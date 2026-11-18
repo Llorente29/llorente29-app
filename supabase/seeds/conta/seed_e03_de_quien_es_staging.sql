@@ -1,11 +1,10 @@
 -- ============================================================================
 -- E03 · ¿De quién es? · Lo que prepara su e2e, en su carril. SOLO STAGING.
 -- ----------------------------------------------------------------------------
--- Para tests/e2e/conta/e03/de-quien-es.spec.ts. No siembra filas: crea una
--- función que la e2e llama con la sesión de la administradora de A (de su
--- carril) y que prepara allí, cada vez de nuevo:
---   · una segunda sociedad de la cuenta, «Prueba Segunda Takeaway, S.L.»
---     (NIF inventado B00000000), si no la tiene;
+-- Para tests/e2e/conta/e03/de-quien-es.spec.ts. Siembra en la cuenta A de la
+-- plantilla una segunda sociedad, «Prueba Segunda Takeaway, S.L.» (NIF inventado
+-- B00000000), que cada carril clona; y crea una función que la e2e llama con la
+-- sesión de la administradora de A (de su carril) y que prepara allí, cada vez de nuevo:
 --   · dos recibidas de Mayorista Prueba Alfa (semilla D01) en Taberna de Prueba
 --     Norte, leídas de su papel, con IVA al 21 % y su PDF en una ruta del
 --     carril (lo sube la e2e): una a nombre de la otra sociedad (con su llegada)
@@ -21,12 +20,24 @@
 --
 -- Guardas: aborta si al otro lado hay cuentas de producción; la función solo
 -- trabaja en la cuenta A de la plantilla o en la de un carril, y solo para una
--- administradora de esa cuenta. Se puede aplicar dos veces (W07): create or replace.
+-- administradora de esa cuenta. Se puede aplicar dos veces (W07): «not exists» y create or replace.
 -- ============================================================================
 
-do $$ begin
+do $$
+declare a constant uuid := 'c01a0000-0000-4000-8000-00000000000a'; emp2 constant uuid := 'c01a0000-0000-4000-8000-0000000000e3';
+begin
   if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
     raise exception 'Semilla E03 ABORTADA: esta base tiene cuentas de producción. ¿Es staging-conta?';
+  end if;
+  if not exists (select 1 from public.accounts where id = a) then raise exception 'Semilla E03: falta la cuenta de prueba A.'; end if;
+  -- La segunda sociedad de A, en la plantilla (cada carril la clona). Solo añade: si ya está, nada.
+  if not exists (select 1 from public.company where account_id = a and tax_id = 'B00000000') then
+    insert into public.company (id, account_id, legal_name, trade_name, tax_id, tax_id_type, entity_kind,
+      fiscal_street_type, fiscal_street, fiscal_number, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country, setup_step, setup_completed_at)
+    values (emp2, a, 'Prueba Segunda Takeaway, S.L.', 'Prueba Segunda Takeaway', 'B00000000', 'nif_es', 'company',
+      'Calle', 'de la Prueba', '14', '28001', 'Madrid', 'Madrid', 'ES', 'hecho', '2026-11-18 00:00:00+00');
+    insert into public.company_tax_profile (company_id, account_id, tax_territory, vat_period, chart_kind, account_digits, tax_forms, sales_tax_rate_code)
+    values (emp2, a, 'peninsula_baleares', 'quarterly', 'pymes', 8, array['303', '347', '390'], 'iva_reducido');
   end if;
 end $$;
 
@@ -48,17 +59,9 @@ begin
   select id, tax_id into alfa, v_nif_alfa from public.supplier where account_id = v_acc and name = 'Mayorista Prueba Alfa' order by created_at limit 1;
   select lc.location_id into loc from public.location_company lc where lc.company_id = emp order by lc.location_id limit 1;
   if emp is null or alfa is null then raise exception 'E03 e2e: faltan Taberna de Prueba Norte o Mayorista Prueba Alfa (semillas C00 y D01).'; end if;
-  -- La segunda sociedad de la cuenta.
+  -- La segunda sociedad de la cuenta (la siembra esta semilla en la plantilla; el carril la clona).
   select id into emp2 from public.company where account_id = v_acc and tax_id = 'B00000000';
-  if emp2 is null then
-    insert into public.company (account_id, legal_name, trade_name, tax_id, tax_id_type, entity_kind,
-      fiscal_street_type, fiscal_street, fiscal_number, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country, setup_step, setup_completed_at)
-    values (v_acc, 'Prueba Segunda Takeaway, S.L.', 'Prueba Segunda Takeaway', 'B00000000', 'nif_es', 'company',
-      'Calle', 'de la Prueba', '14', '28001', 'Madrid', 'Madrid', 'ES', 'hecho', now())
-    returning id into emp2;
-    insert into public.company_tax_profile (company_id, account_id, tax_territory, vat_period, chart_kind, account_digits, tax_forms, sales_tax_rate_code)
-    values (emp2, v_acc, 'peninsula_baleares', 'quarterly', 'pymes', 8, array['303', '347', '390'], 'iva_reducido');
-  end if;
+  if emp2 is null then raise exception 'E03 e2e: falta la segunda sociedad de A (semilla E03).'; end if;
   -- Las dos recibidas, cada vez con su número.
   for c in select * from (values
       ('otra', 'Prueba Segunda Takeaway SL', 'ES-B00000000'),
