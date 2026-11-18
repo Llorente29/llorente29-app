@@ -54,7 +54,7 @@ import { PanelDocumento } from '../ficha/PanelDocumento'
 import { cifra } from '../ficha/textos'
 import { cuentasQueEncajan, queHaceIntro, type CuentaDelPlan } from '../ficha/teclas'
 import { origenes } from './origen'
-import { comprobacionesDe, dudaDelGasto, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
+import { comprobacionesDe, dondeVaElFoco, dudaDelGasto, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
 import { calendarioDe, cuentasAMano, delProveedor, gastoAprendido, marcaDeLaFactura, mayorDelProveedor, textoOperacion } from './servicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 
@@ -324,6 +324,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     }
     ed.reiniciar(vacioAMano(hoy))
     setAviso({ tono: 'ok', texto: `${dicho.join(' ')} ${v.texto} Escribe la siguiente.` })
+    focoPuesto.current = ''; tocada.current = ''
     setTimeout(() => document.getElementById('kf-proveedor')?.focus(), 0)
   }
 
@@ -362,13 +363,24 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     return () => window.removeEventListener('keydown', fuera)
   })
 
-  // El foco, donde hay que mirar: en la duda si la hay (Intro la resuelve, otro Intro guarda); en la nueva, el proveedor.
-  const clavePrimerFoco = aMano ? `nueva:${vuelta === 0}` : duda ? `${invoiceId}:duda` : ''
+  // El foco, donde hay que mirar (dondeVaElFoco): en la duda si la hay (Intro la contesta, otro Intro guarda); en la
+  // nueva, el proveedor. Se vuelve a mirar cada vez que la ficha termina de pintarse o aparece la duda (la duda puede
+  // llegar antes que la ficha), una vez por factura, y nunca encima de lo que alguien ya ha empezado a escribir en ella.
+  const claveFicha = aMano ? 'nueva' : invoiceId
+  const pintada = aMano || (!!fac && !!ficha)
+  const focoPuesto = useRef('')
+  const tocada = useRef('')
+  // Quien empieza a escribir o pulsa en esta factura ya ha elegido dónde está: el foco no se le mueve.
+  const marcarTocada = () => { if (pintada) tocada.current = claveFicha }
   useEffect(() => {
-    if (!clavePrimerFoco || !seVe()) return
-    const x = raiz.current?.querySelector<HTMLElement>(aMano ? '#kf-proveedor' : '.kf-duda .kf-boton-ambar')
-    if (x && !raiz.current?.contains(document.activeElement)) x.focus()
-  }, [clavePrimerFoco, aMano, seVe])
+    if (!seVe()) return
+    const donde = dondeVaElFoco({ pintada, yaPuesto: focoPuesto.current === claveFicha, tocada: tocada.current === claveFicha, aMano, hayDuda: !!duda })
+    if (!donde) return
+    const x = raiz.current?.querySelector<HTMLElement>(donde === 'proveedor' ? '#kf-proveedor' : '.kf-duda .kf-boton-ambar')
+    if (!x) return
+    x.focus()
+    focoPuesto.current = claveFicha
+  }, [claveFicha, pintada, aMano, duda, seVe])
 
   // ── Lo que no es de esta ficha: la de hoy, dentro de la pestaña ──
   const validada = !!fac?.asiento && fac.asiento.estado === 'validado'
@@ -399,7 +411,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const conceptoTexto = propuesta?.concepto ?? (prov ? `${b.numero || 'Factura'}-${prov.nombre}` : '')
 
   return (
-    <div className="kf-ficha" ref={raiz} onKeyDown={alPulsar} data-prueba="ficha-recibida-nucleo" aria-busy={cargando || undefined}>
+    <div className="kf-ficha" ref={raiz} onKeyDown={(e) => { marcarTocada(); alPulsar(e) }} onPointerDown={marcarTocada} data-prueba="ficha-recibida-nucleo" aria-busy={cargando || undefined}>
       <header className="kf-cabecera">
         <h1>Factura recibida</h1>
         <span className="kf-cola">{cola}</span>

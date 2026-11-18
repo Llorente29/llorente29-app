@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { codigoEscrito, cuentasQueEncajan, fechaEscrita, fechaVista, queHaceIntro } from '@/modules/conta/nucleo/ficha/teclas'
-import { comprobacionesDe, dudaDelGasto, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, periodoAbierto, puedeGuardar, trimestreDe } from '@/modules/conta/nucleo/recibida/estado'
+import { comprobacionesDe, dondeVaElFoco, dudaDelGasto, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, periodoAbierto, puedeGuardar, trimestreDe } from '@/modules/conta/nucleo/recibida/estado'
 import { origenes, type DatosOrigen } from '@/modules/conta/nucleo/recibida/origen'
 
 describe('K04 · Intro (decisiones 11 y 12)', () => {
@@ -173,5 +173,22 @@ describe('K04 · de dónde sale cada dato (solo lo que la base sabe)', () => {
   it('sin lectura (escrita a mano), nada del PDF', () => {
     const o = origenes({ ...d, leido: null, conceptoPropuesto: false })
     expect(o).toEqual({ nombre: 'de su ficha', tipoOperacion: 'de su ficha' })
+  })
+})
+
+describe('K04 · dónde va el foco al abrir (la duda, solo con el teclado)', () => {
+  const o = { pintada: true, yaPuesto: false, tocada: false, aMano: false, hayDuda: true }
+  it('con duda, a su botón; en la nueva, al proveedor; sin duda, a ningún sitio (basta Intro)', () => {
+    expect(dondeVaElFoco(o)).toBe('duda')
+    expect(dondeVaElFoco({ ...o, aMano: true, hayDuda: false })).toBe('proveedor')
+    expect(dondeVaElFoco({ ...o, hayDuda: false })).toBeNull()
+  })
+  it('la duda que llega antes que la ficha espera a que se pinte (e2e 1495: el botón salía sin el foco)', () => {
+    expect(dondeVaElFoco({ ...o, pintada: false })).toBeNull()
+    expect(dondeVaElFoco({ ...o, pintada: true })).toBe('duda')
+  })
+  it('una vez por factura, y nunca encima de lo que ya se ha empezado a escribir en ella', () => {
+    expect(dondeVaElFoco({ ...o, yaPuesto: true })).toBeNull()
+    expect(dondeVaElFoco({ ...o, tocada: true })).toBeNull()
   })
 })

@@ -146,3 +146,19 @@ export const nombreDePestana = (proveedor: string | null | undefined): string =>
 export function puedeGuardar(o: { guardando: boolean; validada: boolean; descartada: boolean }): boolean {
   return !o.guardando && !o.validada && !o.descartada
 }
+
+/**
+ * Dónde va el foco al abrir una ficha (lo ámbar es lo único que hay que mirar):
+ * en la nueva, el proveedor; en una con duda, su botón «Dejar …», y así la
+ * duda se contesta solo con el teclado (Intro o Tab + Intro). Una vez por
+ * factura, cuando la ficha YA está pintada (la duda puede llegar antes que la
+ * ficha: entonces se espera a que se pinte) y solo si quien la usa no ha
+ * empezado a escribir en ESTA factura. No mira dónde está el foco ahora: al
+ * pasar con Intro a la siguiente, se queda en una casilla de la de antes, que
+ * es la misma pantalla. null: todavía nada (o ya está).
+ */
+export function dondeVaElFoco(o: { pintada: boolean; yaPuesto: boolean; tocada: boolean; aMano: boolean; hayDuda: boolean }): 'proveedor' | 'duda' | null {
+  if (!o.pintada || o.yaPuesto || o.tocada) return null
+  if (o.aMano) return 'proveedor'
+  return o.hayDuda ? 'duda' : null
+}
