@@ -7,3 +7,9 @@
 # sin ella) y ocho facturas leídas. Solo añade, con ids y fechas fijos: se puede
 # aplicar dos veces igual (W07), y va de verdad desde la rama (W05).
 supabase/seeds/conta/seed_k04_ficha_recibida_staging.sql
+#
+# 3.er intento (18/11, autorizado por Julio): las de la semilla K04 quedaron con
+# el IVA no deducible (el destinatario de su lectura no traía el NIF de la
+# gestoría: «no_a_nombre», 20261101T2212). Otras ocho, a nombre de la gestoría;
+# solo añade, con otros ids.
+supabase/seeds/conta/seed_k04b_recibidas_a_nombre_staging.sql
