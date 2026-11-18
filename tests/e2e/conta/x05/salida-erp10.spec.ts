@@ -19,8 +19,8 @@
 //   3. «Descargar los ficheros» baja subcuentas.xlsx, expedidas.xlsx,
 //      recibidas.xlsx y pdf.zip, lo apunta y lo confirma con contenido; una fila
 //      de cada Excel, comprobada.
-//   4. El paso 2, con los cuatro ficheros en su orden; «Ya lo he importado» vuelve
-//      al paso 1, que ya no enseña lo salido.
+//   4. El paso 2, con los cuatro ficheros en su orden; «Ya lo he importado» lleva al
+//      paso 3 (X06) y, desde ahí, el paso 1 ya no enseña lo salido.
 // Navegador en español (playwright.config.ts: locale es-ES y --lang=es-ES); la
 // fecha de la ficha es el campo de Sumied, dd/mm/aaaa, sea cual sea el idioma.
 // Capturas del paso 1 (con la fila de emitidas pulsada) y del paso 2, a 1456 × 816.
@@ -134,7 +134,10 @@ test('X05 · contra staging: encender, mirar las emitidas y las recibidas, desca
   const ficha = page.getByRole('form', { name: 'Salida a ERP10' })
   await expect(ficha).toBeVisible({ timeout: 40_000 })
   await ficha.getByRole('switch').check()
-  await ficha.getByLabel('Código de la empresa en ERP10').fill('0007')
+  // Si en el mismo carril ya salió algo (la e2e del X06, con el mismo código), el código ya no se cambia: se queda el 0007.
+  const codigo = ficha.getByLabel('Código de la empresa en ERP10')
+  if (await codigo.isEditable()) await codigo.fill('0007')
+  else await expect(codigo).toHaveValue('0007')
   const desde = ficha.getByLabel('Desde qué día sale')
   await desde.fill(dma(dia1))
   await desde.blur()
@@ -222,8 +225,10 @@ test('X05 · contra staging: encender, mirar las emitidas y las recibidas, desca
   await expect(page.getByRole('button', { name: 'ConfiguracionExpedidas.XML' })).toBeVisible()
   await page.screenshot({ path: `${DIR}/paso2.png` })
 
-  // «Ya lo he importado»: de vuelta al paso 1, sin lo salido.
+  // «Ya lo he importado»: al paso 3 (X06); de ahí, al paso 1, sin lo salido.
   await page.getByRole('button', { name: 'Ya lo he importado' }).click()
+  await expect(page.getByRole('heading', { name: 'Sube el «Sumas y saldos» de ERP10' })).toBeVisible()
+  await page.getByRole('button', { name: 'Mira lo que sale' }).click()
   await expect(tabla.getByRole('row')).toHaveCount(7, { timeout: 40_000 })
   await fila('Facturas emitidas').click()
   await expect(page.getByRole('table', { name: 'Facturas emitidas' })).not.toContainText(hecho.emitida)

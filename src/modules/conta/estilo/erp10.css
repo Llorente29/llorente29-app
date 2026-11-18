@@ -84,3 +84,46 @@
 .cxe-estado { padding: 8px 16px; font-size: .9rem; border-top: 1px solid var(--cx-linea); }
 .cxe-hecho { color: var(--cx-verde-oscuro); font-weight: 700; }
 .cxe-mal { color: var(--cx-rojo); font-weight: 700; }
+
+/* X06 · El paso 3, «Comprueba que queda igual» (maqueta_salida_paso3.png) */
+.cxe-paso-boton { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.cxe-paso-boton:hover { text-decoration: underline; }
+.cxe-kbd { margin-left: 8px; padding: 0 6px; border: 1px solid currentColor; border-radius: 4px; font: inherit; font-size: .72rem; font-weight: 400; opacity: .85; }
+.cxe-cuerpo-uno { grid-template-columns: minmax(0, 1fr); }
+.cxe-subir { margin: auto; max-width: 560px; display: flex; flex-direction: column; gap: 10px; padding: 24px; border: 1px dashed var(--cx-borde-control); border-radius: var(--cx-radio-caja); }
+.cxe-subir p { margin: 0; }
+.cxe-subir-titulo { margin: 0; font-size: 1.05rem; }
+.cxe-franja { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cxe-franja-fin { margin-left: auto; }
+.cxe-chip-gris, .cxe-chip-ambar, .cxe-chip-verde { padding: 4px 12px; border-radius: 999px; font-size: .88rem; }
+.cxe-chip-gris { background: var(--cx-neutro-suave); color: var(--cx-texto); }
+.cxe-chip-ambar { background: var(--cx-ambar-suave); color: var(--cx-ambar); font-weight: 700; }
+.cxe-chip-verde { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); font-weight: 700; }
+.cxe-aviso-linea { margin: 0; font-size: .85rem; color: var(--cx-ambar); }
+.cxe-comparar .cxe-cuenta { color: var(--cx-azul); text-decoration: underline; }
+.cxe-comparar .cxe-fila td:first-child { font-weight: 400; }
+.cxe-comparar .cxe-fila-filo td:first-child { box-shadow: inset 4px 0 0 var(--cx-ambar); }
+.cxe-comparar .cxe-fila-filo { background: var(--cx-ambar-fila); }
+.cxe-comparar .cxe-fila[aria-selected='true'] { background: var(--cx-azul-suave); box-shadow: none; }
+.cxe-dif { font-weight: 700; }
+.cxe-grupo th { position: static; background: none; text-align: left; font-weight: 700; color: var(--cx-texto); padding: 10px 10px 4px; border-bottom: 1px solid var(--cx-linea); }
+.cxe-grupo-ambar th { color: var(--cx-ambar); }
+.cxe-grupo-verde th { color: var(--cx-verde-oscuro); }
+.cxe-grupo-gris th { color: var(--cx-neutro-texto); }
+.cxe-mas td { color: var(--cx-apoyo); font-size: .88rem; }
+.cxe-total { border-top: 2px solid var(--cx-texto); table-layout: fixed; }
+.cxe-total th { text-align: left; font-weight: 700; padding: 10px; }
+.cxe-total td { padding: 10px; font-weight: 700; }
+.cxe-der-cabeza { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--cx-linea); padding-right: 16px; }
+.cxe-der-cabeza .cxe-der-titulo { border-bottom: 0; }
+.cxe-cuenta-elegida { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--cx-apoyo); }
+.cxe-grande-dif { font-size: 1.6rem; color: var(--cx-texto); font-variant-numeric: tabular-nums; }
+.cxe-comparar { table-layout: fixed; }
+.cxe-comparar td:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxe-comparar th { white-space: nowrap; }
+/* Si la cabecera no cabe (el marco de hoy, a 1366 o 1456), los pasos que no son el de ahora se quedan en su número; el «title» lo dice. */
+.cxe-cabeza { container-type: inline-size; }
+.cxe-paso-etq { white-space: nowrap; }
+@container (max-width: 1080px) {
+  .cxe-paso:not([aria-current='step']) .cxe-paso-etq { display: none; }
+}

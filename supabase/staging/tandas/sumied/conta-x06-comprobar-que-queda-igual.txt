@@ -1,0 +1,7 @@
+# X06 · el paso 3 de la salida a ERP10.
+# Primero, la medida de lo que no sale todavía, por cuenta (solo lee, ROLLBACK).
+supabase/staging/sql/20261118_x06_no_sale_medida.sql
+# Después, 0515 (añade dos tablas y cuatro funciones) y su prueba (ROLLBACK,
+# empresas inventadas en las cuentas A y B, con su vuelta atrás).
+supabase/migrations/20261118T0515_x06_comprobar_salida.sql
+supabase/staging/sql/20261118_x06_comprobar_salida_prueba.sql
