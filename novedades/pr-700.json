@@ -1,0 +1,11 @@
+[
+ {
+  "id": "700-1",
+  "pr": 700,
+  "fecha": "2026-11-17T08:01:32Z",
+  "producto": "sumied",
+  "apartado": "Correo de facturas",
+  "frase": "Las empresas que lleva tu asesoría tienen su dirección de Sumied para reenviar las facturas de sus proveedores, y la ves igual en Ajustes y en Documentos.",
+  "ruta": "/conta/ajustes/correo-facturas"
+ }
+]

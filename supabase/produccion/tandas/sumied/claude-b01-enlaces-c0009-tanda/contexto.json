@@ -1,0 +1,8 @@
+{
+ "_que": "B01r26 · los enlaces a la C0009 · contexto de producción, medido en SOLO LECTURA el 14/11 a las 23:15Z: la 0016 no añade ni cambia objetos. En Foodint cambia 301 filas de external_send de antes de las 22:00 UTC del 14/11 (284 facturas y 16 asientos «enlazado», 1 factura «enviado») a «pendiente», sin referencia de Diez, y deja sin last_error 16 «pendiente» (13 sales_adjustment y 3 supplier_payment) parados por «igual que no viene de Sumied», que salen del detalle del traspaso de octubre («traspasando», 22 fallos → 6). Los 332 «enviado» de esta noche no se tocan. external_send no tiene disparadores. Nada en el camino del pedido; la 0016 no está en el historial.",
+ "medido": "2026-11-14T23:15Z",
+ "tanda": {
+  "supabase/migrations/20261115T0016_b01r26_enlaces_de_la_c0009.sql": "2e9cadf1a11e3f0d3123a245824d7a1f"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

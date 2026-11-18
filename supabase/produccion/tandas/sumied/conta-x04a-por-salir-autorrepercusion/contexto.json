@@ -1,0 +1,21 @@
+{
+ "_que": "X04a · el arreglo de conta_erp10_por_salir · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging 5c8707d5, 17/11 09:53Z, ya con la X02), en SOLO LECTURA, el 17/11: no en producción (esta sesión no lee producción). La función existe (la X02, en producción desde las 15:22). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-17T14:49Z",
+ "tanda": {
+  "supabase/migrations/20261117T1550_x04a_por_salir_autorrepercusion.sql": "6850b88a21823f555cd244466b818bd5"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_erp10_por_salir(uuid,date)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

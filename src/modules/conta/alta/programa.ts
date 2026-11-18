@@ -15,11 +15,12 @@
 
 import { normalizar } from '@/modules/conta/alta/actividades'
 
-export type ProgramaAnterior = 'diez' | 'holded' | 'sage' | 'a3' | 'contasol' | 'quipu' | 'otro' | 'ninguno'
+export type ProgramaAnterior = 'diez' | 'erp10' | 'holded' | 'sage' | 'a3' | 'contasol' | 'quipu' | 'otro' | 'ninguno'
 
 /** Las respuestas de un toque, en el orden de la pregunta. «Otro» pide el nombre. */
 export const PROGRAMAS: { valor: ProgramaAnterior; texto: string; palabras: string[] }[] = [
   { valor: 'diez', texto: 'Cegid Diez', palabras: ['diez', 'cegid'] },
+  { valor: 'erp10', texto: 'ERP10', palabras: ['erp10', 'erp'] },
   { valor: 'holded', texto: 'Holded', palabras: ['holded'] },
   { valor: 'sage', texto: 'Sage', palabras: ['sage'] },
   { valor: 'a3', texto: 'a3', palabras: ['a3', 'a3con', 'a3asesor', 'a3innuva', 'wolters'] },
@@ -63,6 +64,9 @@ const nombrePlan = (plan: 'pymes' | 'normal') => (plan === 'normal' ? 'el plan g
 export function fraseDePrograma(r: Respuesta, plan: 'pymes' | 'normal'): string {
   if (r.programa === 'diez') {
     return `Vienes de Cegid Diez: al terminar el alta activo ${nombrePlan(plan)}, y tu histórico, con tus subcuentas, lo traigo después. En el Inicio verás cómo va.`
+  }
+  if (r.programa === 'erp10') {
+    return `Vienes de ERP10: al terminar el alta activo ${nombrePlan(plan)}. Tus cuentas y tus proveedores los traes de ERP10 cuando quieras, y lo de antes, después.`
   }
   if (r.programa === 'ninguno') return `Empezamos de cero, con ${nombrePlan(plan)}: lo activo al terminar el alta.`
   return `De momento no traigo solo los datos de ${nombrePrograma(r)}; empezamos con ${nombrePlan(plan)} y te ayudamos a pasar los saldos.`

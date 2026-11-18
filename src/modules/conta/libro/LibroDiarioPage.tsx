@@ -75,6 +75,7 @@ import { apoyoApunte, columnasApuntes, lineasDeApuntes } from '@/modules/conta/l
 import { borrarVista, cumpleFiltros, guardarVista, leerVistas, miles, type CampoFiltro, type VistaGuardada } from '@/modules/conta/ui/tabla/tablaDensa'
 import { useAnalitica, useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 import type { EjeVista } from '@/modules/conta/esqueleto/productos'
+import { useSeVe } from '@/modules/conta/diseno/plantillas/pestana'
 
 const almacen = (): Storage | null => { try { return window.localStorage } catch { return null } }
 
@@ -309,15 +310,17 @@ export default function LibroDiarioPage() {
 
   // Ins: un asiento a mano (la tecla que lleva el botón; no es del navegador).
   const puedeNuevo = !!datos?.ejercicio
+  // K03 · En una pestaña escondida del núcleo, esta pantalla no escucha el teclado.
+  const seVe = useSeVe()
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
-      if (e.key !== 'Insert' || e.ctrlKey || e.metaKey || e.altKey || escribiendo(e.target) || !puedeNuevo) return
+      if (!seVe() || e.key !== 'Insert' || e.ctrlKey || e.metaKey || e.altKey || escribiendo(e.target) || !puedeNuevo) return
       e.preventDefault()
       navegar(rutaNuevoAsiento())
     }
     window.addEventListener('keydown', tecla)
     return () => window.removeEventListener('keydown', tecla)
-  }, [navegar, puedeNuevo])
+  }, [navegar, puedeNuevo, seVe])
 
   async function deshacer(id: string) {
     const a = datos?.asientos.find((x) => x.id === id)

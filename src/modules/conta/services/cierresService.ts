@@ -12,6 +12,8 @@
 //   · conta_cierre_espera: dejarlo en espera con su motivo, o quitarlo.
 //   · validar: validarCierreConDocumento (conDiezService), que valida el
 //     asiento con su PDF y su factura resumen en una transacción.
+//   · R05 · conta_tpv_dias: los días del TPV, en la misma lista; y validarlos,
+//     tpvDiaService (propone y valida a la vez, con su PDF).
 //
 // Nombres dentro de cadenas (regla 40): los crea la 20261024T1440 (conta_cierres,
 // conta_cierre_pedidos, conta_cierre_guardar, conta_cierre_espera,
@@ -20,13 +22,22 @@
 
 import { rpc } from '@/modules/conta/services/bd'
 import { validarCierreConDocumento } from '@/modules/conta/services/conDiezService'
-import { cierreDeFila, pedidoDeFila, type CambioPedido, type Cierre, type PedidoCierre } from '@/modules/conta/lib/cierres'
+import { validarDiaTpv } from '@/modules/conta/services/tpvDiaService'
+import { cierreDeFila, cierreTpvDeFila, pedidoDeFila, type CambioPedido, type Cierre, type PedidoCierre } from '@/modules/conta/lib/cierres'
 
 type Fila = Record<string, unknown>
 
+/**
+ * Los cierres de la empresa: los de Folvy (conta_cierres) y, R05, los días del TPV
+ * (conta_tpv_dias, de la 20261117T1602), en la misma lista, del día más nuevo al más viejo.
+ */
 export async function leerCierres(companyId: string): Promise<Cierre[]> {
-  const r = await rpc<Fila[] | null>('conta_cierres', { p_company: companyId, p_desde: null, p_hasta: null })
-  return (r ?? []).map(cierreDeFila)
+  const [r, t] = await Promise.all([
+    rpc<Fila[] | null>('conta_cierres', { p_company: companyId, p_desde: null, p_hasta: null }),
+    rpc<Fila[] | null>('conta_tpv_dias', { p_company: companyId, p_desde: null, p_hasta: null }),
+  ])
+  const todos = [...(r ?? []).map(cierreDeFila), ...(t ?? []).map(cierreTpvDeFila)]
+  return todos.map((x, i) => ({ x, i })).sort((a, b) => b.x.dia.localeCompare(a.x.dia) || a.i - b.i).map(({ x }) => x)
 }
 
 export async function leerPedidosCierre(cierreId: string): Promise<PedidoCierre[]> {
@@ -63,6 +74,12 @@ export async function quitarDeEspera(cierreId: string, quien: string | null): Pr
 
 export async function facturaPrevista(entryId: string): Promise<string> {
   return String((await rpc<Fila>('conta_cierre_factura_prevista', { p_entry: entryId })).texto)
+}
+
+/** R05 · Validar un día del TPV: se propone y se valida a la vez, con su PDF y sin factura de Sumied. */
+export async function validarCierreTpv(diaId: string, quien: string | null): Promise<{ numero: number; texto: string }> {
+  const v = await validarDiaTpv(diaId, quien)
+  return { numero: v.numero, texto: v.texto }
 }
 
 /** Validar un cierre: el asiento, su PDF y su factura resumen. Dice qué ha hecho (regla 8). */

@@ -88,6 +88,11 @@ export function cuadrarAgrupado(sumied: readonly Saldo[], filasDiez: readonly Re
   return cuadrar([...g.values()], filas)
 }
 
+/** B01r26 · El corte del ensayo del 14/11 (Diez contesta 500 a una subcuenta que no existe): se vuelve a intentar. */
+export const ES_EL_QUINIENTOS = /GET subcuenta → 500/
+/** B01r26 · Lo que no llegó porque le faltaba una subcuenta (el motivo de diezEnviar): vuelve después de «Crearlas en Diez». */
+export const ES_SUBCUENTA_QUE_FALTA = /subcuentas? .* no est[áa]n? en Diez/
+
 /** Los que tocan en esta tanda: en el orden de la lista, sin los que ya han fallado. */
 export function siguientes<T extends { entry_id: string; orden: number }>(lista: readonly T[], fallados: ReadonlySet<string>, n: number): { tanda: T[]; quedan: number } {
   const pendientes = [...lista].sort((a, b) => a.orden - b.orden).filter((x) => !fallados.has(x.entry_id))

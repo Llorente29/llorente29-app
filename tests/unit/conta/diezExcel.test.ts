@@ -61,11 +61,20 @@ describe('recibidas', () => {
     expect(norm(r[1])).toBe('2026-09-30')
     expect(norm(r[24])).toBe('2026-10-02')
   })
-  it('3 tipos de IVA, 3 gastos, sin NIF o sin enlace: por la API, con el porqué', () => {
+  it('Julio (14/11, 17:44): sin PDF no se queda fuera: va con la «Url documento» vacía y lo demás igual', () => {
+    const con = filaRecibida(base, XML_RECIBIDAS) as unknown[]
+    const sin = filaRecibida({ ...base, url: '' }, XML_RECIBIDAS) as unknown[]
+    expect(Array.isArray(sin)).toBe(true)
+    const i = con.indexOf(URL)
+    expect(i).toBeGreaterThanOrEqual(0)
+    expect(sin[i]).toBe('')
+    expect(sin.filter((_, k) => k !== i)).toEqual(con.filter((_, k) => k !== i))
+  })
+  it('3 tipos de IVA, 3 gastos, sin NIF o con un enlace que no es https: por la API, con el porqué', () => {
     expect(filaRecibida({ ...base, iva: [{ base: 50, pct: 10, cuota: 5 }, { base: 30, pct: 21, cuota: 6.3 }, { base: 20, pct: 4, cuota: 0.8 }], total: 112.1 }, XML_RECIBIDAS)).toMatchObject({ porLaApi: expect.stringContaining('3 tipos de IVA') })
     expect(filaRecibida({ ...base, gastos: [{ cuenta: '60000000', importe: 50 }, { cuenta: '62900000', importe: 30 }, { cuenta: '62800000', importe: 20 }] }, XML_RECIBIDAS)).toMatchObject({ porLaApi: expect.stringContaining('3 cuentas de gasto') })
     expect(filaRecibida({ ...base, proveedor: { ...base.proveedor, nif: null } }, XML_RECIBIDAS)).toMatchObject({ porLaApi: expect.stringContaining('NIF') })
-    expect(filaRecibida({ ...base, url: '' }, XML_RECIBIDAS)).toMatchObject({ porLaApi: expect.stringContaining('PDF') })
+    expect(filaRecibida({ ...base, url: 'http://ejemplo.invalid/pdf' }, XML_RECIBIDAS)).toMatchObject({ porLaApi: expect.stringContaining('PDF') })
   })
   it('la exenta: una línea de IVA al 0 % con la base de los gastos', () => {
     const r = filaRecibida({ ...base, iva: [], total: 100 }, XML_RECIBIDAS) as unknown[]
@@ -184,5 +193,16 @@ describe('los abonos de proveedor (12 en octubre y noviembre)', () => {
     }, URL) as Recibida
     expect([r.total, r.gastos, r.iva]).toEqual([-13.66, [{ cuenta: '62300000', importe: -11.29 }], [{ base: -11.29, pct: 21, cuota: -2.37 }]])
     expect('porLaApi' in filaRecibida(r, XML_RECIBIDAS)).toBe(false)
+  })
+})
+
+describe('el IVA no deducible (ensayo del 14/11: Orange y Anthropic)', () => {
+  it('no va al Excel ni como exenta ni como deducible: fuera, con su porqué', () => {
+    const r = recibidaDeAsiento({
+      fecha: '2026-10-05', factura: { numero: 'S11/0177416578', fecha: '2026-10-05' }, proveedor: { nombre: 'P', nif: 'B00000000' },
+      lineas: [{ cuenta: '62800000', debe: 28.89, haber: 0, tipoIva: null, baseIva: null }, { cuenta: '62800000', debe: 6.07, haber: 0, tipoIva: 21, baseIva: 28.89 },
+        { cuenta: '41000043', debe: 0, haber: 34.96, tipoIva: null, baseIva: null }],
+    }, URL)
+    expect(r).toMatchObject({ porLaApi: expect.stringContaining('IVA no deducible') })
   })
 })

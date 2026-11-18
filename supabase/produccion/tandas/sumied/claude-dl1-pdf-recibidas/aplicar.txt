@@ -1,0 +1,14 @@
+# DL1 · los PDF de 44 facturas recibidas (39 de Glovo de la 1210, 3 de Just Eat
+# de la 1615 y 2 de Cloudtown), enlazados con conta_recibida_papel_poner, como
+# «Subir el PDF» (Julio, 14/11). Rama claude/dl1-pdf-recibidas. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1805  Pone el documento a las 44 como Julio. No crea objetos. No toca
+#         asientos ni importes (lo comprueba la propia tanda).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-pdf-recibidas.sql
+supabase/migrations/20261114T1805_dl1_pdf_recibidas.sql
+sin-vuelta-atras: supabase/migrations/20261114T1805_dl1_pdf_recibidas.sql · motivo: el documento de una factura con asiento validado ya no se cambia.
+esperado: dl1-pdf-recibidas · de las 44, las que no tienen su PDF = 0
+esperado: dl1-pdf-recibidas · Debe de sus asientos validados = como antes

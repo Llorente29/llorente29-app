@@ -30,6 +30,7 @@
 //   · «1 de N» sale de la misma cola que la barra (recibidas.colaPorRevisar),
 //     y la barra se vuelve a contar al validar, descartar o guardar.
 
+import { useSeVe } from '@/modules/conta/diseno/plantillas/pestana'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaCompras, rutaDocumentos, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
@@ -64,7 +65,10 @@ import { decisionIbanDeFactura, obtenerFicha } from '@/modules/conta/services/pr
 import {
   apuntarFactura, cuentasDeGasto, descartarFactura, guardarCambiosRecibida, leerDescarte, ponerPapelRecibida, sinPapelRecibida, leerExtrasFacturas, leerFactura, leerFichaRecibida,
   plazoDeLaFicha, proveedoresDeLaCuenta, recuperarFactura, releerProveedorDeLaFactura, urlDelPapel, verPropuestaFactura, type Apuntada,
+  fechaDelAsiento, leerAntesDelInicio, responderAntesDelInicio,
 } from '@/modules/conta/services/documentosService'
+import { PreguntaAntesDelInicio } from './PreguntaAntesDelInicio'
+import { hechoEsNueva, marcaDeLaFicha, yaVinoTraida, type AntesDelInicio } from './antesDelInicio'
 import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
@@ -91,6 +95,7 @@ import {
   ACEPTA_PAPEL, COMO_SE_GUARDA, ETIQUETAS, aManoDeLoGuardado, asientoVistaPrevia, retencionLeidaSinTipo, cuentaDelGastoEnAsiento, borradorDe, cambiosParaLaBase, lineasConMasDecimales, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
   textoDelGuardado, totalesDe, type BorradorFicha,
 } from '@/modules/conta/documentos/fichaRecibida'
+import { accionPdf } from '@/modules/conta/lib/pdfDeLaRecibida'
 import {
   BloqueGasto, BloqueHistorial, BloqueImportesIva, BloquePago, BloqueProveedorFactura, EditarAsientoAMano, HuecoPapel,
 } from '@/modules/conta/documentos/FichaRecibidaBloques'
@@ -385,6 +390,13 @@ export default function RevisarFacturaPage() {
     } catch (e) { setFalloDescarte(e instanceof Error ? e.message : String(e)) }
   }
   const [apuntando, setApuntando] = useState(false)
+  // N03 · Una factura de antes del día de inicio: Sumied para y pregunta (la ventana) y lo que ya se contestó.
+  const antes = useLeer(fac && accountId ? () => leerAntesDelInicio(fac.id) : null, `${accountId}:${invoiceId}:antes:${fac?.asiento ? 'con' : 'sin'}:${vuelta}`)
+  const [pregunta, setPregunta] = useState<AntesDelInicio | null>(null)
+  const [falloPregunta, setFalloPregunta] = useState<string | null>(null)
+  const [dichoAntes, setDichoAntes] = useState<{ id: string; texto: string } | null>(null)
+  const yaEstaba = antes.datos?.respuesta === 'ya_estaba' && !fac?.asiento
+  const traida = !fac?.asiento ? antes.datos?.traida ?? null : null
   // N1 · Lo que dijo «NIF del proveedor» al guardar (el bloque se va: la ficha ya tiene NIF).
   const [nifGuardado, setNifGuardado] = useState<{ id: string; texto: string } | null>(null)
   const [apuntada, setApuntada] = useState<{ id: string; r: Apuntada } | null>(null)
@@ -392,9 +404,61 @@ export default function RevisarFacturaPage() {
 
   async function validar() {
     if (!fac || ed.hay) return
+    // N03 · De antes del día de inicio y sin contestar: no se contabiliza todavía, se pregunta.
+    if (!fac.asiento) {
+      setFalloPregunta(null)
+      // Sin respuesta de la base, se sigue: la base para igual al proponer (0956).
+      const a = await leerAntesDelInicio(fac.id).catch((): AntesDelInicio | null => null)
+      if (a?.traida || a?.respuesta === 'ya_estaba') { antes.recargar(); return }
+      if (a?.preguntar) { setPregunta(a); return }
+      await apuntar(a?.respuesta === 'es_nueva' ? a : null)
+      return
+    }
+    await apuntar(null)
+  }
+
+  /** N03 · «Sí, ya estaba»: no se contabiliza; queda en la lista, marcada (regla 7), y se dice (regla 8). */
+  async function contestarYaEstaba() {
+    if (!fac || !pregunta) return
+    try {
+      const texto = await responderAntesDelInicio(fac.id, 'ya_estaba', userName)
+      setPregunta(null)
+      setDichoAntes({ id: fac.id, texto })
+      refrescarCuentasMenu(); antes.recargar(); setVuelta((v) => v + 1)
+    } catch (e) { setFalloPregunta(e instanceof Error ? e.message : String(e)) }
+  }
+
+  /** N03 · «No, es nueva»: se contabiliza al primer día abierto; la fecha de la factura no cambia. */
+  async function contestarEsNueva() {
+    if (!fac || !pregunta) return
+    const a = pregunta
+    try {
+      await responderAntesDelInicio(fac.id, 'es_nueva', userName)
+      setPregunta(null)
+      await apuntar(a)
+    } catch (e) { setFalloPregunta(e instanceof Error ? e.message : String(e)) }
+  }
+
+  /** N03 · «No estaba contabilizada»: vuelve a como estaba. */
+  async function deshacerYaEstaba() {
+    if (!fac) return
+    try {
+      const texto = await responderAntesDelInicio(fac.id, null, userName)
+      setDichoAntes({ id: fac.id, texto })
+      refrescarCuentasMenu(); antes.recargar(); setVuelta((v) => v + 1)
+    } catch (e) { setDichoAntes({ id: fac.id, texto: `No se ha podido deshacer: ${e instanceof Error ? e.message : String(e)}` }) }
+  }
+
+  async function apuntar(nueva: AntesDelInicio | null) {
+    if (!fac) return
     setApuntando(true)
     try {
       const r = await apuntarFactura(fac, userName, userId, localPropuesto ?? null)
+      // N03 · Contabilizada siendo de antes del inicio: el día del asiento, y la fecha de la factura, que no cambia.
+      if (nueva && r.validado && r.asiento) {
+        const dia = await fechaDelAsiento(r.asiento).catch(() => null)
+        if (dia) r.texto = `${hechoEsNueva(dia, fac.fecha)} ${r.texto.replace(/^Apuntada y validada\.\s*/, '')}`.trim()
+      }
       // S01b2 · Con una lectura de antes, se vuelve a leer su PDF para completar también el teléfono y la web.
       const desde = r.validado && fac.proveedor?.id && fichaProv.datos?.id === fac.proveedor.id
         ? (await releer().then((p) => (p ? calcularDesde(p) : desdeDocumento)).catch(() => desdeDocumento)) : desdeDocumento
@@ -427,9 +491,11 @@ export default function RevisarFacturaPage() {
   }
 
   // El teclado de la cola: Intro valida y pasa (no con cambios sin guardar: el botón está apagado); ← y → mueven; Esc vuelve a la lista. Con cambios, avisa antes.
+  // K03 · En una pestaña escondida del núcleo, esta pantalla no escucha el teclado.
+  const seVe = useSeVe()
   useEffect(() => {
     const alPulsar = (e: KeyboardEvent) => {
-      if (!teclaDeLaFicha(e)) return
+      if (!seVe() || !teclaDeLaFicha(e)) return
       if (e.key === 'Enter') {
         const boton = document.querySelector<HTMLButtonElement>('[data-validar-y-siguiente]')
         if (!boton || boton.disabled) return
@@ -440,7 +506,7 @@ export default function RevisarFacturaPage() {
     }
     window.addEventListener('keydown', alPulsar)
     return () => window.removeEventListener('keydown', alPulsar)
-  }, [siguiente, anterior, ir, navegar, volver, pedirSalir])
+  }, [siguiente, anterior, ir, navegar, volver, pedirSalir, seVe])
 
   const inputCambiar = useRef<HTMLInputElement>(null)
 
@@ -455,6 +521,20 @@ export default function RevisarFacturaPage() {
   const cuentaPago = (cuentasPago.datos ?? [])[0] ?? null
   const [pagarAqui, setPagarAqui] = useState(false)
   const [avisoPago, setAvisoPago] = useState<{ tono: 'ok' | 'duda' | 'falta'; texto: string } | null>(null)
+  // S01p·22 · «Subir el PDF» en una ya apuntada que no lo tiene: no hay barra de guardar (es de solo
+  // lectura), así que se pone al elegirlo y lo dice (regla 8). Poner el PDF no cambia el asiento (0831).
+  const inputPdfApuntada = useRef<HTMLInputElement>(null)
+  const [pdfApuntada, setPdfApuntada] = useState<{ id: string; texto: string; tono: 'seguro' | 'falta' } | null>(null)
+  const [subiendoPdf, setSubiendoPdf] = useState(false)
+  async function subirPdfApuntada(file: File) {
+    if (!fac) return
+    setSubiendoPdf(true); setPdfApuntada(null)
+    try {
+      const x = await ponerPapelRecibida(fac, file, userName)
+      if (x.hecho) { setPdfApuntada({ id: fac.id, texto: `${x.texto} El asiento no cambia.`, tono: 'seguro' }); setVuelta((v) => v + 1) }
+      else setPdfApuntada({ id: fac.id, texto: `No se ha puesto el PDF: ${x.texto}.`, tono: 'falta' })
+    } finally { setSubiendoPdf(false) }
+  }
 
   if (f.error && !fac) {
     return (
@@ -499,7 +579,7 @@ export default function RevisarFacturaPage() {
   const totales = totalesDe(b)
 
   const hayCambios = ed.hay
-  const sePuedeValidar = !yaApuntada && !apuntando && !sinProveedor && !!fac.fecha && !hayCambios && !faltaDoc
+  const sePuedeValidar = !yaApuntada && !apuntando && !sinProveedor && !!fac.fecha && !hayCambios && !faltaDoc && !yaEstaba && !traida
   // B01·13 · Una factura aprobada que se puede pagar: «Pagar» es el principal y «Validar» va al lado,
   // en secundario (un solo botón azul). Antes «Validar» tapaba a «Pagar» hasta tener asiento (e2e 41609431355).
   const conPagar = puedePagarAqui && !!cuentaPago && quienPagaFicha.datos?.yoPuedo === true
@@ -543,10 +623,15 @@ export default function RevisarFacturaPage() {
     ? [...(!validada && !descartada ? [{ etiqueta: 'Por revisar', a: rutaRecibidaEnAsientos() }] : []), { etiqueta: `Abono${fac.numero ? ` ${fac.numero}` : ''}` }]
     : [{ etiqueta: `${proveedor}${fac.numero ? ` ${fac.numero}` : ''}` }]
   const tienePapel = !!papel.datos?.url
+  // Qué ofrece «Más acciones» con el PDF: la regla está en accionPdf (S01p·22).
+  const accPdf = accionPdf({ validada: !!validada, descartada: !!descartada, papelLeido: !!papel.datos, tienePapel })
   const mas: GrupoDeAcciones[] = [{
     titulo: '',
     acciones: [
-      ...(!yaApuntada ? [{ id: 'cambiar-pdf', etiqueta: tienePapel ? 'Cambiar el PDF' : 'Subir el PDF', dato: 'Un PDF o una foto, que se guarda como PDF', alPulsar: () => inputCambiar.current?.click(), grupo: '' }] : []),
+      // S01p·22: también en una apuntada sin PDF (ponerlo no cambia el asiento); cambiar el de una apuntada, no.
+      ...(accPdf ? [{ id: 'cambiar-pdf', etiqueta: accPdf.que === 'subir_apuntada' && subiendoPdf ? 'Subiendo el PDF…' : accPdf.etiqueta,
+        dato: accPdf.que === 'subir_apuntada' ? 'Un PDF o una foto, que se guarda como PDF. El asiento no cambia' : 'Un PDF o una foto, que se guarda como PDF',
+        alPulsar: () => (accPdf.que === 'subir_apuntada' ? inputPdfApuntada : inputCambiar).current?.click(), grupo: '' }] : []),
       ...(!descartada ? [{ id: 'duplicada', etiqueta: 'Marcar como duplicada', dato: 'Ya la tienes: sale de «Por revisar»', alPulsar: () => setNoEs('Está repetida'), grupo: '' }] : []),
       ...(!descartada ? [{ id: 'no-es', etiqueta: 'Descartar con motivo', dato: 'Un albarán, un presupuesto, un extracto…', alPulsar: () => setNoEs(''), grupo: '' }] : []),
       // Sin la tanda 0790 (la base aún no guarda los importes desde aquí), se corrigen donde se aprobó.
@@ -697,6 +782,18 @@ export default function RevisarFacturaPage() {
       )}
       {vista.datos && !vista.datos.propuesta && !fac.asiento && <p className="s-apoyo">{vista.datos.porque}</p>}
       <div role="status" aria-live="polite">
+        {/* N03 · La marcada «ya estaba» (gris: informa) y la que ya vino con lo traído. */}
+        {dichoAntes?.id === fac.id && <p className="s-aviso-lista" data-tono="ok" data-prueba="antes-hecho"><strong>{dichoAntes.texto}</strong></p>}
+        {yaEstaba && antes.datos && (
+          <p className="s-aviso-lista" data-tono="neutro" data-prueba="ya-contabilizada">{marcaDeLaFicha(antes.datos)}{' '}
+            <button type="button" className="s-boton s-boton-enlace" onClick={() => void deshacerYaEstaba()}>No estaba contabilizada</button>
+          </p>
+        )}
+        {traida && (
+          <p className="s-aviso-lista" data-tono="neutro" data-prueba="vino-traida">{yaVinoTraida(antes.datos?.programa ?? null)}:{' '}
+            <Link to={rutaRevisarFactura(traida.id)}>{traida.numero ? `la ${traida.numero}` : 'ábrela'}</Link>.
+          </p>
+        )}
         {avisoDeAntes && !hecho && !msgRecuperado && <p className="s-aviso-lista" data-tono="ok">{avisoDeAntes}</p>}
         {msgRecuperado && <p className="s-aviso-lista" data-tono="ok">{msgRecuperado}</p>}
         {hecho && (
@@ -762,6 +859,9 @@ export default function RevisarFacturaPage() {
         secundarios={botonPagar && !movil ? botonValidar || undefined : undefined}
         principal={botonPagar || botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}
       />
+      {pdfApuntada?.id === invoiceId && <p className="s-aviso-lista" data-tono={pdfApuntada.tono} role={pdfApuntada.tono === 'falta' ? 'alert' : 'status'} data-prueba="pdf-apuntada">{pdfApuntada.texto}</p>}
+      <input ref={inputPdfApuntada} type="file" accept={ACEPTA_PAPEL} hidden aria-label="Subir el PDF de la factura apuntada"
+        onChange={(e) => { const x = e.target.files?.[0]; if (x) void subirPdfApuntada(x); e.target.value = '' }} />
       {avisoPago && <p className="s-aviso-lista" data-tono={avisoPago.tono === 'ok' ? 'seguro' : avisoPago.tono} role={avisoPago.tono === 'falta' ? 'alert' : 'status'} data-prueba="aviso-pagar-ficha">{avisoPago.texto}</p>}
       {pagarAqui && cuentaPago && fac.company_id && (
         <DialogoPagarVarias empresaId={fac.company_id} cuenta={cuentaPago} facturas={[{ id: fac.id, proveedor: fac.proveedor?.nombre ?? 'el proveedor', numero: fac.numero }]}
@@ -770,6 +870,10 @@ export default function RevisarFacturaPage() {
       <Ficha datos={datos} documento={documento} documentoOculto={marco?.documentoOculto ?? false} usuario={userId} reglaAnchos />
       <BotonPulgar>{botonPagar ? <>{botonValidar || null}{botonPagar}</> : botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}</BotonPulgar>
       {salida.aviso}
+      {pregunta && (
+        <PreguntaAntesDelInicio a={pregunta} fallo={falloPregunta} alCerrar={() => { setPregunta(null); setFalloPregunta(null) }}
+          alYaEstaba={contestarYaEstaba} alEsNueva={contestarEsNueva} />
+      )}
       {noEs !== null && <NoEsFactura inicial={noEs} alCerrar={() => setNoEs(null)} alDescartar={(m) => descartar(m)} fallo={falloDescarte} />}
     </div>
   )

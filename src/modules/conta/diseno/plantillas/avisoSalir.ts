@@ -20,10 +20,19 @@
 // ya montado, que la ficha pinta donde quiera. <AvisoSalir> (en
 // CambiosSinGuardar.tsx) es el mismo hook envuelto en un componente, para la
 // ficha que solo quiere las puertas 1 y 2 (o que prefiere un ref).
+//
+// K03 · Dentro del marco del núcleo, ir a otra pestaña NO es salir: la
+// pantalla se queda viva con lo escrito. Así que ahí la puerta 2 solo
+// pregunta por un enlace de la pestaña que se ve y que se abriría en ESTA
+// misma pestaña (la pantalla se iría); y lo que hay sin guardar se apunta en
+// la pestaña (pestana.ts), para que su aspa pregunte antes de cerrar y la
+// pestaña lo enseñe sin abrirla. La 1 (recargar) protege a todas, se vean o
+// no. Fuera del núcleo, como siempre.
 
 import { createElement, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DialogoSalir } from './DialogoSalir'
+import { usePestana } from './pestana'
 import type { CambioCampo, ResultadoGuardar } from './cambios'
 
 export interface OpcionesAvisoSalir {
@@ -64,6 +73,23 @@ export function useAvisoSalir({ hay, cambios, donde, onGuardar, onDescartar }: O
   const [fallo, setFallo] = useState<string | null>(null)
   const hayRef = useRef(hay)
   useEffect(() => { hayRef.current = hay }, [hay])
+  const pestana = usePestana()
+  const activa = pestana ? pestana.activa : true
+  const esDeEstaPestana = pestana?.esDeEstaPestana
+  // K03 · Lo que hay sin guardar, en la pestaña (las funciones del último render, nunca viejas).
+  const ultimo = useRef({ cambios, donde, onGuardar, onDescartar })
+  useEffect(() => { ultimo.current = { cambios, donde, onGuardar, onDescartar } })
+  const ponerCambios = pestana?.ponerCambios
+  const claveCambios = hay ? `${donde ?? ''}|${cambios.length}` : ''
+  useEffect(() => {
+    if (!ponerCambios) return
+    if (!claveCambios) { ponerCambios(null); return }
+    ponerCambios({
+      cambios: ultimo.current.cambios, donde: ultimo.current.donde,
+      onGuardar: () => ultimo.current.onGuardar(), onDescartar: () => ultimo.current.onDescartar?.(),
+    })
+    return () => ponerCambios(null)
+  }, [ponerCambios, claveCambios])
 
   useEffect(() => {
     if (!hay) return
@@ -71,6 +97,8 @@ export function useAvisoSalir({ hay, cambios, donde, onGuardar, onDescartar }: O
     const alClic = (ev: MouseEvent) => {
       const destino = destinoDelClic(ev)
       if (!destino) return
+      // K03 · En el núcleo: solo la pestaña que se ve, y solo si el destino la sustituye.
+      if (!activa || (esDeEstaPestana && !esDeEstaPestana(destino))) return
       ev.preventDefault(); ev.stopPropagation()
       setFallo(null)
       setPendiente({ accion: () => navigate(destino) })
@@ -81,7 +109,7 @@ export function useAvisoSalir({ hay, cambios, donde, onGuardar, onDescartar }: O
       window.removeEventListener('beforeunload', antesDeIrse)
       document.removeEventListener('click', alClic, true)
     }
-  }, [hay, navigate])
+  }, [hay, navigate, activa, esDeEstaPestana])
 
   const pedirSalir = useCallback((accion: () => void) => {
     if (!hayRef.current) { accion(); return }

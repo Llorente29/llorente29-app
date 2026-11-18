@@ -1,0 +1,3 @@
+# X04a · la vuelta atrás: conta_erp10_por_salir como la dejó la X02.
+cuenta: scripts/conta/produccion/cuentas/x04a-por-salir.sql
+supabase/vuelta-atras/20261117T1550_x04a_por_salir_autorrepercusion.down.sql

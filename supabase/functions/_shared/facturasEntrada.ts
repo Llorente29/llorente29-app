@@ -76,7 +76,7 @@ import { queDiceElContenido, queDiceElNombre, type QueEs } from './queEs.ts'
 
 export { queDiceElContenido, queDiceElNombre, type QueEs }
 
-export const DOMINIO_ENTRADA = 'entrada.folvy.app'
+// E01 · Sin dominio de entrada fijo: cada empresa tiene el suyo y lo dice la base (_conta_dominio_entrada).
 export const DIRECCION = /^((?:facturas|liquidaciones)-[a-z0-9][a-z0-9-]{1,40})@([a-z0-9.-]+)$/
 /** La dirección única de la puerta: sin prefijo, y solo en un dominio de entrada (entrada.folvy.app, entrada.sumied.com…). */
 export const DIRECCION_UNICA = /^([a-z0-9][a-z0-9-]{1,40})@(entrada\.[a-z0-9.-]+)$/
@@ -113,6 +113,48 @@ export async function comprobarFirma(secreto: string, cab: { id: string | null; 
   // Comparación en tiempo constante.
   const igual = (a: string, b: string) => a.length === b.length && [...a].reduce((d, ch, i) => d | (ch.charCodeAt(0) ^ b.charCodeAt(i)), 0) === 0
   return dadas.some((f) => igual(f, esperada)) ? null : 'la firma no es la de Resend'
+}
+
+// ── E01 · Las dos cuentas de Resend ─────────────────────────────────────────
+//
+// Folvy y Sumied tienen cada una su cuenta de Resend (entrada.folvy.app y
+// entrada.sumied.com), y las dos avisan a esta misma función. Cada aviso es de
+// la cuenta cuyo secreto valida su firma, y todo lo que se pida después de ese
+// correo (adjuntos, cuerpo, el correo entero) se pide con la clave de ESA cuenta.
+// Nunca se elige por el dominio del destinatario: eso lo escribe quien manda.
+
+export type CuentaResend = 'folvy' | 'sumied'
+/** Una cuenta de Resend con su secreto del webhook y su clave de la API. */
+export type ParejaResend = { cuenta: CuentaResend; secreto: string; clave: string }
+
+/** Las cuentas configuradas: solo las parejas completas (secreto y clave). */
+export function parejasResend(x: Record<CuentaResend, { secreto?: string | null; clave?: string | null }>): ParejaResend[] {
+  return (['folvy', 'sumied'] as const)
+    .filter((c) => !!x[c]?.secreto && !!x[c]?.clave)
+    .map((c) => ({ cuenta: c, secreto: x[c].secreto!, clave: x[c].clave! }))
+}
+
+/** ¿De qué cuenta es este aviso? La primera cuyo secreto valida la firma; si ninguna, el porqué. */
+export async function cuentaDelAviso(parejas: readonly ParejaResend[], cab: { id: string | null; timestamp: string | null; firma: string | null }, cuerpo: string, ahoraS: number):
+  Promise<{ pareja: ParejaResend; mal?: undefined } | { pareja?: undefined; mal: string }> {
+  if (!parejas.length) return { mal: 'no hay ninguna cuenta de Resend configurada' }
+  let mal = 'la firma no es la de Resend'
+  for (const p of parejas) {
+    const m = await comprobarFirma(p.secreto, cab, cuerpo, ahoraS)
+    if (!m) return { pareja: p }
+    mal = m
+  }
+  return { mal }
+}
+
+/**
+ * La cuenta por la que entró un correo, para pedirlo otra vez («Volver a leer», «Poner el PDF»): la
+ * apuntada en el registro de entrada; si no hay (los de antes del E01), la de Folvy. Null si esa
+ * cuenta no está configurada.
+ */
+export function parejaDelCorreo(apuntada: string | null | undefined, parejas: readonly ParejaResend[]): ParejaResend | null {
+  const c: CuentaResend = apuntada === 'sumied' ? 'sumied' : 'folvy'
+  return parejas.find((p) => p.cuenta === c) ?? null
 }
 
 // ── El correo ──────────────────────────────────────────────────────────────

@@ -810,7 +810,7 @@ async function enviarContraasientoRecibida(c: ContraasientoBD, p: PuertoEnvio & 
 
 /** Lo que el envío de un asiento general usa del cliente de Diez (ClienteDiez lo cumple). */
 export interface ClienteDiezApuntes {
-  apuntesDelMes(aaaamm: string): Promise<Apunte[]>
+  apuntesDelMes(aaaamm: string, o?: { fresco?: boolean }): Promise<Apunte[]>
   enviarAsiento(a: ApunteSimplificado): Promise<Apunte>
   subcuenta(codigo: string): Promise<Record<string, unknown> | null>
 }
@@ -822,6 +822,14 @@ export interface PuertoApunte extends Pick<PuertoEnvio, 'envio' | 'guardar' | 'c
    * mismas líneas) son dos asientos en Diez: el del primero no es el del segundo.
    */
   enlazados?(companyId: string, menosEntry: string): Promise<Set<string>>
+  /**
+   * B01r26 (14/11) · En el traspaso del mes, un asiento igual que ya está en Diez y no
+   * viene de Sumied NO se enlaza: después de borrar el mes en Diez no debería haber
+   * ninguno, y si lo hay es que el borrado no está hecho (o no ha terminado). El
+   * traspaso de octubre enlazó así 275 asientos con documentos que Diez borró
+   * después. Se para ese asiento, con el documento de Diez en el motivo.
+   */
+  noEnlazarAjenos?: boolean
 }
 
 export async function enviarApunteADiez(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnvio> {
@@ -886,11 +894,20 @@ async function enviarApunte(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnv
   const mes = String(ap.Fecha).slice(0, 6)
   const usados = p.enlazados ? await p.enlazados(a.company_id, a.id) : new Set<string>()
   const esElMismo = (d: Apunte) => esElMismoApunte(ap)(d) && !usados.has(`${d.Serie}/${d.Documento}`)
-  const ya = unoPorAsiento((await diez.apuntesDelMes(mes)).filter(esElMismo))
+  // B01r26 (14/11): si el intento anterior se cortó escribiendo («enviando», p. ej. un 504), Diez se
+  // lee de nuevo, sin la copia de 10 minutos: la copia es de antes del corte y no ve lo que
+  // escribió, y se mandaba otra vez (los duplicados del ensayo de la C0009).
+  const cortado = previo?.last_error === 'enviando'
+  const ya = unoPorAsiento((await diez.apuntesDelMes(mes, { fresco: cortado })).filter(esElMismo))
   if (ya.length > 1) return apuntar(`hay ${ya.length} asientos iguales en Diez ese día (${ya.map((d) => `${d.Serie}/${d.Documento}`).join(', ')}): no se toca nada`, { account_connector_id: con.id }, false)
   const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(ap)))
   const comun = { entry_id: a.id, account_id: a.account_id, company_id: a.company_id, account_connector_id: con.id, kind: 'asiento' as const, ext_invoice_number: null, payload_hash: hash, document_id: null, document_status: null, document_error: null, document_attached_at: null }
   let serie: string, documento: number, enlazada: boolean
+  // Un igual en Diez que no viene de Sumied, dentro del traspaso: no se enlaza (salvo que
+  // sea el nuestro, cortado escribiendo: entonces sí es el que escribió Sumied).
+  if (ya.length === 1 && p.noEnlazarAjenos && !cortado) {
+    return apuntar(`en Diez ya hay un asiento igual que no viene de Sumied (${ya[0].Serie}/${ya[0].Documento}): no se enlaza ni se escribe otro. ¿Está hecho el borrado del mes en Diez? Si ese asiento es bueno, se enlaza a mano`, { account_connector_id: con.id })
+  }
   if (ya.length === 1) {
     serie = String(ya[0].Serie); documento = Number(ya[0].Documento); enlazada = true
     previo = await p.guardar({ ...(previo ?? fila0(a)), ...comun, status: 'enlazado', ext_year: String(ya[0].Ejercicio ?? ap.Ejercicio), ext_series: serie, ext_number: documento, last_error: null, sent_at: iso(p.ahora()), next_try_at: null })
@@ -903,7 +920,7 @@ async function enviarApunte(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnv
     serie = String(creado?.Serie ?? ap.Serie); documento = Number(creado?.Documento ?? 0)
     if (!documento) {
       // Diez lo ha aceptado sin decir su número: se busca el que acaba de escribir.
-      const vuelta = unoPorAsiento((await diez.apuntesDelMes(mes)).filter(esElMismo))
+      const vuelta = unoPorAsiento((await diez.apuntesDelMes(mes, { fresco: true })).filter(esElMismo))
       if (vuelta.length !== 1) return apuntar('Diez lo ha aceptado pero no dice su número y no se encuentra uno solo: al reintentar se busca antes y se enlaza, no se escribe otro')
       ej = String(vuelta[0].Ejercicio ?? ej); serie = String(vuelta[0].Serie); documento = Number(vuelta[0].Documento)
     }

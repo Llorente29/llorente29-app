@@ -1,0 +1,12 @@
+# X06 · El paso 3 de la salida a ERP10, «Comprueba que queda igual» (encargo X06,
+# 18/11). Rama conta/x06-comprobar-que-queda-igual. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   0515  Añade dos tablas (conta_erp10_a_mano, conta_erp10_igualado) y cuatro
+#         funciones: conta_erp10_comprobar (solo lee), conta_erp10_a_mano_poner,
+#         conta_erp10_volver_a_sacar y conta_erp10_igualado_poner. No cambia ninguna
+#         función ni tabla que exista.
+#
+# Solo añade. Nada de Diez ni del camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x06-comprobar-erp10.sql
+supabase/migrations/20261118T0515_x06_comprobar_salida.sql

@@ -1,0 +1,10 @@
+# N06a · la carga en prueba y deshacerla: 1806 añade columnas; 1807 cambia el embudo y cuatro
+# funciones más con la misma firma; 1808 añade las funciones de traer, deshacer y dejar fuera. Su
+# prueba (ROLLBACK, cuenta A, el ejemplo inventado de ERP10): las cinco propuestas del embudo
+# idénticas antes y después; traer con las cifras del LEEME; no validar a mano; no dos a la vez; la
+# otra cuenta no ve; deshacer deja todo idéntico, tabla a tabla; traer otra vez; el ensayo de la
+# regla 10; y las tres vueltas atrás.
+supabase/migrations/20261117T1806_n06a_carga_columnas.sql
+supabase/migrations/20261117T1807_n06a_carga_embudo.sql
+supabase/migrations/20261117T1808_n06a_carga_funciones.sql
+supabase/staging/sql/20261117_n06a_carga_prueba.sql

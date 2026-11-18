@@ -112,20 +112,26 @@ export function SeGuarda({ texto, ocupado }: { texto: string | null; ocupado?: b
  * Una ventana encima de la ficha. Escape y el fondo la cierran; el foco vuelve adonde estaba.
  * Con `cerrable`, además una ✕ visible arriba a la derecha (en el móvil no hay Escape ni fondo a la vista).
  */
-export function Dialogo({ titulo, children, alCerrar, cerrable = false }: { titulo: string; children: ReactNode; alCerrar: () => void; cerrable?: boolean }) {
+export function Dialogo({ titulo, children, alCerrar, cerrable = false, sinBotonPorDefecto = false }: {
+  titulo: string; children: ReactNode; alCerrar: () => void; cerrable?: boolean
+  /** N03 · Ningún botón es el de por defecto: el foco va a la ventana, no al primer botón (Intro no contesta). */
+  sinBotonPorDefecto?: boolean
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const cerrar = useRef(alCerrar)
+  const sinBoton = useRef(sinBotonPorDefecto)
   useEffect(() => { cerrar.current = alCerrar }, [alCerrar])
   useEffect(() => {
     const previo = document.activeElement as HTMLElement | null
-    ref.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus()
+    if (sinBoton.current) ref.current?.focus()
+    else ref.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus()
     const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') cerrar.current() }
     window.addEventListener('keydown', tecla)
     return () => { window.removeEventListener('keydown', tecla); previo?.focus() }
   }, [])
   return (
     <div className="cxp-velo cx" onMouseDown={(e) => { if (e.target === e.currentTarget) alCerrar() }}>
-      <div className={cerrable ? 'cxp-dialogo cxp-dialogo-cerrable' : 'cxp-dialogo'} role="dialog" aria-modal="true" aria-label={titulo} ref={ref}>
+      <div className={cerrable ? 'cxp-dialogo cxp-dialogo-cerrable' : 'cxp-dialogo'} role="dialog" aria-modal="true" aria-label={titulo} ref={ref} tabIndex={sinBotonPorDefecto ? -1 : undefined}>
         <h2>{titulo}</h2>
         {children}
         {/* Al final del árbol para que el foco inicial siga yendo al primer campo; se pinta arriba. */}

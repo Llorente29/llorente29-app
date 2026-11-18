@@ -110,6 +110,7 @@ function fuentesHosteleria() {
 function puertaHosteleria() {
   return {
     direcciones: [{ tipo: 'documentos', direccion: 'taberna-de-prueba-norte@entrada.folvy.app', activa: true }],
+    direccion: { tipo: 'documentos', direccion: 'taberna-de-prueba-norte@entrada.folvy.app', activa: true },
     conectados: { bancos: [], uber_por_correo: true },
     ultimos: [
       { id: 'n1', fuente: 'bandeja', cuando: hace(2), por: 'correo', que: null, de: 'info@talleresruiz.test', importe: null, estado: 'no_es_factura', donde: null, nombre: 'documento_scan_0231.pdf' },

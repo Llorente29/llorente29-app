@@ -16,7 +16,7 @@ import { rutaAsiento } from '@/config/navegacion'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Guardado } from '@/modules/conta/ui/piezas'
 import { bajarXlsx, libroXlsx } from '@/modules/conta/lib/traspasoExcelLibro'
-import { crearSubcuentasEnDiez, prepararExcel, yaLoHeImportado, type ResultadoExcel, type ResultadoImportado } from '@/modules/conta/services/traspasoService'
+import { crearSubcuentasEnDiez, prepararExcel, yaLoHeImportado, type ResultadoExcel, type ResultadoImportado, type ResultadoSubcuentas } from '@/modules/conta/services/traspasoService'
 
 const mensajeDe = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, '')
 const n = (x: number) => x.toLocaleString('es-ES')
@@ -35,24 +35,28 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
   const [hecho, setHecho] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [crear, setCrear] = useState(false)
+  const [creacion, setCreacion] = useState<ResultadoSubcuentas | null>(null)
 
   async function preparar() {
-    setOcupado('Comprobando las subcuentas en Diez…'); setError(null); setHecho(null)
+    setOcupado('Comprobando las subcuentas en Diez…'); setError(null)
     try {
       const r = await prepararExcel(companyId, mes)
       setX(r)
-      setHecho(r.faltan.length
+      setHecho((antes) => (antes && antes.startsWith('En Diez (') ? `${antes} ` : '') + (r.faltan.length
         ? `Faltan ${n(r.faltan.length)} ${r.faltan.length === 1 ? 'subcuenta' : 'subcuentas'} en Diez (${r.base}): sin ellas no se prepara ningún Excel.`
-        : `Las ${n(r.comprobadas)} subcuentas están en Diez (${r.base}). Listos: ${n(r.emitidas?.length ?? 0)} emitidas y ${n(r.recibidas?.length ?? 0)} recibidas.`)
+        : `Las ${n(r.comprobadas)} subcuentas están en Diez (${r.base}). Listos: ${n(r.emitidas?.length ?? 0)} emitidas y ${n(r.recibidas?.length ?? 0)} recibidas${r.sin_pdf?.length ? ` (${n(r.sin_pdf.length)} sin PDF: van sin el enlace y se adjunta después)` : ''}.`))
     } catch (e) { setError(`No se han podido preparar los Excel: ${mensajeDe(e)}`) } finally { setOcupado(null) }
   }
 
   async function crearlas() {
-    setOcupado('Creando las subcuentas en Diez…'); setError(null)
+    const cuantas = x?.faltan.length ?? 0
+    setOcupado(`Creando ${n(cuantas)} ${cuantas === 1 ? 'subcuenta' : 'subcuentas'} en Diez, una a una… (unos segundos cada una)`); setError(null); setCreacion(null)
     try {
       const r = await crearSubcuentasEnDiez(companyId, mes)
       setCrear(false)
-      setHecho(`Creadas en Diez (${r.base}): ${r.creadas.map((c) => `${c.codigo} ${c.nombre}`).join(', ') || 'ninguna'}.${r.faltan.length ? ` Siguen faltando ${n(r.faltan.length)}.` : ''}`)
+      setCreacion(r)
+      const no = r.no_creadas ?? []
+      setHecho(`En Diez (${r.base}): ${r.creadas.length ? `creadas ${n(r.creadas.length)}` : 'no se ha creado ninguna'}${no.length ? `; ${n(no.length)} no (abajo, por qué)` : ''}.${r.faltan.length ? ` Siguen faltando ${n(r.faltan.length)}.` : ' Ya están todas.'}${r.otra_vez ? ` ${n(r.otra_vez)} ${r.otra_vez === 1 ? 'asiento que esperaba vuelve' : 'asientos que esperaban vuelven'} al traspaso: pulsa «Seguir traspasando ${nombre}».` : ''}`)
       await preparar()
     } catch (e) { setError(`No se han creado: ${mensajeDe(e)}`); setOcupado(null) }
   }
@@ -61,7 +65,8 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
     const filas = x?.[cual] ?? []
     try {
       bajarXlsx(await libroXlsx(filas, cual === 'emitidas' ? 'Emitidas' : 'Recibidas'), `diez-${cual}-${mes.slice(0, 7)}.xlsx`)
-      setHecho(`Descargado el Excel de ${cual}: ${n(filas.length)} ${filas.length === 1 ? 'factura' : 'facturas'}, cada una con el enlace a su PDF.`)
+      const sinPdf = cual === 'recibidas' ? (x?.sin_pdf?.length ?? 0) : 0
+      setHecho(`Descargado el Excel de ${cual}: ${n(filas.length)} ${filas.length === 1 ? 'factura' : 'facturas'}, ${sinPdf ? `${n(filas.length - sinPdf)} con el enlace a su PDF y ${n(sinPdf)} sin él (se adjunta después)` : 'cada una con el enlace a su PDF'}.`)
     } catch (e) { setError(`No se ha podido hacer el Excel: ${mensajeDe(e)}`) }
   }
 
@@ -70,7 +75,7 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
     try {
       const r = await yaLoHeImportado(companyId, mes)
       setImp(r)
-      setHecho(`${n(r.enlazadas)} de ${n(r.van_por_excel)} facturas encontradas en Diez y enlazadas.${r.faltan.length ? ` Faltan ${n(r.faltan.length)}.` : ''}${r.dobles.length ? ` ${n(r.dobles.length)} están dos veces en Diez y no se enlazan: ${r.dobles.join(', ')}.` : ''}`)
+      setHecho(`${n(r.enlazadas)} de ${n(r.van_por_excel)} facturas encontradas en Diez y enlazadas.${r.faltan.length ? ` Faltan ${n(r.faltan.length)}.` : ''}${r.dobles.length ? ` ${n(r.dobles.length)} están dos veces en Diez y no se enlazan: ${r.dobles.join(', ')}.` : ''}${r.dias_sin_leer?.length ? ` Diez no ha dejado leer ${n(r.dias_sin_leer.length)} ${r.dias_sin_leer.length === 1 ? 'día' : 'días'} (${r.dias_sin_leer.join(', ')}): las facturas de esos días salen como que faltan; vuelve a pulsar en un rato.` : ''}`)
       setOcupado('Comprobando con Diez…')
       await alImportar()
     } catch (e) { setError(`No se ha podido comprobar lo importado: ${mensajeDe(e)}`) } finally { setOcupado(null) }
@@ -93,6 +98,29 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
           <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => setCrear(true)}>Crearlas en Diez</button>
         </div>
       )}
+      {creacion && (creacion.creadas.length > 0 || (creacion.no_creadas?.length ?? 0) > 0) && (
+        <ul className="cxl-lista-estado" aria-label="Lo que se ha hecho en Diez" data-testid="traspaso-subcuentas-creadas">
+          {creacion.creadas.map((c) => (
+            <li key={c.codigo} className="cxl-mes"><span className="cxl-mes-que"><span className="cxl-punto cxl-punto-verde" aria-hidden="true" /><span><strong>{c.codigo}</strong> {c.nombre}: creada{c.recortado ? ' (con el nombre recortado: Diez admite 60 caracteres)' : ''}</span></span></li>
+          ))}
+          {(creacion.no_creadas ?? []).map((c) => (
+            <li key={c.codigo} className="cxl-mes"><span className="cxl-mes-que"><span className="cxl-punto cxl-punto-rojo" aria-hidden="true" /><span><strong>{c.codigo}</strong> {c.nombre}: no se ha creado. {c.porque}</span></span></li>
+          ))}
+        </ul>
+      )}
+      {x && (x.sin_pdf?.length ?? 0) > 0 && (
+        <div className="cxl-aviso-ambar" role="note" data-testid="traspaso-sin-pdf">
+          <p>{n(x.sin_pdf!.length)} {x.sin_pdf!.length === 1 ? 'recibida va' : 'recibidas van'} en el Excel sin su PDF (Sumied no lo tiene): llegan a Diez sin el enlace y el PDF se adjunta después.</p>
+          <ul className="cxl-lista-estado">
+            {x.sin_pdf!.map((f) => (
+              <li key={f.entry_id} className="cxl-mes">
+                <span className="cxl-mes-que"><span className="cxl-punto cxl-punto-ambar" aria-hidden="true" /><span>{f.numero || 'Sin número'}: sin PDF, para adjuntar después</span></span>
+                <Link to={rutaAsiento(f.entry_id)} className="cx-enlace">Ver el asiento</Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {x && x.por_la_api.length > 0 && (
         <details>
           <summary>{n(x.por_la_api.length)} {x.por_la_api.length === 1 ? 'factura va' : 'facturas van'} por la API, sin PDF en Diez</summary>
@@ -110,8 +138,9 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
       <h4 className="cxl-subtitulo">3 · Ya lo he importado</h4>
       <p className="cxl-apoyo">Cuando los dos estén importados en Diez, Sumied busca cada factura allí, la enlaza con la suya y comprueba si cuadra.</p>
       <div className="cxl-herramientas">
-        <button type="button" className="cx-boton" disabled={!!ocupado || !listos} onClick={() => void importado()}>Ya lo he importado</button>
+        <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => void importado()}>Ya lo he importado</button>
       </div>
+      {!x && <p className="cxl-apoyo">No hace falta volver a preparar los Excel: Sumied lee directamente lo que hay en Diez.</p>}
       {imp && imp.faltan.length > 0 && (
         <ul className="cxl-lista-estado" aria-label="Las que no están en Diez">
           {imp.faltan.map((f) => (
@@ -129,9 +158,10 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
         <Dialogo titulo="Crear las subcuentas en Diez" alCerrar={() => { if (!ocupado) setCrear(false) }}>
           <p>Se crean en Diez ({x.base}) con el nombre que tienen en Sumied:</p>
           <ul>{x.faltan.map((f) => <li key={f.codigo}><strong>{f.codigo}</strong> {f.nombre}</li>)}</ul>
-          <p className="cxl-apoyo">Queda apuntado quién las ha creado y cuándo.</p>
+          <p className="cxl-apoyo">Queda apuntado quién las ha creado y cuándo. Si un nombre pasa de 60 caracteres, va recortado por la última palabra entera.</p>
+          {ocupado && <p className="cxl-apoyo" role="status" data-testid="traspaso-creando">{ocupado}</p>}
           <div className="cxl-herramientas">
-            <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => void crearlas()}>{ocupado ?? 'Crearlas'}</button>
+            <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => void crearlas()}>{ocupado ? 'Creando…' : 'Crearlas'}</button>
             <button type="button" className="cx-boton-sec" disabled={!!ocupado} onClick={() => setCrear(false)}>Cancelar</button>
           </div>
         </Dialogo>

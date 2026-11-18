@@ -1,0 +1,5 @@
+# B01r26 · 0016: los 301 envíos de octubre enlazados con la C0009, a «pendiente», y
+# los 16 parados por la C0009 otra vez al traspaso. No añade objetos. Su prueba
+# (ROLLBACK): sin Foodint no hace nada.
+supabase/migrations/20261115T0016_b01r26_enlaces_de_la_c0009.sql
+supabase/staging/sql/20261115_b01r26_enlaces_de_la_c0009_prueba.sql

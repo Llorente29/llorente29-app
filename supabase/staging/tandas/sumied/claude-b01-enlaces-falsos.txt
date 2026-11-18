@@ -1,0 +1,6 @@
+# B01r26 · los enlaces falsos de octubre: en Foodint, 275 envíos «enlazado» y 55
+# «enviado» cuyo asiento no está en la C0008 vuelven a «pendiente». No añade
+# objetos. Su prueba (ROLLBACK): sin Foodint no hace nada, y el mecanismo
+# (enlazado → no va en el traspaso; pendiente sin referencia → vuelve).
+supabase/migrations/20261114T2041_b01r26_enlaces_falsos.sql
+supabase/staging/sql/20261114_b01r26_enlaces_falsos_prueba.sql

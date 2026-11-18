@@ -1,0 +1,19 @@
+{
+ "_que": "R06 · las formas de pago del TPV · contexto medido en la BASE LOCAL con la estructura de staging y sus semillas, en SOLO LECTURA, el 17/11: no en producción (esta sesión no lee producción). Las funciones nuevas no existen; conta_tpv_forma_cuenta, conta_tpv_dia, conta_tpv_cobro y conta_tpv_documento existen desde el R03 y no se tocan. Nada del camino del pedido.",
+ "medido": "2026-11-17T21:35Z",
+ "tanda": {
+  "supabase/migrations/20261117T2130_r06_formas_de_pago.sql": "8272e90b6b7195ba3ed9b0cd53a55cf2"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,8 @@
+{
+ "_que": "B01r26 · los arreglos del ensayo de la C0009 · el cerrojo de la tanda del traspaso · contexto de producción, medido en SOLO LECTURA el 14/11 a las 06:57Z: la 0757 añade a conta_diez_traspaso (0 filas) la columna tanda_hasta, que admite nulos y no existe, y dos funciones que no existen (conta_traspaso_tomar_tanda y conta_traspaso_soltar_tanda). No está en el historial. Nada en el camino del pedido.",
+ "medido": "2026-11-14T06:57Z",
+ "tanda": {
+  "supabase/migrations/20261114T0757_b01r26_traspaso_cerrojo.sql": "711b421ac34e1049f82512326c1585f3"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

@@ -316,7 +316,7 @@ export const CONTA = {
  * su aviso «aún no» (`hueco`), como pide el encargo para Certificados: el
  * índice dice lo que habrá, y la entrada dice que todavía no está.
  */
-export interface EntradaAjustes { id: string; etiqueta: string; ruta: string; hueco?: string; /** GD · Solo en una cuenta de demostración. */ soloDemo?: boolean }
+export interface EntradaAjustes { id: string; etiqueta: string; ruta: string; hueco?: string; /** GD · Solo en una cuenta de demostración. */ soloDemo?: boolean; /** R06 · Solo en una empresa con «ventas por día» encendido. */ soloVentasPorDia?: boolean }
 export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
   {
     grupo: 'Empresa',
@@ -356,6 +356,13 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
     ],
   },
   {
+    // R06 · Ajustes › Ventas por día: a qué cuenta va cada forma de pago del TPV.
+    grupo: 'Ventas',
+    entradas: [
+      { id: 'ventas-por-dia', etiqueta: 'Ventas por día', ruta: 'ajustes/ventas-por-dia', soloVentasPorDia: true },
+    ],
+  },
+  {
     grupo: 'Acceso y avisos',
     entradas: [
       // DM1 · PR 1 (30/10): ya no es un hueco. Quién entra e «Invitar a una persona» (tablero 4).
@@ -378,8 +385,8 @@ export const ENTRADA_DE_APARTADO: Record<string, string> = {
 }
 
 /** Las entradas del índice de Ajustes que se pintan: en el producto vendido solo, sin las que dicen «aún no». */
-export function indiceAjustes(solo = false, demo = false): typeof INDICE_AJUSTES {
-  return INDICE_AJUSTES.map((g) => ({ ...g, entradas: g.entradas.filter((e) => !(solo && e.hueco) && (demo || !e.soloDemo)) })).filter((g) => g.entradas.length > 0)
+export function indiceAjustes(solo = false, demo = false, ventasPorDia = false): typeof INDICE_AJUSTES {
+  return INDICE_AJUSTES.map((g) => ({ ...g, entradas: g.entradas.filter((e) => !(solo && e.hueco) && (demo || !e.soloDemo) && (ventasPorDia || !e.soloVentasPorDia)) })).filter((g) => g.entradas.length > 0)
 }
 
 /** N1 · La ficha nueva de una persona en Sumied › Laboral. */

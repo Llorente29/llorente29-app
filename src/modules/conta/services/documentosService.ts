@@ -32,6 +32,7 @@ import { MAX_BYTES_EXPEDIDA, claseDeFichero, motivoExpedida, nombreExpedida, rut
 import { papelDeLaLectura } from '@/modules/conta/documentos/fichaRecibida'
 import { releerCorreos } from '@/modules/conta/services/comprasService'
 import type { ProveedorLeido } from '@/modules/conta/lib/proveedorDesdeFactura'
+import { deLaBase as antesDeLaBase, type AntesDelInicio } from '@/modules/conta/documentos/antesDelInicio'
 
 type Fila = Record<string, unknown>
 const RECEPCIONES = 'receipt-uploads'
@@ -300,6 +301,33 @@ export async function guardarExpedidaPdf(accountId: string, entryId: string, fic
     p_entry: entryId, p_ruta: destino, p_nombre: nombreExpedida(fichero.name), p_sha256: huella, p_bytes: pdf.length, p_quien_nombre: quien,
   }).catch((e: unknown) => { throw new Error(motivoExpedida(motivo(e))) })
   return { nombre: typeof r.nombre === 'string' ? r.nombre : nombreExpedida(fichero.name), yaEstaba: r.ya_estaba === true }
+}
+
+/**
+ * N03 · Una factura de antes del día en que la empresa empezó en Sumied: si hay que
+ * preguntar «¿Ya estaba contabilizada?», con sus fechas y el programa
+ * (conta_recibida_antes_del_inicio, 0955). Null si la base aún no la tiene: entonces
+ * se sigue como antes y la base, cuando la tenga, para igual.
+ */
+export async function leerAntesDelInicio(invoiceId: string): Promise<AntesDelInicio | null> {
+  const x = await llamar<unknown>('conta_recibida_antes_del_inicio', { p_invoice: invoiceId })
+  if (x.falta) return null
+  if (x.error) throw new Error(x.error)
+  return antesDeLaBase(x.datos)
+}
+
+/** N03 · «Sí, ya estaba» / «No, es nueva», o null para deshacerlo («No estaba contabilizada»). Devuelve el texto de la base (regla 8). */
+export async function responderAntesDelInicio(invoiceId: string, respuesta: 'ya_estaba' | 'es_nueva' | null, quien: string | null): Promise<string> {
+  const r = await rpc<{ texto?: string } | null>('conta_recibida_responder_antes_del_inicio', { p_invoice: invoiceId, p_respuesta: respuesta, p_quien_nombre: quien })
+  return typeof r?.texto === 'string' ? r.texto : 'Hecho.'
+}
+
+/** N03 · La fecha de un asiento (para decir «Contabilizada el …»). */
+export async function fechaDelAsiento(entryId: string): Promise<string | null> {
+  const { data, error } = await tabla('journal_entry').select('entry_date').eq('id', entryId).maybeSingle()
+  if (error) throw new Error(mensaje('No he podido leer la fecha del asiento', error))
+  const f = (data as { entry_date?: string } | null)?.entry_date
+  return f ? String(f).slice(0, 10) : null
 }
 
 /**

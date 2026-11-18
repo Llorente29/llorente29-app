@@ -1,0 +1,4 @@
+# X04 · la vuelta atrás: quita las dos funciones y la columna (para si alguna
+# empresa ya tiene su carpeta puesta).
+cuenta: scripts/conta/produccion/cuentas/x04-pantalla-erp10.sql
+supabase/vuelta-atras/20261117T1530_x04_salida_erp10_pantalla.down.sql

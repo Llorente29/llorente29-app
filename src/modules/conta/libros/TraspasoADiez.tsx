@@ -75,10 +75,26 @@ export function TraspasoADiez({ companyId, meses, cerrados, hoy, vuelta, alCambi
   /** Las tandas hasta que no queda nada, y después el cuadre. */
   async function traspasar() {
     setError(null); setHecho(null)
+    // Regla 8 (ensayo de la C0009, 14/11): dice algo desde el primer momento, no al acabar la primera tanda.
+    setOcupado(`Traspasando ${nombre}: mandando la primera tanda a Diez (unos segundos por asiento)…`)
     try {
-      let quedan = 1; let ultima: Awaited<ReturnType<typeof traspasarTanda>> | null = null
+      let quedan = 1; let ultima: Awaited<ReturnType<typeof traspasarTanda>> | null = null; let cortes = 0; let esperas = 0
       while (quedan > 0) {
-        ultima = await traspasarTanda(companyId, mes)
+        try {
+          ultima = await traspasarTanda(companyId, mes)
+          cortes = 0
+        } catch (e) {
+          // B01r26 (14/11): si otra tanda lo tiene (otra pestaña, o la de antes de un corte), se espera a que acabe.
+          if (/tanda de este traspaso en marcha/.test(mensajeDe(e)) && ++esperas <= 20) {
+            setOcupado(`Traspasando ${nombre}: hay otra tanda en marcha; espero a que acabe…`)
+            await new Promise((ok) => setTimeout(ok, 6000))
+            continue
+          }
+          // Un corte de la función (504) no pierde nada: lo que llegó está apuntado y la tanda siguiente sigue por donde iba.
+          if (++cortes > 2 || !/504|tiempo|timeout|Failed to fetch/i.test(mensajeDe(e))) throw e
+          setOcupado(`Traspasando ${nombre}: la función se ha cortado (${mensajeDe(e)}); sigo con la tanda siguiente…`)
+          continue
+        }
         quedan = ultima.quedan
         setOcupado(`Traspasando ${nombre}: ${ultima.llegaron_total.toLocaleString('es-ES')} de ${ultima.van.toLocaleString('es-ES')} en Diez${ultima.no_llegaron ? ` · ${ultima.no_llegaron} sin llegar` : ''}…`)
       }
@@ -129,8 +145,8 @@ export function TraspasoADiez({ companyId, meses, cerrados, hoy, vuelta, alCambi
   const terminado = mesTerminado(mes, hoy)
   const faltan = d ? queFalta(d.faltan) : []
   const tipos = d ? porTipo(d.por_tipo) : []
-  // El botón principal: traspasar (o seguir) cuando el mes ha terminado y hay algo que mandar.
-  const puedeEmpezar = !!d && d.conectado && terminado && d.van > 0 && t?.estado !== 'terminado'
+  // El botón principal: traspasar (o seguir) cuando hay algo que mandar. SP (Julio, 15/11): también el mes en curso, con su aviso.
+  const puedeEmpezar = !!d && d.conectado && d.van > 0 && t?.estado !== 'terminado'
   const sigue = t?.estado === 'traspasando'
   const verDetalle = fallos ?? (t?.estado === 'con_fallos' ? null : [])
 
@@ -145,7 +161,7 @@ export function TraspasoADiez({ companyId, meses, cerrados, hoy, vuelta, alCambi
       {!d && !r.error && <Hueso alto={60} />}
       {d && (
         <>
-          <p className={`cxl-traspaso-frase ${t?.estado === 'terminado' && d.mes_cerrado ? 'cxl-verde' : faltan.length && terminado && !t ? 'cxl-ambar' : ''}`} data-testid="traspaso-frase">
+          <p className={`cxl-traspaso-frase ${t?.estado === 'terminado' && d.mes_cerrado ? 'cxl-verde' : (faltan.length || !terminado) && !t ? 'cxl-ambar' : ''}`} data-testid="traspaso-frase">
             {d.conectado ? fraseDelMes(d, hoy) : 'Esta empresa no está conectada con Diez: no hay nada que traspasar.'}
           </p>
 
@@ -235,7 +251,12 @@ export function TraspasoADiez({ companyId, meses, cerrados, hoy, vuelta, alCambi
               <p>Si traspasas igual, queda apuntado que faltaban. Lo que se arregle después va al mes siguiente.</p>
             </div>
           )}
-          <p className="cxl-apoyo">Al confirmar, autorizas escribir en Diez todo lo de {nombre}: ventas, facturas recibidas, banco, asientos a mano y liquidaciones. El banco, los asientos a mano y las liquidaciones van solos; las facturas, con su PDF, por dos Excel que importas tú en Diez (pasos 2 y 3). Queda apuntado quién y cuándo. Si llega todo y cuadra, {nombre} se cierra.</p>
+          {!terminado && (
+            <div className="cxl-aviso-ambar" role="note" data-testid="traspaso-mes-en-curso">
+              <p>{mayuscula(nombre)} aún no ha terminado. Se traspasa lo que lleva hasta hoy y {nombre} no se cierra en Sumied: lo que entre después con fecha de {nombre} ya no viajará a Diez.</p>
+            </div>
+          )}
+          <p className="cxl-apoyo">Al confirmar, autorizas escribir en Diez todo lo de {nombre}: ventas, facturas recibidas, banco, asientos a mano y liquidaciones. El banco, los asientos a mano y las liquidaciones van solos; las facturas, con su PDF, por dos Excel que importas tú en Diez (pasos 2 y 3). Queda apuntado quién y cuándo. {terminado ? `Si llega todo y cuadra, ${nombre} se cierra.` : ''}</p>
           {error && <p className="cxl-sin-sitio" role="alert">{error}</p>}
           <div className="cxl-herramientas">
             <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => void confirmar()}>{ocupado ?? (faltan.length ? 'Traspasar igual' : 'Traspasar')}</button>

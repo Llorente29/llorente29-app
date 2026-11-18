@@ -119,6 +119,8 @@ describe('contabilidad no escribe «Folvy» a mano', () => {
     // S01: «Volver a Folvy» vive en el esqueleto, en el menú del usuario y en el cajón del móvil (S01c; detrás de `!solo`).
     ['esqueleto/MenuUsuario.tsx', /Volver a Folvy/],
     ['marco/Cajon.tsx', /Volver a Folvy/],
+    // K02: y en el menú de la persona del marco del núcleo (detrás de `!solo`, como en el de hoy).
+    ['nucleo/Arriba.tsx', /Volver a Folvy/],
     ['ajustes/MarcoAjustes.tsx', /CON_MARCA \? MARCA\.nombre : 'Folvy Conta'/],
     ['module.tsx', /CON_MARCA \? MARCA\.nombre : 'Folvy Conta'/],
     // D01: «Apuntar solo lo seguro» firma como escritor automático, igual que la de ventas (lib/autor.ts la reconoce).

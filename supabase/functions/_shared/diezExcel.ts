@@ -170,7 +170,9 @@ export type Recibida = {
 
 /** La fila del Excel de recibidas de una factura, o por qué va por la API. */
 export function filaRecibida(f: Recibida, xml: string): Fila | NoCabe {
-  if (!/^https:\/\//.test(f.url)) return { porLaApi: 'sin el enlace de su PDF' }
+  // Julio (14/11, 17:44): el PDF va siempre que esté; una recibida suelta sin PDF viaja igual,
+  // sin «Url documento» (vacía), y se adjunta después. Un enlace que no es https no vale.
+  if (f.url !== '' && !/^https:\/\//.test(f.url)) return { porLaApi: 'sin el enlace de su PDF' }
   if (f.iva.length > 2) return { porLaApi: `lleva ${f.iva.length} tipos de IVA y el Excel admite 2 (Julio, 13/11: estas, por la API)` }
   const gastos = f.gastos.filter((g) => c(g.importe) !== 0)
   if (gastos.length === 0) return { porLaApi: 'no lleva gasto' }
@@ -259,6 +261,9 @@ export function recibidaDeAsiento(r: RecibidaAsiento, url: string): Recibida | N
   const prov = new Map<string, number>(); const ret = new Map<string, number>()
   for (const l of r.lineas) {
     const neto = n(l.debe) - n(l.haber)
+    // B01r26 (ensayo del 14/11): IVA NO DEDUCIBLE (la cuota a la cuenta de gasto, con su tipo y su base):
+    // el Excel lo pondría como deducible (472) o, sin él, como exenta. Fuera, con su porqué.
+    if (/^[26]/.test(l.cuenta) && l.tipoIva != null) return { porLaApi: 'lleva IVA no deducible: ni el Excel ni la API de Diez lo guardan como tal; se mete a mano en Diez' }
     if (/^[26]/.test(l.cuenta)) gastos.set(l.cuenta, (gastos.get(l.cuenta) ?? 0) + neto)
     else if (/^472/.test(l.cuenta)) {
       if (l.tipoIva == null || l.baseIva == null) return { porLaApi: `la ${l.cuenta} no lleva su tipo y su base` }

@@ -14,7 +14,8 @@ import { Calculator } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import { CONTA, rutaConta } from '@/config/navegacion'
 import '@/modules/conta/estilo'
-import { Marco } from '@/modules/conta/marco/Marco'
+import { MarcoSegun } from '@/modules/conta/nucleo/MarcoSegun'
+import { registrarRutasDelNucleo } from '@/modules/conta/nucleo/rutas'
 import { EmpresasProveedor } from '@/modules/conta/empresa/EmpresasProveedor'
 import AjustesPage from '@/modules/conta/pages/AjustesPage'
 import PlanContablePage from '@/modules/conta/pages/PlanContablePage'
@@ -80,8 +81,10 @@ import { baseDeDatos } from '@/services/versionApp'
 // lleva. M01: lo que hacía va al buscador general (grupo «Preguntar»), y solo
 // en las rutas que la llevarían (sinPregunta = false). El ejemplo de cada ruta
 // se queda escrito para cuando la IA conteste de verdad.
+// K02 · El marco lo elige MarcoSegun: el del núcleo con `conta_nucleo` encendido
+// en la cuenta y en el ordenador; si no, el de hoy (marco/Marco.tsx), tal cual.
 const enMarco = (pagina: ReactNode, _ejemplo: string, sinPregunta = true) => (
-  <EmpresasProveedor><Marco sinPregunta={sinPregunta}>{pagina}</Marco></EmpresasProveedor>
+  <EmpresasProveedor><MarcoSegun sinPregunta={sinPregunta}>{pagina}</MarcoSegun></EmpresasProveedor>
 )
 
 export const contaModule: ModuleDefinition = {
@@ -220,3 +223,6 @@ export const contaModule: ModuleDefinition = {
     items: [{ id: 'conta_ajustes', label: 'Ajustes', icon: Calculator, path: CONTA.rutas.empresa, requiredRole: 'admin' }],
   },
 }
+
+// K03 · Las mismas rutas, para que el marco del núcleo pinte cada pestaña de trabajo con su dirección.
+registrarRutasDelNucleo(contaModule.routes)
