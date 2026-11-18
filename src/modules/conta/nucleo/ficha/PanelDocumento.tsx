@@ -17,7 +17,9 @@ import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 
 const ZOOM = [50, 75, 100, 125, 150, 200] as const
 
-export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar }: {
+export interface SinDocumento { marcado: boolean; motivo: string; poner: (marcado: boolean, motivo: string) => void }
+
+export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar, sinDocumento }: {
   /** El documento: su dirección y si es una foto; null = sin documento; undefined = cargando. */
   documento: { url: string; foto: boolean; titulo: string } | null | undefined
   /** La segunda pestaña: su nombre y lo que enseña. */
@@ -26,6 +28,8 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar 
   alElegir?: (f: File) => void
   acepta?: string
   textoSoltar?: string
+  /** «Sin documento», con su motivo: sin él, una factura sin PDF no se valida (paraValidar.faltaDocumento). */
+  sinDocumento?: SinDocumento
 }) {
   const [ver, setVer] = useState<'documento' | 'otra'>('documento')
   const [zoom, setZoom] = useState<(typeof ZOOM)[number]>(100)
@@ -69,6 +73,15 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar 
               <input ref={elegir} type="file" accept={acepta} hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) alElegir(f); e.target.value = '' }} />
             </button>
           ) : <p className="kf-panel-nota">Esta factura no tiene documento.</p>}
+        {ver === 'documento' && documento === null && sinDocumento && (
+          <div className="kf-sin-documento">
+            <label><input type="checkbox" checked={sinDocumento.marcado} onChange={(e) => sinDocumento.poner(e.target.checked, sinDocumento.motivo)} /> Guardarla sin documento</label>
+            {sinDocumento.marcado && (
+              <input aria-label="Por qué no tiene documento" placeholder="Por qué (por ejemplo: «el proveedor no la manda»)" value={sinDocumento.motivo}
+                onChange={(e) => sinDocumento.poner(true, e.target.value)} />
+            )}
+          </div>
+        )}
       </div>
     </aside>
   )

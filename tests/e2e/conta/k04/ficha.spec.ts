@@ -34,10 +34,20 @@ const ficha = (page: Page) => page.locator('[data-prueba="ficha-recibida-nucleo"
 const aviso = (page: Page) => page.locator('[data-prueba="aviso-ficha"]')
 const asientos: Record<number, unknown> = {}
 
-async function rest<T>(s: Sesion, ruta: string): Promise<T> {
-  const r = await fetch(`${STAGING_URL}/rest/v1/${ruta}`, { headers: { apikey: anonKey(), Authorization: `Bearer ${s.access_token}` } })
-  expect(r.status, `GET ${ruta}`).toBeLessThan(300)
-  return (await r.json()) as T
+async function rest<T>(s: Sesion, ruta: string, cuerpo?: unknown): Promise<T> {
+  const r = await fetch(`${STAGING_URL}/rest/v1/${ruta}`, {
+    method: cuerpo === undefined ? 'GET' : 'POST',
+    headers: { apikey: anonKey(), Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json' },
+    body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+  })
+  const texto = await r.text()
+  expect(r.status, `${cuerpo === undefined ? 'GET' : 'POST'} ${ruta}: ${texto.slice(0, 300)}`).toBeLessThan(300)
+  return (texto ? JSON.parse(texto) : null) as T
+}
+
+/** Las facturas de la semilla no traen PDF: se marcan «Sin documento» con su motivo, la misma función que la ficha (sin eso, ninguna de las dos pantallas las valida). */
+async function sinDocumento(s: Sesion, id: string) {
+  await rest(s, 'rpc/conta_recibida_sin_papel', { p_invoice: id, p_sin: true, p_motivo: 'Prueba e2e K04: la semilla no trae PDF', p_quien_nombre: 'Prueba e2e K04' })
 }
 
 /** El asiento de una factura, con la vara de la regla 31: la serie, el estado y cada línea (la subcuenta del proveedor, como «proveedor»). */
@@ -79,6 +89,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await page.setViewportSize({ width: ancho, height: alto })
     const s = await entrarEnLaGestoria(page)
     const grande = ancho === 1456
+    for (const n of [1, 2, 3, 4]) await sinDocumento(s, factura(t, n))
     // A 1366 × 768, la cinta plegada (así cabe la ficha sin rodar).
     if (!grande) {
       const plegar = page.getByRole('button', { name: /Plegar los botones/ })
@@ -110,10 +121,18 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await ficha(page).locator('[data-guardar-y-siguiente]').click()
     await expect(aviso(page)).toContainText('Apuntada y validada', { timeout: 60_000 })
 
+    // Lo que da la duda, escrito en el registro (Q03): los asientos de las dos anteriores y lo que dice la base.
+    const anteriores = [await asientoDe(s, factura(t, 1)).catch((e) => String(e)), await asientoDe(s, factura(t, 2)).catch((e) => String(e))]
+    const aprendido = await rest(s, 'rpc/conta_gasto_aprendido', { p_company: enCarril('c0e20000-0000-4000-8000-0000000000e3'), p_supplier: enCarril(`c0e40000-0000-4000-8000-0000000000a${t}`) }).catch((e) => String(e))
+    console.log(`[K04 ${ancho}] las dos anteriores: ${JSON.stringify(anteriores)} · lo aprendido: ${JSON.stringify(aprendido)}`)
+
     // ── 1c · La tercera: la duda, y SOLO con el teclado. ──
     await abrirFicha(page, factura(t, 3))
     const duda = ficha(page).locator('.kf-duda')
-    await expect(duda).toContainText('Mira esto.', { timeout: 30_000 })
+    await expect(duda).toContainText('Mira esto.', { timeout: 30_000 }).catch(async (e) => {
+      console.log(`[K04 ${ancho}] en pantalla, sin la duda: ${(await ficha(page).innerText()).replace(/\s+/g, ' ').slice(0, 1500)}`)
+      throw e
+    })
     await expect(ficha(page).locator('.kf-estado')).toContainText('con 1 duda')
     await expect(ficha(page).getByRole('button', { name: 'Dejar 60000000' })).toBeFocused()
     await cargada(page, 'la rellenada con su duda')

@@ -36,6 +36,7 @@ import { conCambio, recordarLista } from '@/modules/conta/diseno/plantillas'
 import { LISTA_RECIBIDAS, filtrosDe, ventanaDe } from '@/modules/conta/documentos/recibidas'
 import { colaRecibidas } from '@/modules/conta/documentos/colaRecibidas'
 import { duplicadaDe } from '@/modules/conta/documentos/paraValidarService'
+import { faltaDocumento } from '@/modules/conta/documentos/paraValidar'
 import { esAbono } from '@/modules/conta/documentos/abono'
 import {
   ACEPTA_PAPEL, ETIQUETAS, FORMAS_PAGO, TIPOS_RETENCION, asientoVistaPrevia, borradorDe, cambiosParaLaBase, comprobarAMano, cuentasDeLaPropuesta, formatoCampo,
@@ -43,7 +44,7 @@ import {
 } from '@/modules/conta/documentos/fichaRecibida'
 import {
   apuntarFactura, cuentasDeGasto, guardarCambiosRecibida, leerExtrasFacturas, leerFactura, leerFichaRecibida, plazoDeLaFicha, ponerPapelRecibida,
-  proveedoresDeLaCuenta, urlDelPapel, verPropuestaFactura, leerAntesDelInicio,
+  proveedoresDeLaCuenta, urlDelPapel, verPropuestaFactura, leerAntesDelInicio, sinPapelRecibida,
 } from '@/modules/conta/services/documentosService'
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
@@ -117,6 +118,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const [textoProv, setTextoProv] = useState<string | null>(null)
   const [textoCuenta, setTextoCuenta] = useState<Record<number, string>>({})
   const [textoTotal, setTextoTotal] = useState<string | null>(null)
+  const [fichero, setFichero] = useState<{ file: File; url: string } | null>(null)
 
   // ── Lo que se lee: lo mismo que la ficha de hoy ──
   const id = aMano ? '' : invoiceId
@@ -212,6 +214,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     nifFicha: prov?.nif ?? null, nifLeido: leido?.proveedor.nif ?? fac?.propuesto?.nif ?? null,
     total: totales.total, totalDocumento: leido?.total ?? null, lectura: fac?.lectura?.comprobaciones ?? [], avisos: propuesta?.avisos ?? [],
   })
+  const faltaDoc = !aMano && fac ? faltaDocumento({ tieneDocumento: !!(fac.llegada || fac.papel || ficha?.lectura?.ruta || fichero), sinPdf: b.sinPdf, fuente: ficha?.fuente ?? null }) : null
+  if (faltaDoc) comprobaciones.push({ id: 'documento', tono: 'rojo', texto: faltaDoc.replace(/\.$/, '') })
   const estado = estadoDeLaFicha({ aMano, leida: !!fac?.lectura, comprobaciones, hayDudaGasto: !!duda })
   useNombreDePestana(nombreDePestana(aMano ? prov?.nombre : prov?.nombre ?? fac?.proveedor?.nombre))
 
@@ -230,7 +234,6 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const aviso: Aviso | null = propio && propio.k === claveAviso ? propio.a : avisoDeAntes ? { tono: 'ok', texto: avisoDeAntes } : null
   const setAviso = (a: Aviso | null) => setPropio({ k: claveAviso, a })
   const [guardando, setGuardando] = useState(false)
-  const [fichero, setFichero] = useState<{ file: File; url: string } | null>(null)
   useEffect(() => () => { if (fichero) URL.revokeObjectURL(fichero.url) }, [fichero])
 
   /** Guarda lo cambiado (sin validar). true si todo; si no, el porqué. */
@@ -245,6 +248,12 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       if (r.fallos.length) return `No se ha guardado: ${r.fallos.map((x) => `${x.etiqueta}, ${x.porque.replace(/\.$/, '')}`).join(' · ')}.`
       if (!r.conTanda) return 'No se ha guardado: la base aún no tiene la función que guarda la ficha (0790).'
       if (r.texto) partes.push(r.texto)
+    }
+    if (!fichero && ed.cambios.some((c) => c.campo === 'sinPdf' || c.campo === 'motivoSinPdf')) {
+      if (b.sinPdf && !b.motivoSinPdf.trim()) return 'No se ha guardado «Sin documento»: di por qué no tiene documento.'
+      const x = await sinPapelRecibida(fac.id, b.sinPdf, b.motivoSinPdf, userName)
+      if (!x.hecho) return `No se ha guardado «Sin documento»: ${x.texto}`
+      partes.push(x.texto)
     }
     if (fichero) {
       const x = await ponerPapelRecibida(fac, fichero.file, userName)
@@ -268,6 +277,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
         setAviso({ tono: 'falta', texto: 'Guardada. Es de antes del día de inicio de Sumied: contesta si ya estaba contabilizada en «Más › La ficha completa». No paso a la siguiente.' }); return
       }
       const fresca = await leerFactura(fac.id)
+      const faltaDoc = faltaDocumento({ tieneDocumento: !!(fresca.llegada || fresca.papel || ficha?.lectura?.ruta || fichero), sinPdf: b.sinPdf, fuente: ficha?.fuente ?? null })
+      if (faltaDoc) { setAviso({ tono: 'falta', texto: `Guardada, sin validar: ${faltaDoc} No paso a la siguiente.` }); setVuelta((v) => v + 1); return }
       const r = await apuntarFactura(fresca, userName, userId, localPropuesto ?? null)
       refrescarCuentasMenu()
       if (!r.validado) { setAviso({ tono: 'falta', texto: `Guardada, sin validar: ${r.texto.replace(/^Apuntada y validada\.\s*/, '')} No paso a la siguiente.` }); setVuelta((v) => v + 1); return }
@@ -297,8 +308,15 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       const g = await guardarCambiosRecibida(nueva, cambiosParaLaBase(b, campos, { comun: LOCAL_COMUN }), { quien: userName, nombres: {} })
       for (const x of g.fallos) dicho.push(`${x.etiqueta}: no se ha guardado (${x.porque.replace(/\.$/, '')}).`)
     }
+    if (b.sinPdf && !fichero) {
+      const x = await sinPapelRecibida(r.id, true, b.motivoSinPdf || 'Escrita a mano, sin documento', userName)
+      if (!x.hecho) dicho.push(`«Sin documento»: no se ha guardado (${x.texto.replace(/\.$/, '')}).`)
+    }
+    const conPapel = !!fichero
     setFichero(null)
     refrescarCuentasMenu()
+    const falta = faltaDocumento({ tieneDocumento: conPapel, sinPdf: b.sinPdf, fuente: 'manual' })
+    if (falta) { navegar(`${rutaRevisarFactura(r.id)}?ver=por-revisar`, { state: { aviso: `${dicho.join(' ')} Sin validar: ${falta}` } }); return }
     const fresca = await leerFactura(r.id)
     const v = await apuntarFactura(fresca, userName, userId, null)
     if (!v.validado) {
@@ -535,6 +553,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
         <AyudaTeclas />
         </div>
         <PanelDocumento documento={documento} acepta={ACEPTA_PAPEL}
+          sinDocumento={{ marcado: b.sinPdf, motivo: b.motivoSinPdf, poner: (m, motivo) => { ed.poner('sinPdf', m); ed.poner('motivoSinPdf', m ? motivo : '') } }}
           alElegir={(file) => { setFichero({ file, url: URL.createObjectURL(file) }); ed.poner('documento', file.name) }}
           otra={{ nombre: 'El mayor del proveedor', contenido: <MayorDelProveedor apuntes={mayor?.apuntes ?? null} subcuenta={subcuenta} hay={!!provId} /> }} />
       </div>
