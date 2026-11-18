@@ -90,7 +90,7 @@ test('N07 · 1 · solo cuentas y proveedores: soltar, ver, traer, darlo por buen
   const sinProveedor = r.datos[0].id
 
   await page.goto(RUTA, { waitUntil: 'load' })
-  await expect(page.getByRole('heading', { name: 'Traer de ERP10', level: 1 })).toBeVisible({ timeout: 40_000 })
+  await expect(page.locator('h1#cxt-titulo')).toHaveText('Traer de ERP10', { timeout: 40_000 })
   await soltar(page, SOLO_PLAN.map(fichero))
   const tabla = page.getByRole('table', { name: 'Los ficheros' })
   await expect(tabla.getByRole('row', { name: /Plan de cuentas/ })).toContainText('16 cuentas')
@@ -132,7 +132,7 @@ test('N07 · 2 · deshacer lo traído en prueba', async ({ page }) => {
   const inicio = await rest<string | null>(s, 'POST', 'rpc/conta_empresa_dia_de_inicio', { p_company: EMPRESA_A })
   expect(inicio.datos === null || inicio.datos > '2026-03-31', `la empresa de pruebas tiene día de inicio ${inicio.datos}: el ejemplo (enero a marzo de 2026) no entraría entero`).toBe(true)
   await page.goto(RUTA, { waitUntil: 'load' })
-  await expect(page.getByRole('heading', { name: 'Traer de ERP10', level: 1 })).toBeVisible({ timeout: 40_000 })
+  await expect(page.locator('h1#cxt-titulo')).toHaveText('Traer de ERP10', { timeout: 40_000 })
   await soltar(page, TODOS.map(fichero))
   await page.getByRole('button', { name: 'Ver lo que entra' }).click()
   await expect(page.getByRole('table', { name: 'Qué entra' }).getByRole('row', { name: /Asientos/ })).toContainText('11.499,00', { timeout: 30_000 })
@@ -149,12 +149,12 @@ test('N07 · 2 · deshacer lo traído en prueba', async ({ page }) => {
 test('N07 · 3 · con un sumas y saldos que no cuadra no deja, y enseña la cuenta', async ({ page }) => {
   const errores = vigilar(page)
   await page.goto(RUTA, { waitUntil: 'load' })
-  await expect(page.getByRole('heading', { name: 'Traer de ERP10', level: 1 })).toBeVisible({ timeout: 40_000 })
+  await expect(page.locator('h1#cxt-titulo')).toHaveText('Traer de ERP10', { timeout: 40_000 })
   await soltar(page, [...TODOS.filter((x) => x !== 'sumas_y_saldos.xlsx').map(fichero), sumasQueNoCuadra()])
   await expect(page.getByRole('table', { name: 'Los ficheros' }).getByRole('row', { name: /Sumas y saldos/ })).toContainText('no cuadran con el diario')
   await page.getByRole('button', { name: 'Ver lo que entra' }).click()
   await page.getByRole('button', { name: 'Traerlo' }).click()
-  await expect(page.getByText('1 cuenta con diferencia')).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByText('1 cuenta con diferencia', { exact: true })).toBeVisible({ timeout: 60_000 })
   const fila = page.getByRole('table', { name: 'Cuenta a cuenta' }).getByRole('row', { name: /57200001/ })
   await expect(fila).toContainText('4.426,00')
   await expect(fila).toContainText('4.416,00')
@@ -172,7 +172,7 @@ test('N07 · 3 · con un sumas y saldos que no cuadra no deja, y enseña la cuen
 test('N07 · 4 · el ejemplo entero: soltar, ver, traer, comparar (cuadra) y darlo por bueno', async ({ page }) => {
   const errores = vigilar(page)
   await page.goto(RUTA, { waitUntil: 'load' })
-  await expect(page.getByRole('heading', { name: 'Traer de ERP10', level: 1 })).toBeVisible({ timeout: 40_000 })
+  await expect(page.locator('h1#cxt-titulo')).toHaveText('Traer de ERP10', { timeout: 40_000 })
   await soltar(page, TODOS.map(fichero))
   const tabla = page.getByRole('table', { name: 'Los ficheros' })
   await expect(tabla.getByRole('row', { name: /Diario/ })).toContainText('10 asientos · 26 apuntes')
@@ -189,7 +189,7 @@ test('N07 · 4 · el ejemplo entero: soltar, ver, traer, comparar (cuadra) y dar
   await cabeA1366(page, 'entero · paso 2')
 
   await page.getByRole('button', { name: 'Traerlo' }).click()
-  await expect(page.getByText('Cuadra con el sumas y saldos')).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByText('Cuadra con el sumas y saldos', { exact: true })).toBeVisible({ timeout: 60_000 })
   await expect(page.getByRole('table', { name: 'Cuenta a cuenta' })).toContainText('15 cuentas quedan igual')
   await expect(page.getByText(/Si alguna factura quedó pagada a medias en ERP10, aquí sale como pendiente entera\. Revísalas en Pagos\./)).toBeVisible()
   await page.screenshot({ path: `${DIR}/entero-paso3.png` })

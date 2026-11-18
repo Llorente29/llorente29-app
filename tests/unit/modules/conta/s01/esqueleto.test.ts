@@ -47,6 +47,7 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     libroDiario: 'contabilidad.asientos', nuevoAsiento: 'contabilidad.asientos', asiento: 'contabilidad.asientos',
     libros: 'contabilidad.listados', diarioResumido: 'contabilidad.listados', librosArea: 'contabilidad.listados', librosAccion: 'contabilidad.listados',
     pendientesDiez: 'contabilidad.importar',
+    traerErp10: 'contabilidad.importar',   // N07
     terceros: 'contactos.todos', tercero: 'contactos.todos', terceroApartado: 'contactos.todos',
     comoTeFactura: 'contactos.todos', fichaProveedor: 'contactos.todos', fichaProveedorApartado: 'contactos.todos',
     // S02: las recepciones del local cuelgan de Facturas recibidas.

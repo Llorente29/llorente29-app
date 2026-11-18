@@ -204,6 +204,8 @@ export const CONTA = {
     diarioResumido: 'libros/diario/resumido',
     /** C06b R7 · Pendientes de adjuntar en Diez: ruta propia, como el resumido, para no chocar con un asiento. */
     pendientesDiez: 'libros/diario/pendientes-diez',
+    /** N07 · «Traer de ERP10»: ruta propia, como Pendientes de Diez, para no chocar con un asiento. */
+    traerErp10: 'libros/diario/traer-erp10',
     /** Un área de Libros y su primera acción (C05). */
     librosArea: 'libros/:area',
     /** Una acción de un área de Libros (C05): balance, sumas y saldos, libro registro… */
@@ -422,6 +424,7 @@ export const rutaLibros = (area?: string, accion?: string): string => {
   if (!area) return rutaConta(CONTA.rutas.libros)
   if (area === 'diario' && accion === 'diario-resumido') return rutaConta(CONTA.rutas.diarioResumido)
   if (area === 'diario' && accion === 'pendientes-diez') return rutaConta(CONTA.rutas.pendientesDiez)
+  if (area === 'diario' && accion === 'traer-erp10') return rutaConta(CONTA.rutas.traerErp10)
   if (area === 'diario' && (!accion || accion === 'libro-diario')) return rutaConta(CONTA.rutas.libroDiario)
   return accion ? rutaConta(CONTA.rutas.librosAccion, { area, accion }) : rutaConta(CONTA.rutas.librosArea, { area })
 }

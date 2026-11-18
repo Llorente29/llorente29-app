@@ -185,7 +185,7 @@ export const PRODUCTOS: Producto[] = [
       { id: 'cierre', etiqueta: 'Cierre y Registro', icono: 'cierre', ruta: `${R.libros}/cierre/ejercicios`, prefijos: [`${R.libros}/cierre`, `${R.libros}/anuales`, `${R.bancos}/cierre`] },
       // N07: Importar ya no es solo de Diez: abre «Traer de ERP10», que es para cualquier empresa que venga de
       // otro programa. Con Diez, «Pendientes de adjuntar en Diez» sigue en su cinta, al lado.
-      { id: 'importar', etiqueta: 'Importar', icono: 'importar', ruta: `${R.libros}/diario/traer-erp10`, prefijos: [`${R.libros}/diario/traer-erp10`, R.pendientesDiez] },
+      { id: 'importar', etiqueta: 'Importar', icono: 'importar', ruta: R.traerErp10, prefijos: [R.traerErp10, R.pendientesDiez] },
     ],
   },
   {
