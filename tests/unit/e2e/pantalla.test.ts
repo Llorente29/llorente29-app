@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { TOPES, bloque, deLaTraza, erroresDeLaSalida, leerContexto, limpiar, resumenError, resumenMd } from '../../../scripts/e2e/pantalla.mjs'
+import { TOPES, bloque, deLaTraza, erroresDeLaSalida, leerContexto, limpiar, ordenarPantalla, resumenError, resumenMd } from '../../../scripts/e2e/pantalla.mjs'
 
 const F = join(__dirname, 'fixtures/pantalla')
 const leer = (n: string) => readFileSync(join(F, n), 'utf8')
@@ -116,5 +116,25 @@ describe('el bloque del registro: qué prueba, qué esperaba y qué había, en e
     expect(r).toContain('— Error: expect(locator).toBeVisible() failed</summary>')
     expect(r).toContain('**Lo que había en pantalla**')
     expect(r).toContain('- paragraph: Ninguna cuenta encaja con lo que buscas.')
+  })
+})
+
+describe('lo que importa, delante: la pantalla real del plan contable en staging (run 44247888358)', () => {
+  const real = leer('staging-plan-contable.pantalla.txt').split('\n').filter((l) => l.trim() && !l.startsWith('# '))
+  const o = ordenarPantalla(real)
+  it('en el orden de Playwright, el menú se comía el tope: el título del plan caía en la línea 50 y pico', () => {
+    expect(real.findIndex((l) => l.includes('heading "Plan contable"'))).toBeGreaterThan(50)
+  })
+  it('ordenada: sin «/url:», «main» delante del menú, y el título y la búsqueda escrita en las primeras 15 líneas', () => {
+    expect(o.some((l) => l.includes('/url:'))).toBe(false)
+    expect(o.findIndex((l) => /^- main/.test(l))).toBeLessThan(o.findIndex((l) => /^- navigation/.test(l)))
+    expect(o.findIndex((l) => l.includes('heading "Plan contable" [level=1]'))).toBeLessThan(15)
+    expect(o.findIndex((l) => l.includes('searchbox "Buscar una cuenta": zzz q03 no existe'))).toBeLessThan(15)
+  })
+  it('no pierde ni inventa nada: las mismas líneas, salvo las «/url:»', () => {
+    expect([...o].sort()).toEqual(real.filter((l) => !l.includes('/url:')).sort())
+  })
+  it('un diálogo o un aviso va delante de todo', () => {
+    expect(ordenarPantalla(['- navigation "Menú":', '  - link "Inicio"', '- main:', '  - heading "X" [level=1]', '- dialog "¿Borrar?":', '  - button "Borrar"'])[0]).toBe('- dialog "¿Borrar?":')
   })
 })

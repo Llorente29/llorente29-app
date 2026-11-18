@@ -65,8 +65,33 @@ export function leerContexto(md) {
   const yaml = t.match(/```yaml\s*\n([\s\S]*?)\n```/)?.[1] ?? null
   return {
     error: error ? error.trim() : null,
-    pantalla: yaml ? yaml.split('\n').filter((l) => l.trim()) : null,
+    pantalla: yaml ? ordenarPantalla(yaml.split('\n').filter((l) => l.trim())) : null,
   }
+}
+
+/**
+ * Lo que importa, delante. El árbol de Playwright va en el orden de la página:
+ * el menú lateral primero (unas 45 líneas en Sumied, con la dirección de cada
+ * enlace), y el tope por prueba se lo comía antes de llegar a lo que se lee
+ * (visto en vivo el 18/11, run 44247888358). Aquí: fuera las líneas «/url:»;
+ * delante los diálogos y avisos, luego «main» (lo que hay en la página) y lo
+ * demás; el menú («navigation»), al final.
+ */
+export function ordenarPantalla(lineas) {
+  const sinUrl = (lineas ?? []).filter((l) => !/^\s*- \/url: /.test(l))
+  const bloques = []
+  for (const l of sinUrl) {
+    if (/^- /.test(l) || !bloques.length) bloques.push([l])
+    else bloques.at(-1).push(l)
+  }
+  const peso = (b) => {
+    const t = b[0]
+    if (/^- (dialog|alertdialog|alert)\b/.test(t)) return 0
+    if (/^- main\b/.test(t)) return 1
+    if (/^- navigation\b/.test(t)) return 3
+    return 2
+  }
+  return bloques.map((b, i) => ({ b, i, p: peso(b) })).sort((x, y) => x.p - y.p || x.i - y.i).flatMap((x) => x.b)
 }
 
 /** Qué esperaba, en pocas líneas: la primera, el localizador y lo esperado y recibido. */
