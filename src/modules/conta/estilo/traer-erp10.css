@@ -1,0 +1,74 @@
+/* src/modules/conta/estilo/traer-erp10.css
+ *
+ * N07 · «Traer de ERP10» (las maquetas traer_paso1/2/3 del 17/11). La pantalla usa las piezas de
+ * «Salida a ERP10» (erp10.css, clases cxe-*: cabecera, pasos, tabla, etiquetas, panel derecho, avisos
+ * y botones), para que las dos se vean iguales. Aquí solo lo que la salida no tiene: los dos modos, la
+ * zona de soltar, la fila «Mira esto» con su filo, las etiquetas del paso 3, el total con su raya, la
+ * línea de «en prueba» y la confirmación. Solo tokens de tokens.css: ningún color escrito aquí.
+ */
+
+.cxt-fila-modos { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cxt-como { white-space: nowrap; font-size: .9rem; }
+.cxt-modos { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--cx-radio-boton); background: var(--cx-neutro-suave); align-self: flex-start; }
+.cxt-modo { height: 32px; padding: 0 14px; border: 0; border-radius: calc(var(--cx-radio-boton) - 2px); background: transparent; font: inherit; font-size: .9rem; color: var(--cx-apoyo); cursor: pointer; }
+.cxt-modo[aria-pressed='true'] { background: var(--cx-blanco); color: var(--cx-texto); font-weight: 700; box-shadow: var(--cx-sombra-entrada); }
+.cxt-ayuda { margin: -2px 0 0; color: var(--cx-apoyo); font-size: .85rem; }
+.cxt-gris { color: var(--cx-apoyo); font-size: .85rem; }
+.cxt-linea { margin: 0; }
+
+/* La fila que hay que mirar: ámbar, con su filo a la izquierda (como en la maqueta). */
+.cxe-tabla tr.cxt-fila-mira td { background: var(--cx-ambar-fila); }
+.cxe-tabla tr.cxt-fila-mira td:first-child { box-shadow: inset 4px 0 0 var(--cx-ambar); }
+.cxe-tabla tr.cxt-fila-mira[aria-selected='true'] td { background: var(--cx-azul-suave); }
+.cxt-todavia { color: var(--cx-apoyo); font-size: .85rem; border-bottom: 0 !important; padding-top: 10px !important; }
+
+/* «Cómo está» y «Cómo entra»: la etiqueta entera; la nota, si no cabe, sigue debajo (cortada no se lee: e2e 1508). */
+.cxt .cxe-tabla .cxe-etq { white-space: nowrap; }
+.cxt .cxe-tabla td:first-child strong { white-space: nowrap; }
+.cxt .cxe-tabla td.cxt-leido { white-space: normal; }
+/* «Todavía no se trae por aquí…» es una sola celda (y la primera de su fila): sin partir, ensanchaba la tabla. */
+.cxt .cxe-tabla td.cxt-todavia { white-space: normal; }
+
+/* La zona de soltar, con su borde de rayas. */
+.cxt-soltar { margin: 8px; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 2px dashed var(--cx-borde-control); border-radius: var(--cx-radio-caja); font-size: .9rem; }
+.cxt-soltar p { margin: 0; flex: 1; }
+.cxt-soltar-encima { border-color: var(--cx-azul); background: var(--cx-azul-suave); }
+.cxt-soltar-icono { font-size: 1.3rem; color: var(--cx-azul); }
+.cxt-elegir { height: 34px; flex-shrink: 0; }
+
+.cxt-pie { flex-direction: column; gap: 2px; }
+
+/* Mientras está en prueba: arriba y siempre a la vista. */
+.cxt-prueba { padding: 8px 16px; background: var(--cx-ambar-suave); color: var(--cx-texto); border-bottom: 1px solid var(--cx-linea); font-size: .9rem; }
+
+/* Lo último que se dio por bueno (verde) o se deshizo (gris), arriba del paso 1: la confirmación de esos botones. */
+.cxt-ultimo { background: var(--cx-neutro-suave); }
+.cxt-ultimo-bueno { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+
+/* Paso 3: las etiquetas de arriba, los grupos de la tabla y el total. */
+.cxt-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cxt-chip { padding: 3px 10px; border-radius: 999px; background: var(--cx-neutro-suave); font-size: .82rem; white-space: nowrap; }
+.cxt-chip-verde { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxt-chip-ambar { background: var(--cx-ambar-suave); color: var(--cx-ambar); font-weight: 700; }
+.cxt-deshacer { margin-left: auto; white-space: nowrap; font-size: .9rem; }
+.cxt-deshacer:disabled { opacity: .55; cursor: default; }
+.cxt-grupo td { font-weight: 700; background: var(--cx-blanco); }
+.cxt-grupo-ambar { color: var(--cx-ambar); }
+.cxt-grupo-verde { color: var(--cx-verde-oscuro); }
+.cxt-vacio { margin: 16px; color: var(--cx-apoyo); }
+.cxe-tabla tfoot .cxt-total td { position: sticky; bottom: 0; background: var(--cx-blanco); box-shadow: inset 0 2px 0 var(--cx-texto); border-bottom: 0; font-weight: 700; padding: 10px; }
+.cxt-der-cabeza { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--cx-linea); padding-right: 16px; }
+.cxt-der-cabeza .cxe-der-titulo { border-bottom: 0; }
+.cxt-sel { display: flex; justify-content: space-between; align-items: baseline; color: var(--cx-apoyo); }
+.cxt-sel strong { font-size: 1.3rem; color: var(--cx-texto); font-variant-numeric: tabular-nums; }
+
+/* La confirmación de «Darlo por bueno» y «Deshacer el traspaso»: los dos botones del mismo tamaño. */
+.cxt { position: relative; }
+.cxt-velo { position: absolute; inset: 0; background: var(--cx-velo-hoja); display: flex; align-items: center; justify-content: center; z-index: 5; }
+.cxt-confirmar { background: var(--cx-blanco); border-radius: var(--cx-radio-tarjeta); padding: 20px 22px; max-width: 520px; box-shadow: var(--cx-sombra-flotante); }
+.cxt-confirmar h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.cxt-confirmar p { margin: 0 0 16px; }
+.cxt-confirmar-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cxt-confirmar-botones button { width: 100%; }
+.cxt-igual { height: 40px; }
+.cxt-hecho { display: block; }

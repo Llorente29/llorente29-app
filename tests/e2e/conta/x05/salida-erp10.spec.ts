@@ -19,8 +19,8 @@
 //   3. «Descargar los ficheros» baja subcuentas.xlsx, expedidas.xlsx,
 //      recibidas.xlsx y pdf.zip, lo apunta y lo confirma con contenido; una fila
 //      de cada Excel, comprobada.
-//   4. El paso 2, con los cuatro ficheros en su orden; «Ya lo he importado» vuelve
-//      al paso 1, que ya no enseña lo salido.
+//   4. El paso 2, con los cuatro ficheros en su orden; «Ya lo he importado» lleva al
+//      paso 3 (X06) y, desde ahí, el paso 1 ya no enseña lo salido.
 // Navegador en español (playwright.config.ts: locale es-ES y --lang=es-ES); la
 // fecha de la ficha es el campo de Sumied, dd/mm/aaaa, sea cual sea el idioma.
 // Capturas del paso 1 (con la fila de emitidas pulsada) y del paso 2, a 1456 × 816.
@@ -134,7 +134,10 @@ test('X05 · contra staging: encender, mirar las emitidas y las recibidas, desca
   const ficha = page.getByRole('form', { name: 'Salida a ERP10' })
   await expect(ficha).toBeVisible({ timeout: 40_000 })
   await ficha.getByRole('switch').check()
-  await ficha.getByLabel('Código de la empresa en ERP10').fill('0007')
+  // Si en el mismo carril ya salió algo (la e2e del X06, con el mismo código), el código ya no se cambia: se queda el 0007.
+  const codigo = ficha.getByLabel('Código de la empresa en ERP10')
+  if (await codigo.isEditable()) await codigo.fill('0007')
+  else await expect(codigo).toHaveValue('0007')
   const desde = ficha.getByLabel('Desde qué día sale')
   await desde.fill(dma(dia1))
   await desde.blur()
@@ -175,8 +178,9 @@ test('X05 · contra staging: encender, mirar las emitidas y las recibidas, desca
   if (await igual.isVisible()) await igual.click()
   await page.getByRole('button', { name: 'Descargar los ficheros' }).click()
   const confirma = page.locator('.cxe-hecho')
-  await expect(confirma).toHaveText(/^Descargado: \d+ cuentas? nuevas?, \d+ facturas? emitidas? \([\d.]+,\d\d €\) y \d+ facturas? recibidas? \([\d.]+,\d\d €\)\. Los PDF, en un fichero comprimido\. Queda apuntado\.$/, { timeout: 60_000 })
-  await expect.poll(() => bajadas.map((d) => d.suggestedFilename()).sort(), { timeout: 30_000 })
+  await expect(confirma).toHaveText(/^Descargado: \d+ cuentas? nuevas?, \d+ facturas? emitidas? \([\d.]+,\d\d €\)(, | y )\d+ facturas? recibidas? \([\d.]+,\d\d €\)( y \d+ asientos? \([\d.]+,\d\d €\))?\. Los PDF, en un fichero comprimido\. Queda apuntado\.$/, { timeout: 60_000 })
+  // X07: si en el mes hay asientos (nóminas, pagos y cobros) de otra prueba del carril, sale también su fichero.
+  await expect.poll(() => bajadas.map((d) => d.suggestedFilename()).filter((f) => f !== 'asientos.xlsx').sort(), { timeout: 30_000 })
     .toEqual(['expedidas.xlsx', 'pdf.zip', 'recibidas.xlsx', 'subcuentas.xlsx'])
 
   const hoja = async (nombre: string) => {
@@ -211,19 +215,20 @@ test('X05 · contra staging: encender, mirar las emitidas y las recibidas, desca
 
   // 4 · El paso 2: los cuatro ficheros, en el orden en que se importan.
   const orden = page.getByRole('table', { name: 'Los ficheros, en el orden en que se importan' })
-  await expect(orden.getByRole('row')).toHaveCount(5)
   await expect(orden.getByRole('row').nth(1)).toContainText('subcuentas.xlsx')
   await expect(orden.getByRole('row').nth(2)).toContainText('expedidas.xlsx')
   await expect(orden.getByRole('row').nth(2)).toContainText('Facturas, eligiendo «Facturas emitidas»')
   await expect(orden.getByRole('row').nth(3)).toContainText('recibidas.xlsx')
-  await expect(orden.getByRole('row').nth(4)).toContainText('pdf.zip')
-  await expect(page.getByText('Primero las cuentas; después las emitidas y las recibidas.')).toBeVisible()
+  await expect(orden.getByRole('row').last()).toContainText('pdf.zip')
+  await expect(page.getByText('Primero las cuentas; después las emitidas, las recibidas y los asientos.')).toBeVisible()
   await page.getByRole('button', { name: 'La primera vez' }).click()
   await expect(page.getByRole('button', { name: 'ConfiguracionExpedidas.XML' })).toBeVisible()
   await page.screenshot({ path: `${DIR}/paso2.png` })
 
-  // «Ya lo he importado»: de vuelta al paso 1, sin lo salido.
+  // «Ya lo he importado»: al paso 3 (X06); de ahí, al paso 1, sin lo salido.
   await page.getByRole('button', { name: 'Ya lo he importado' }).click()
+  await expect(page.getByRole('heading', { name: 'Sube el «Sumas y saldos» de ERP10' })).toBeVisible()
+  await page.getByRole('button', { name: 'Mira lo que sale' }).click()
   await expect(tabla.getByRole('row')).toHaveCount(7, { timeout: 40_000 })
   await fila('Facturas emitidas').click()
   await expect(page.getByRole('table', { name: 'Facturas emitidas' })).not.toContainText(hecho.emitida)

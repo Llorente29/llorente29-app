@@ -5,6 +5,8 @@
 // buscador y Favoritos y las mismas tarjetas antes y después (regla 31: la
 // misma vara a los dos lados).
 //   · Antes: foto-antes.json, sacada sobre `main` (45585d8) con medirMenu.ts
+//     N07 (18/11): a mano, solo lo suyo —la pestaña «Importar» para todas y «Traer de ERP10»—; la foto
+//     regenerada hoy cambiaría además Facturación (otro contexto de entonces), y eso no se toca.
 //     (generarAntes.test.ts dice cómo).
 //   · Después: la misma vara, con el contexto que arma ahora la app
 //     (loQueEnciendeLaEmpresa) y la tarjeta de Cobros con `gestoria`.

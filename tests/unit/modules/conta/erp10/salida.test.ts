@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import { unzipSync } from 'fflate'
 import * as XLSX from 'xlsx'
-import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepararDescarga, repartirPdfs } from '@/modules/conta/erp10/salida'
+import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepararDescarga, repartirPdfs, soloUna } from '@/modules/conta/erp10/salida'
 import { aEmitidas, aPorSalir, aRecibidas, carpetaDeLaSalida } from '@/modules/conta/services/erp10Service'
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -85,12 +85,12 @@ describe('Lo que sale de un mes', () => {
     expect(carpetaDeLaSalida({ carpeta: 'D:\\ERP10\\Doc', codigo: '0007' })).toBe('D:\\ERP10\\Doc')
   })
 
-  it('las filas de «Qué sale», con sus cifras de verdad; las emitidas salen como las recibidas; asientos y días del TPV se cuentan y no salen', () => {
+  it('las filas de «Qué sale», con sus cifras de verdad; las emitidas salen como las recibidas; los asientos, sin sus apuntes (aquí no los trae), no van; los días del TPV se cuentan y no salen', () => {
     expect(s.filas.map((f) => [f.que, f.cuantos, f.importe, f.estado, f.texto, f.sale])).toEqual([
       ['Cuentas nuevas', 4, null, 'Listo', 'ERP10 no las tiene todavía; van las primeras', true],
       ['Facturas recibidas', 2, 242, 'Mira esto', '1 sin PDF · 2 no pueden salir', true],
       ['Facturas emitidas', 2, 231, 'Mira esto', '1 sin PDF · 1 no puede salir', true],
-      ['Asientos', 2, 1030, 'Todavía no sale por aquí', 'Nóminas, bancos, traspasos; aún no van', false],
+      ['Asientos', 0, 0, 'Nada', 'Ninguno este mes', true],
       ['Días de ventas del TPV', 1, 500, 'Todavía no sale por aquí', 'Irán como asiento; aún no van', false],
       ['Los PDF', 2, null, 'Listo', 'Con el nombre de su factura, para que ERP10 los pegue solo', true],
     ])
@@ -105,7 +105,7 @@ describe('Lo que sale de un mes', () => {
       ['F-2026/0001', 'Cliente Inventado X05, S.L.', 121, '20261005_Cliente-Inventado-X05-S-L_F-2026-0001.pdf'],
       ['F-2026/0002', 'Cliente Inventado X05, S.L.', 110, null],
     ])
-    expect(s.listas.asientos).toHaveLength(2)
+    expect(s.listas.asientos).toHaveLength(0)
     expect(s.listas.tpv.map((p) => p.concepto)).toEqual(['Ventas del día inventado'])
   })
 
@@ -140,8 +140,8 @@ describe('Lo que sale de un mes', () => {
     expect(s.ficheros.expedidas[0].fila).toContain(`C:\\Sumied\\0007\\${s.listas.pdf[0].nombre}`)
     expect(s.ficheros.recibidas[0].fila).toContain(`C:\\Sumied\\0007\\${s.listas.pdf[1].nombre}`)
     expect(s.ficheros.pdfs).toEqual([
-      { nombre: s.listas.pdf[0].nombre, ruta: 'inventado/ventas/5/factura.pdf' },
-      { nombre: s.listas.pdf[1].nombre, ruta: 'inventado/x04/1.pdf' },
+      { nombre: s.listas.pdf[0].nombre, ruta: 'inventado/ventas/5/factura.pdf', entryId: id(5) },
+      { nombre: s.listas.pdf[1].nombre, ruta: 'inventado/x04/1.pdf', entryId: id(1) },
     ])
   })
 
@@ -179,5 +179,20 @@ describe('Las cifras y los meses', () => {
     expect(mesesDesde('2026-10-15', '2027-01-03')).toEqual(['2027-01-01', '2026-12-01', '2026-11-01', '2026-10-01'])
     expect(mesesDesde('2026-12-01', '2026-11-17')).toEqual(['2026-11-01'])
     expect(mesEnPalabras('2026-11-01')).toBe('noviembre de 2026')
+  })
+})
+
+describe('X06 · Volver a sacar solo una', () => {
+  const s = armarSalida(PS, RS, ES, CARPETA)
+  it('la salida con una sola factura: su fila y su PDF, sin subcuentas', () => {
+    const x = soloUna(s, id(1))!
+    expect(x.ficheros.subcuentas).toEqual([])
+    expect(x.ficheros.expedidas).toEqual([])
+    expect(x.ficheros.recibidas.map((f) => f.entryId)).toEqual([id(1)])
+    expect(x.ficheros.pdfs.map((p) => p.entryId)).toEqual([id(1)])
+    expect([x.totalRecibidas, x.totalEmitidas]).toEqual([121, 0])
+  })
+  it('una que no está en lo que sale: nulo', () => {
+    expect(soloUna(s, id(4))).toBeNull()
   })
 })

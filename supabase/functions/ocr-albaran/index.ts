@@ -49,6 +49,7 @@ import { createClient } from '@supabase/supabase-js';
 import { MODELO_VISION, buildPrompt, extractJson, validate, type ParsedDoc } from '../_shared/ocrAlbaranNucleo.ts';
 import { PROMPT_CUADRO, comprobarCuadro } from '../_shared/lecturaCuadro.ts';
 import { leerFactura, PROMPT_FACTURA, type LecturaModelo } from '../_shared/lecturaFactura.ts';
+import { falloDeContenido, falloDeExcepcion, falloDeRespuesta, paraGuardar, type FalloLectura } from '../_shared/lecturaFallo.ts';
 
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -102,6 +103,20 @@ async function bloquesDe(sb: Sb, paths: string[]): Promise<{ blocks: unknown[]; 
     files.push({ path, bucket: BUCKET });
   }
   return { blocks, files };
+}
+
+// E02 · Una lectura que falla también deja su sesión (status 'failed'): con qué falló, en
+// validation.fallo (clase, causa, código, stop_reason, uso y el principio y el final de lo
+// que contestó; sin cabeceras, sin claves y sin el documento). Nadie la enlaza: no sale en
+// ninguna lista. Si no se puede guardar, la respuesta es la misma (se dice en el registro).
+async function guardarFallo(sb: Sb, x: { account_id: string; files: { path: string; bucket: string }[]; model: string; latencyMs: number | null; fallo: FalloLectura }): Promise<string | null> {
+  const kind = x.files.some(f => f.path.toLowerCase().endsWith('.pdf')) ? 'pdf' : 'photo';
+  const { data, error } = await sb.from('goods_receipt_ai_session').insert({
+    account_id: x.account_id, kind, input_files: x.files as unknown, raw_response: null, parsed_result: null,
+    validation: { fallo: paraGuardar(x.fallo) } as unknown, ai_model: x.model, ai_latency_ms: x.latencyMs, status: 'failed',
+  }).select('id').single();
+  if (error) { console.error('[ocr-albaran] no se ha guardado el fallo:', error.message); return null; }
+  return data.id as string;
 }
 
 async function leerConIa(anthropicKey: string, model: string, blocks: unknown[], prompt: string):
@@ -244,17 +259,28 @@ Deno.serve(async (req) => {
   let rawResponse: unknown = null;
   try {
     const r = await leerConIa(anthropicKey, model, contentBlocks, esFactura ? buildPrompt() + PROMPT_FACTURA : buildPrompt());
-    if ('error' in r) return jsonResponse(502, { error: 'Error del servicio de IA', detail: r.error });
+    if ('error' in r) {
+      // E02 · La clase y la causa (caída o este documento), y la sesión con qué falló.
+      const fallo = falloDeRespuesta(r.status, r.error);
+      const sesion_fallo = await guardarFallo(sb, { account_id, files: inputFiles, model, latencyMs: Date.now() - t0, fallo });
+      return jsonResponse(502, { error: 'Error del servicio de IA', detail: r.error, clase: fallo.clase, causa: fallo.causa, sesion_fallo });
+    }
     parsed = r.parsed;
     rawResponse = r.raw;
   } catch (e) {
     console.error('[ocr-albaran] error IA:', String(e));
-    return jsonResponse(502, { error: 'Fallo llamando a la IA' });
+    const fallo = falloDeExcepcion(e);
+    const sesion_fallo = await guardarFallo(sb, { account_id, files: inputFiles, model, latencyMs: Date.now() - t0, fallo });
+    return jsonResponse(502, { error: 'Fallo llamando a la IA', clase: fallo.clase, causa: fallo.causa, sesion_fallo });
   }
   const latencyMs = Date.now() - t0;
 
   if (!parsed || !parsed.document) {
-    return jsonResponse(422, { error: 'La IA no devolvió un albarán legible', raw: rawResponse });
+    // E02 · Cortada (max_tokens), rechazada, sin JSON o sin el documento: este documento no se ha podido leer.
+    // La condición es la de siempre: una lectura que hoy sale bien sigue saliendo igual.
+    const fallo = falloDeContenido(rawResponse, parsed) ?? falloDeContenido(rawResponse, null)!;
+    const sesion_fallo = await guardarFallo(sb, { account_id, files: inputFiles, model, latencyMs, fallo });
+    return jsonResponse(422, { error: 'La IA no devolvió un albarán legible', raw: rawResponse, clase: fallo.clase, causa: fallo.causa, sesion_fallo });
   }
 
   // ── 3) Validación por base imponible ──

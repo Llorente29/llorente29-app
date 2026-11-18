@@ -146,12 +146,50 @@ export interface AlbaranEsperando {
   camino: 'pendiente_factura' | 'liquidacion'; forma: string | null; llegada: LlegadaFacturas | null
   base: number | null; total_papel: number | null; lineas_sin_leer: number | null; motivo_hueco: string | null
   espera_hasta: string; dias: number; retrasado: boolean
+  /** S01p·20·2 · El nombre del que lo factura, si a su proveedor se lo factura otro. */
+  lo_factura?: string | null
 }
 
 export async function cargarEsperandoDetalle(accountId: string): Promise<AlbaranEsperando[]> {
   const f = await rpc<AlbaranEsperando[] | null>('compras_esperando_detalle', { p_cuenta: accountId })
-  return (f ?? []).map((x) => ({ ...x, base: x.base == null ? null : Number(x.base), total_papel: x.total_papel == null ? null : Number(x.total_papel),
+  const filas = (f ?? []).map((x) => ({ ...x, base: x.base == null ? null : Number(x.base), total_papel: x.total_papel == null ? null : Number(x.total_papel),
     lineas_sin_leer: x.lineas_sin_leer == null ? null : Number(x.lineas_sin_leer) }))
+  const otros = await quienLesFactura(accountId, [...new Set(filas.map((x) => x.supplier_id))])
+  return filas.map((x) => ({ ...x, lo_factura: otros.get(x.supplier_id) ?? null }))
+}
+
+/**
+ * S01p·20·2 · De estos proveedores, a cuáles se lo factura otro y cómo se llama ese otro
+ * (supplier.invoiced_by_supplier_id, de la 1910). Filtra por la cuenta (regla 9).
+ */
+export async function quienLesFactura(accountId: string, proveedores: string[]): Promise<Map<string, string>> {
+  const m = new Map<string, string>()
+  if (proveedores.length === 0) return m
+  const { data, error } = await tabla('supplier').select('id, invoiced_by_supplier_id')
+    .eq('account_id', accountId).in('id', proveedores).not('invoiced_by_supplier_id', 'is', null)
+  if (error) throw new Error(`No se pudo leer quién les factura: ${error.message}`)
+  const pares = (data ?? []) as { id: string; invoiced_by_supplier_id: string }[]
+  if (pares.length === 0) return m
+  const { data: ns, error: e2 } = await tabla('supplier').select('id, name')
+    .eq('account_id', accountId).in('id', [...new Set(pares.map((p) => p.invoiced_by_supplier_id))])
+  if (e2) throw new Error(`No se pudo leer quién les factura: ${e2.message}`)
+  const nombre = new Map(((ns ?? []) as { id: string; name: string }[]).map((n) => [n.id, n.name]))
+  for (const p of pares) { const n = nombre.get(p.invoiced_by_supplier_id); if (n) m.set(p.id, n) }
+  return m
+}
+
+/** S01p·20·2 · Los contactos de Compras que pueden facturar lo de otro: vivos, de la cuenta, y que no tengan a su vez quien les facture. */
+export async function contactosQueFacturan(accountId: string, salvo: string): Promise<{ id: string; nombre: string }[]> {
+  const { data, error } = await tabla('supplier').select('id, name')
+    .eq('account_id', accountId).is('archived_at', null).is('invoiced_by_supplier_id', null).neq('id', salvo).order('name')
+  if (error) throw new Error(`No se pudieron leer los contactos: ${error.message}`)
+  return ((data ?? []) as { id: string; name: string }[]).map((x) => ({ id: x.id, nombre: x.name }))
+}
+
+/** S01p·20·2 · «Me lo factura otro»: guarda quién lo factura y vuelve a mirar sus recepciones; devuelve lo que dice (regla 8). */
+export function loFacturaOtro(proveedor: string, otro: string):
+  Promise<{ proveedor: string; otro: string; otro_nombre: string; recepciones: number; mensaje: string }> {
+  return rpc('compras_lo_factura_otro', { p_proveedor: proveedor, p_otro: otro })
 }
 
 /** S01c · Apunta por qué faltan líneas en un albarán que no cuadra; devuelve la frase de lo apuntado. */

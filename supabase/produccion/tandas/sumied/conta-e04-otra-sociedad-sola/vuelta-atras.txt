@@ -1,0 +1,7 @@
+# E04 · la vuelta atrás, en orden inverso: la 1952 (cada pasada al aplicar, a su
+# sociedad de antes), la 1951 (fuera el disparador; «Pasarla», a su respaldo) y la
+# 1950 (fuera lo nuevo).
+cuenta: scripts/conta/produccion/cuentas/e04-otra-sociedad-sola.sql
+supabase/vuelta-atras/20261118T1952_e04_las_que_esperan_se_pasan.down.sql
+supabase/vuelta-atras/20261118T1951_e04_pasar_sola_al_leer.down.sql
+supabase/vuelta-atras/20261118T1950_e04_pasar_sola.down.sql

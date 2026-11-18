@@ -1,4 +1,4 @@
 {
-  "segundos": 90,
-  "medido": "estimado (X05, 17/11): contra staging, con la emitida, la recibida y la descarga; se cambia por lo medido en su primera e2e en verde"
+  "segundos": 15,
+  "medido": "run 44197555158, commit 571a86c9 (X05, 17/11): 14,6 s en el ordenador (11,2 s en el run 44248695770 del X06); el móvil se salta"
 }

@@ -1,0 +1,3 @@
+# Q05 · la vuelta atrás: las dos funciones vuelven a las tres claves de la S01f (20261031T1706).
+cuenta: scripts/conta/produccion/cuentas/q05-interruptor-nucleo.sql
+supabase/vuelta-atras/20261118T2029_q05_interruptor_nucleo.down.sql

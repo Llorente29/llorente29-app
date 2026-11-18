@@ -1,0 +1,19 @@
+{
+ "_que": "X06 · el paso 3 de la salida a ERP10 · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging, 18/11), en SOLO LECTURA: no en producción (esta sesión no lee producción). Las dos tablas y las cuatro funciones son nuevas; las de la X02, el X04 y el X05 existen y no se tocan. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-18T05:18Z",
+ "tanda": {
+  "supabase/migrations/20261118T0515_x06_comprobar_salida.sql": "704b16054eb5a11ceab5578c0176529c"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -47,6 +47,7 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     libroDiario: 'contabilidad.asientos', nuevoAsiento: 'contabilidad.asientos', asiento: 'contabilidad.asientos',
     libros: 'contabilidad.listados', diarioResumido: 'contabilidad.listados', librosArea: 'contabilidad.listados', librosAccion: 'contabilidad.listados',
     pendientesDiez: 'contabilidad.importar',
+    traerErp10: 'contabilidad.importar',   // N07
     terceros: 'contactos.todos', tercero: 'contactos.todos', terceroApartado: 'contactos.todos',
     comoTeFactura: 'contactos.todos', fichaProveedor: 'contactos.todos', fichaProveedorApartado: 'contactos.todos',
     // S02: las recepciones del local cuelgan de Facturas recibidas.
@@ -184,9 +185,9 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(productosVisibles(NADA, conPantalla).map((p) => p.id)).not.toContain('laboral')
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_laboral']) }, conPantalla).map((p) => p.id)).toContain('laboral')
   })
-  it('las pestañas de Contabilidad, y «Importar» solo con Diez', () => {
+  it('las pestañas de Contabilidad; «Importar», para todas desde el N07 («Traer de ERP10»)', () => {
     const c = PRODUCTOS.find((p) => p.id === 'contabilidad')!
-    expect(pestanasVisibles(c, NADA).map((t) => t.etiqueta)).toEqual(['Asientos', 'Libros y listados', 'Definiciones', 'Cierre y Registro'])
+    expect(pestanasVisibles(c, NADA).map((t) => t.etiqueta)).toEqual(['Asientos', 'Libros y listados', 'Definiciones', 'Cierre y Registro', 'Importar'])
     expect(pestanasVisibles(c, CON_DIEZ).map((t) => t.etiqueta)).toEqual(['Asientos', 'Libros y listados', 'Definiciones', 'Cierre y Registro', 'Importar'])
   })
   it('PC01 · Compras y gastos: Facturas recibidas · Pagos · Repartidores; Repartidores solo con hostelería; Tickets, fuera hasta el S07', () => {
@@ -247,19 +248,19 @@ describe('el catálogo de órdenes', () => {
     ])
     expect(cintaDe('contabilidad', null, NADA)).toEqual([])
   })
-  it('paso 3: las acciones de Libros, en la cinta de su pestaña; Importar (Diez), solo con Diez', () => {
+  it('paso 3: las acciones de Libros, en la cinta de su pestaña; Importar: «Traer de ERP10» siempre (N07) y lo de Diez, solo con Diez', () => {
     expect(cintaDe('contabilidad', 'listados', NADA).map((g) => [g.titulo, g.ordenes.length])).toEqual([['Diario', 1], ['Mayor', 3], ['Estados', 3], ['IVA', 6], ['Retenciones', 1]])
     expect(cintaDe('contabilidad', 'cierre', NADA).map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([
       ['Cierre', ['Ejercicios', 'Cerrar el mes', 'Regularización, cierre y apertura']],
       ['Cuentas anuales', ['Cuentas anuales del ejercicio', 'Qué cuentas alimentan cada línea']],
     ])
-    expect(cintaDe('contabilidad', 'importar', NADA)).toEqual([])
-    expect(cintaDe('contabilidad', 'importar', CON_DIEZ).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Pendientes de adjuntar en Diez']])
+    expect(cintaDe('contabilidad', 'importar', NADA).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Traer de ERP10']])
+    expect(cintaDe('contabilidad', 'importar', CON_DIEZ).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Traer de ERP10'], ['Pendientes de adjuntar en Diez']])
   })
   it('regla 31, contra AREAS_LIBROS: cada acción con pantalla está en UNA cinta, y su orden lleva a su dirección de Libros', () => {
     const enCintas = Object.values(CINTAS).flatMap((gs) => gs.flatMap((g) => g.ordenes))
     const conPantalla = AREAS_LIBROS.flatMap((a) => a.grupos.flatMap((g) => g.acciones)).filter((x) => !x.c05b && !['libro-diario', 'balances-pdf', 'balances-excel'].includes(x.id))
-    expect(conPantalla.length).toBe(21)   // diario 2 · mayor 3 · IVA 7 · estados 3 · cuentas anuales 2 · cierre 4 (X04: «Salida a ERP10»)
+    expect(conPantalla.length).toBe(22)   // diario 3 (N07: «Traer de ERP10») · mayor 3 · IVA 7 · estados 3 · cuentas anuales 2 · cierre 4 (X04: «Salida a ERP10»)
     for (const x of conPantalla) expect(enCintas.filter((id) => id === `libros.${x.id}`), x.id).toHaveLength(1)
     for (const x of conPantalla) {
       const o = ordenPorId(`libros.${x.id}`)!

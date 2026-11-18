@@ -1,0 +1,9 @@
+{
+ "_que": "S01p·20·2 · «Me lo factura otro» · contexto medido en SOLO LECTURA el 2026-11-13 (23:35Z): en Foodint, MANUFACTURAS CATOR (f2651061…) sin forma de facturar y con una recepción confirmada (ALB-00251, 04/11) que va a la liquidación de CLOUDTOWN BRANDS (monthly_settlement) porque su papel iba a nombre de Cloudtown; supplier tiene 110 filas y no tiene invoiced_by_supplier_id; no existe compras_lo_factura_otro. Las cuatro funciones que cambian, por su md5: _compras_camino_calcula 85e147729b36baaa5676b53356e63540, compras_ficha_le_falta 17a060bb6d1bcee533a95cd890589b56, compras_mirar 0e576adea1f3a57be6d9c354bddffdbd y _compras_forma_facturar d8dc04cf5a27e90c423ba23579465a87; el trozo de cada una está una sola vez (el de compras_mirar, también en la base local, cuyo md5 es otro). Nada de la tanda en el historial.",
+ "medido": "2026-11-13T23:35Z",
+ "tanda": {
+  "supabase/migrations/20261113T1910_s01p_me_lo_factura_otro.sql": "f7888853f1cce1321e74e38c02bac998",
+  "supabase/migrations/20261114T0033_s01p_me_lo_factura_otro_caminos.sql": "9f8b8a72ca840a15eea862f6ffc1697f"
+ },
+ "contexto": {"tablas": ["public.supplier", "public.goods_receipt_path"], "funciones": ["public._compras_camino_calcula(uuid)", "public.compras_ficha_le_falta(uuid)", "public.compras_mirar(uuid)", "public._compras_forma_facturar(uuid,text,boolean,text)"], "filas": {"public.supplier": 110}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

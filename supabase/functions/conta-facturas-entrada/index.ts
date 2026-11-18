@@ -48,6 +48,7 @@ import * as XLSX from "npm:xlsx@0.18.5";
 import { corsHeaders } from "../_shared/cors.ts";
 import { jsPDF } from "npm:jspdf@4.2.1";
 import { nombrePdfCorreo, pdfDelCorreo, type PdfMinimo } from "../_shared/correoPdf.ts";
+import { falloDeLlamada, type ClaseFallo } from "../_shared/lecturaFallo.ts";
 import { cuentaDelAviso, parejaDelCorreo, parejasResend, ponerPapelesDelCorreo, recibirCorreo, releerCorreos, resumenPapeles, resumenReleidos, type AdjuntoResend, type ClaseDireccion, type CorreoResend, type PapelPuesto, type ParejaResend, type PuertoEntrada, type QueEs, type Releido, type Sobre } from "../_shared/facturasEntrada.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -191,15 +192,31 @@ function puertoDe(sb: any, pareja: ParejaResend): PuertoEntrada {
     },
     leer: async (inboxId) => {
       const { data: l } = await sb.from("document_inbox").select("account_id, file_path").eq("id", inboxId).single();
-      const r = await fetch(`${SUPABASE_URL}/functions/v1/ocr-albaran`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICIO}`, "x-internal-key": SERVICIO },
-        body: JSON.stringify({ account_id: l!.account_id, file_paths: [l!.file_path], modo: "factura" }),
-      });
-      const j = await r.json().catch(() => ({})) as { session_id?: string; error?: string };
-      if (!r.ok || !j.session_id) {
-        await sb.from("document_inbox").update({ status: "error", reason: `No se ha podido leer: ${j.error ?? r.status}`, updated_at: new Date().toISOString() }).eq("id", inboxId);
-        return { estado: "error", texto: `No se ha podido leer (${j.error ?? r.status}).` };
+      // E02 · Si la llamada no contesta (red, la plataforma corta la función), es una caída, no un 500 de todo el correo.
+      let http: number | null = null;
+      let j: { session_id?: string; error?: string; clase?: string; causa?: string } = {};
+      try {
+        const r = await fetch(`${SUPABASE_URL}/functions/v1/ocr-albaran`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICIO}`, "x-internal-key": SERVICIO },
+          body: JSON.stringify({ account_id: l!.account_id, file_paths: [l!.file_path], modo: "factura" }),
+        });
+        http = r.status;
+        j = await r.json().catch(() => ({})) as typeof j;
+        if (!r.ok) j.session_id = undefined;
+      } catch { http = null; }
+      if (!j.session_id) {
+        // E02 · La clase del fallo, en la llegada: la lectura está caída o este documento no se ha podido leer.
+        const f = falloDeLlamada(http, j);
+        const motivo: Record<ClaseFallo, string> = {
+          caida: "No se ha podido leer: en ese momento no se podía leer ninguna factura. Está guardada.",
+          documento: "No se ha podido leer este documento.",
+        };
+        await sb.from("document_inbox").update({
+          status: "error", reason: motivo[f.clase], read_failure: f.clase, read_failure_cause: f.causa, read_failure_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq("id", inboxId);
+        return { estado: "error", texto: motivo[f.clase] };
       }
       const f = await rpc<{ estado: string; texto: string }>("conta_factura_desde_lectura", { p_inbox: inboxId, p_session: j.session_id });
       return { estado: f.estado, texto: f.texto };

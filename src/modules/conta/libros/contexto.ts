@@ -46,6 +46,29 @@ export function useLeer<T>(leer: (() => Promise<T>) | null, clave: string): { da
   return { datos: vale ? r.datos : null, error: vale ? r.error : null, recargar: () => setVuelta((v) => v + 1) }
 }
 
+/**
+ * X07 · Como useLeer, pero mientras vuelve a leer lo MISMO (misma `familia`: la misma
+ * empresa y el mismo mes, por ejemplo) deja a la vista lo que había, y dice que está
+ * leyendo (`cargando`). Para no vaciar una tabla al refrescarla (paso 3 de la salida a
+ * ERP10). Si cambia la familia, empieza vacío, como useLeer.
+ */
+export function useLeerConservando<T>(leer: (() => Promise<T>) | null, clave: string, familia: string): { datos: T | null; error: string | null; cargando: boolean; recargar: () => void } {
+  const [r, setR] = useState<{ clave: string; familia: string; datos: T | null; error: string | null }>({ clave: '', familia: '', datos: null, error: null })
+  const [vuelta, setVuelta] = useState(0)
+  const k = `${clave}:${vuelta}`
+  useEffect(() => {
+    if (!leer) return
+    let vivo = true
+    leer().then((datos) => { if (vivo) setR({ clave: k, familia, datos, error: null }) },
+      (e: unknown) => { if (vivo) setR({ clave: k, familia, datos: null, error: e instanceof Error ? e.message : String(e) }) })
+    return () => { vivo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `k` resume lo que se lee
+  }, [k])
+  const vale = r.clave === k
+  const misma = r.familia === familia
+  return { datos: vale || misma ? r.datos : null, error: vale ? r.error : null, cargando: !!leer && !vale, recargar: () => setVuelta((v) => v + 1) }
+}
+
 /** El trimestre de una fecha ('YYYY-MM-DD') como rango, y el del ejercicio si cae fuera. */
 export function trimestreDe(fecha: string): { desde: string; hasta: string; nombre: string } {
   const y = fecha.slice(0, 4)

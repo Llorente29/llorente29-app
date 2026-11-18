@@ -101,7 +101,7 @@ const DE_LIBROS: Orden[] = AREAS_LIBROS.flatMap((area) => area.grupos.flatMap((g
   .filter((x) => !x.c05b && !FUERA_DE_LA_CINTA.has(x.id))
   .map((x): Orden => ({
     id: `libros.${x.id}`, etiqueta: x.nombre, producto: 'contabilidad',
-    pestana: x.id === 'pendientes-diez' ? 'importar' : PESTANA_DE_AREA[area.id],
+    pestana: x.id === 'pendientes-diez' || x.id === 'traer-erp10' ? 'importar' : PESTANA_DE_AREA[area.id],
     a: { ruta: sinModulo(rutaLibros(area.id, x.id)) }, sinonimos: x.sinonimos,
     solo: x.id === 'pendientes-diez' ? 'diez' : x.id === 'salida-erp10' ? 'erp10' : undefined,
   }))))
@@ -167,6 +167,8 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
     { titulo: 'Analítica', ordenes: ['def.analitica'], ver: true },
   ],
   'contabilidad.importar': [
+    // N07: «Traer de ERP10», para todas las empresas (traer las cuentas y los proveedores no depende de la salida).
+    { titulo: 'ERP10', ordenes: ['libros.traer-erp10'] },
     { titulo: 'Diez', ordenes: ['libros.pendientes-diez'] },
   ],
   // Paso 3: Compras y gastos. Facturas recibidas: la barra de la N22 (TRAER ·
