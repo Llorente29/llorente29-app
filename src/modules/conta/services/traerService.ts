@@ -71,9 +71,9 @@ export async function asientosApuntados(accountId: string, companyId: string, de
 export const diaDeInicio = (companyId: string) => rpc<string | null>('conta_empresa_dia_de_inicio', { p_company: companyId })
 
 /** «Traerlo»: todo en prueba, en una transacción. Devuelve el texto de la base (regla 8). */
-export async function traer(companyId: string, ejercicio: string | null, datos: DatosDeLaCarga, quien: string | null): Promise<{ carga: string; texto: string }> {
-  const r = await rpc<{ carga: string; texto: string }>('conta_traer_cargar', { p_company: companyId, p_ejercicio: ejercicio, p_datos: datos, p_quien_nombre: quien })
-  return { carga: r.carga, texto: r.texto }
+export async function traer(companyId: string, ejercicio: string | null, datos: DatosDeLaCarga, quien: string | null): Promise<{ carga: string; texto: string; cuentas: Record<string, number> }> {
+  const r = await rpc<{ carga: string; texto: string; cuentas: Record<string, number> }>('conta_traer_cargar', { p_company: companyId, p_ejercicio: ejercicio, p_datos: datos, p_quien_nombre: quien })
+  return { carga: r.carga, texto: r.texto, cuentas: r.cuentas ?? {} }
 }
 
 export interface AntesDeDarlo { puede: boolean; texto: string; comparado: boolean; diferencias: Diferencia[]; asientos: number; facturas: number; si_hay_un_error: string }

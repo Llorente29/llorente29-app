@@ -69,6 +69,17 @@ async function cabeA1366(page: Page, que: string) {
   await page.waitForTimeout(300)
 }
 
+/** Las cuentas como las dice la tabla «Lo traído» del paso 3: «0 cuentas nuevas (las 16 ya estaban)». */
+async function cuentasComoLaTabla(page: Page): Promise<string> {
+  const fila = (await page.getByRole('table', { name: 'Lo traído' }).getByRole('row', { name: /^Cuentas/ }).innerText()).replace(/\s+/g, ' ')
+  const nuevas = Number(/(\d+) nuevas?/.exec(fila)?.[1] ?? NaN)
+  const estaban = /La otra ya estaba/.test(fila) ? 1 : Number(/Las otras (\d+) ya estaban/.exec(fila)?.[1] ?? 0)
+  expect(Number.isNaN(nuevas), `la fila de cuentas dice cuántas son nuevas: «${fila}»`).toBe(false)
+  const cuentas = `${nuevas} ${nuevas === 1 ? 'cuenta nueva' : 'cuentas nuevas'}`
+  if (!estaban) return cuentas
+  return `${cuentas} (${nuevas === 0 ? (estaban === 1 ? 'la que había ya estaba' : `las ${estaban} ya estaban`) : (estaban === 1 ? 'la otra ya estaba' : `las otras ${estaban} ya estaban`)})`
+}
+
 async function soltar(page: Page, ficheros: { name: string; mimeType: string; buffer: Buffer }[]) {
   await page.getByLabel('Elegir ficheros', { exact: true }).setInputFiles(ficheros)
 }
@@ -112,19 +123,22 @@ test('N07 · 1 · solo cuentas y proveedores: soltar, ver, traer, darlo por buen
   await cabeA1366(page, 'solo cuentas · paso 2')
 
   await page.getByRole('button', { name: 'Traerlo' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'He traído 16 cuentas, 4 proveedores y 1 cliente.' })).toBeVisible({ timeout: 60_000 })
-  await expect(page.getByText('Solo has traído las cuentas y los proveedores. No hay saldos que comparar.')).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByText(/^Traído en prueba el .*: 16 cuentas, 4 proveedores y 1 cliente\. Lo traído no se puede pagar ni cobrar hasta darlo por bueno\.$/)).toBeVisible()
+  await expect(page.getByText('Solo has traído las cuentas y los proveedores. No hay saldos que comparar.')).toBeVisible({ timeout: 60_000 })
+  // Las frases dicen las cuentas como la tabla «Lo traído» (las nuevas, y las que ya estaban).
+  const que = `${await cuentasComoLaTabla(page)}, 4 proveedores y 1 cliente`
+  // La confirmación de «Traerlo» se ve también en el paso 3 (regla 8; e2e 1492).
+  await expect(page.getByRole('status').filter({ hasText: `He traído ${que}. Lo de antes sigue sin traer.` })).toBeVisible()
+  await expect(page.getByText(`: ${que}. Lo traído no se puede pagar ni cobrar hasta darlo por bueno.`)).toBeVisible()
   await page.screenshot({ path: `${DIR}/solo-cuentas-paso3.png` })
   await cabeA1366(page, 'solo cuentas · paso 3')
 
   await page.getByRole('button', { name: 'Darlo por bueno' }).click()
   const dialogo = page.getByRole('dialog', { name: 'Darlo por bueno' })
-  await expect(dialogo).toContainText('Vas a dar por bueno lo traído de ERP10: 16 cuentas, 4 proveedores y 1 cliente. Después ya no se podrá deshacer.')
+  await expect(dialogo).toContainText(`Vas a dar por bueno lo traído de ERP10: ${que}. Después ya no se podrá deshacer.`)
   const [b1, b2] = [dialogo.getByRole('button', { name: 'Darlo por bueno' }), dialogo.getByRole('button', { name: 'Todavía no' })]
   expect((await b1.boundingBox())?.width, 'los dos botones del mismo tamaño').toBe((await b2.boundingBox())?.width)
   await b1.click()
-  await expect(page.getByText(/^Hecho\. Lo traído de ERP10 ya es parte de tu contabilidad: 16 cuentas, 4 proveedores y 1 cliente\. 1 factura que había entrado sin proveedor ya lo tiene\.$/)).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByText(`Hecho. Lo traído de ERP10 ya es parte de tu contabilidad: ${que}. 1 factura que había entrado sin proveedor ya lo tiene.`, { exact: true })).toBeVisible({ timeout: 60_000 })
   await expect(page.getByText('La primera factura de cada proveedor te pedirá a qué cuenta de gasto va: ERP10 no la da en su listado.')).toBeVisible()
   const f = await rest<{ supplier_id: string | null }[]>(s, 'GET', `supplier_invoice?select=supplier_id&id=eq.${sinProveedor}`)
   expect(f.datos[0]?.supplier_id, 'la recibida sin proveedor ya lo tiene').not.toBeNull()

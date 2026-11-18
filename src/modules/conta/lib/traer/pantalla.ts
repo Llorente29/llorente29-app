@@ -251,6 +251,24 @@ export function lineaEnPrueba(quien: string | null, cuando: Date, que: string): 
   return `Traído en prueba el ${f}${quien ? ` por ${quien}` : ''}: ${que}. Lo traído no se puede pagar ni cobrar hasta darlo por bueno.`
 }
 
+/**
+ * Lo traído cuando son solo cuentas y fichas, dicho como la tabla: «0 cuentas nuevas (las 16 ya estaban),
+ * 4 proveedores y 1 cliente». Las cuentas, con lo que guardó la base (nuevas y las que ya estaban); los
+ * terceros, como los dice la base en su texto («He traído 16 cuentas, 4 proveedores y 1 cliente. …»).
+ */
+export function queSeTrajoSoloCuentas(cuentas: { cuentas_nuevas?: number; cuentas_estaban?: number }, textoDeLaBase: string | null): string {
+  const nuevas = cuentas.cuentas_nuevas ?? 0, estaban = cuentas.cuentas_estaban ?? 0
+  const deCuentas = `${n(nuevas)} ${nuevas === 1 ? 'cuenta nueva' : 'cuentas nuevas'}`
+    + (estaban ? ` (${nuevas === 0 ? (estaban === 1 ? 'la que había ya estaba' : `las ${n(estaban)} ya estaban`) : (estaban === 1 ? 'la otra ya estaba' : `las otras ${n(estaban)} ya estaban`)})` : '')
+  const terceros = /^He traído [^,]+?, (.+?)\.(?: |$)/.exec(textoDeLaBase ?? '')?.[1] ?? /^He traído [^,]+? y (.+?)\.(?: |$)/.exec(textoDeLaBase ?? '')?.[1]
+  return terceros ? `${deCuentas}, ${terceros}` : deCuentas
+}
+
+/** Cambia, en una frase de la base, «16 cuentas, 4 proveedores y 1 cliente» por como lo dice la tabla. */
+export function conLoDeLaTabla(frase: string, que: string): string {
+  return frase.replace(/\b[\d.]+ cuentas?(, [^.]*?)?(?=\.( |$))/, que)
+}
+
 export const AVISO_PAGOS_A_MEDIAS = 'Si alguna factura quedó pagada a medias en ERP10, aquí sale como pendiente entera. Revísalas en Pagos.'
 export const SIN_SALDOS = 'Solo has traído las cuentas y los proveedores. No hay saldos que comparar.'
 export const SIN_CUENTA_DE_GASTO = 'La primera factura de cada proveedor te pedirá a qué cuenta de gasto va: ERP10 no la da en su listado.'

@@ -8,7 +8,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   abrirExcel, avisosPaso1, avisosPaso2, comprobacionesPaso1, filasPaso1, filasPaso2, filasPaso3, leerCarga, paraLaBase, puedeTraer,
-  puedeVerLoQueEntra, soloCuentas, soltadosQueNoSeTraen, type FicheroExcel,
+  puedeVerLoQueEntra, soloCuentas, soltadosQueNoSeTraen, queSeTrajoSoloCuentas, conLoDeLaTabla, type FicheroExcel,
 } from '@/modules/conta/lib/traer'
 
 const D = 'tests/conta/fixtures/importar/erp10'
@@ -126,5 +126,23 @@ describe('N07 · paso 3: cuenta a cuenta', () => {
     expect(r.distintas).toEqual([{ cuenta: '57200001', nombre: 'Banco de ejemplo', erp10: 4426, sumied: 4416, diferencia: -10 }])
     expect(r.iguales).toHaveLength(14)
     expect(r.total.diferencia).toBe(-10)
+  })
+})
+
+describe('N07 · solo cuentas: la frase dice lo mismo que la tabla', () => {
+  const base = 'He traído 16 cuentas, 4 proveedores y 1 cliente. Lo de antes sigue sin traer.'
+  it('todas ya estaban, algunas nuevas, todas nuevas', () => {
+    expect(queSeTrajoSoloCuentas({ cuentas_nuevas: 0, cuentas_estaban: 16 }, base)).toBe('0 cuentas nuevas (las 16 ya estaban), 4 proveedores y 1 cliente')
+    expect(queSeTrajoSoloCuentas({ cuentas_nuevas: 13, cuentas_estaban: 3 }, base)).toBe('13 cuentas nuevas (las otras 3 ya estaban), 4 proveedores y 1 cliente')
+    expect(queSeTrajoSoloCuentas({ cuentas_nuevas: 16, cuentas_estaban: 0 }, base)).toBe('16 cuentas nuevas, 4 proveedores y 1 cliente')
+    expect(queSeTrajoSoloCuentas({ cuentas_nuevas: 1, cuentas_estaban: 1 }, 'He traído 2 cuentas y 1 proveedor. Lo de antes sigue sin traer.')).toBe('1 cuenta nueva (la otra ya estaba), 1 proveedor')
+  })
+  it('en las frases de la base: al traer, antes de darlo por bueno y al darlo por bueno', () => {
+    const que = '0 cuentas nuevas (las 16 ya estaban), 4 proveedores y 1 cliente'
+    expect(conLoDeLaTabla(base, que)).toBe('He traído 0 cuentas nuevas (las 16 ya estaban), 4 proveedores y 1 cliente. Lo de antes sigue sin traer.')
+    expect(conLoDeLaTabla('Vas a dar por bueno lo traído de ERP10: 16 cuentas, 4 proveedores y 1 cliente. Después ya no se podrá deshacer.', que))
+      .toBe('Vas a dar por bueno lo traído de ERP10: 0 cuentas nuevas (las 16 ya estaban), 4 proveedores y 1 cliente. Después ya no se podrá deshacer.')
+    expect(conLoDeLaTabla('Hecho. Lo traído de ERP10 ya es parte de tu contabilidad: 16 cuentas, 4 proveedores y 1 cliente. 1 factura que había entrado sin proveedor ya lo tiene.', que))
+      .toBe('Hecho. Lo traído de ERP10 ya es parte de tu contabilidad: 0 cuentas nuevas (las 16 ya estaban), 4 proveedores y 1 cliente. 1 factura que había entrado sin proveedor ya lo tiene.')
   })
 })

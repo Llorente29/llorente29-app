@@ -26,7 +26,8 @@ import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import {
   AVISO_PAGOS_A_MEDIAS, MODOS, SIN_CUENTA_DE_GASTO, SIN_SALDOS, TODAVIA_NO, abrirExcel, avisosPaso1, avisosPaso2, comprobacionesPaso1, filasPaso1,
-  filasPaso2, filasPaso3, leerCarga, lineaEnPrueba, paraLaBase, puedeTraer, puedeVerLoQueEntra, soloCuentas, soltadosQueNoSeTraen,
+  conLoDeLaTabla, filasPaso2, filasPaso3, leerCarga, lineaEnPrueba, paraLaBase, puedeTraer, puedeVerLoQueEntra, queSeTrajoSoloCuentas, soloCuentas,
+  soltadosQueNoSeTraen,
   type Aviso, type Modo, type Subido,
 } from '@/modules/conta/lib/traer'
 import { antesDeDarlo, asientosApuntados, darPorBueno, deshacer, diaDeInicio, leerEnPrueba, leerYaEnSumied, traer } from '@/modules/conta/services/traerService'
@@ -116,8 +117,9 @@ export function TraerErp10() {
     try {
       setHecho(await f())
       despues?.()
+      // Solo se vuelve a leer lo de esta pantalla. L.recargar() hacía que Libros volviera a leer lo suyo y,
+      // mientras, desmontaba la pantalla: se perdía la confirmación (regla 8; e2e 1492, en el paso 3 sin ella).
       setVuelta((v) => v + 1)
-      L.recargar()
     } catch (e) {
       setFallo(`${e instanceof Error ? e.message : 'No ha contestado.'}`)
     } finally {
@@ -151,8 +153,13 @@ export function TraerErp10() {
   const a = antes.datos
   const r3 = p && a ? filasPaso3(p.sumas, a.diferencias) : null
   const sel = r3 ? ([...r3.distintas, ...r3.iguales].find((x) => x.cuenta === cuenta) ?? r3.distintas[0] ?? null) : null
-  const queSeTrajo = p ? (p.soloCuentas ? (p.texto ?? 'las cuentas y las fichas').replace(/^He traído /, '').replace(/\. .*$/, '').replace(/\.$/, '')
+  // Solo cuentas: dicho como la tabla («0 cuentas nuevas (las 16 ya estaban), 4 proveedores y 1 cliente»).
+  const queSeTrajo = p ? (p.soloCuentas ? queSeTrajoSoloCuentas(p.cuentas, p.texto)
     : `${p.cuentas.asientos ?? 0} ${p.cuentas.asientos === 1 ? 'asiento' : 'asientos'} y ${(p.cuentas.facturas_recibidas ?? 0) + (p.cuentas.facturas_emitidas ?? 0)} facturas`) : ''
+
+  /** La frase de la base, con las cuentas dichas como la tabla cuando son solo cuentas y fichas. */
+  const comoLaTabla = (frase: string) => (p?.soloCuentas ? conLoDeLaTabla(frase, queSeTrajo) : frase)
+  const fraseAntes = a ? comoLaTabla(a.texto) : ''
 
   const avisoCaja = (x: Aviso) => x.tono === 'nota'
     ? <div key={x.id} className="cxe-nota"><p><strong>{x.titulo}</strong> {x.texto}</p></div>
@@ -189,9 +196,12 @@ export function TraerErp10() {
           {paso === 2 && <>
             <button type="button" className="cxe-sec" onClick={() => setPaso(1)}>Volver a los ficheros</button>
             <button type="button" className="cxe-grande" disabled={!puede2 || !!haciendo}
-              onClick={() => { void hacer('Trayendo en prueba…', async () => [(await traer(L.companyId, ej, datos, L.quien)).texto], () => { setSubidos([]); setPaso(1) }) }}>Traerlo</button>
+              onClick={() => { void hacer('Trayendo en prueba…', async () => {
+                const r = await traer(L.companyId, ej, datos, L.quien)
+                return [soloCuentas(carga) ? conLoDeLaTabla(r.texto, queSeTrajoSoloCuentas(r.cuentas, r.texto)) : r.texto]
+              }, () => { setSubidos([]); setPaso(1) }) }}>Traerlo</button>
           </>}
-          {paso === 3 && <button type="button" className="cxe-grande" disabled={!a?.puede || !!haciendo} title={a && !a.puede ? a.texto : undefined} onClick={() => setConfirmar('dar')}>Darlo por bueno</button>}
+          {paso === 3 && <button type="button" className="cxe-grande" disabled={!a?.puede || !!haciendo} title={a && !a.puede ? fraseAntes : undefined} onClick={() => setConfirmar('dar')}>Darlo por bueno</button>}
         </div>
       </div>
 
@@ -376,13 +386,13 @@ export function TraerErp10() {
                   </div>
                 </div>
               </>}
-              {a && !a.puede && <div className="cxe-aviso" role="alert"><p><strong>{a.texto}</strong></p></div>}
-              {a && a.puede && <div className="cxe-nota"><p>{a.texto}</p></div>}
+              {a && !a.puede && <div className="cxe-aviso" role="alert"><p><strong>{fraseAntes}</strong></p></div>}
+              {a && a.puede && <div className="cxe-nota"><p>{fraseAntes}</p></div>}
               {!p.soloCuentas && <div className="cxe-aviso" role="note"><p><strong>Pagadas a medias.</strong> {AVISO_PAGOS_A_MEDIAS}</p></div>}
               {p.soloCuentas && <div className="cxe-nota"><p><strong>Sin la cuenta de gasto.</strong> {SIN_CUENTA_DE_GASTO}</p></div>}
               {p.mirar.length > 0 && (
                 <div className="cxe-aviso" role="note">
-                  <p><strong>Al traerlo se apuntó {p.mirar.length === 1 ? 'una cosa' : `${p.mirar.length} cosas`}.</strong></p>
+                  <p><strong>Al traerlo {p.mirar.length === 1 ? 'se apuntó una cosa' : `se apuntaron ${p.mirar.length} cosas`}.</strong></p>
                   <ul>{p.mirar.map((m, i) => <li key={i}>{m.frase}</li>)}</ul>
                 </div>
               )}
@@ -396,11 +406,11 @@ export function TraerErp10() {
         <div className="cxt-velo" role="dialog" aria-modal="true" aria-labelledby="cxt-confirmar">
           <div className="cxt-confirmar">
             <h2 id="cxt-confirmar">{confirmar === 'dar' ? 'Darlo por bueno' : 'Deshacer el traspaso'}</h2>
-            <p>{confirmar === 'dar' ? a?.texto : 'Vas a deshacer lo traído en prueba: se quita todo lo que entró y la empresa queda como estaba antes de traerlo.'}</p>
+            <p>{confirmar === 'dar' ? fraseAntes : 'Vas a deshacer lo traído en prueba: se quita todo lo que entró y la empresa queda como estaba antes de traerlo.'}</p>
             <div className="cxt-confirmar-botones">
               {confirmar === 'dar'
                 ? <button type="button" className="cxe-grande" disabled={!!haciendo}
-                    onClick={() => { void hacer('Dándolo por bueno…', async () => [await darPorBueno(p.id, L.quien), ...(p.soloCuentas ? [SIN_CUENTA_DE_GASTO] : [])]) }}>Darlo por bueno</button>
+                    onClick={() => { void hacer('Dándolo por bueno…', async () => [comoLaTabla(await darPorBueno(p.id, L.quien)), ...(p.soloCuentas ? [SIN_CUENTA_DE_GASTO] : [])]) }}>Darlo por bueno</button>
                 : <button type="button" className="cxe-grande" disabled={!!haciendo}
                     onClick={() => { void hacer('Deshaciendo…', async () => [await deshacer(p.id, L.quien)]) }}>Deshacer el traspaso</button>}
               <button type="button" className="cxe-sec cxt-igual" disabled={!!haciendo} onClick={() => setConfirmar(null)}>Todavía no</button>
