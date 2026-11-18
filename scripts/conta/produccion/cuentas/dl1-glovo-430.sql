@@ -16,6 +16,7 @@ l as (
    where e.company_id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9' and e.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'
      and e.status in ('validado', 'anulado') and (e.voided_at is null or e.voided_by_entry_id is not null)
      -- corte: asientos del 01/10/2026
+     -- quieta: solo los asientos del 01/10/2026 con los conceptos que escribe esta tanda (A1, A2 y A3); nadie más escribe asientos con esos conceptos ni con esa fecha (el 1T y el 2T están presentados).
      and e.entry_date = date '2026-10-01'
      and (e.concept like 'Ventas Glovo % · regularización de la 43000001%' or e.concept like 'Glovo % · factura y compensación al revés%'
           or e.concept like 'Compensación Glovo que faltaba · %' or e.concept like 'Factura Glovo que faltaba · %')
