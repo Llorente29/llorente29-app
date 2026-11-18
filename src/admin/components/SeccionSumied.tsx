@@ -1,7 +1,7 @@
 // src/admin/components/SeccionSumied.tsx
 //
 // S01f · La sección «Sumied» de la ficha de la cuenta (administración de la
-// plataforma): los tres interruptores, con su estado, desde cuándo, quién y
+// plataforma): los cuatro interruptores (Q05: y «Pantallas nuevas»), con su estado, desde cuándo, quién y
 // por qué. Al tocar uno se abre en la propia fila el cuadro del motivo
 // (obligatorio) con «Guardar» y «Cancelar». Apagar «Contabilidad» con datos
 // dentro avisa de lo que deja de verse y apaga las tres (Julio, 31/10); nunca
@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react'
 import { CuadradoMarca } from '@/marca/PiezasMarca'
 import { MARCAS } from '@/marca/marca'
 import {
-  FRASE_BLOQUEADA, NOMBRE_INTERRUPTOR, avisoApagar, bloqueada, fraseConfirmacion, lineaDeEstado,
+  EXPLICACION_INTERRUPTOR, FRASE_BLOQUEADA, NOMBRE_INTERRUPTOR, avisoApagar, bloqueada, fraseConfirmacion, lineaDeEstado,
   type ClaveSumied, type DatosCuenta, type Interruptor,
 } from '@/admin/lib/interruptoresSumied'
 import { cambiarInterruptor, leerInterruptores } from '@/admin/services/interruptoresSumiedService'
@@ -87,6 +87,7 @@ export default function SeccionSumied({ accountId, cuenta }: { accountId: string
           const bloq = bloqueada(i, lista)
           const abiertaAqui = abierta?.clave === i.clave
           const nombre = NOMBRE_INTERRUPTOR[i.clave]
+          const explicacion = EXPLICACION_INTERRUPTOR[i.clave]
           const aviso = abiertaAqui && i.clave === 'conta' && !abierta.encender && datos ? avisoApagar(cuenta, datos, lista) : null
           const apagarConta = abiertaAqui && i.clave === 'conta' && !abierta.encender
           return (
@@ -96,6 +97,7 @@ export default function SeccionSumied({ accountId, cuenta }: { accountId: string
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, color: bloq ? '#6b7a8f' : undefined }}>
                   <strong style={{ fontSize: 16, color: bloq ? '#6b7a8f' : '#0f1b2d' }}>{nombre}</strong>
+                  {explicacion && <span data-prueba={`explicacion-${i.clave}`} style={{ fontSize: 14, color: bloq ? '#6b7a8f' : APOYO, lineHeight: 1.45 }}>{explicacion}</span>}
                   <span style={{ fontSize: 14, color: bloq ? '#6b7a8f' : APOYO, lineHeight: 1.45 }}>{bloq ? FRASE_BLOQUEADA : lineaDeEstado(i)}</span>
                 </div>
                 <BotonInterruptor encendida={abiertaAqui ? abierta.encender : i.encendida} apagado={bloq || guardando} etiqueta={nombre}

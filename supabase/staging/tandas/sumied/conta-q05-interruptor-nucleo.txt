@@ -1,0 +1,5 @@
+# Q05 · «Pantallas nuevas» en la ficha de la cuenta (2029: cambia las dos funciones de la ficha, en ROLLBACK).
+# Su prueba (cuenta inventada): solo el administrador; los cuatro en su orden; sin contabilidad no se enciende;
+# encender y apagar con quién, motivo y apunte; apagar la contabilidad lo apaga también; la vuelta atrás.
+supabase/migrations/20261118T2029_q05_interruptor_nucleo.sql
+supabase/staging/sql/20261118_q05_interruptor_nucleo_prueba.sql
