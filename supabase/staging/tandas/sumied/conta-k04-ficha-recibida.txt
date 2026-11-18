@@ -1,0 +1,9 @@
+# K04 · La ficha de la factura recibida en el núcleo (rama conta/k04-ficha-recibida).
+# Sin tanda de producción: solo una semilla de staging.
+#
+# Lo que necesita la e2e de la ficha (tests/e2e/conta/k04) en la gestoría de la
+# cuenta del núcleo (semilla K02): las cuentas de gasto, la retención y el IVA
+# soportado con su enlace a cada tipo, tres proveedores (dos con subcuenta y uno
+# sin ella) y ocho facturas leídas. Solo añade, con ids y fechas fijos: se puede
+# aplicar dos veces igual (W07), y va de verdad desde la rama (W05).
+supabase/seeds/conta/seed_k04_ficha_recibida_staging.sql
