@@ -3,7 +3,7 @@
 //
 // K04 · La ficha de la factura recibida en el núcleo, contra staging, con la
 // cuenta del núcleo (semilla K02) en su gestoría y las facturas de la semilla
-// K04, a 1456 × 816 y a 1366 × 768, con el navegador en español:
+// K04b (a nombre de la gestoría), a 1456 × 816 y a 1366 × 768, con el navegador en español:
 //   1. una rellenada con una duda: se elige una salida, Intro, queda validada y
 //      pasa a la siguiente; SOLO con el teclado. Antes se validan sus dos
 //      facturas anteriores (a la 60000000 y a la 60200000), que son las que dan
@@ -28,7 +28,9 @@ test.use({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
 
 const DIR = 'docs/conta/capturas/k04'
 const DIR_K03 = 'docs/conta/capturas/k03'
-const factura = (t: number, n: number) => enCarril(`c0e40000-0000-4000-8000-000000000b${t}${n}`)
+// Las de seed_k04b (a nombre de la gestoría: su IVA se deduce). Las de seed_k04 (…0b) se leyeron sin el NIF del
+// destinatario y la base las marca «no viene a nombre de la empresa»: su IVA va al gasto y no sirven para la duda.
+const factura = (t: number, n: number) => enCarril(`c0e40000-0000-4000-8000-000000000c${t}${n}`)
 const PROVEEDOR = (t: number) => (t === 1 ? 'Proveedor de Prueba Ficha Uno, S.L.' : 'Proveedor de Prueba Ficha Dos, S.L.')
 const ficha = (page: Page) => page.locator('[data-prueba="ficha-recibida-nucleo"]')
 const aviso = (page: Page) => page.locator('[data-prueba="aviso-ficha"]')
