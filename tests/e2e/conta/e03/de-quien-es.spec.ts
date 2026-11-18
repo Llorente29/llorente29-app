@@ -67,9 +67,13 @@ async function preparar(s: Sesion, page: Page): Promise<Preparadas> {
   return r.datos
 }
 
-/** Abre la cuenta con esa empresa activa (la que recuerda «Cambiar de empresa»). */
+/**
+ * La empresa activa en las páginas que se abran a partir de ahora (la que recuerda
+ * «Cambiar de empresa»). Antes de navegar, como en dm1/dos-empresas: en la página
+ * en blanco del principio no se puede tocar el almacén (run 1500: SecurityError).
+ */
 async function conEmpresa(page: Page, cuenta: string, empresa: string) {
-  await page.evaluate(([k, v]) => window.localStorage.setItem(k, v), [`folvy.conta.empresa.${cuenta}`, empresa])
+  await page.addInitScript(([k, v]) => { try { window.localStorage.setItem(k, v) } catch { /* sin almacén */ } }, [`folvy.conta.empresa.${cuenta}`, empresa] as const)
 }
 
 async function capturar(page: Page, nombre: string) {
