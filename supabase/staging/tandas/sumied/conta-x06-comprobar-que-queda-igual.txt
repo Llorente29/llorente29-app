@@ -1,0 +1,3 @@
+# X06 · el paso 3 de la salida a ERP10.
+# Primero, la medida de lo que no sale todavía, por cuenta (solo lee, ROLLBACK).
+supabase/staging/sql/20261118_x06_no_sale_medida.sql
