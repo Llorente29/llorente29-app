@@ -153,6 +153,8 @@ describe('K03 · el menú de la persona trae todo Ajustes de hoy (respuesta K02 
     ['con Folvy', { hosteleria: false, diez: false, interruptores: new Set(), solo: false }],
     ['vendido solo (Sumied)', { hosteleria: false, diez: false, interruptores: new Set(), solo: true }],
     ['cuenta de demostración', { hosteleria: false, diez: false, interruptores: new Set(), solo: true, demo: true }],
+    // R06: «Ventas por día» sale solo con su interruptor; en el menú también.
+    ['con «ventas por día» encendido', { hosteleria: false, diez: false, interruptores: new Set(), solo: true, ventasPorDia: true }],
   ]
   for (const [nombre, ctx] of casos) {
     it(`${nombre}: las mismas entradas, en el mismo orden, que el apartado Ajustes de hoy`, () => {
