@@ -54,7 +54,8 @@
 .cxt-sel strong { font-size: 1.3rem; color: var(--cx-texto); font-variant-numeric: tabular-nums; }
 
 /* La confirmación de «Darlo por bueno» y «Deshacer el traspaso»: los dos botones del mismo tamaño. */
-.cxt { position: relative; }
+/* Sin el mínimo de 480 de la salida: a 1366 × 768, con el marco de hoy, no cabe y la página rodaba. */
+.cxe.cxt { position: relative; min-height: 320px; }
 .cxt-velo { position: absolute; inset: 0; background: var(--cx-velo-hoja); display: flex; align-items: center; justify-content: center; z-index: 5; }
 .cxt-confirmar { background: var(--cx-blanco); border-radius: var(--cx-radio-tarjeta); padding: 20px 22px; max-width: 520px; box-shadow: var(--cx-sombra-flotante); }
 .cxt-confirmar h2 { margin: 0 0 8px; font-size: 1.1rem; }
