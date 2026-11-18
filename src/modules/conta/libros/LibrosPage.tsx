@@ -46,6 +46,7 @@ import { CuentasAnuales, Mapeo, PendienteC05b } from '@/modules/conta/libros/Anu
 import { CerrarMes, CierreEjercicio, Ejercicios } from '@/modules/conta/libros/Cierre'
 import { PendientesDiez } from '@/modules/conta/libros/PendientesDiez'
 import { SalidaErp10 } from '@/modules/conta/libros/SalidaErp10'
+import { TraerErp10 } from '@/modules/conta/libros/TraerErp10'
 
 /**
  * S02 · PR 2 · Las acciones cuyo contenido pinta su propio encabezado del
@@ -55,7 +56,7 @@ import { SalidaErp10 } from '@/modules/conta/libros/SalidaErp10'
 const CON_ENCABEZADO: ReadonlySet<string> = new Set([
   'diario-resumido', 'pendientes-diez', 'libro-mayor', 'sumas-saldos', 'acumulados', 'expedidas', 'recibidas', 'intracomunitarias',
   'bienes-inversion', 'suplidos', 'retenciones', 'formato-aeat', 'balance', 'pyg', 'ecpn', 'balances-pdf', 'balances-excel',
-  'cuentas-anuales', 'mapeo', 'memoria', 'legalizacion', 'deposito', 'salida-erp10',
+  'cuentas-anuales', 'mapeo', 'memoria', 'legalizacion', 'deposito', 'salida-erp10', 'traer-erp10',
 ])
 
 /** El contenido de cada acción. */
@@ -87,6 +88,7 @@ function contenido(accion: string): ReactNode {
     case 'ejercicios': return <Ejercicios />
     case 'cerrar-mes': return <CerrarMes />
     case 'salida-erp10': return <SalidaErp10 />
+    case 'traer-erp10': return <TraerErp10 />
     case 'cierre-ejercicio': return <CierreEjercicio />
     default: return null
   }
@@ -125,6 +127,7 @@ function estados(r: ResumenLibros | null, nombreTrimestre: string, ctx: Pick<Con
   e.ejercicios = { texto: `${ctx.ejercicios.length} ${ctx.ejercicios.length === 1 ? 'ejercicio' : 'ejercicios'}`, tono: 'gris' }
   e['cerrar-mes'] = { texto: 'mes a mes', tono: 'gris' }
   e['salida-erp10'] = { texto: 'lo que sale del mes', tono: 'gris' }
+  e['traer-erp10'] = { texto: 'cuentas, fichas y el año', tono: 'gris' }
   e['cierre-ejercicio'] = ej.origen === 'migrated' ? { texto: 'traído', tono: 'gris' }
     : ej.estado === 'closed' ? { texto: 'cerrado', tono: 'verde' } : ej.cierre?.estado === 'preparado' ? { texto: 'preparado', tono: 'ambar' } : { texto: 'abierto', tono: 'gris' }
   return e

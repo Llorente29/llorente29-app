@@ -6,6 +6,8 @@
 // lo traído a medias (se deshace lo traído y se vuelve a traer).
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+import { rutaLibros } from '@/config/navegacion'
 import { fechaLarga } from '@/modules/conta/lib/formato'
 import { empezarSinHistorico, fijarCorte, leerCorte, nombrePrograma, type CorteEmpresa } from '@/modules/conta/services/corteService'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -92,13 +94,18 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
         ? (
           <p className="cx-ayuda" data-testid="sin-historico-decidido">
             Se trabaja sin lo anterior al {dma(inicio)} desde el {dma(new Date(c.sinHistorico.el).toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' }))}
-            {c.sinHistorico.por ? ` (lo decidió ${c.sinHistorico.por})` : ''}. Cuando lo tengas, tráelo.
+            {c.sinHistorico.por ? ` (lo decidió ${c.sinHistorico.por})` : ''}. Cuando lo tengas, tráelo.{' '}
+            {/* N07: donde dice que lo anterior no se ha traído, el camino para traerlo. */}
+            <Link className="cx-enlace" to={rutaLibros('diario', 'traer-erp10')}>Traerlo ahora</Link>
           </p>
         )
         : (
           <div className="cx-columna" data-testid="sin-historico">
             <p style={{ margin: 0 }}>Lo anterior al {dma(inicio)} es {dePrograma} y todavía no se ha traído. Hasta entonces no se puede contabilizar.</p>
-            <div><button type="button" className="cx-boton" onClick={() => { h.limpiar(); setConfirmar(true) }} disabled={h.guardando}>Empezar a trabajar ya</button></div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Link className="cx-boton" to={rutaLibros('diario', 'traer-erp10')}>Traerlo ahora</Link>
+              <button type="button" className="cx-boton-sec" onClick={() => { h.limpiar(); setConfirmar(true) }} disabled={h.guardando}>Empezar a trabajar ya</button>
+            </div>
           </div>
         ))}
       {confirmar && inicio && (
