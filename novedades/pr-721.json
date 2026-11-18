@@ -1,0 +1,20 @@
+[
+ {
+  "id": "721-1",
+  "pr": 721,
+  "fecha": "2026-11-18T20:28:18Z",
+  "producto": "sumied",
+  "apartado": "Traer de ERP10",
+  "frase": "sueltas los Excel que saca ERP10, ves lo que entra y lo traes en prueba; si cuadra con su sumas y saldos lo das por bueno, y si no, lo deshaces entero.",
+  "ruta": null
+ },
+ {
+  "id": "721-2",
+  "pr": 721,
+  "fecha": "2026-11-18T20:28:18Z",
+  "producto": "sumied",
+  "apartado": "Solo cuentas y proveedores",
+  "frase": "si tienes prisa, traes el plan y los dos listados; las facturas que entraron sin proveedor lo encuentran por su NIF.",
+  "ruta": null
+ }
+]
