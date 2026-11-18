@@ -78,3 +78,37 @@ describe('S01f · el aviso de apagar la contabilidad con datos dentro', () => {
     expect(avisoApagar('Bar Inventado', { asientos: 0, facturasRecibidas: 0, impuestos: 0 }, todos)).toBeNull()
   })
 })
+
+describe('Q05 · «Pantallas nuevas (en pruebas)», el cuarto (conta_nucleo)', () => {
+  it('su nombre dice que está en pruebas, y debajo qué es y dónde sale', async () => {
+    const { NOMBRE_INTERRUPTOR, EXPLICACION_INTERRUPTOR, CLAVES_SUMIED } = await import('@/admin/lib/interruptoresSumied')
+    expect(CLAVES_SUMIED).toEqual(['conta', 'conta_impuestos', 'conta_laboral', 'conta_nucleo'])
+    expect(NOMBRE_INTERRUPTOR.conta_nucleo).toBe('Pantallas nuevas (en pruebas)')
+    expect(EXPLICACION_INTERRUPTOR.conta_nucleo).toBe('El marco nuevo y las pantallas que ya estén hechas. Solo en el ordenador; en el móvil sigue lo de hoy.')
+    // Los otros tres no llevan explicación: la fila sigue igual que antes.
+    expect(EXPLICACION_INTERRUPTOR.conta).toBeUndefined()
+  })
+  it('sin Contabilidad no se enciende, como Impuestos y Laboral; con Contabilidad, sí', () => {
+    const sin = [i({ clave: 'conta' }), i({ clave: 'conta_nucleo' })]
+    expect(bloqueada(sin[1], sin)).toBe(true)
+    const con = [i({ clave: 'conta', encendida: true, existe: true }), i({ clave: 'conta_nucleo' })]
+    expect(bloqueada(con[1], con)).toBe(false)
+    // Encendida, no se bloquea nunca: se puede apagar aunque se haya apagado la contabilidad a mano en la base.
+    expect(bloqueada(i({ clave: 'conta_nucleo', encendida: true, existe: true }), sin)).toBe(false)
+  })
+  it('encender y apagar dicen lo que ha hecho (regla 8)', () => {
+    expect(fraseConfirmacion('Bar Inventado', 'conta_nucleo', true, [{ clave: 'conta_nucleo', de: false, a: true }]))
+      .toBe('Encendidas las pantallas nuevas de Bar Inventado. En el ordenador ya sale el marco nuevo; en el móvil sigue lo de hoy.')
+    expect(fraseConfirmacion('Bar Inventado', 'conta_nucleo', false, [{ clave: 'conta_nucleo', de: true, a: false }]))
+      .toBe('Apagadas las pantallas nuevas de Bar Inventado: vuelve a salir lo de hoy. No se ha borrado nada.')
+    expect(fraseConfirmacion('Bar Inventado', 'conta_nucleo', true, []))
+      .toBe('No ha cambiado nada: el interruptor «Pantallas nuevas (en pruebas)» de Bar Inventado ya estaba encendido.')
+  })
+  it('apagar la contabilidad apaga también las pantallas nuevas, y lo dice', () => {
+    expect(fraseConfirmacion('Bar Inventado', 'conta', false, [{ clave: 'conta', de: true, a: false }, { clave: 'conta_nucleo', de: true, a: false }]))
+      .toBe('Apagada la contabilidad de Bar Inventado: Sumied ya no sale en su menú. También se han apagado las pantallas nuevas. No se ha borrado nada.')
+    const todos = [i({ clave: 'conta', encendida: true, existe: true }), i({ clave: 'conta_laboral', encendida: true, existe: true }), i({ clave: 'conta_nucleo', encendida: true, existe: true })]
+    expect(avisoApagar('Bar Inventado', { asientos: 2, facturasRecibidas: 0, impuestos: 0 }, todos)?.texto)
+      .toBe('2 asientos. Al apagar la contabilidad, Sumied deja de salir en su menú y nadie de la cuenta los ve; también se apagan «Laboral» y «Pantallas nuevas (en pruebas)». No se borra nada: al volver a encenderla, todo sigue ahí.')
+  })
+})
