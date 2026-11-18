@@ -110,7 +110,10 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const { local: ejeLocal } = useAnalitica()
   const hoy = hoyEnMadrid()
   const [vuelta, setVuelta] = useState(0)
-  const [completa, setCompleta] = useState(false)
+  // «La ficha completa» (la de hoy), solo para la factura en que se pidió.
+  const [completaDe, setCompletaDe] = useState<string | null>(null)
+  const completa = !aMano && completaDe === invoiceId
+  const setCompleta = (si: boolean) => setCompletaDe(si ? invoiceId : null)
   const [textoProv, setTextoProv] = useState<string | null>(null)
   const [textoCuenta, setTextoCuenta] = useState<Record<number, string>>({})
 
@@ -181,7 +184,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const prov = proveedores.find((p) => p.id === provId) ?? (fac?.proveedor && fac.proveedor.id === provId ? { id: provId, nombre: fac.proveedor.nombre, nif: fac.proveedor.nif } : null)
   const delProv = useLeer(accountId && empresa && provId ? () => delProveedor(accountId, empresa, provId) : null, `${accountId}:${empresa}:${provId}:del`).datos ?? null
   const mayor = useLeer(accountId && empresa && delProv?.subcuenta ? () => mayorDelProveedor(accountId, empresa, delProv.subcuenta!.id, hoy) : null, `${accountId}:${empresa}:${delProv?.subcuenta?.id}:mayor:${vuelta}`).datos ?? null
-  const aprendido = useLeer(empresa && provId && !aMano ? () => gastoAprendido(empresa, provId) : null, `${empresa}:${provId}:aprendido`).datos ?? null
+  const aprendido = useLeer(empresa && provId && !aMano ? () => gastoAprendido(empresa, provId) : null, `${empresa}:${provId}:${invoiceId}:aprendido:${vuelta}`).datos ?? null
   const sinPropuesta = aMano || propuesta === null
   const aManoCuentas = useLeer(accountId && empresa && sinPropuesta ? () => cuentasAMano(accountId, empresa, provId || null) : null, `${accountId}:${empresa}:${provId}:cuentas-a-mano`).datos ?? null
 
@@ -271,7 +274,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       if (siguiente) { ir(siguiente, texto); return }
       setAviso({ tono: 'ok', texto }); setVuelta((v) => v + 1)
     } catch (e) {
-      setAviso({ tono: 'mal', texto: `No se ha podido: ${e instanceof Error ? e.message : String(e)}` })
+      setAviso({ tono: 'mal', texto: `No se ha podido: ${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}. No paso a la siguiente.` })
     } finally { setGuardando(false) }
   }
 
