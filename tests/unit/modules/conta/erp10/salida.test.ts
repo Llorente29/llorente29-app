@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import { unzipSync } from 'fflate'
 import * as XLSX from 'xlsx'
-import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepararDescarga, repartirPdfs } from '@/modules/conta/erp10/salida'
+import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepararDescarga, repartirPdfs, soloUna } from '@/modules/conta/erp10/salida'
 import { aEmitidas, aPorSalir, aRecibidas, carpetaDeLaSalida } from '@/modules/conta/services/erp10Service'
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -140,8 +140,8 @@ describe('Lo que sale de un mes', () => {
     expect(s.ficheros.expedidas[0].fila).toContain(`C:\\Sumied\\0007\\${s.listas.pdf[0].nombre}`)
     expect(s.ficheros.recibidas[0].fila).toContain(`C:\\Sumied\\0007\\${s.listas.pdf[1].nombre}`)
     expect(s.ficheros.pdfs).toEqual([
-      { nombre: s.listas.pdf[0].nombre, ruta: 'inventado/ventas/5/factura.pdf' },
-      { nombre: s.listas.pdf[1].nombre, ruta: 'inventado/x04/1.pdf' },
+      { nombre: s.listas.pdf[0].nombre, ruta: 'inventado/ventas/5/factura.pdf', entryId: id(5) },
+      { nombre: s.listas.pdf[1].nombre, ruta: 'inventado/x04/1.pdf', entryId: id(1) },
     ])
   })
 
@@ -179,5 +179,20 @@ describe('Las cifras y los meses', () => {
     expect(mesesDesde('2026-10-15', '2027-01-03')).toEqual(['2027-01-01', '2026-12-01', '2026-11-01', '2026-10-01'])
     expect(mesesDesde('2026-12-01', '2026-11-17')).toEqual(['2026-11-01'])
     expect(mesEnPalabras('2026-11-01')).toBe('noviembre de 2026')
+  })
+})
+
+describe('X06 · Volver a sacar solo una', () => {
+  const s = armarSalida(PS, RS, ES, CARPETA)
+  it('la salida con una sola factura: su fila y su PDF, sin subcuentas', () => {
+    const x = soloUna(s, id(1))!
+    expect(x.ficheros.subcuentas).toEqual([])
+    expect(x.ficheros.expedidas).toEqual([])
+    expect(x.ficheros.recibidas.map((f) => f.entryId)).toEqual([id(1)])
+    expect(x.ficheros.pdfs.map((p) => p.entryId)).toEqual([id(1)])
+    expect([x.totalRecibidas, x.totalEmitidas]).toEqual([121, 0])
+  })
+  it('una que no está en lo que sale: nulo', () => {
+    expect(soloUna(s, id(4))).toBeNull()
   })
 })

@@ -52,7 +52,7 @@ export interface Salida {
     subcuentas: Fila[]
     expedidas: { entryId: string; fila: Fila }[]
     recibidas: { entryId: string; fila: Fila }[]
-    pdfs: { nombre: string; ruta: string }[]
+    pdfs: { nombre: string; ruta: string; entryId: string }[]
   }
   /** Lo que suma lo que sale (para la confirmación). */
   totalRecibidas: number
@@ -129,7 +129,7 @@ export function armarSalida(ps: PorSalir, rs: RecibidasPorSalir, em: EmitidasPor
 
   const sinPdf = [...emitidas, ...recibidas].filter((x) => !x.pdf)
   const conPdf = [...filasE, ...filasR].filter((f) => f.pdf)
-  const pdfs = conPdf.map((f) => ({ nombre: f.pdf!, ruta: porId.get(f.entryId)!.pdf!.ruta }))
+  const pdfs = conPdf.map((f) => ({ nombre: f.pdf!, ruta: porId.get(f.entryId)!.pdf!.ruta, entryId: f.entryId }))
   const asientos = ps.partidas.filter((p) => p.clase === 'asiento')
   const tpv = ps.partidas.filter(esTpv)
   const sumaP = (xs: PartidaPorSalir[]) => xs.reduce((t, p) => t + c(p.importe), 0) / 100
@@ -175,6 +175,26 @@ export function armarSalida(ps: PorSalir, rs: RecibidasPorSalir, em: EmitidasPor
       pdfs,
     },
     totalRecibidas, totalEmitidas,
+  }
+}
+
+/**
+ * X06 · «Volver a sacar solo esa»: la salida con una sola factura (su fila y su PDF).
+ * Sin subcuentas: sus cuentas ya salieron con ella la primera vez. Nulo si esa factura
+ * no está en lo que sale (no se puede preparar su fila).
+ */
+export function soloUna(x: Salida, entryId: string): Salida | null {
+  const expedidas = x.ficheros.expedidas.filter((f) => f.entryId === entryId)
+  const recibidas = x.ficheros.recibidas.filter((f) => f.entryId === entryId)
+  if (!expedidas.length && !recibidas.length) return null
+  const emitidas = x.listas.emitidas.filter((f) => f.entryId === entryId)
+  const rec = x.listas.recibidas.filter((f) => f.entryId === entryId)
+  const suma = (xs: FacturaQueSale[]) => xs.reduce((t, f) => t + c(f.importe), 0) / 100
+  return {
+    ...x,
+    listas: { ...x.listas, cuentas: [], emitidas, recibidas: rec, pdf: x.listas.pdf.filter((p) => x.ficheros.pdfs.some((q) => q.entryId === entryId && q.nombre === p.nombre)) },
+    ficheros: { subcuentas: [], expedidas, recibidas, pdfs: x.ficheros.pdfs.filter((p) => p.entryId === entryId) },
+    totalEmitidas: suma(emitidas), totalRecibidas: suma(rec),
   }
 }
 
