@@ -55,12 +55,16 @@ function vigilar(page: Page): string[] {
   return errores
 }
 
-/** A 1366 × 768 la página no rueda: rueda la tabla (y el panel, si hace falta). */
+/**
+ * A 1366 × 768 cabe: la pantalla acaba dentro de la ventana y rueda la tabla (y el panel, si hace falta),
+ * no la página. Se mide como «Salida a ERP10» (x06 y x07): el borde de abajo de la pantalla (.cxe), y no
+ * lo que rueda la página, que en las builds de prueba lleva además la franja «BUILD LOCAL» (25 px).
+ */
 async function cabeA1366(page: Page, que: string) {
   await page.setViewportSize({ width: 1366, height: 768 })
   await page.waitForTimeout(300)
-  const rueda = await page.evaluate(() => (document.scrollingElement?.scrollHeight ?? 0) - window.innerHeight)
-  expect(rueda, `${que}: a 1366 × 768 la página no rueda`).toBeLessThanOrEqual(1)
+  const abajo = await page.evaluate(() => [document.querySelector('.cxe')?.getBoundingClientRect().bottom ?? 9999, window.innerHeight])
+  expect(abajo[0], `${que}: a 1366 × 768 la pantalla acaba dentro de la ventana`).toBeLessThanOrEqual(abajo[1])
   await page.setViewportSize({ width: 1456, height: 816 })
   await page.waitForTimeout(300)
 }
