@@ -7493,6 +7493,37 @@ $$;
 
 
 --
+-- Name: _conta_pasar_sola(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pasar_sola(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.supplier_invoice; q jsonb; o public.company;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null or v.recipient_answer is not null then return null; end if;
+  q := public._conta_de_quien(p_invoice);
+  -- Solo la otra sociedad de la misma cuenta, y solo si la pregunta sigue en pie: sin asiento validado y sin respuesta.
+  if coalesce(q->>'caso', '') <> 'otra_sociedad' or not coalesce((q->>'pregunta')::boolean, false) then return null; end if;
+  -- Con lo que ya se hizo en su sociedad (un pago, el banco…), no se mueve: se queda la pregunta.
+  if public._conta_recibida_trabas(p_invoice) is not null then return null; end if;
+  select * into o from public.company where id = (q->>'sociedad_id')::uuid and account_id = v.account_id;
+  if o.id is null then return null; end if;
+  return public._conta_recibida_mover(p_invoice, o.id, 'Sumied', true,
+    format('va a nombre de %s (%s)', o.legal_name, coalesce(nullif(btrim(o.tax_id), ''), q->>'nif')));
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_pasar_sola(p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_pasar_sola(p_invoice uuid) IS 'E04: si una recibida va a nombre de otra sociedad de la misma cuenta, sin asiento validado, sin respuesta de una persona y sin trabas, la pasa a ella (lo apunta como Sumied, «sola»); si no, nada.';
+
+
+--
 -- Name: _conta_periodo_admite(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -9010,6 +9041,68 @@ COMMENT ON FUNCTION public._conta_recibida_antes_del_inicio_para(p_company uuid,
 
 
 --
+-- Name: _conta_recibida_mover(uuid, uuid, text, boolean, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_recibida_mover(p_invoice uuid, p_company uuid, p_quien text, p_sola boolean DEFAULT false, p_porque text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v public.supplier_invoice; d public.company; c public.company; v_traba text; v_quitados int := 0; v_llegadas int := 0;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice for update;
+  if v.id is null then raise exception 'Esa factura no está.' using errcode = 'P0002'; end if;
+  -- Regla 9: la sociedad de destino, de LA MISMA cuenta.
+  select * into d from public.company where id = p_company and account_id = v.account_id;
+  if d.id is null then raise exception 'Esa sociedad no es de tu cuenta.' using errcode = '42501'; end if;
+  if d.id = v.company_id then raise exception 'Ya está en %.', d.legal_name using errcode = '22023'; end if;
+  select * into c from public.company where id = v.company_id;
+  if v.status in ('anulada', 'descartada') then raise exception 'Está %: no se pasa.', v.status using errcode = '22023'; end if;
+  if exists (select 1 from public.journal_entry e where e.account_id = v.account_id and e.source_type = 'supplier_invoice'
+               and e.source_id = v.id and e.status = 'validado') then
+    raise exception 'Tiene su asiento validado: anula el asiento antes de pasarla a %', d.legal_name || case when right(d.legal_name, 1) = '.' then '' else '.' end using errcode = '22023';
+  end if;
+  -- Lo que ya se hizo con ella en esta sociedad no se mueve solo: se deshace antes.
+  v_traba := public._conta_recibida_trabas(v.id);
+  if v_traba is not null then
+    raise exception 'Ya tiene %: deshazlo antes de pasarla a %', v_traba, d.legal_name || case when right(d.legal_name, 1) = '.' then '' else '.' end using errcode = '22023';
+  end if;
+  delete from public.journal_entry e
+   where e.account_id = v.account_id and e.source_type = 'supplier_invoice' and e.source_id = v.id and e.status in ('propuesto', 'borrador');
+  get diagnostics v_quitados = row_count;
+  update public.supplier_invoice
+     set company_id = d.id,
+         -- Su local, si es también de la otra sociedad; si no, sin local.
+         location_id = case when exists (select 1 from public.location_company lc where lc.location_id = v.location_id and lc.company_id = d.id) then v.location_id end,
+         vat_non_deductible = case when vat_non_deductible_reason = 'no_a_nombre' then false else vat_non_deductible end,
+         vat_non_deductible_reason = case when vat_non_deductible_reason = 'no_a_nombre' then null else vat_non_deductible_reason end,
+         recipient_answer = null, recipient_answered_at = null, recipient_answered_by_name = null,
+         journal_entry_id = case when journal_entry_id is not null and not exists (select 1 from public.journal_entry e where e.id = v.journal_entry_id) then null else journal_entry_id end,
+         updated_at = now()
+   where id = v.id;
+  update public.document_inbox set company_id = d.id, updated_at = now() where supplier_invoice_id = v.id and account_id = v.account_id;
+  get diagnostics v_llegadas = row_count;
+  update public.document_activity set company_id = d.id where supplier_invoice_id = v.id and account_id = v.account_id;
+  update public.supplier_invoice_auto set company_id = d.id where invoice_id = v.id and account_id = v.account_id;
+  insert into public.supplier_invoice_change (account_id, supplier_invoice_id, by_name, what, cambios)
+  values (v.account_id, v.id, coalesce(nullif(btrim(p_quien), ''), 'una persona'), 'guardar', jsonb_build_array(jsonb_strip_nulls(jsonb_build_object('campo', 'sociedad',
+          'antes', jsonb_build_object('id', c.id, 'nombre', c.legal_name), 'ahora', jsonb_build_object('id', d.id, 'nombre', d.legal_name),
+          'sola', case when p_sola then true end, 'porque', p_porque))));
+  return jsonb_build_object('sociedad_id', d.id, 'sociedad', d.legal_name, 'desde_id', c.id, 'desde', c.legal_name,
+    'llegadas', v_llegadas, 'asiento_quitado', v_quitados > 0, 'sola', p_sola,
+    'texto', format('Pasada a %s, con su PDF. Ya no está en esta lista.', d.legal_name));
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_recibida_mover(p_invoice uuid, p_company uuid, p_quien text, p_sola boolean, p_porque text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_recibida_mover(p_invoice uuid, p_company uuid, p_quien text, p_sola boolean, p_porque text) IS 'E04: pasa una recibida (con su llegada, su actividad y su apunte de «apunta sola») a otra sociedad de la misma cuenta, sin asiento; lo apunta en supplier_invoice_change, con «sola» si fue Sumied. Interna: quien la llama mira la cuenta.';
+
+
+--
 -- Name: _conta_recibida_no_antes_de_entrar(uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -9061,6 +9154,34 @@ end $$;
 --
 
 COMMENT ON FUNCTION public._conta_recibida_no_antes_de_entrar(p_company uuid, p_entry jsonb) IS 'S01p·4 (2210; antes V04, 1350). La propuesta de una factura recibida va con su fecha de factura, salvo que su trimestre tenga el 303 presentado o su día no esté abierto: entonces, al primer día abierto (conta_primer_dia_iva_abierto), con su aviso y su razón. Un mes cerrado por una persona no frena. N03: una de antes del día de inicio no se contabiliza sin respuesta (_conta_recibida_antes_del_inicio_para). Solo cambia la fecha de la propuesta, nunca la de la factura. La usa _journal_entry_proponer.';
+
+
+--
+-- Name: _conta_recibida_trabas(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_recibida_trabas(p_invoice uuid) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select string_agg(x, ', ') from (
+    select 'pagos' x where exists (select 1 from public.supplier_invoice_payment p where p.invoice_id = p_invoice)
+                          or exists (select 1 from public.conta_pago_salida p where p.invoice_id = p_invoice)
+                          or exists (select 1 from public.conta_pago_remesa_linea p where p.invoice_id = p_invoice)
+    union all select 'una casación con el banco' where exists (select 1 from public.bank_match_item b where b.supplier_invoice_id = p_invoice)
+    union all select 'un impuesto presentado' where exists (select 1 from public.tax_return_line t where t.supplier_invoice_id = p_invoice)
+    union all select 'una liquidación' where exists (select 1 from public.licensed_settlement l where l.received_invoice_id = p_invoice)
+                                          or exists (select 1 from public.channel_settlement_invoice l where l.supplier_invoice_id = p_invoice)
+    union all select 'su recepción' where exists (select 1 from public.goods_receipt_path g where g.supplier_invoice_id = p_invoice)
+  ) t
+$$;
+
+
+--
+-- Name: FUNCTION _conta_recibida_trabas(p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_recibida_trabas(p_invoice uuid) IS 'E04: lo que ya se hizo con una recibida en su sociedad y no se mueve solo (pagos, banco, impuesto, liquidación, recepción), o null. Interna, solo lee.';
 
 
 --
@@ -52650,6 +52771,73 @@ COMMENT ON FUNCTION public.conta_pantalla_ficha(p_cuenta uuid, p_cliente uuid) I
 
 
 --
+-- Name: conta_pasada_sola(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pasada_sola(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.supplier_invoice; x jsonb; v_at timestamptz; d public.company;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(v.account_id)) then
+    raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501';
+  end if;
+  select c, h.at into x, v_at from public.supplier_invoice_change h cross join lateral jsonb_array_elements(h.cambios) c
+   where h.supplier_invoice_id = v.id and h.account_id = v.account_id and c->>'campo' = 'sociedad'
+   order by h.at desc limit 1;
+  if x is null or not coalesce((x->>'sola')::boolean, false) or (x->'ahora'->>'id')::uuid is distinct from v.company_id then return null; end if;
+  select * into d from public.company where id = v.company_id;
+  return jsonb_build_object('desde_id', x->'antes'->>'id', 'desde', x->'antes'->>'nombre', 'cuando', v_at,
+    'a_nombre', d.legal_name, 'nif', d.tax_id,
+    'texto', format('Pasada sola desde %s: va a nombre de %s', x->'antes'->>'nombre', d.legal_name)
+             || case when nullif(btrim(d.tax_id), '') is not null then format(' (%s).', d.tax_id) else '.' end);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_pasada_sola(p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_pasada_sola(p_invoice uuid) IS 'E04: si Sumied pasó sola esta recibida a su sociedad (y sigue ahí), de dónde vino y por qué, para la línea verde de su ficha; si no, null. Solo lee.';
+
+
+--
+-- Name: conta_pasadas_solas(uuid, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pasadas_solas(p_company uuid, p_desde timestamp with time zone) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid; v_ids uuid[];
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(v_acc)) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  -- Las que están hoy en esta sociedad y cuyo último cambio de sociedad, desde esa hora, lo hizo Sumied solo.
+  select coalesce(array_agg(u.id order by u.at desc), '{}') into v_ids from (
+    select distinct on (si.id) si.id, h.at, c as x
+      from public.supplier_invoice si
+      join public.supplier_invoice_change h on h.supplier_invoice_id = si.id and h.account_id = v_acc
+      cross join lateral jsonb_array_elements(h.cambios) c
+     where si.account_id = v_acc and si.company_id = p_company and c->>'campo' = 'sociedad'
+     order by si.id, h.at desc) u
+   where coalesce((u.x->>'sola')::boolean, false) and (u.x->'ahora'->>'id')::uuid = p_company and u.at >= p_desde;
+  return jsonb_build_object('n', coalesce(array_length(v_ids, 1), 0), 'ids', to_jsonb(v_ids));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_pasadas_solas(p_company uuid, p_desde timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_pasadas_solas(p_company uuid, p_desde timestamp with time zone) IS 'E04: cuántas recibidas ha pasado Sumied solo a esta sociedad desde esa hora (y siguen en ella), y cuáles. Solo lee.';
+
+
+--
 -- Name: conta_pdf_llaves_del_traspaso(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -56642,6 +56830,45 @@ COMMENT ON FUNCTION public.conta_recibida_de_quien(p_invoice uuid, p_respuesta t
 
 
 --
+-- Name: conta_recibida_devolver(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_devolver(p_invoice uuid, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v public.supplier_invoice; x jsonb; r jsonb; v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+begin
+  select * into v from public.supplier_invoice where id = p_invoice for update;
+  if v.id is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(v.account_id)) then
+    raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501';
+  end if;
+  -- El último cambio de sociedad: tiene que ser el de Sumied, y la factura seguir donde la dejó.
+  select c into x from public.supplier_invoice_change h cross join lateral jsonb_array_elements(h.cambios) c
+   where h.supplier_invoice_id = v.id and h.account_id = v.account_id and c->>'campo' = 'sociedad'
+   order by h.at desc limit 1;
+  if x is null or not coalesce((x->>'sola')::boolean, false) or (x->'ahora'->>'id')::uuid is distinct from v.company_id then
+    raise exception 'Esta factura no la pasé yo sola aquí: si no es de esta sociedad, pásala desde su ficha.' using errcode = '22023';
+  end if;
+  r := public._conta_recibida_mover(v.id, (x->'antes'->>'id')::uuid, v_quien, false, 'deshacer lo que hizo Sumied');
+  -- Y no se vuelve a mover sola: es de esta sociedad, lo ha dicho una persona.
+  update public.supplier_invoice set recipient_answer = 'es_de_esta', recipient_answered_at = now(), recipient_answered_by_name = v_quien
+   where id = v.id;
+  return jsonb_build_object('sociedad_id', r->>'sociedad_id', 'sociedad', r->>'sociedad',
+    -- Sin doble punto cuando el nombre ya acaba en punto («…, S.L.»).
+    'texto', format('Devuelta a %s%s Ya no se moverá sola.', r->>'sociedad', case when right(r->>'sociedad', 1) = '.' then '' else '.' end));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_devolver(p_invoice uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_devolver(p_invoice uuid, p_quien_nombre text) IS 'E04: «Deshacer»: devuelve una recibida que Sumied pasó sola a la sociedad de la que vino, con su llegada, y apunta «Es de esta sociedad» para que no se mueva más.';
+
+
+--
 -- Name: conta_recibida_envio(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -57173,60 +57400,15 @@ CREATE FUNCTION public.conta_recibida_pasar_a(p_invoice uuid, p_company uuid, p_
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare
-  v public.supplier_invoice; d public.company; c public.company; v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
-  v_traba text; v_quitados int := 0; v_llegadas int := 0;
+declare v public.supplier_invoice; r jsonb;
 begin
-  select * into v from public.supplier_invoice where id = p_invoice for update;
+  select * into v from public.supplier_invoice where id = p_invoice;
   if v.id is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(v.account_id)) then
     raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501';
   end if;
-  -- Regla 9: la sociedad de destino, de LA MISMA cuenta.
-  select * into d from public.company where id = p_company and account_id = v.account_id;
-  if d.id is null then raise exception 'Esa sociedad no es de tu cuenta.' using errcode = '42501'; end if;
-  if d.id = v.company_id then raise exception 'Ya está en %.', d.legal_name using errcode = '22023'; end if;
-  select * into c from public.company where id = v.company_id;
-  if v.status in ('anulada', 'descartada') then raise exception 'Está %: no se pasa.', v.status using errcode = '22023'; end if;
-  if exists (select 1 from public.journal_entry e where e.account_id = v.account_id and e.source_type = 'supplier_invoice'
-               and e.source_id = v.id and e.status = 'validado') then
-    raise exception 'Tiene su asiento validado: anula el asiento antes de pasarla a %.', d.legal_name using errcode = '22023';
-  end if;
-  -- Lo que ya se hizo con ella en esta sociedad no se mueve solo: se deshace antes.
-  select string_agg(x, ', ') into v_traba from (
-    select 'pagos' x where exists (select 1 from public.supplier_invoice_payment p where p.invoice_id = v.id)
-                          or exists (select 1 from public.conta_pago_salida p where p.invoice_id = v.id)
-                          or exists (select 1 from public.conta_pago_remesa_linea p where p.invoice_id = v.id)
-    union all select 'una casación con el banco' where exists (select 1 from public.bank_match_item b where b.supplier_invoice_id = v.id)
-    union all select 'un impuesto presentado' where exists (select 1 from public.tax_return_line t where t.supplier_invoice_id = v.id)
-    union all select 'una liquidación' where exists (select 1 from public.licensed_settlement l where l.received_invoice_id = v.id)
-                                          or exists (select 1 from public.channel_settlement_invoice l where l.supplier_invoice_id = v.id)
-    union all select 'su recepción' where exists (select 1 from public.goods_receipt_path g where g.supplier_invoice_id = v.id)
-  ) t;
-  if v_traba is not null then
-    raise exception 'Ya tiene %: deshazlo antes de pasarla a %.', v_traba, d.legal_name using errcode = '22023';
-  end if;
-  delete from public.journal_entry e
-   where e.account_id = v.account_id and e.source_type = 'supplier_invoice' and e.source_id = v.id and e.status in ('propuesto', 'borrador');
-  get diagnostics v_quitados = row_count;
-  update public.supplier_invoice
-     set company_id = d.id,
-         -- Su local, si es también de la otra sociedad; si no, sin local.
-         location_id = case when exists (select 1 from public.location_company lc where lc.location_id = v.location_id and lc.company_id = d.id) then v.location_id end,
-         vat_non_deductible = case when vat_non_deductible_reason = 'no_a_nombre' then false else vat_non_deductible end,
-         vat_non_deductible_reason = case when vat_non_deductible_reason = 'no_a_nombre' then null else vat_non_deductible_reason end,
-         recipient_answer = null, recipient_answered_at = null, recipient_answered_by_name = null,
-         journal_entry_id = case when journal_entry_id is not null and not exists (select 1 from public.journal_entry e where e.id = v.journal_entry_id) then null else journal_entry_id end,
-         updated_at = now()
-   where id = v.id;
-  update public.document_inbox set company_id = d.id, updated_at = now() where supplier_invoice_id = v.id and account_id = v.account_id;
-  get diagnostics v_llegadas = row_count;
-  update public.document_activity set company_id = d.id where supplier_invoice_id = v.id and account_id = v.account_id;
-  update public.supplier_invoice_auto set company_id = d.id where invoice_id = v.id and account_id = v.account_id;
-  insert into public.supplier_invoice_change (account_id, supplier_invoice_id, by_name, what, cambios)
-  values (v.account_id, v.id, v_quien, 'guardar', jsonb_build_array(jsonb_build_object('campo', 'sociedad',
-          'antes', jsonb_build_object('id', c.id, 'nombre', c.legal_name), 'ahora', jsonb_build_object('id', d.id, 'nombre', d.legal_name))));
-  return jsonb_build_object('sociedad_id', d.id, 'sociedad', d.legal_name, 'llegadas', v_llegadas, 'asiento_quitado', v_quitados > 0,
-    'texto', format('Pasada a %s, con su PDF. Ya no está en esta lista.', d.legal_name));
+  -- E04 · Lo de siempre, sobre lo común (también lo usa Sumied cuando la pasa sola).
+  r := public._conta_recibida_mover(p_invoice, p_company, coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona'), false, null);
+  return r - 'desde_id' - 'desde' - 'sola';
 end $$;
 
 
@@ -57234,7 +57416,7 @@ end $$;
 -- Name: FUNCTION conta_recibida_pasar_a(p_invoice uuid, p_company uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_recibida_pasar_a(p_invoice uuid, p_company uuid, p_quien_nombre text) IS 'E03: pasa una recibida (con su llegada y su actividad) a otra sociedad de la misma cuenta, sin asiento. No si tiene asiento validado, pagos, banco, impuesto, liquidación o recepción. Lo apunta en supplier_invoice_change.';
+COMMENT ON FUNCTION public.conta_recibida_pasar_a(p_invoice uuid, p_company uuid, p_quien_nombre text) IS 'E03 (E04: sobre _conta_recibida_mover): pasa una recibida (con su llegada y su actividad) a otra sociedad de la misma cuenta, sin asiento. No si tiene asiento validado, pagos, banco, impuesto, liquidación o recepción. Lo apunta en supplier_invoice_change.';
 
 
 --
@@ -67602,6 +67784,31 @@ end $_$;
 --
 
 COMMENT ON FUNCTION public.e2e_e03_preparar(p_lado text) IS 'SOLO STAGING (semilla E03): prepara en la cuenta A de prueba (o la de su carril) una segunda sociedad y dos recibidas que preguntan «¿de quién es?», para su e2e.';
+
+
+--
+-- Name: e2e_e04_preparar(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.e2e_e04_preparar(p_lado text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare r jsonb; s jsonb;
+begin
+  r := public.e2e_e03_preparar(p_lado);
+  -- Lo que hace el disparador de la 1951 al leerla: pasarla sola a la sociedad a cuyo nombre va.
+  s := public._conta_pasar_sola((r->'otra'->>'id')::uuid);
+  if s is null then raise exception 'E04 e2e: no se ha pasado sola: %', public._conta_de_quien((r->'otra'->>'id')::uuid); end if;
+  return r || jsonb_build_object('sola', s);
+end $$;
+
+
+--
+-- Name: FUNCTION e2e_e04_preparar(p_lado text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.e2e_e04_preparar(p_lado text) IS 'SOLO STAGING (semilla E04): lo de e2e_e03_preparar y la recibida a nombre de la segunda sociedad pasada sola, para su e2e.';
 
 
 --
@@ -102035,6 +102242,29 @@ end $$;
 
 
 --
+-- Name: tg_e04_pasar_sola(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_e04_pasar_sola() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if new.recipient_answer is null and coalesce(new.reading, '{}'::jsonb) ? 'factura' then
+    perform public._conta_pasar_sola(new.id);
+  end if;
+  return null;
+end $$;
+
+
+--
+-- Name: FUNCTION tg_e04_pasar_sola(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_e04_pasar_sola() IS 'E04: al leer una recibida (o cambiar su lectura), si va a nombre de otra sociedad de la cuenta, se pasa sola (_conta_pasar_sola). Diferido: al confirmar.';
+
+
+--
 -- Name: tg_ensure_public_token(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -115501,6 +115731,30 @@ CREATE TABLE public.conta_e03_respaldo (
 --
 
 COMMENT ON TABLE public.conta_e03_respaldo IS 'E03 (1836): cómo estaba cada recibida antes de que su marca «no va a nombre» volviera a ser pregunta, para la vuelta atrás.';
+
+
+--
+-- Name: conta_e04_respaldo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_e04_respaldo (
+    supplier_invoice_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    desde uuid NOT NULL,
+    hacia uuid NOT NULL,
+    location_id uuid,
+    vat_non_deductible boolean,
+    vat_non_deductible_reason text,
+    journal_entry_id uuid,
+    hecho_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_e04_respaldo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_e04_respaldo IS 'E04 (1952): de qué sociedad venía cada recibida que se pasó sola al aplicar, y cómo estaba, para la vuelta atrás.';
 
 
 --
@@ -132838,6 +133092,14 @@ ALTER TABLE ONLY public.conta_e03_respaldo
 
 
 --
+-- Name: conta_e04_respaldo conta_e04_respaldo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_e04_respaldo
+    ADD CONSTRAINT conta_e04_respaldo_pkey PRIMARY KEY (supplier_invoice_id);
+
+
+--
 -- Name: conta_eje_analitico conta_eje_analitico_company_id_eje_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -144222,6 +144484,13 @@ CREATE TRIGGER customer_invoice_verifactu AFTER UPDATE OF status ON public.custo
 
 
 --
+-- Name: supplier_invoice e04_pasar_sola; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER e04_pasar_sola AFTER INSERT OR UPDATE OF reading ON public.supplier_invoice DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.tg_e04_pasar_sola();
+
+
+--
 -- Name: entry_text entry_text_misma_cuenta; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -149169,6 +149438,14 @@ ALTER TABLE ONLY public.conta_diez_traspaso
 
 ALTER TABLE ONLY public.conta_e03_respaldo
     ADD CONSTRAINT conta_e03_respaldo_supplier_invoice_id_fkey FOREIGN KEY (supplier_invoice_id) REFERENCES public.supplier_invoice(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_e04_respaldo conta_e04_respaldo_supplier_invoice_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_e04_respaldo
+    ADD CONSTRAINT conta_e04_respaldo_supplier_invoice_id_fkey FOREIGN KEY (supplier_invoice_id) REFERENCES public.supplier_invoice(id) ON DELETE CASCADE;
 
 
 --
@@ -161353,6 +161630,12 @@ ALTER TABLE public.conta_dl1_303_4t_antes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conta_e03_respaldo ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: conta_e04_respaldo; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_e04_respaldo ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: conta_eje_analitico; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -171027,6 +171310,14 @@ GRANT ALL ON FUNCTION public._conta_pago_topes(p_company uuid) TO service_role;
 
 
 --
+-- Name: FUNCTION _conta_pasar_sola(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pasar_sola(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pasar_sola(p_invoice uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_periodo_admite(p_entry uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -171262,11 +171553,27 @@ GRANT ALL ON FUNCTION public._conta_recibida_antes_del_inicio_para(p_company uui
 
 
 --
+-- Name: FUNCTION _conta_recibida_mover(p_invoice uuid, p_company uuid, p_quien text, p_sola boolean, p_porque text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_recibida_mover(p_invoice uuid, p_company uuid, p_quien text, p_sola boolean, p_porque text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_recibida_mover(p_invoice uuid, p_company uuid, p_quien text, p_sola boolean, p_porque text) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_recibida_no_antes_de_entrar(p_company uuid, p_entry jsonb); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public._conta_recibida_no_antes_de_entrar(p_company uuid, p_entry jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_recibida_no_antes_de_entrar(p_company uuid, p_entry jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_recibida_trabas(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_recibida_trabas(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_recibida_trabas(p_invoice uuid) TO service_role;
 
 
 --
@@ -179718,6 +180025,24 @@ GRANT ALL ON FUNCTION public.conta_pantalla_ficha(p_cuenta uuid, p_cliente uuid)
 
 
 --
+-- Name: FUNCTION conta_pasada_sola(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pasada_sola(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pasada_sola(p_invoice uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pasada_sola(p_invoice uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pasadas_solas(p_company uuid, p_desde timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pasadas_solas(p_company uuid, p_desde timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pasadas_solas(p_company uuid, p_desde timestamp with time zone) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pasadas_solas(p_company uuid, p_desde timestamp with time zone) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_pdf_llaves_del_traspaso(p_traspaso uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -180493,6 +180818,15 @@ GRANT ALL ON FUNCTION public.conta_recibida_antes_del_inicio(p_invoice uuid) TO 
 REVOKE ALL ON FUNCTION public.conta_recibida_de_quien(p_invoice uuid, p_respuesta text, p_quien_nombre text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_recibida_de_quien(p_invoice uuid, p_respuesta text, p_quien_nombre text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_recibida_de_quien(p_invoice uuid, p_respuesta text, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibida_devolver(p_invoice uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_devolver(p_invoice uuid, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_devolver(p_invoice uuid, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_devolver(p_invoice uuid, p_quien_nombre text) TO service_role;
 
 
 --
@@ -182351,6 +182685,15 @@ GRANT ALL ON FUNCTION public.e2e_c06_recorrido_base(p_company uuid) TO service_r
 REVOKE ALL ON FUNCTION public.e2e_e03_preparar(p_lado text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.e2e_e03_preparar(p_lado text) TO authenticated;
 GRANT ALL ON FUNCTION public.e2e_e03_preparar(p_lado text) TO service_role;
+
+
+--
+-- Name: FUNCTION e2e_e04_preparar(p_lado text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.e2e_e04_preparar(p_lado text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.e2e_e04_preparar(p_lado text) TO authenticated;
+GRANT ALL ON FUNCTION public.e2e_e04_preparar(p_lado text) TO service_role;
 
 
 --
@@ -187321,6 +187664,14 @@ GRANT ALL ON FUNCTION public.tg_dining_table_same_location() TO service_role;
 
 
 --
+-- Name: FUNCTION tg_e04_pasar_sola(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_e04_pasar_sola() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_e04_pasar_sola() TO service_role;
+
+
+--
 -- Name: FUNCTION tg_ensure_public_token(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -190636,6 +190987,13 @@ GRANT ALL ON TABLE public.conta_dl1_303_4t_antes TO service_role;
 --
 
 GRANT ALL ON TABLE public.conta_e03_respaldo TO service_role;
+
+
+--
+-- Name: TABLE conta_e04_respaldo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_e04_respaldo TO service_role;
 
 
 --
