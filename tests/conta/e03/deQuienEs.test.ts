@@ -62,14 +62,14 @@ describe('casoDeQuien: los cuatro casos', () => {
   })
 })
 
-describe('botonesDeQuien: dos botones, el que más se usará relleno; palabras de la calle', () => {
+describe('botonesDeQuien: dos botones; solo «Pasarla a …» relleno; palabras de la calle', () => {
   it('otra sociedad: «Pasarla a …» (relleno) y «Es de esta sociedad»', () => {
     const b = botonesDeQuien({ caso: 'otra_sociedad', sociedadCorta: 'Frango Takeaway', sociedad: 'Frango Takeaway, S.L.' })
     expect(b.map((x) => [x.texto, x.principal, x.que])).toEqual([['Pasarla a Frango Takeaway', true, 'pasar'], ['Es de esta sociedad', false, 'es_de_esta']])
   })
-  it('fuera: «Su IVA no se deduce» relleno; sin leer: «Sí es nuestra, se deduce» relleno', () => {
-    expect(botonesDeQuien({ caso: 'fuera', sociedadCorta: null, sociedad: null }).map((x) => [x.que, x.principal])).toEqual([['no_deduce', true], ['deduce', false]])
-    expect(botonesDeQuien({ caso: 'sin_leer', sociedadCorta: null, sociedad: null }).map((x) => [x.que, x.principal])).toEqual([['no_deduce', false], ['deduce', true]])
+  it('fuera y sin leer (E04): los dos botones del IVA en hueco, ninguno relleno', () => {
+    expect(botonesDeQuien({ caso: 'fuera', sociedadCorta: null, sociedad: null }).map((x) => [x.que, x.principal])).toEqual([['no_deduce', false], ['deduce', false]])
+    expect(botonesDeQuien({ caso: 'sin_leer', sociedadCorta: null, sociedad: null }).map((x) => [x.que, x.principal])).toEqual([['no_deduce', false], ['deduce', false]])
   })
   it('la empresa y sin IVA, ningún botón', () => {
     expect(botonesDeQuien({ caso: 'empresa', sociedadCorta: null, sociedad: null })).toEqual([])

@@ -11,6 +11,7 @@
 // Lo que falla en una pieza se dice en esa pieza; no tumba el Inicio.
 
 import { tabla, mensaje } from '@/modules/conta/services/bd'
+import { pasadasSolas } from '@/modules/conta/services/pasadaSolaService'
 import { saldosCuentas, aSaldoCuenta, movimientoIva } from '@/modules/conta/services/librosService'
 import { leerAsientos, leerCierres, fuenteCierre, primerDiaAbierto } from '@/modules/conta/services/diarioService'
 import { listarFacturasDeLaCuenta } from '@/modules/conta/services/proveedorService'
@@ -68,20 +69,27 @@ export async function proximoPago(accountId: string, hoy: string): Promise<strin
   return calcularCifras(f, hoy).proximoPago?.fecha ?? null
 }
 
-export interface HechoDesdeAyer { asientosSolos: number; asientosParaRevisar: number; datosDeLaEmpresa: number }
+export interface HechoDesdeAyer {
+  asientosSolos: number; asientosParaRevisar: number; datosDeLaEmpresa: number
+  /** E04 · Las facturas que he pasado solas a esta sociedad (iban a su nombre). Null si no se ha podido saber. */
+  pasadasSolas: number | null
+}
 
 /** Lo que hizo lo automático desde ayer a las 00:00 de Madrid. */
 export async function hechoDesdeAyer(companyId: string, desde: string): Promise<HechoDesdeAyer> {
-  const [validados, propuestos, ia] = await Promise.all([
+  const [validados, propuestos, ia, solas] = await Promise.all([
     tabla('journal_entry').select('validated_by_name').eq('company_id', companyId).gte('validated_at', desde).eq('status', 'validado'),
     tabla('journal_entry').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('created_at', desde).eq('status', 'propuesto').is('created_by', null),
     tabla('ai_action_log').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('done_at', desde).is('undone_at', null),
+    // E04 · Si no se puede saber, la línea no sale (no se pinta un 0 que no es).
+    pasadasSolas(companyId, desde).then((r) => r.n).catch(() => null),
   ])
   for (const r of [validados, propuestos, ia]) if (r.error) throw new Error(mensaje('No se ha podido leer lo que he hecho', r.error))
   return {
     asientosSolos: ((validados.data ?? []) as Fila[]).filter((f) => esFirmaAutomatica(typeof f.validated_by_name === 'string' ? f.validated_by_name : null)).length,
     asientosParaRevisar: propuestos.count ?? 0,
     datosDeLaEmpresa: ia.count ?? 0,
+    pasadasSolas: solas,
   }
 }
 

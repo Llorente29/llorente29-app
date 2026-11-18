@@ -54,6 +54,8 @@ import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import { IvaNoDeducibleFicha } from '@/modules/conta/documentos/IvaNoDeducibleFicha'
 import { PreguntaDeQuien } from '@/modules/conta/documentos/PreguntaDeQuien'
 import { leerDeQuien } from '@/modules/conta/services/deQuienService'
+import { PasadaSola } from '@/modules/conta/documentos/PasadaSola'
+import { leerPasadaSola } from '@/modules/conta/services/pasadaSolaService'
 import { BloqueComision } from '@/modules/conta/documentos/BloqueComision'
 import { chipComision, estadoPagoComision } from '@/modules/conta/documentos/comision'
 import { leerComision } from '@/modules/conta/services/comisionService'
@@ -132,9 +134,12 @@ export default function RevisarFacturaPage() {
   const { search } = useLocation()
   const navegar = useNavigate()
   const { accountId, userId, userName } = useCuentaConta()
-  const { activa } = useEmpresas()
+  const { activa, empresas } = useEmpresas()
   const movil = useIsMobile()
-  const avisoDeAntes = (useLocation().state as { aviso?: string } | null)?.aviso ?? null
+  const estadoDeAntes = useLocation().state as { aviso?: string; arriba?: boolean } | null
+  const avisoDeAntes = estadoDeAntes?.aviso ?? null
+  // E04 · La confirmación de «Pasarla» va arriba, donde se ve sin bajar (en el móvil salía al pie).
+  const avisoArriba = estadoDeAntes?.arriba === true
   const [vuelta, setVuelta] = useState(0)
   const f = useLeer(invoiceId ? () => leerFactura(invoiceId) : null, `${invoiceId}:${vuelta}`)
   const facLeida = useUltimo(f.datos, invoiceId)
@@ -163,15 +168,17 @@ export default function RevisarFacturaPage() {
   const pos = ids.indexOf(invoiceId)
 
   const volver = listaRecordada(LISTA_RECIBIDAS, `${rutaDocumentos()}${conCambio(search, { fila: invoiceId })}`)
-  const ir = useCallback((id: string, aviso?: string) => {
+  const ir = useCallback((id: string, aviso?: string, arriba?: boolean) => {
     const q = conCambio(search, { fila: id })
     recordarLista(LISTA_RECIBIDAS, `${rutaDocumentos()}${q}`)
-    navegar(`${rutaRevisarFactura(id)}${q}`, aviso ? { state: { aviso } } : undefined)
+    navegar(`${rutaRevisarFactura(id)}${q}`, aviso ? { state: { aviso, ...(arriba ? { arriba: true } : {}) } } : undefined)
   }, [search, navegar])
 
   const fichaLeida = useLeer(accountId && invoiceId ? () => leerFichaRecibida(accountId, invoiceId) : null, `${accountId}:${invoiceId}:ficha:${vuelta}`)
   // E03 · ¿A nombre de quién va? Si no es de la empresa, se pregunta arriba y no se valida hasta contestar.
   const deQuien = useLeer(invoiceId ? () => leerDeQuien(invoiceId) : null, `${invoiceId}:de-quien:${vuelta}`)
+  // E04 · Si Sumied la pasó sola a esta sociedad: la línea verde, con «Deshacer».
+  const pasadaSola = useLeer(invoiceId ? () => leerPasadaSola(invoiceId) : null, `${invoiceId}:pasada-sola:${vuelta}`)
   const ficha = useUltimo(fichaLeida.datos, invoiceId)
   const localPropuesto = ficha ? ficha.localId ?? ficha.recepcion?.localId ?? null : undefined
   const papel = useLeer(fac && ficha ? async () => ({ url: await urlDelPapel(fac, ficha.lectura?.ruta ?? null) }) : null,
@@ -689,8 +696,14 @@ export default function RevisarFacturaPage() {
       )}
       <Veredicto tipo={v.tipo} titulo={v.titulo} porque={v.porque} detalle={v.detalle} quien={MARCA.nombre} />
       {/* E03 · La pregunta, arriba, en la franja de las dudas: Sumied no decide solo que su IVA no se deduce. */}
+      {/* E04 · La confirmación de «Pasarla», arriba (en el móvil se ve sin bajar). */}
+      {avisoDeAntes && avisoArriba && !hecho && !msgRecuperado && <p className="s-aviso-lista" data-tono="ok" role="status" data-prueba="aviso-arriba">{avisoDeAntes}</p>}
+      {/* E04 · Lo que Sumied hizo solo, en verde y con «Deshacer». */}
+      {!descartada && <PasadaSola invoiceId={invoiceId} p={pasadaSola.datos ?? null} quien={userName ?? null}
+        alDevolver={(t) => { refrescarCuentasMenu(); decir(t) }} />}
       {!descartada && <PreguntaDeQuien invoiceId={invoiceId} q={deQuien.datos ?? null} quien={userName ?? null}
-        alContestar={(t) => decir(t)} alPasar={(t) => { refrescarCuentasMenu(); if (siguiente) ir(siguiente, t); else decir(t) }} />}
+        sociedades={empresas.map((e) => ({ id: e.id, nombre: e.nombre }))} actual={fac.company_id ?? null}
+        alContestar={(t) => decir(t)} alPasar={(t) => { refrescarCuentasMenu(); if (siguiente) ir(siguiente, t, true); else decir(t) }} />}
       {!soloLectura && <div className="cxf-barra"><BarraCambios cambios={ed.cambios} onDescartar={() => { ed.descartar(); setMensaje(null) }} onGuardar={() => void guardar()} guardando={guardando} mensaje={mensaje} /></div>}
       {descartada && (
         <section className="s-bloque-ficha" aria-label="No es una factura">
@@ -802,7 +815,7 @@ export default function RevisarFacturaPage() {
             <Link to={rutaRevisarFactura(traida.id)}>{traida.numero ? `la ${traida.numero}` : 'ábrela'}</Link>.
           </p>
         )}
-        {avisoDeAntes && !hecho && !msgRecuperado && <p className="s-aviso-lista" data-tono="ok">{avisoDeAntes}</p>}
+        {avisoDeAntes && !avisoArriba && !hecho && !msgRecuperado && <p className="s-aviso-lista" data-tono="ok">{avisoDeAntes}</p>}
         {msgRecuperado && <p className="s-aviso-lista" data-tono="ok">{msgRecuperado}</p>}
         {hecho && (
           <p className="s-aviso-lista" data-tono={hecho.validado ? 'ok' : 'falta'}><strong>{hecho.texto}</strong>
