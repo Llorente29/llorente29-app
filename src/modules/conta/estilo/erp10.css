@@ -101,6 +101,8 @@
 .cxe-chip-verde { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); font-weight: 700; }
 .cxe-aviso-linea { margin: 0; font-size: .85rem; color: var(--cx-ambar); }
 .cxe-comparar .cxe-cuenta { color: var(--cx-azul); text-decoration: underline; }
+/* X07 · Ya igualado: el botón lo dice, en verde, apagado. */
+.cxe-grande.cxe-igualado-hecho, .cxe-grande.cxe-igualado-hecho:disabled { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); border: 1px solid currentColor; opacity: 1; cursor: default; }
 .cxe-comparar .cxe-fila td:first-child { font-weight: 400; }
 .cxe-comparar .cxe-fila-filo td:first-child { box-shadow: inset 4px 0 0 var(--cx-ambar); }
 .cxe-comparar .cxe-fila-filo { background: var(--cx-ambar-fila); }

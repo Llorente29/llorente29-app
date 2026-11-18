@@ -1,4 +1,4 @@
 {
-  "segundos": 8,
-  "medido": "estimado como el del X06 (7 s); se cambia por el medido en la primera e2e del X07"
+  "segundos": 9,
+  "medido": "run 44266436131, commit 985ddfdd (X07, 18/11): 9,2 s en el ordenador; el móvil se salta"
 }

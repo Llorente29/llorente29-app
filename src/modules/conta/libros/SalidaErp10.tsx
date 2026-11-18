@@ -243,6 +243,9 @@ export function SalidaErp10() {
     } finally { setHaciendo(null) }
   }
   const hayLotes = (datos.datos?.lotes.length ?? 0) > 0
+  // X07 · Ya igualado (este mes, este fichero, esta fecha): el botón lo dice y se apaga; la pantalla se ve acabada.
+  const g = comprobar.datos?.igualado
+  const yaIgualado = !!g && !!subido && g.mes === mes && g.fichero === subido.nombre && g.fechaSaldos === fecha
   const porQueNoIgualar = !subido ? 'Primero sube el sumas y saldos de ERP10.'
     : !comparacion ? 'Comparando…'
     : !comparacion.igualable ? 'Queda alguna diferencia sin explicar o por hacer.' : undefined
@@ -280,9 +283,11 @@ export function SalidaErp10() {
             <button type="button" className="cxe-grande" onClick={() => { setPaso(3); setHecho(null); setMarcados(new Set()); setSubido(null); setVuelta((v) => v + 1) }}>Ya lo he importado</button>
           </>}
           {paso === 3 && <>
-            <button type="button" className="cxe-grande cxe-igualar" disabled={!!porQueNoIgualar || !!haciendo} title={porQueNoIgualar} onClick={() => { void igualar() }}>
-              Darlo por igualado <kbd className="cxe-kbd">Intro</kbd>
-            </button>
+            {yaIgualado
+              ? <button type="button" className="cxe-grande cxe-igualado-hecho" disabled>✓ Igualado</button>
+              : <button type="button" className="cxe-grande cxe-igualar" disabled={!!porQueNoIgualar || !!haciendo} title={porQueNoIgualar} onClick={() => { void igualar() }}>
+                  Darlo por igualado <kbd className="cxe-kbd">Intro</kbd>
+                </button>}
           </>}
         </div>
       </div>

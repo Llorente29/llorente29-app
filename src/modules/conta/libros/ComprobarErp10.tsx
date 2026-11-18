@@ -32,7 +32,7 @@ const hoyDe = (sello: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'E
 const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const PLEGADAS = 2
 /** Las anchuras de las cinco columnas, las mismas en la tabla y en su total (que va fuera, para que no ruede). */
-const Columnas = () => <colgroup><col style={{ width: '12%' }} /><col style={{ width: '30%' }} /><col style={{ width: '21%' }} /><col style={{ width: '20%' }} /><col style={{ width: '17%' }} /></colgroup>
+const Columnas = () => <colgroup><col style={{ width: '15%' }} /><col style={{ width: '27%' }} /><col style={{ width: '21%' }} /><col style={{ width: '20%' }} /><col style={{ width: '17%' }} /></colgroup>
 
 export function ComprobarErp10(p: {
   subido: Subido | null
@@ -98,7 +98,8 @@ export function ComprobarErp10(p: {
   )
   const grupo = (lista: CuentaComparada[], titulo: string, clase: string, plegable: 'igual' | 'noSale' | null) => {
     if (!lista.length) return null
-    const abierto = !plegable || abiertos[plegable]
+    // X07 · Si solo hay cuentas que quedan igual, se ven todas (la tabla rueda por dentro): sin hueco debajo de dos filas.
+    const abierto = !plegable || abiertos[plegable] || (plegable === 'igual' && !!c && !c.noIgual.length && !c.noSale.length)
     const vistas = abierto ? lista : lista.slice(0, PLEGADAS)
     return (
       <tbody>
