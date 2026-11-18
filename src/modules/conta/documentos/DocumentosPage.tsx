@@ -35,6 +35,7 @@ import { SIN_APUNTADAS, lineaDeArriba, motivoDeRevisar, motivoPideRoi } from '@/
 import { PreguntaRoi } from '@/modules/conta/empresa/ApartadoRoi'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
+import { AvisoLecturaCaida } from './AvisoLecturaCaida'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
@@ -334,6 +335,7 @@ export default function DocumentosPage() {
         masAcciones={mas}
         principal={botonSubir}
       />
+      <AvisoLecturaCaida companyId={activa?.id} />
       <input ref={ficheros} type="file" multiple accept={ACEPTA} className="s-oculto" aria-label="Elegir facturas para subir"
         onChange={(e) => void subir(e.target.files)} data-prueba="subir-ficheros" />
       <input ref={camara} type="file" accept="image/*" capture="environment" className="s-oculto" aria-label="Hacer una foto a una factura"

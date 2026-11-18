@@ -1,0 +1,7 @@
+# E02 · la lectura caída se ve y se avisa. La migración (solo añade) y su prueba
+# (ROLLBACK: llegadas de cada clase en dos cuentas; el vigía salta con una de tope
+# de gasto y con tres de otra caída en 15 minutos, no con dos; no repite dentro de
+# su ventana; avisa de la vuelta; una cuenta no ve las llegadas de otra y la caída
+# es común).
+supabase/migrations/20261118T0600_e02_lectura_caida.sql
+supabase/staging/sql/20261118_e02_lectura_caida_prueba.sql
