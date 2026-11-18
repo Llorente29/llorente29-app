@@ -5105,6 +5105,84 @@ $$;
 
 
 --
+-- Name: _conta_de_quien(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_de_quien(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v public.supplier_invoice; c public.company; o public.company;
+  v_emp text; v_dest text; v_nif text; v_nom text; v_caso text; v_validado boolean; v_pregunta boolean; v_frase text; v_corta text;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null then return null; end if;
+  if not (coalesce(v.reading, '{}'::jsonb) ? 'factura') or coalesce(v.source, '') in ('lote', 'liquidacion', 'traida')
+     or v.status in ('anulada', 'descartada', 'repetida') then
+    return jsonb_build_object('caso', null, 'pregunta', false);
+  end if;
+  select * into c from public.company where id = v.company_id and account_id = v.account_id;
+  v_emp := public._conta_nif_clave(c.tax_id);
+  if v_emp is null then return jsonb_build_object('caso', null, 'pregunta', false); end if;
+  v_nif := nullif(btrim(v.reading->'factura'->'destinatario'->>'nif'), '');
+  v_dest := public._conta_nif_clave(v_nif);
+  v_nom := nullif(btrim(v.reading->'factura'->'destinatario'->>'nombre'), '');
+  if v_dest = v_emp then
+    v_caso := 'empresa';
+  else
+    if v_dest is not null then
+      -- Regla 9: solo las sociedades de SU cuenta.
+      select x.* into o from public.company x
+       where x.account_id = v.account_id and x.id <> v.company_id and public._conta_nif_clave(x.tax_id) = v_dest
+       order by x.created_at limit 1;
+    end if;
+    if o.id is not null then
+      v_caso := 'otra_sociedad';
+    elsif not exists (select 1 from public.supplier_invoice_tax t where t.supplier_invoice_id = v.id and coalesce(t.vat_pct, 0) > 0 and coalesce(t.vat_amount, 0) <> 0) then
+      v_caso := 'sin_iva';
+    elsif v_dest is null then
+      v_caso := 'sin_leer';
+    else
+      v_caso := 'fuera';
+    end if;
+  end if;
+  v_validado := exists (select 1 from public.journal_entry e where e.account_id = v.account_id and e.source_type = 'supplier_invoice'
+                          and e.source_id = v.id and e.status = 'validado');
+  -- Pregunta: no contestada, sin asiento validado. Fuera o sin leer, además, si nadie ha dicho ya por qué
+  -- su IVA no se deduce (un ticket sin NIF, el ROI…); la otra sociedad se pregunta siempre.
+  v_pregunta := not v_validado and v.recipient_answer is null
+                and (v_caso = 'otra_sociedad' or (v_caso in ('fuera', 'sin_leer') and v.vat_non_deductible_reason is null));
+  v_corta := case when o.id is not null then coalesce(nullif(btrim(o.trade_name), ''),
+               regexp_replace(o.legal_name, ',?\s*(S\.?\s?L\.?\s?U?\.?|S\.?\s?A\.?\s?U?\.?|S\.?\s?C\.?\s?P\.?|C\.?\s?B\.?)\s*$', '', 'i')) end;
+  -- Sin doble punto cuando el nombre ya acaba en punto («…, S.L.»).
+  v_frase := case v_caso
+    when 'otra_sociedad' then format('Esta factura va a nombre de %s, no de %s', o.legal_name, c.legal_name) || case when right(c.legal_name, 1) = '.' then '' else '.' end
+    when 'fuera' then format('Esta factura va a nombre de %s, no de %s', coalesce(v_nom || ' (' || v_nif || ')', v_nif), c.legal_name)
+                      || case when right(c.legal_name, 1) = '.' then '' else '.' end || ' Si no es vuestra, su IVA no se deduce.'
+    when 'sin_leer' then 'No he podido leer a nombre de quién va esta factura. Míralo en el PDF.' end;
+  return jsonb_build_object(
+    'caso', v_caso, 'pregunta', v_pregunta, 'frase', v_frase,
+    'empresa', c.legal_name, 'sociedad_id', o.id, 'sociedad', o.legal_name, 'sociedad_corta', v_corta,
+    'nombre', v_nom, 'nif', v_nif,
+    'respuesta', v.recipient_answer, 'quien', v.recipient_answered_by_name, 'cuando', v.recipient_answered_at,
+    'validado', v_validado,
+    -- Con su asiento validado y marcada «no va a nombre» sin que lo dijera nadie: lo marcó Sumied solo (S01o·2).
+    'solo_sumied', v_validado and coalesce(v.vat_non_deductible, false) and v.vat_non_deductible_reason = 'no_a_nombre'
+                   and v.recipient_answer is null
+                   and not exists (select 1 from public.supplier_invoice_change h where h.supplier_invoice_id = v.id
+                                     and h.cambios @> '[{"campo": "iva_no_deducible"}]'::jsonb));
+end $_$;
+
+
+--
+-- Name: FUNCTION _conta_de_quien(p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_de_quien(p_invoice uuid) IS 'E03: a nombre de quién va una recibida (otra_sociedad, fuera, sin_leer, empresa, sin_iva) y si hay que preguntarlo, con su frase. Interna, solo lee.';
+
+
+--
 -- Name: _conta_despachos_de_quien_llama(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5503,6 +5581,10 @@ begin
     return jsonb_build_object('seguro', false, 'motivo', 'Sus líneas de IVA no suman la base y el IVA de la factura.');
   end if;
   -- ¿Se deduce su IVA? (2212: no a nombre de la empresa, o de la UE sin ROI).
+  -- E03 · Si va a nombre de otro y nadie lo ha contestado, la mira una persona.
+  if coalesce((public._conta_de_quien(v.id)->>'pregunta')::boolean, false) then
+    return jsonb_build_object('seguro', false, 'motivo', public._conta_de_quien(v.id)->>'frase');
+  end if;
   v_nd_r := public._conta_iva_no_deducible_auto(v.id);
   if coalesce((v_nd_r->>'falta_roi')::boolean, false) then
     return jsonb_build_object('seguro', false, 'motivo', 'Es de un proveedor de la UE que cobra IVA español: falta saber si estás en el ROI (Ajustes › Tus impuestos).');
@@ -6289,13 +6371,7 @@ begin
   v_empresa := coalesce(nullif(btrim(c.legal_name), ''), 'la empresa');
   v_iva := exists (select 1 from public.supplier_invoice_tax t where t.supplier_invoice_id = v.id and coalesce(t.vat_pct, 0) > 0 and coalesce(t.vat_amount, 0) <> 0);
   if not v_iva then return jsonb_build_object('no_deducible', false, 'motivos', v_m); end if;
-  -- No viene a nombre de la empresa: leída de su documento, y su destinatario sin el NIF de la empresa.
-  if v.reading ? 'factura' and coalesce(v.source, '') not in ('lote', 'liquidacion') and public._conta_nif_clave(c.tax_id) is not null then
-    v_dest := public._conta_nif_clave(v.reading->'factura'->'destinatario'->>'nif');
-    if v_dest is distinct from public._conta_nif_clave(c.tax_id) then
-      v_m := v_m || jsonb_build_object('motivo', 'no_a_nombre', 'texto', format('No viene a nombre de %s: el IVA no se puede deducir y va al gasto.', v_empresa));
-    end if;
-  end if;
+  -- E03 · «No viene a nombre de la empresa» ya no lo decide Sumied: lo pregunta (_conta_de_quien) y lo contesta una persona.
   -- Sin ROI: proveedor de la UE que cobra IVA español.
   select public.conta_proveedor_iva_clase(s.country_code, s.tax_id_type, s.tax_id, s.tax_id_check_status, s.vat_regime) into v_clase
     from public.supplier s where s.id = v.supplier_id and s.account_id = v.account_id;
@@ -38398,6 +38474,31 @@ COMMENT ON FUNCTION public.conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe 
 
 
 --
+-- Name: conta_de_quien_es(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_de_quien_es(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid;
+begin
+  select account_id into v_acc from public.supplier_invoice where id = p_invoice;
+  if v_acc is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(v_acc)) then
+    raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501';
+  end if;
+  return public._conta_de_quien(p_invoice);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_de_quien_es(p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_de_quien_es(p_invoice uuid) IS 'E03: a nombre de quién va una recibida de tu cuenta y si hay que preguntarlo. Solo lee.';
+
+
+--
 -- Name: conta_despacho_clientes(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -40122,6 +40223,7 @@ begin
                      when f.asiento is null and f.diez is not null then 'en_diez'
                      when f.asiento->>'estado' = 'validado' then 'apuntada'
                      when f.supplier_id is null or f.reading_confidence = 'duda' or f.status = 'con_discrepancias' then 'por_aclarar'
+                     when coalesce((dq.q->>'pregunta')::boolean, false) then 'por_aclarar'  -- E03 · ¿de quién es?
                      else 'para_mirar' end,
       'proveedor', jsonb_build_object('id', f.supplier_id, 'nombre', coalesce(f.proveedor_nombre, f.reading->'factura'->'proveedor'->>'nombre')),
       'numero', f.invoice_number, 'fecha', f.invoice_date, 'total', f.grand_total,
@@ -40132,6 +40234,7 @@ begin
       'programa_antes', case when f.asiento is null and f.before_start_answer = 'ya_estaba' then public._conta_programa_de_antes(p_company) end,  -- N03
       'previas', f.previas,
       'confianza', f.reading_confidence,
+      'de_quien', case when coalesce((dq.q->>'pregunta')::boolean, false) then jsonb_build_object('caso', dq.q->>'caso', 'sociedad', dq.q->>'sociedad_corta') end,  -- E03
       'porque', case when f.asiento is null and f.before_start_answer = 'ya_estaba'  -- N03
                   then 'Ya estaba contabilizada ' || coalesce('en ' || public._conta_programa_de_antes(p_company), 'en el programa de antes')
                        || ': no se contabiliza en Sumied (' || coalesce(f.before_start_answered_by_name, 'una persona') || ', '
@@ -40140,6 +40243,7 @@ begin
                   then 'Ya contabilizada en Diez (asiento ' || (f.diez->>'serie') || '/' || (f.diez->>'numero') || ', ' || to_char((f.diez->>'fecha')::date, 'DD/MM/YYYY') || '): no se vuelve a apuntar.'
                   when f.status = 'descartada'
                   then 'No es una factura: ' || coalesce(f.discard_reason, 'sin motivo') || ' (' || coalesce(f.discarded_by_name, 'una persona') || ', ' || to_char(f.discarded_at at time zone 'Europe/Madrid', 'DD/MM/YYYY') || ').'
+                  when coalesce((dq.q->>'pregunta')::boolean, false) then dq.q->>'frase'  -- E03
                   else coalesce(f.reading->'porque'->>0, case when f.supplier_id is null then 'No reconozco el emisor: dime quién es.' end) end,
       'entendido', coalesce(g.entendido, case when g.aprendido->>'cuenta' is not null then jsonb_build_object(
                      'cuenta', g.aprendido->>'cuenta', 'nombre', g.aprendido->>'nombre', 'origen', g.aprendido->>'origen', 'sin_confirmar', true) end),
@@ -40148,6 +40252,7 @@ begin
       'recepcion', f.recepcion, 'asiento', f.asiento, 'diez', f.diez,
       'llego', f.created_at) as fila
       from facturas f join gasto g on g.id = f.id
+      cross join lateral (select public._conta_de_quien(f.id) as q) dq  -- E03
   ), recepciones as materialized (
     -- R6 · Una recepción cuyo papel es «factura» o «albarán-factura» ES una
     -- factura recibida. Desde el corte, Compras ya la hace factura con el mismo
@@ -51175,6 +51280,12 @@ begin
     end if;
   end if;
 
+  -- E03 · Una recibida que va a nombre de otro: no se valida hasta que una persona conteste.
+  if v_e.source_type = 'supplier_invoice' and coalesce((public._conta_de_quien(v_e.source_id)->>'pregunta')::boolean, false) then
+    orden := 12; codigo := 'de_quien_es';
+    motivo := (public._conta_de_quien(v_e.source_id)->>'frase') || ' Contesta en su ficha antes de validar.'; return next;
+  end if;
+
   -- C06b (#210): un asiento de ventas del día con un envío por aclarar. Copiado
   -- de tg_journal_entry_envio_por_aclarar, que desde aquí lo lee de esta función.
   if v_e.source_type = 'sales_day' then
@@ -56469,6 +56580,68 @@ COMMENT ON FUNCTION public.conta_recibida_antes_del_inicio(p_invoice uuid) IS 'N
 
 
 --
+-- Name: conta_recibida_de_quien(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_de_quien(p_invoice uuid, p_respuesta text, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v public.supplier_invoice; q jsonb; v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  v_nd boolean; v_motivo text; v_quitados int := 0; v_dia text := to_char(now() at time zone 'Europe/Madrid', 'DD/MM');
+begin
+  select * into v from public.supplier_invoice where id = p_invoice for update;
+  if v.id is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(v.account_id)) then
+    raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501';
+  end if;
+  if p_respuesta is null or p_respuesta not in ('es_de_esta', 'deduce', 'no_deduce') then
+    raise exception 'Di si su IVA se deduce o no.' using errcode = '22023';
+  end if;
+  if v.status in ('anulada', 'descartada') then raise exception 'Está %: no se cambia.', v.status using errcode = '22023'; end if;
+  if exists (select 1 from public.journal_entry e where e.account_id = v.account_id and e.source_type = 'supplier_invoice'
+               and e.source_id = v.id and e.status = 'validado') then
+    raise exception 'Ya está contabilizada: para cambiarlo, anula su asiento.' using errcode = '22023';
+  end if;
+  -- Lo que decide: no se deduce, «no va a nombre»; se deduce, se quita «no va a nombre» (otro motivo que ya
+  -- tuviera, como el ROI o un ticket sin NIF, se queda: no es lo que se pregunta aquí).
+  if p_respuesta = 'no_deduce' then
+    v_nd := true; v_motivo := 'no_a_nombre';
+  elsif coalesce(v.vat_non_deductible_reason, 'no_a_nombre') = 'no_a_nombre' then
+    v_nd := false; v_motivo := null;
+  else
+    v_nd := v.vat_non_deductible; v_motivo := v.vat_non_deductible_reason;
+  end if;
+  update public.supplier_invoice
+     set vat_non_deductible = v_nd, vat_non_deductible_reason = v_motivo,
+         vat_non_deductible_note = case when v_motivo = 'otro' then vat_non_deductible_note end,
+         recipient_answer = p_respuesta, recipient_answered_at = now(), recipient_answered_by_name = v_quien, updated_at = now()
+   where id = v.id;
+  -- Su asiento propuesto se rehace con lo contestado.
+  delete from public.journal_entry e
+   where e.account_id = v.account_id and e.source_type = 'supplier_invoice' and e.source_id = v.id and e.status in ('propuesto', 'borrador');
+  get diagnostics v_quitados = row_count;
+  insert into public.supplier_invoice_change (account_id, supplier_invoice_id, by_name, what, cambios)
+  values (v.account_id, v.id, v_quien, 'guardar', jsonb_build_array(jsonb_build_object('campo', 'de_quien_es',
+          'antes', jsonb_build_object('respuesta', v.recipient_answer, 'no_deducible', v.vat_non_deductible, 'motivo', v.vat_non_deductible_reason),
+          'ahora', jsonb_build_object('respuesta', p_respuesta, 'no_deducible', v_nd, 'motivo', v_motivo))));
+  return jsonb_build_object('respuesta', p_respuesta, 'no_deducible', v_nd, 'asiento_quitado', v_quitados > 0,
+    'texto', case p_respuesta
+               when 'no_deduce' then format('Apuntado: su IVA no se deduce y va al gasto. Lo decidió %s el %s.', v_quien, v_dia)
+               when 'es_de_esta' then format('Apuntado: es de esta sociedad y su IVA se deduce. Lo decidió %s el %s.', v_quien, v_dia)
+               else format('Apuntado: su IVA se deduce. Lo decidió %s el %s.', v_quien, v_dia) end
+             || case when v_quitados > 0 then ' Su asiento propuesto se vuelve a proponer.' else '' end);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_de_quien(p_invoice uuid, p_respuesta text, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_de_quien(p_invoice uuid, p_respuesta text, p_quien_nombre text) IS 'E03: la respuesta de una persona a «¿a nombre de quién va?» (es_de_esta, deduce, no_deduce). Manda sobre lo que Sumied calcula.';
+
+
+--
 -- Name: conta_recibida_envio(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -56909,6 +57082,8 @@ begin
      set vat_non_deductible = coalesce(p_no_deducible, false),
          vat_non_deductible_reason = v_motivo,
          vat_non_deductible_note = case when v_motivo = 'otro' then v_texto end,
+         recipient_answer = case when coalesce(p_no_deducible, false) then 'no_deduce' else 'deduce' end,  -- E03 · también es una respuesta
+         recipient_answered_at = now(), recipient_answered_by_name = v_quien,
          updated_at = now()
    where id = v_f.id;
   delete from public.journal_entry e
@@ -56988,6 +57163,78 @@ end $_$;
 --
 
 COMMENT ON FUNCTION public.conta_recibida_papel_poner(p_invoice uuid, p_ruta text, p_nombre text, p_quien_nombre text) IS 'D03 · Pone el documento de una recibida (subido en receipt-uploads, en la carpeta de su cuenta), quita «Sin PDF» y reinicia su fila del D02. Con historial. No con su asiento validado.';
+
+
+--
+-- Name: conta_recibida_pasar_a(uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_pasar_a(p_invoice uuid, p_company uuid, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v public.supplier_invoice; d public.company; c public.company; v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  v_traba text; v_quitados int := 0; v_llegadas int := 0;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice for update;
+  if v.id is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(v.account_id)) then
+    raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501';
+  end if;
+  -- Regla 9: la sociedad de destino, de LA MISMA cuenta.
+  select * into d from public.company where id = p_company and account_id = v.account_id;
+  if d.id is null then raise exception 'Esa sociedad no es de tu cuenta.' using errcode = '42501'; end if;
+  if d.id = v.company_id then raise exception 'Ya está en %.', d.legal_name using errcode = '22023'; end if;
+  select * into c from public.company where id = v.company_id;
+  if v.status in ('anulada', 'descartada') then raise exception 'Está %: no se pasa.', v.status using errcode = '22023'; end if;
+  if exists (select 1 from public.journal_entry e where e.account_id = v.account_id and e.source_type = 'supplier_invoice'
+               and e.source_id = v.id and e.status = 'validado') then
+    raise exception 'Tiene su asiento validado: anula el asiento antes de pasarla a %.', d.legal_name using errcode = '22023';
+  end if;
+  -- Lo que ya se hizo con ella en esta sociedad no se mueve solo: se deshace antes.
+  select string_agg(x, ', ') into v_traba from (
+    select 'pagos' x where exists (select 1 from public.supplier_invoice_payment p where p.invoice_id = v.id)
+                          or exists (select 1 from public.conta_pago_salida p where p.invoice_id = v.id)
+                          or exists (select 1 from public.conta_pago_remesa_linea p where p.invoice_id = v.id)
+    union all select 'una casación con el banco' where exists (select 1 from public.bank_match_item b where b.supplier_invoice_id = v.id)
+    union all select 'un impuesto presentado' where exists (select 1 from public.tax_return_line t where t.supplier_invoice_id = v.id)
+    union all select 'una liquidación' where exists (select 1 from public.licensed_settlement l where l.received_invoice_id = v.id)
+                                          or exists (select 1 from public.channel_settlement_invoice l where l.supplier_invoice_id = v.id)
+    union all select 'su recepción' where exists (select 1 from public.goods_receipt_path g where g.supplier_invoice_id = v.id)
+  ) t;
+  if v_traba is not null then
+    raise exception 'Ya tiene %: deshazlo antes de pasarla a %.', v_traba, d.legal_name using errcode = '22023';
+  end if;
+  delete from public.journal_entry e
+   where e.account_id = v.account_id and e.source_type = 'supplier_invoice' and e.source_id = v.id and e.status in ('propuesto', 'borrador');
+  get diagnostics v_quitados = row_count;
+  update public.supplier_invoice
+     set company_id = d.id,
+         -- Su local, si es también de la otra sociedad; si no, sin local.
+         location_id = case when exists (select 1 from public.location_company lc where lc.location_id = v.location_id and lc.company_id = d.id) then v.location_id end,
+         vat_non_deductible = case when vat_non_deductible_reason = 'no_a_nombre' then false else vat_non_deductible end,
+         vat_non_deductible_reason = case when vat_non_deductible_reason = 'no_a_nombre' then null else vat_non_deductible_reason end,
+         recipient_answer = null, recipient_answered_at = null, recipient_answered_by_name = null,
+         journal_entry_id = case when journal_entry_id is not null and not exists (select 1 from public.journal_entry e where e.id = v.journal_entry_id) then null else journal_entry_id end,
+         updated_at = now()
+   where id = v.id;
+  update public.document_inbox set company_id = d.id, updated_at = now() where supplier_invoice_id = v.id and account_id = v.account_id;
+  get diagnostics v_llegadas = row_count;
+  update public.document_activity set company_id = d.id where supplier_invoice_id = v.id and account_id = v.account_id;
+  update public.supplier_invoice_auto set company_id = d.id where invoice_id = v.id and account_id = v.account_id;
+  insert into public.supplier_invoice_change (account_id, supplier_invoice_id, by_name, what, cambios)
+  values (v.account_id, v.id, v_quien, 'guardar', jsonb_build_array(jsonb_build_object('campo', 'sociedad',
+          'antes', jsonb_build_object('id', c.id, 'nombre', c.legal_name), 'ahora', jsonb_build_object('id', d.id, 'nombre', d.legal_name))));
+  return jsonb_build_object('sociedad_id', d.id, 'sociedad', d.legal_name, 'llegadas', v_llegadas, 'asiento_quitado', v_quitados > 0,
+    'texto', format('Pasada a %s, con su PDF. Ya no está en esta lista.', d.legal_name));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_pasar_a(p_invoice uuid, p_company uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_pasar_a(p_invoice uuid, p_company uuid, p_quien_nombre text) IS 'E03: pasa una recibida (con su llegada y su actividad) a otra sociedad de la misma cuenta, sin asiento. No si tiene asiento validado, pagos, banco, impuesto, liquidación o recepción. Lo apunta en supplier_invoice_change.';
 
 
 --
@@ -67292,6 +67539,69 @@ $$;
 --
 
 COMMENT ON FUNCTION public.e2e_c06_recorrido_base(p_company uuid) IS 'SOLO STAGING (seed_c06_recorrido_staging.sql). El recorrido e2e del C06 registra la C0009 para su empresa, por turnos entre carriles («ocupada» mientras otro la tenga, hasta 10 min). Solo el administrador de plataforma de prueba (el de la plantilla o el de su carril).';
+
+
+--
+-- Name: e2e_e03_preparar(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.e2e_e03_preparar(p_lado text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_acc uuid; emp uuid; emp2 uuid; alfa uuid; v_nif_alfa text; loc uuid; v_hoy date := (now() at time zone 'Europe/Madrid')::date;
+  v_sello text := upper(to_hex((extract(epoch from clock_timestamp()) * 1000)::bigint % 1679616));
+  r jsonb := '{}'::jsonb; c record; v_id uuid; v_num text; v_ruta text;
+begin
+  if p_lado is null or p_lado !~ '^[a-z0-9]{1,12}$' then raise exception 'E03 e2e: el lado (ordenador, movil…) en minúsculas.'; end if;
+  -- La cuenta A de quien llama, en la plantilla o en un carril (el segundo grupo es el carril).
+  select up.account_id into v_acc from public.user_profiles up
+   where up.user_id = auth.uid() and up.role = 'admin' and up.active
+     and up.account_id::text ~ '^c01a0000-[0-9a-f]{4}-4000-8000-00000000000a$'
+   order by up.created_at limit 1;
+  if v_acc is null then raise exception 'E03 e2e: solo para la administradora de la cuenta A de prueba (o la de su carril).' using errcode = '42501'; end if;
+  select id into emp from public.company where account_id = v_acc and tax_id = 'B28000016';
+  select id, tax_id into alfa, v_nif_alfa from public.supplier where account_id = v_acc and name = 'Mayorista Prueba Alfa' order by created_at limit 1;
+  select lc.location_id into loc from public.location_company lc where lc.company_id = emp order by lc.location_id limit 1;
+  if emp is null or alfa is null then raise exception 'E03 e2e: faltan Taberna de Prueba Norte o Mayorista Prueba Alfa (semillas C00 y D01).'; end if;
+  -- La segunda sociedad de la cuenta (la siembra esta semilla en la plantilla; el carril la clona).
+  select id into emp2 from public.company where account_id = v_acc and tax_id = 'B00000000';
+  if emp2 is null then raise exception 'E03 e2e: falta la segunda sociedad de A (semilla E03).'; end if;
+  -- Las dos recibidas, cada vez con su número.
+  for c in select * from (values
+      ('otra', 'Prueba Segunda Takeaway SL', 'ES-B00000000'),
+      ('fuera', 'Cliente Inventado, S.L.', 'F00000000')) t(caso, nombre, nif) loop
+    v_num := format('E03-%s-%s-%s', upper(left(p_lado, 3)), upper(c.caso), v_sello);
+    v_ruta := format('%s/e03-e2e/%s.pdf', v_acc, v_num);
+    insert into public.supplier_invoice (account_id, company_id, supplier_id, location_id, doc_kind, invoice_number, invoice_date, status, source,
+      reading_confidence, needs_review, tax_base_total, tax_total, grand_total, raw_document_url, created_by_name, reading)
+    values (v_acc, emp, alfa, loc, 'invoice', v_num, v_hoy, 'en_revision', 'ocr', 'seguro', false, 100, 21, 121, v_ruta, 'Prueba e2e E03',
+      jsonb_build_object('confianza', 'seguro', 'porque', jsonb_build_array('Prueba e2e E03.'), 'comprobaciones', '[]'::jsonb,
+        'factura', jsonb_build_object('proveedor', jsonb_build_object('nombre', 'Mayorista Prueba Alfa', 'nif', v_nif_alfa),
+                                      'destinatario', jsonb_build_object('nombre', c.nombre, 'nif', c.nif))))
+    returning id into v_id;
+    insert into public.supplier_invoice_line (supplier_invoice_id, raw_text, qty, unit_price, line_amount, vat_pct, position)
+    values (v_id, 'Material de limpieza', 1, 100, 100, 21, 0);
+    insert into public.supplier_invoice_tax (account_id, supplier_invoice_id, vat_pct, base, vat_amount) values (v_acc, v_id, 21, 100, 21);
+    -- El disparador de antes la habrá marcado «no va a nombre»: el E03 la deja como pregunta.
+    update public.supplier_invoice set vat_non_deductible = false, vat_non_deductible_reason = null
+     where id = v_id and vat_non_deductible_reason = 'no_a_nombre';
+    if c.caso = 'otra' then
+      insert into public.document_inbox (account_id, company_id, channel, status, file_path, file_name, mime_type, size_bytes, supplier_invoice_id)
+      values (v_acc, emp, 'subida', 'factura', v_ruta, v_num || '.pdf', 'application/pdf', 1000, v_id);
+    end if;
+    r := r || jsonb_build_object(c.caso, jsonb_build_object('id', v_id, 'numero', v_num, 'ruta', v_ruta));
+  end loop;
+  return r || jsonb_build_object('cuenta', v_acc, 'empresa', emp, 'otra_empresa', emp2);
+end $_$;
+
+
+--
+-- Name: FUNCTION e2e_e03_preparar(p_lado text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.e2e_e03_preparar(p_lado text) IS 'SOLO STAGING (semilla E03): prepara en la cuenta A de prueba (o la de su carril) una segunda sociedad y dos recibidas que preguntan «¿de quién es?», para su e2e.';
 
 
 --
@@ -102566,6 +102876,7 @@ CREATE FUNCTION public.tg_s01o2_iva_no_deducible() RETURNS trigger
 declare r jsonb;
 begin
   if new.vat_non_deductible_reason is not null or new.status in ('anulada', 'descartada', 'repetida') then return null; end if;
+  if new.recipient_answer is not null then return null; end if;   -- E03 · lo contestó una persona: manda
   if new.source = 'traida' then return null; end if;   -- N06a · su IVA es el de su libro de allí
   if exists (select 1 from public.journal_entry e where e.source_type = 'supplier_invoice' and e.source_id = new.id and e.status = 'validado') then return null; end if;
   r := public._conta_iva_no_deducible_auto(new.id);
@@ -115168,6 +115479,31 @@ COMMENT ON TABLE public.conta_dl1_303_4t_antes IS 'DL1 (13/11). Copia del borrad
 
 
 --
+-- Name: conta_e03_respaldo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_e03_respaldo (
+    supplier_invoice_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    que text NOT NULL,
+    vat_non_deductible boolean,
+    vat_non_deductible_reason text,
+    recipient_answer text,
+    recipient_answered_at timestamp with time zone,
+    recipient_answered_by_name text,
+    hecho_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_e03_respaldo_que_check CHECK ((que = ANY (ARRAY['respuesta_de_la_ficha'::text, 'vuelve_a_pregunta'::text])))
+);
+
+
+--
+-- Name: TABLE conta_e03_respaldo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_e03_respaldo IS 'E03 (1836): cómo estaba cada recibida antes de que su marca «no va a nombre» volviera a ser pregunta, para la vuelta atrás.';
+
+
+--
 -- Name: conta_eje_analitico; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -117310,10 +117646,14 @@ END, ''::text)) STORED,
     before_start_answered_by_name text,
     import_mark text,
     import_pending numeric,
+    recipient_answer text,
+    recipient_answered_at timestamp with time zone,
+    recipient_answered_by_name text,
     CONSTRAINT supplier_invoice_arrival_channel_check CHECK ((arrival_channel = ANY (ARRAY['subida'::text, 'correo'::text, 'cocina'::text, 'portal'::text]))),
     CONSTRAINT supplier_invoice_before_start_answer_check CHECK (((before_start_answer IS NULL) OR (before_start_answer = ANY (ARRAY['ya_estaba'::text, 'es_nueva'::text])))),
     CONSTRAINT supplier_invoice_descartada_con_motivo CHECK (((status = 'descartada'::text) = ((discarded_at IS NOT NULL) AND (length(TRIM(BOTH FROM COALESCE(discard_reason, ''::text))) > 0) AND (status_before_discard IS NOT NULL)))),
     CONSTRAINT supplier_invoice_doc_kind_check CHECK ((doc_kind = ANY (ARRAY['invoice'::text, 'credit_note'::text]))),
+    CONSTRAINT supplier_invoice_e03_respuesta CHECK ((recipient_answer = ANY (ARRAY['es_de_esta'::text, 'deduce'::text, 'no_deduce'::text]))),
     CONSTRAINT supplier_invoice_iban_decision_check CHECK (((iban_decision IS NULL) OR (iban_decision = ANY (ARRAY['es_el_nuevo'::text, 'no_es_suyo'::text])))),
     CONSTRAINT supplier_invoice_import_mark_check CHECK (((import_mark IS NULL) OR (import_mark = ANY (ARRAY['sin_casar'::text, 'fuera'::text])))),
     CONSTRAINT supplier_invoice_match_status_check CHECK ((match_status = ANY (ARRAY['sin_match'::text, 'ok'::text, 'con_diferencias'::text]))),
@@ -117537,6 +117877,27 @@ COMMENT ON COLUMN public.supplier_invoice.import_mark IS 'N06a: en una factura t
 --
 
 COMMENT ON COLUMN public.supplier_invoice.import_pending IS 'N06a: en una factura traída, lo que queda por pagar según el saldo del proveedor en el otro programa (0: pagada).';
+
+
+--
+-- Name: COLUMN supplier_invoice.recipient_answer; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier_invoice.recipient_answer IS 'E03: lo que contestó una persona a «¿a nombre de quién va?»: es_de_esta (va a otra sociedad de la cuenta, pero es de esta), deduce o no_deduce. Manda: el disparador del IVA no deducible y «apunta sola» no la tocan.';
+
+
+--
+-- Name: COLUMN supplier_invoice.recipient_answered_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier_invoice.recipient_answered_at IS 'E03: cuándo lo contestó.';
+
+
+--
+-- Name: COLUMN supplier_invoice.recipient_answered_by_name; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier_invoice.recipient_answered_by_name IS 'E03: quién lo contestó.';
 
 
 --
@@ -132466,6 +132827,14 @@ ALTER TABLE ONLY public.conta_diez_traspaso
 
 ALTER TABLE ONLY public.conta_diez_traspaso
     ADD CONSTRAINT conta_diez_traspaso_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_e03_respaldo conta_e03_respaldo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_e03_respaldo
+    ADD CONSTRAINT conta_e03_respaldo_pkey PRIMARY KEY (supplier_invoice_id);
 
 
 --
@@ -148795,6 +149164,14 @@ ALTER TABLE ONLY public.conta_diez_traspaso
 
 
 --
+-- Name: conta_e03_respaldo conta_e03_respaldo_supplier_invoice_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_e03_respaldo
+    ADD CONSTRAINT conta_e03_respaldo_supplier_invoice_id_fkey FOREIGN KEY (supplier_invoice_id) REFERENCES public.supplier_invoice(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_eje_analitico conta_eje_analitico_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -160970,6 +161347,12 @@ CREATE POLICY conta_diez_traspaso_leer ON public.conta_diez_traspaso FOR SELECT 
 ALTER TABLE public.conta_dl1_303_4t_antes ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: conta_e03_respaldo; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_e03_respaldo ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: conta_eje_analitico; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -170018,6 +170401,14 @@ GRANT ALL ON FUNCTION public._conta_de_programa(p_programa text) TO service_role
 
 
 --
+-- Name: FUNCTION _conta_de_quien(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_de_quien(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_de_quien(p_invoice uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_despachos_de_quien_llama(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -176726,6 +177117,15 @@ GRANT ALL ON FUNCTION public.conta_cuadro_con_pendiente(p_cuadro jsonb, p_import
 
 
 --
+-- Name: FUNCTION conta_de_quien_es(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_de_quien_es(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_de_quien_es(p_invoice uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_de_quien_es(p_invoice uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_despacho_clientes(p_account uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -180087,6 +180487,15 @@ GRANT ALL ON FUNCTION public.conta_recibida_antes_del_inicio(p_invoice uuid) TO 
 
 
 --
+-- Name: FUNCTION conta_recibida_de_quien(p_invoice uuid, p_respuesta text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_de_quien(p_invoice uuid, p_respuesta text, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_de_quien(p_invoice uuid, p_respuesta text, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_de_quien(p_invoice uuid, p_respuesta text, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_recibida_envio(p_entry uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -180129,6 +180538,15 @@ GRANT ALL ON FUNCTION public.conta_recibida_iva_no_deducible(p_invoice uuid, p_n
 REVOKE ALL ON FUNCTION public.conta_recibida_papel_poner(p_invoice uuid, p_ruta text, p_nombre text, p_quien_nombre text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_recibida_papel_poner(p_invoice uuid, p_ruta text, p_nombre text, p_quien_nombre text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_recibida_papel_poner(p_invoice uuid, p_ruta text, p_nombre text, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibida_pasar_a(p_invoice uuid, p_company uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_pasar_a(p_invoice uuid, p_company uuid, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_pasar_a(p_invoice uuid, p_company uuid, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_pasar_a(p_invoice uuid, p_company uuid, p_quien_nombre text) TO service_role;
 
 
 --
@@ -181924,6 +182342,15 @@ GRANT ALL ON FUNCTION public.e2e_autoconteo_preparar(p_caso text) TO service_rol
 REVOKE ALL ON FUNCTION public.e2e_c06_recorrido_base(p_company uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.e2e_c06_recorrido_base(p_company uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.e2e_c06_recorrido_base(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION e2e_e03_preparar(p_lado text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.e2e_e03_preparar(p_lado text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.e2e_e03_preparar(p_lado text) TO authenticated;
+GRANT ALL ON FUNCTION public.e2e_e03_preparar(p_lado text) TO service_role;
 
 
 --
@@ -190202,6 +190629,13 @@ GRANT SELECT ON TABLE public.conta_diez_traspaso TO authenticated;
 --
 
 GRANT ALL ON TABLE public.conta_dl1_303_4t_antes TO service_role;
+
+
+--
+-- Name: TABLE conta_e03_respaldo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_e03_respaldo TO service_role;
 
 
 --
