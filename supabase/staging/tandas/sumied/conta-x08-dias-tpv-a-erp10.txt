@@ -1,0 +1,3 @@
+# X08 · los días del TPV salen a ERP10 como facturas expedidas.
+# Primero, la medida de cómo son hoy los días del TPV (solo lee, ROLLBACK).
+supabase/staging/sql/20261118_x08_dias_tpv_medida.sql
