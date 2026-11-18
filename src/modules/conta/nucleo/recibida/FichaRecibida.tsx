@@ -1,0 +1,562 @@
+// src/modules/conta/nucleo/recibida/FichaRecibida.tsx
+//
+// K04 · La ficha de la factura recibida en el núcleo (maquetas nucleo_1,
+// nucleo_2 y nucleo_3, aprobadas por Julio el 17/11). Es la pantalla; los
+// datos, la validación y lo que se guarda son los de hoy (RevisarFacturaPage y
+// RecibidaAMano), con las mismas funciones de la base:
+//
+//   · leer: conta_factura_para_revisar, la ficha (leerFichaRecibida), la
+//     propuesta del asiento (verPropuestaFactura), la cola de «Por revisar»
+//     (colaRecibidas), las repetidas (duplicadaDe);
+//   · guardar: conta_recibida_guardar (0790) con cambiosParaLaBase, el PDF con
+//     conta_recibida_papel_poner; la escrita a mano, con guardarRecibidaAMano;
+//   · validar: apuntarFactura, la misma de «Validar y siguiente».
+//
+// «Guardar y siguiente» hace los tres en un paso (decisión 12): guarda, valida
+// y pasa a la siguiente, y lo dice con contenido (regla 8). Si no se puede
+// validar, guarda, dice por qué y no pasa.
+//
+// Lo que esta ficha no hace, y sigue en la ficha de hoy (Más › «La ficha
+// completa»): los abonos, la comisión de una plataforma, dar de alta un
+// proveedor desde lo leído, el IBAN, pagar, el historial y descartar. Las
+// validadas y las descartadas se abren con la de hoy.
+
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as KE } from 'react'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { rutaDocumentos, rutaMayor, rutaRevisarFactura } from '@/config/navegacion'
+import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import { useEmpresas } from '@/modules/conta/empresa/contexto'
+import { useLeer } from '@/modules/conta/libros/contexto'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
+import { hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { calcularVencimiento } from '@/modules/conta/lib/cifras'
+import { LOCAL_COMUN } from '@/modules/conta/lib/recibidaAMano'
+import { useAvisoSalir, useCambiosSinGuardar, useNombreDePestana, usePestana, useSeVe } from '@/modules/conta/diseno/plantillas'
+import { conCambio, recordarLista } from '@/modules/conta/diseno/plantillas'
+import { LISTA_RECIBIDAS, filtrosDe, ventanaDe } from '@/modules/conta/documentos/recibidas'
+import { colaRecibidas } from '@/modules/conta/documentos/colaRecibidas'
+import { duplicadaDe } from '@/modules/conta/documentos/paraValidarService'
+import { esAbono } from '@/modules/conta/documentos/abono'
+import {
+  ACEPTA_PAPEL, ETIQUETAS, FORMAS_PAGO, TIPOS_RETENCION, asientoVistaPrevia, borradorDe, cambiosParaLaBase, comprobarAMano, cuentasDeLaPropuesta, formatoCampo,
+  importeEs, rehacerCuota, rehacerRetencion, totalesDe, desdeElTotal, type BorradorFicha, type LineaIva,
+} from '@/modules/conta/documentos/fichaRecibida'
+import {
+  apuntarFactura, cuentasDeGasto, guardarCambiosRecibida, leerExtrasFacturas, leerFactura, leerFichaRecibida, plazoDeLaFicha, ponerPapelRecibida,
+  proveedoresDeLaCuenta, urlDelPapel, verPropuestaFactura, leerAntesDelInicio,
+} from '@/modules/conta/services/documentosService'
+import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
+import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
+import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
+import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, Comprobaciones, Duda, EstadoFicha } from '../ficha/piezas'
+import { PanelDocumento } from '../ficha/PanelDocumento'
+import { cifra } from '../ficha/textos'
+import { cuentasQueEncajan, queHaceIntro, type CuentaDelPlan } from '../ficha/teclas'
+import { origenes } from './origen'
+import { comprobacionesDe, dudaDelGasto, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
+import { calendarioDe, cuentasAMano, delProveedor, gastoAprendido, marcaDeLaFactura, mayorDelProveedor, textoOperacion } from './servicio'
+import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
+
+const VACIO: BorradorFicha = borradorDe({ proveedorId: null, numero: null, fecha: null, vence: null, retencion: null, recargo: null, gasto: null, local: null, formaPago: null, pagada: false, tipos: [], lineas: [], base: null, cuota: null })
+const vacioAMano = (hoy: string): BorradorFicha => ({ ...VACIO, fecha: hoy, iva: [{ base: '', tipo: '21', cuota: '' }, { base: '', tipo: '10', cuota: '' }] })
+const num = (x: string): number | null => { const n = Number(x.replace(/\./g, '').replace(',', '.')); return x.trim() && Number.isFinite(n) ? n : null }
+
+type Aviso = { tono: 'ok' | 'falta' | 'mal'; texto: string }
+
+/** Las casillas que cuentan para Intro, en el orden de la página (data-casilla). */
+function casillasDe(raiz: HTMLElement | null): HTMLElement[] {
+  return raiz ? Array.from(raiz.querySelectorAll<HTMLElement>('[data-casilla]')).filter((x) => !x.hasAttribute('disabled') && x.offsetParent !== null) : []
+}
+
+/** Una casilla que busca en una lista (el proveedor, la cuenta): escribe, F4 o ↓ abre, Intro elige. */
+function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cuenta, duda, placeholder }: {
+  id: string; valor: string; ponerTexto: (t: string) => void; lista: (t: string) => T[]; texto: (x: T) => string; elegir: (x: T) => void
+  etiqueta: string; cuenta?: string | null; duda?: boolean; placeholder?: string
+}) {
+  const [abierta, setAbierta] = useState(false)
+  const [sel, setSel] = useState(0)
+  const opciones = abierta ? lista(valor).slice(0, 12) : []
+  const teclas = (e: KE<HTMLInputElement>) => {
+    if (e.key === 'F4' || (e.key === 'ArrowDown' && !abierta)) { e.preventDefault(); setAbierta(true); setSel(0); return }
+    if (!abierta) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSel((s) => Math.min(s + 1, opciones.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)) }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAbierta(false) }
+    else if (e.key === 'Enter' && opciones[sel]) { e.preventDefault(); e.stopPropagation(); elegir(opciones[sel]); setAbierta(false) }
+  }
+  return (
+    <div className="kf-con-sugerencias">
+      <input id={id} data-casilla value={valor} aria-label={etiqueta} data-cuenta={cuenta ?? undefined} data-duda={duda ? 'si' : undefined} placeholder={placeholder}
+        autoComplete="off" role="combobox" aria-expanded={abierta} aria-controls={`${id}-lista`}
+        onChange={(e) => { ponerTexto(e.target.value); setAbierta(true); setSel(0) }} onKeyDown={teclas} onBlur={() => setTimeout(() => setAbierta(false), 150)} />
+      {abierta && opciones.length > 0 && (
+        <ul className="kf-sugerencias" id={`${id}-lista`} role="listbox">
+          {opciones.map((o, i) => <li key={i} role="option" aria-selected={i === sel} onMouseDown={(e) => { e.preventDefault(); elegir(o); setAbierta(false) }}>{texto(o)}</li>)}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
+  const { invoiceId = '' } = useParams()
+  const [query] = useSearchParams()
+  const { search, state } = useLocation()
+  const navegar = useNavigate()
+  const pestana = usePestana()
+  const seVe = useSeVe()
+  const { accountId, userId, userName } = useCuentaConta()
+  const { activa } = useEmpresas()
+  const { local: ejeLocal } = useAnalitica()
+  const hoy = hoyEnMadrid()
+  const [vuelta, setVuelta] = useState(0)
+  const [completa, setCompleta] = useState(false)
+  const [textoProv, setTextoProv] = useState<string | null>(null)
+  const [textoCuenta, setTextoCuenta] = useState<Record<number, string>>({})
+
+  // ── Lo que se lee: lo mismo que la ficha de hoy ──
+  const id = aMano ? '' : invoiceId
+  const f = useLeer(id ? () => leerFactura(id) : null, `${id}:${vuelta}`)
+  const fac = f.datos
+  const empresa = activa?.id ?? fac?.company_id ?? null
+  const filtros = filtrosDe(query)
+  const { desde, hasta } = ventanaDe(filtros.mes, hoy)
+  const lista = useLeer(empresa && accountId ? () => colaRecibidas(accountId, empresa, desde, hasta, filtros) : null, `${accountId}:${empresa}:${desde}:${hasta}:${search}:${vuelta}`)
+  const ids = useMemo(() => lista.datos ?? [], [lista.datos])
+  const pos = ids.indexOf(invoiceId)
+  const ficha = useLeer(accountId && id ? () => leerFichaRecibida(accountId, id) : null, `${accountId}:${id}:ficha:${vuelta}`).datos
+  const localPropuesto = ficha ? ficha.localId ?? ficha.recepcion?.localId ?? null : undefined
+  const papel = useLeer(fac && ficha ? async () => ({ url: await urlDelPapel(fac, ficha.lectura?.ruta ?? null) }) : null, `${id}:papel:${ficha ? 'f' : '-'}:${fac?.llegada?.ruta ?? fac?.papel ?? ''}`)
+  const plazo = useLeer(fac?.proveedor?.id && accountId ? () => plazoDeLaFicha(accountId, fac.proveedor!.id) : null, `${accountId}:${fac?.proveedor?.id}:plazo`).datos
+  const vista = useLeer(fac && accountId && fac.company_id && fac.fecha && !fac.asiento && localPropuesto !== undefined
+    ? () => verPropuestaFactura(accountId, fac.company_id!, fac.id, fac.fecha!, localPropuesto) : null,
+  `${accountId}:${id}:${fac?.fecha}:${fac?.proveedor?.id}:${localPropuesto}:${vuelta}`)
+  const extra = useLeer(accountId && id ? () => leerExtrasFacturas(accountId, [id]).then((m) => m.get(id) ?? null) : null, `${accountId}:${id}:extra:${vuelta}`).datos
+  const proveedoresL = useLeer(accountId ? () => proveedoresDeLaCuenta(accountId) : null, `${accountId}:proveedores`).datos
+  const proveedores = useMemo(() => proveedoresL ?? [], [proveedoresL])
+  const localesL = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}:locales`).datos
+  const locales = useMemo(() => localesL ?? [], [localesL])
+  const cuentasGastoL = useLeer(accountId && empresa ? () => cuentasDeGasto(accountId, empresa) : null, `${accountId}:${empresa}:gastos`).datos
+  const cuentasGasto = useMemo(() => cuentasGastoL ?? [], [cuentasGastoL])
+  const tiposIva = useLeer(accountId ? () => tiposDeIvaRecibida(accountId) : null, `${accountId}:tipos-iva`).datos ?? [21, 10, 4, 0]
+  const dup = useLeer(accountId && fac ? () => duplicadaDe(accountId, fac.id, fac.proveedor?.id ?? null) : null, `${accountId}:${id}:${fac?.numero}:${fac?.total}:dup:${vuelta}`).datos ?? null
+  const calendario = useLeer(accountId && empresa ? () => calendarioDe(accountId, empresa) : null, `${accountId}:${empresa}:calendario`).datos ?? null
+  const marca = useLeer(accountId && id ? () => marcaDeLaFactura(accountId, id) : null, `${accountId}:${id}:marca`).datos ?? null
+
+  // ── El borrador: lo guardado, como en la ficha de hoy ──
+  const propuesta = fac?.asiento ? undefined : vista.datos ? (vista.datos.propuesta ?? null) : vista.error ? null : undefined
+  const nombresProp = vista.datos?.propuesta ? vista.datos.nombres : null
+  const lineaGasto = propuesta?.lineas.find((l) => l.debe > 0 && /^6/.test(l.cuenta)) ?? null
+  const gastoPropuesto = lineaGasto?.cuenta ?? fac?.proveedor?.gasto?.cuenta ?? null
+  const venceFicha = fac?.fecha && plazo && plazo.dias !== null ? calcularVencimiento(fac.fecha, plazo.dias, plazo.fijos) : null
+  const guardado = ficha?.guardado ?? null
+  const original = useMemo<BorradorFicha>(() => {
+    if (aMano) return vacioAMano(hoy)
+    if (!fac) return VACIO
+    return borradorDe({
+      proveedorId: fac.proveedor?.id ?? null, numero: fac.numero, fecha: fac.fecha, vence: fac.vence ?? venceFicha,
+      retencion: fac.retencion, recargo: fac.recargo, gasto: gastoPropuesto, local: localPropuesto ?? null,
+      formaPago: guardado?.formaPago ?? extra?.comoPagada ?? ficha?.formaPagoFicha ?? null, pagada: !!extra?.pagada,
+      tipos: fac.tipos, lineas: fac.lineas, base: fac.base, cuota: fac.cuota,
+      reparto: guardado?.reparto.length ? guardado.reparto.map((g) => ({ cuenta: g.cuenta, local: g.comun ? null : g.local, importe: g.importe })) : null,
+      sinPdf: guardado?.sinPdf ? { motivo: guardado.sinPdf.motivo } : null,
+    })
+  }, [aMano, hoy, fac, venceFicha, gastoPropuesto, localPropuesto, extra, ficha, guardado])
+  const nombreProveedor = useCallback((pid: string) => proveedores.find((p) => p.id === pid)?.nombre ?? (fac?.proveedor?.id === pid ? fac.proveedor.nombre : 'otro proveedor'), [proveedores, fac])
+  const nombreLocal = useCallback((lid: string) => locales.find((l) => l.id === lid)?.nombre ?? null, [locales])
+  const formato = useMemo(() => formatoCampo(nombreProveedor, nombreLocal), [nombreProveedor, nombreLocal])
+  const ed = useCambiosSinGuardar<BorradorFicha>(original, ETIQUETAS, formato)
+  const b = ed.valor
+  const { reiniciar } = ed
+  const deFactura = useRef(`${aMano}:${invoiceId}`)
+  useEffect(() => {
+    const k = `${aMano}:${invoiceId}`
+    if (deFactura.current === k) return
+    deFactura.current = k
+    reiniciar(aMano ? vacioAMano(hoy) : VACIO)
+  }, [aMano, invoiceId, reiniciar, hoy])
+
+  // ── Del proveedor elegido: su ficha (régimen, subcuenta), su mayor, lo aprendido ──
+  const provId = b.proveedorId || fac?.proveedor?.id || ''
+  const prov = proveedores.find((p) => p.id === provId) ?? (fac?.proveedor && fac.proveedor.id === provId ? { id: provId, nombre: fac.proveedor.nombre, nif: fac.proveedor.nif } : null)
+  const delProv = useLeer(accountId && empresa && provId ? () => delProveedor(accountId, empresa, provId) : null, `${accountId}:${empresa}:${provId}:del`).datos ?? null
+  const mayor = useLeer(accountId && empresa && delProv?.subcuenta ? () => mayorDelProveedor(accountId, empresa, delProv.subcuenta!.id, hoy) : null, `${accountId}:${empresa}:${delProv?.subcuenta?.id}:mayor:${vuelta}`).datos ?? null
+  const aprendido = useLeer(empresa && provId && !aMano ? () => gastoAprendido(empresa, provId) : null, `${empresa}:${provId}:aprendido`).datos ?? null
+  const sinPropuesta = aMano || propuesta === null
+  const aManoCuentas = useLeer(accountId && empresa && sinPropuesta ? () => cuentasAMano(accountId, empresa, provId || null) : null, `${accountId}:${empresa}:${provId}:cuentas-a-mano`).datos ?? null
+
+  // ── El asiento que sale ──
+  const cuentasPlan: CuentaDelPlan[] = useMemo(() => cuentasGasto.map((c) => ({ codigo: c.codigo, nombre: c.nombre })), [cuentasGasto])
+  const nombreGasto = useCallback((c: string) => cuentasPlan.find((x) => x.codigo === c)?.nombre ?? nombresProp?.get(c) ?? 'Cuenta', [cuentasPlan, nombresProp])
+  const cuentasAsiento = useMemo(() => (propuesta ? cuentasDeLaPropuesta(propuesta.lineas, (c) => nombresProp?.get(c) ?? 'Cuenta') : aManoCuentas?.cuentas ?? null), [propuesta, nombresProp, aManoCuentas])
+  const previa = cuentasAsiento ? asientoVistaPrevia(b, cuentasAsiento, nombreGasto, nombreLocal) : null
+  const totales = totalesDe(b)
+
+  // ── Lo que se dice: origen, comprobaciones, la duda, la franja ──
+  const leido = fac?.lectura?.factura ?? null
+  const origen = origenes({
+    leido: leido ? { nif: leido.proveedor.nif, numero: leido.numero, fecha: leido.fecha } : null,
+    deRecepcion: !!fac?.leido_en_recepcion && !fac?.lectura?.factura?.numero,
+    proveedor: prov ? { id: prov.id, nif: prov.nif, regimen: delProv?.regimen ?? null } : null,
+    proveedorCambiado: !!fac && b.proveedorId !== (fac.proveedor?.id ?? ''),
+    numero: b.numero, fecha: b.fecha, conceptoPropuesto: !!propuesta && Object.keys(b.aMano).length === 0,
+  })
+  const [decidida, setDecidida] = useState<string | null>(null)
+  const duda = aprendido ? dudaDelGasto({ reparto: aprendido.reparto, confianza: aprendido.confianza, cuentaAhora: b.gastos[0]?.cuenta ?? '', decidida: decidida === `${invoiceId}:${provId}` }) : null
+  const comprobaciones = aMano ? [] : comprobacionesDe({
+    aMano, duplicada: dup, noRepetida: fac?.no_repetida ?? true, fecha: b.fecha, calendario,
+    nifFicha: prov?.nif ?? null, nifLeido: leido?.proveedor.nif ?? fac?.propuesto?.nif ?? null,
+    total: totales.total, totalDocumento: leido?.total ?? null, lectura: fac?.lectura?.comprobaciones ?? [], avisos: propuesta?.avisos ?? [],
+  })
+  const estado = estadoDeLaFicha({ aMano, leida: !!fac?.lectura, comprobaciones, hayDudaGasto: !!duda })
+  useNombreDePestana(nombreDePestana(aMano ? prov?.nombre : prov?.nombre ?? fac?.proveedor?.nombre))
+
+  // ── Guardar, validar y pasar ──
+  const siguiente = pos >= 0 && pos < ids.length - 1 ? ids[pos + 1] : null
+  const anterior = pos > 0 ? ids[pos - 1] : null
+  const ir = useCallback((destino: string, aviso?: string) => {
+    const q = conCambio(search, { fila: destino })
+    recordarLista(LISTA_RECIBIDAS, `${rutaDocumentos()}${q}`)
+    navegar(`${rutaRevisarFactura(destino)}${q}`, aviso ? { state: { aviso } } : undefined)
+  }, [search, navegar])
+  // El aviso: el de la factura de antes (lo que dijo al pasar), hasta que esta diga el suyo.
+  const avisoDeAntes = (state as { aviso?: string } | null)?.aviso ?? null
+  const claveAviso = `${aMano}:${invoiceId}:${avisoDeAntes ?? ''}`
+  const [propio, setPropio] = useState<{ k: string; a: Aviso | null } | null>(null)
+  const aviso: Aviso | null = propio && propio.k === claveAviso ? propio.a : avisoDeAntes ? { tono: 'ok', texto: avisoDeAntes } : null
+  const setAviso = (a: Aviso | null) => setPropio({ k: claveAviso, a })
+  const [guardando, setGuardando] = useState(false)
+  const [fichero, setFichero] = useState<{ file: File; url: string } | null>(null)
+  useEffect(() => () => { if (fichero) URL.revokeObjectURL(fichero.url) }, [fichero])
+
+  /** Guarda lo cambiado (sin validar). true si todo; si no, el porqué. */
+  async function guardarCambios(): Promise<true | string> {
+    if (!fac) return true
+    const campos = ed.cambios.map((c) => c.campo).filter((c) => c !== 'documento' && c !== 'sinPdf' && c !== 'motivoSinPdf' && c !== 'estadoPago')
+    const partes: string[] = []
+    if (campos.length) {
+      const prev = cuentasAsiento ? asientoVistaPrevia(b, cuentasAsiento, () => 'Cuenta', () => null).lineas : undefined
+      const r = await guardarCambiosRecibida(fac, cambiosParaLaBase(b, campos, { previa: prev, comun: '', retencionTipoId: b.retencion && original.retencion && b.retencion.tipo === original.retencion.tipo ? ficha?.retencionId ?? null : null }),
+        { quien: userName, nombres: { proveedor: nombreProveedor(b.proveedorId) }, localPropuesto: localPropuesto ?? null })
+      if (r.fallos.length) return `No se ha guardado: ${r.fallos.map((x) => `${x.etiqueta}, ${x.porque.replace(/\.$/, '')}`).join(' · ')}.`
+      if (!r.conTanda) return 'No se ha guardado: la base aún no tiene la función que guarda la ficha (0790).'
+      if (r.texto) partes.push(r.texto)
+    }
+    if (fichero) {
+      const x = await ponerPapelRecibida(fac, fichero.file, userName)
+      if (!x.hecho) return `No se ha guardado el documento: ${x.texto}`
+      partes.push(x.texto); setFichero(null)
+    }
+    if (partes.length) { ed.reiniciar(b); setVuelta((v) => v + 1) }
+    return true
+  }
+
+  async function guardarYSiguiente() {
+    if (guardando) return
+    setGuardando(true); setAviso(null)
+    try {
+      if (aMano) { await guardarNueva(); return }
+      if (!fac) return
+      const g = await guardarCambios()
+      if (g !== true) { setAviso({ tono: 'mal', texto: g }); return }
+      const a = await leerAntesDelInicio(fac.id).catch(() => null)
+      if (a?.preguntar || a?.traida || a?.respuesta === 'ya_estaba') {
+        setAviso({ tono: 'falta', texto: 'Guardada. Es de antes del día de inicio de Sumied: contesta si ya estaba contabilizada en «Más › La ficha completa». No paso a la siguiente.' }); return
+      }
+      const fresca = await leerFactura(fac.id)
+      const r = await apuntarFactura(fresca, userName, userId, localPropuesto ?? null)
+      refrescarCuentasMenu()
+      if (!r.validado) { setAviso({ tono: 'falta', texto: `Guardada, sin validar: ${r.texto.replace(/^Apuntada y validada\.\s*/, '')} No paso a la siguiente.` }); setVuelta((v) => v + 1); return }
+      const texto = `${r.texto}${siguiente ? '' : ' No quedan más por revisar en esta lista.'}`
+      if (siguiente) { ir(siguiente, texto); return }
+      setAviso({ tono: 'ok', texto }); setVuelta((v) => v + 1)
+    } catch (e) {
+      setAviso({ tono: 'mal', texto: `No se ha podido: ${e instanceof Error ? e.message : String(e)}` })
+    } finally { setGuardando(false) }
+  }
+
+  /** La escrita a mano: se da de alta como la de hoy (guardarRecibidaAMano), se valida y se abre la siguiente nueva. */
+  async function guardarNueva() {
+    const c = comprobarAMano(b, tiposIva, hoy, !!ejeLocal, LOCAL_COMUN)
+    if (!c.datos) {
+      const faltan = Object.values(c.errores).filter(Boolean)
+      setAviso({ tono: 'falta', texto: `No se ha guardado: ${faltan.map((x) => String(x).replace(/\.$/, '')).join(' · ') || 'falta algún dato'}.` }); return
+    }
+    if (!accountId || !activa) { setAviso({ tono: 'mal', texto: 'No se ha guardado: no sé de qué empresa es. Elige la empresa arriba.' }); return }
+    const nombre = nombreProveedor(b.proveedorId)
+    const r = await guardarRecibidaAMano({ accountId, companyId: activa.id, userId, userName, proveedor: nombre, datos: c.datos, papel: fichero?.file ?? null })
+    const dicho: string[] = [`Guardada la ${c.datos.numero} de ${nombre.replace(/\.$/, '')}.`, ...r.ademas]
+    // Lo mismo que «Nueva recibida a mano» de hoy: después de darla de alta, la forma de pago, la retención y el recargo (0790).
+    const campos = [...(b.formaPago ? ['formaPago'] : []), ...(b.retencion ? ['retencion'] : []), ...(b.recargo ? ['recargo'] : [])]
+    const nueva = { id: r.id, account_id: accountId, company_id: activa.id, estado: 'en_revision', fecha: c.datos.fecha }
+    if (campos.length) {
+      const g = await guardarCambiosRecibida(nueva, cambiosParaLaBase(b, campos, { comun: LOCAL_COMUN }), { quien: userName, nombres: {} })
+      for (const x of g.fallos) dicho.push(`${x.etiqueta}: no se ha guardado (${x.porque.replace(/\.$/, '')}).`)
+    }
+    setFichero(null)
+    refrescarCuentasMenu()
+    const fresca = await leerFactura(r.id)
+    const v = await apuntarFactura(fresca, userName, userId, null)
+    if (!v.validado) {
+      navegar(`${rutaRevisarFactura(r.id)}?ver=por-revisar`, { state: { aviso: `${dicho.join(' ')} Sin validar: ${v.texto}` } }); return
+    }
+    ed.reiniciar(vacioAMano(hoy))
+    setAviso({ tono: 'ok', texto: `${dicho.join(' ')} ${v.texto} Escribe la siguiente.` })
+    setTimeout(() => document.getElementById('kf-proveedor')?.focus(), 0)
+  }
+
+  const salida = useAvisoSalir({ hay: ed.hay, cambios: ed.cambios, donde: prov ? `${prov.nombre}${b.numero ? ` ${b.numero}` : ''}` : 'la factura nueva',
+    onGuardar: async () => { const g = await guardarCambios(); return g === true ? true : g }, onDescartar: ed.descartar })
+
+  // ── El teclado: Intro (decisiones 11 y 12), las flechas de la cola y Esc ──
+  const raiz = useRef<HTMLDivElement>(null)
+  const alPulsar = (e: KE<HTMLDivElement>) => {
+    if (e.defaultPrevented || e.nativeEvent.isComposing) return
+    const t = e.target as HTMLElement
+    if (e.key === 'Enter' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      const lista = casillasDe(raiz.current)
+      const sobre = t.closest('button, a, summary') ? 'boton' : t.closest('textarea') ? 'texto' : null
+      const que = queHaceIntro({ orden: lista.length, actual: lista.indexOf(t), sobre })
+      if (!que) return
+      e.preventDefault()
+      if (que.que === 'siguiente') { const s = lista[que.a]; s.focus(); if (s instanceof HTMLInputElement) s.select() }
+      else void guardarYSiguiente()
+    } else if (e.key === 'Escape' && !t.closest('[role="dialog"]')) {
+      e.preventDefault()
+      if (pestana?.cerrar) pestana.cerrar(); else salida.pedirSalir(() => navegar(rutaDocumentos('por-revisar')))
+    }
+  }
+  // Intro y Esc fuera de la ficha (nada con el foco, o la zona): «Guardar y siguiente» y dejarla sin guardar.
+  useEffect(() => {
+    const fuera = (e: KeyboardEvent) => {
+      if (!seVe() || (e.key !== 'Enter' && e.key !== 'Escape') || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return
+      const t = e.target as HTMLElement | null
+      if (t && (raiz.current?.contains(t) || t.closest('input, textarea, select, button, a, [role="dialog"], [contenteditable="true"]'))) return
+      e.preventDefault()
+      if (e.key === 'Enter') void guardarYSiguiente()
+      else if (pestana?.cerrar) pestana.cerrar()
+    }
+    window.addEventListener('keydown', fuera)
+    return () => window.removeEventListener('keydown', fuera)
+  })
+
+  // El foco, donde hay que mirar: en la duda si la hay (Intro la resuelve, otro Intro guarda); en la nueva, el proveedor.
+  const clavePrimerFoco = aMano ? `nueva:${vuelta === 0}` : duda ? `${invoiceId}:duda` : ''
+  useEffect(() => {
+    if (!clavePrimerFoco || !seVe()) return
+    const x = raiz.current?.querySelector<HTMLElement>(aMano ? '#kf-proveedor' : '.kf-duda .kf-boton-ambar')
+    if (x && !raiz.current?.contains(document.activeElement)) x.focus()
+  }, [clavePrimerFoco, aMano, seVe])
+
+  // ── Lo que no es de esta ficha: la de hoy, dentro de la pestaña ──
+  const validada = !!fac?.asiento && fac.asiento.estado === 'validado'
+  const descartada = fac?.estado === 'descartada'
+  if (!aMano && (completa || (fac && (esAbono(fac) || validada || descartada)))) {
+    return <>{completa && <p className="kf-aviso" data-tono="ok"><button type="button" className="kf-enlace" onClick={() => setCompleta(false)}>‹ Volver a la ficha de siempre del núcleo</button></p>}<RevisarFacturaPage /></>
+  }
+  if (!aMano && f.error) return <div className="kf-ficha"><p className="kf-aviso" data-tono="mal">No se ha podido abrir la factura: {f.error}</p></div>
+  const cargando = !aMano && (!fac || !ficha)
+
+  // ── Lo que se pinta ──
+  const ponerIva = (i: number, c: Partial<LineaIva>, rehacer = true) => {
+    const iva = b.iva.map((l, j) => (j === i ? (rehacer ? rehacerCuota({ ...l, ...c }) : { ...l, ...c }) : l))
+    ed.poner('iva', iva)
+    const base = iva.reduce((t, l) => t + (num(l.base) ?? 0), 0)
+    if (b.retencion) ed.poner('retencion', rehacerRetencion(b.retencion, base))
+  }
+  const ponerGasto = (i: number, c: Partial<BorradorFicha['gastos'][number]>) => ed.poner('gastos', b.gastos.map((g, j) => (j === i ? { ...g, ...c } : g)))
+  const subcuenta = delProv?.subcuenta?.codigo ?? ''
+  const conEstaFactura = mayor ? mayor.saldo + (validada ? 0 : totales.total) : null
+  const cola = !aMano && pos >= 0 ? `${pos + 1} de ${ids.length} por revisar` : aMano ? 'Nueva' : ''
+  const etiqueta = previa ? etiquetaDelAsiento({ debe: previa.debe, haber: previa.haber, cuadra: previa.cuadra, faltan: previa.faltan, lineas: previa.lineas.length }) : { texto: 'Se forma al escribir', tono: 'vacio' as const }
+  const documento = aMano
+    ? (fichero ? { url: fichero.url, foto: !/pdf/i.test(fichero.file.type), titulo: fichero.file.name } : null)
+    : fichero ? { url: fichero.url, foto: !/pdf/i.test(fichero.file.type), titulo: fichero.file.name }
+    : papel.datos ? (papel.datos.url ? { url: papel.datos.url, foto: /^image\//i.test(fac?.llegada?.tipo ?? '') || /\.(jpe?g|png)$/i.test(fac?.llegada?.archivo ?? fac?.papel ?? ''), titulo: `El documento de la ${fac?.numero ?? 'factura'}` } : null) : undefined
+  const puede = puedeGuardar({ guardando, validada, descartada })
+  const conceptoTexto = propuesta?.concepto ?? (prov ? `${b.numero || 'Factura'}-${prov.nombre}` : '')
+
+  return (
+    <div className="kf-ficha" ref={raiz} onKeyDown={alPulsar} data-prueba="ficha-recibida-nucleo" aria-busy={cargando || undefined}>
+      <header className="kf-cabecera">
+        <h1>Factura recibida</h1>
+        <span className="kf-cola">{cola}</span>
+        {!cargando && <EstadoFicha {...estado} />}
+        <div className="kf-cabecera-botones">
+          {!aMano && <>
+            <button type="button" className="kf-flecha" aria-label="La anterior" disabled={!anterior} onClick={() => anterior && salida.pedirSalir(() => ir(anterior))}>‹</button>
+            <button type="button" className="kf-flecha" aria-label="La siguiente" disabled={!siguiente} onClick={() => siguiente && salida.pedirSalir(() => ir(siguiente))}>›</button>
+          </>}
+          <Mas aMano={aMano} abrirCompleta={() => setCompleta(true)} />
+          <button type="button" className="kf-guardar" data-guardar-y-siguiente disabled={!puede || cargando} onClick={() => void guardarYSiguiente()}>
+            {guardando ? 'Guardando…' : 'Guardar y siguiente'} <kbd>Intro</kbd>
+          </button>
+        </div>
+      </header>
+      {aviso && <p className="kf-aviso" data-tono={aviso.tono} role="status" data-prueba="aviso-ficha">{aviso.texto}</p>}
+      {salida.aviso}
+      <div className="kf-cuerpo">
+        <div className="kf-izquierda">
+        <div className="kf-formulario">
+          {cargando ? <p className="kf-panel-nota" aria-busy="true">Abriendo la factura…</p> : <>
+            <div className="kf-fila" style={{ gridTemplateColumns: '1.1fr 1.1fr 2.9fr 1.7fr' }}>
+              <Casilla rotulo="Proveedor" origen={origen.proveedor} htmlFor="kf-proveedor">
+                <Buscador id="kf-proveedor" etiqueta="Proveedor" valor={textoProv ?? (provId ? subcuenta || prov?.nombre || '' : '')} cuenta={subcuenta || null}
+                  placeholder={aMano ? 'Código, nombre o NIF' : undefined}
+                  ponerTexto={setTextoProv} lista={(t) => { const q = t.toLowerCase(); return proveedores.filter((p) => !q || p.nombre.toLowerCase().includes(q) || (p.nif ?? '').toLowerCase().includes(q)) }}
+                  texto={(p) => `${p.nombre}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { ed.poner('proveedorId', p.id); setTextoProv(null) }} />
+              </Casilla>
+              <Casilla rotulo="N.I.F." origen={origen.nif} htmlFor="kf-nif"><input id="kf-nif" readOnly tabIndex={-1} value={prov?.nif ?? ''} /></Casilla>
+              <Casilla rotulo="Nombre" origen={origen.nombre} htmlFor="kf-nombre"><input id="kf-nombre" readOnly tabIndex={-1} value={prov?.nombre ?? ''} /></Casilla>
+              <Casilla rotulo="Tipo de operación" origen={origen.tipoOperacion} htmlFor="kf-operacion"><input id="kf-operacion" readOnly tabIndex={-1} value={textoOperacion(delProv?.regimen ?? null) ?? ''} /></Casilla>
+            </div>
+            <div className="kf-fila" style={{ gridTemplateColumns: '1.7fr 1.1fr 1.1fr 1.1fr 1.7fr' }}>
+              <Casilla rotulo="N.º de factura" origen={origen.numero} htmlFor="kf-numero"><input id="kf-numero" data-casilla value={b.numero} onChange={(e) => ed.poner('numero', e.target.value)} /></Casilla>
+              <Casilla rotulo="Fecha factura" origen={origen.fecha} htmlFor="kf-fecha"><CasillaFecha id="kf-fecha" etiqueta="Fecha factura" iso={b.fecha} hoy={hoy} poner={(x) => ed.poner('fecha', x)} /></Casilla>
+              <Casilla rotulo="Se deduce en" htmlFor="kf-deduce"><input id="kf-deduce" readOnly tabIndex={-1} value={trimestreDe(b.fecha)} /></Casilla>
+              <Casilla rotulo="Serie / documento" htmlFor="kf-serie"><input id="kf-serie" readOnly tabIndex={-1} value={fac?.asiento?.numero ? `2 / ${fac.asiento.numero}` : '2 / —'} /></Casilla>
+              <Casilla rotulo="Concepto del asiento" origen={origen.concepto} htmlFor="kf-concepto"><input id="kf-concepto" readOnly tabIndex={-1} value={conceptoTexto} title={conceptoTexto} /></Casilla>
+            </div>
+            {!aMano && (
+              <div className="kf-saldo" data-prueba="saldo-proveedor">
+                Saldo del proveedor a hoy <strong>{mayor ? cifra(mayor.saldo) : '—'}</strong>
+                · con esta factura <strong>{conEstaFactura !== null ? cifra(conEstaFactura) : '—'}</strong>
+                {provId && <Link className="kf-enlace" to={`/conta/proveedores/${provId}`}>Ficha del proveedor</Link>}
+              </div>
+            )}
+            <Comprobaciones lista={comprobaciones} nota={aMano ? 'Al escribir se comprueba que no esté repetida, el periodo y el NIF' : null} />
+
+            <div className="kf-importes">
+              <div className="kf-bloque">
+                <table className="kf-iva">
+                  <colgroup><col className="kf-col-base" /><col className="kf-col-tipo" /><col /><col className="kf-iva-quitar" /></colgroup>
+                  <thead><tr>
+                    <th><span className="kf-iva-cabeza"><span className="kf-titulo">IVA <button type="button" className="kf-enlace-plano" onClick={() => ed.poner('iva', [...b.iva, { base: '', tipo: String(tiposIva.find((t) => !b.iva.some((l) => l.tipo === String(t))) ?? 21), cuota: '' }])}>+ Otro tipo</button></span><span>Base</span></span></th>
+                    <th>%</th><th>Cuota</th><th />
+                  </tr></thead>
+                  <tbody>
+                    {b.iva.map((l, i) => (
+                      <tr key={i}>
+                        <td><input className="kf-cifra" data-casilla aria-label={`Base ${i + 1}`} value={l.base} onChange={(e) => ponerIva(i, { base: e.target.value })} onBlur={() => { const n = num(l.base); if (n !== null) ponerIva(i, { base: importeEs(n) }) }} /></td>
+                        <td><select data-casilla aria-label={`Tipo de IVA ${i + 1}`} className="kf-cifra" value={l.tipo} onChange={(e) => ponerIva(i, { tipo: e.target.value })}>
+                          {[...new Set([...tiposIva.map(String), l.tipo])].filter(Boolean).map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select></td>
+                        <td><input className="kf-cifra" aria-label={`Cuota ${i + 1}`} value={l.cuota} tabIndex={-1} onChange={(e) => ponerIva(i, { cuota: e.target.value }, false)} /></td>
+                        <td>{b.iva.length > 1 && <button type="button" className="kf-quitar" aria-label={`Quitar el tipo ${l.tipo} %`} tabIndex={-1} onClick={() => ed.poner('iva', b.iva.filter((_, j) => j !== i))}>×</button>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="kf-total">
+                <div className="kf-total-arriba">
+                  <span>Total factura</span>
+                  {aMano
+                    ? <input className="kf-total-cifra" data-casilla aria-label="Total factura" placeholder="0,00" key={`t-${vuelta}`}
+                        defaultValue="" onBlur={(e) => { const n = num(e.target.value); if (n === null) return; const r = desdeElTotal(b, n); if (r) { ed.poner('iva', r.iva); ed.poner('retencion', r.retencion) } e.target.value = importeEs(n) }} />
+                    : <span className="kf-total-cifra" data-prueba="total">{cifra(totales.total)}</span>}
+                </div>
+                {aMano && <span className="kf-total-ayuda">Escríbelo y sale la base</span>}
+                <label className="kf-total-retencion">Retención
+                  <select data-casilla value={b.retencion?.tipo ?? ''} onChange={(e) => ed.poner('retencion', e.target.value ? rehacerRetencion({ tipo: e.target.value, importe: '' }, totales.base) : null)}>
+                    <option value="">Sin retención</option>
+                    {TIPOS_RETENCION.map((t) => <option key={t} value={String(t)}>{t} % · {b.retencion?.tipo === String(t) ? b.retencion.importe : cifra(Math.round(totales.base * t) / 100)}</option>)}
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="kf-dos">
+              <div className="kf-bloque">
+                <h2 className="kf-titulo">A qué cuenta de gasto va
+                  <span className="kf-titulo-derecha">
+                    <button type="button" className="kf-enlace-plano" onClick={() => ed.poner('gastos', [...b.gastos, { cuenta: '', local: b.gastos[0]?.local ?? '', importe: '' }])}>+ Otra cuenta</button>
+                    <button type="button" className="kf-enlace-plano" onClick={() => ed.poner('gastos', [...b.gastos, { cuenta: b.gastos[0]?.cuenta ?? '', local: '', importe: '' }])}>+ Repartir</button>
+                  </span>
+                </h2>
+                {b.gastos.map((g, i) => (
+                  <div className="kf-gasto" key={i} data-una={b.gastos.length === 1 ? 'si' : undefined}>
+                    <Buscador id={`kf-cuenta-${i}`} etiqueta={`Cuenta de gasto ${i + 1}`} valor={textoCuenta[i] ?? g.cuenta} cuenta={g.cuenta || null} duda={!!duda && i === 0}
+                      ponerTexto={(t) => setTextoCuenta((x) => ({ ...x, [i]: t }))} lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8)}
+                      texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }} />
+                    <input readOnly tabIndex={-1} aria-label={`Nombre de la cuenta ${i + 1}`} value={g.cuenta ? nombreGasto(g.cuenta) : ''} data-duda={duda && i === 0 ? 'si' : undefined} />
+                    <input className="kf-cifra" data-casilla={b.gastos.length > 1 ? '' : undefined} aria-label={`Importe del gasto ${i + 1}`} placeholder={i === b.gastos.length - 1 ? importeEs(totales.base) : ''}
+                      value={g.importe || (b.gastos.length === 1 ? importeEs(totales.base + (totales.recargo ?? 0)) : '')} readOnly={b.gastos.length === 1}
+                      tabIndex={b.gastos.length === 1 ? -1 : 0} onChange={(e) => ponerGasto(i, { importe: e.target.value })} />
+                    {b.gastos.length > 1 ? <button type="button" className="kf-quitar" aria-label={`Quitar la cuenta ${i + 1}`} tabIndex={-1} onClick={() => ed.poner('gastos', b.gastos.filter((_, j) => j !== i))}>×</button> : <span />}
+                  </div>
+                ))}
+                {aMano && <p className="kf-gasto-ayuda">Escribe 6001 y sale 60000001. También vale 600.1, o parte del nombre.</p>}
+                <div className="kf-pareja">
+                  <select aria-label="Local" data-casilla={ejeLocal ? '' : undefined} disabled={!ejeLocal} value={b.gastos[0]?.local ?? ''} onChange={(e) => ponerGasto(0, { local: e.target.value })}>
+                    {aMano && ejeLocal && <option value="">Elige el local</option>}
+                    <option value={aMano && ejeLocal ? LOCAL_COMUN : ''}>{ejeLocal ? 'Común a todos los locales' : 'Sin locales'}</option>
+                    {locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}{l.id === localPropuesto ? ' (su ficha)' : ''}</option>)}
+                  </select>
+                  <select aria-label="Marca" disabled title="La marca de la factura no se cambia desde aquí: la base aún no la guarda (conta_recibida_guardar)." value="">
+                    <option value="">{marca ? `${marca} (de la factura)` : 'Sin repartir por marca'}</option>
+                  </select>
+                </div>
+              </div>
+              <div className="kf-bloque">
+                <h2 className="kf-titulo">Cómo se paga</h2>
+                <select aria-label="Forma de pago" data-casilla value={b.formaPago} onChange={(e) => ed.poner('formaPago', e.target.value)}>
+                  {FORMAS_PAGO.map((x) => <option key={x.valor} value={x.valor}>{x.texto}{x.valor && x.valor === ficha?.formaPagoFicha ? ' (su ficha)' : ''}</option>)}
+                </select>
+                <div className="kf-pareja">
+                  <CasillaFecha id="kf-vence" etiqueta="Vence" iso={b.vence} hoy={hoy} poner={(x) => ed.poner('vence', x)} />
+                  <input className="kf-cifra" readOnly tabIndex={-1} aria-label="Importe del pago" value={cifra(totales.total - (totales.retencion ?? 0) * 0)} />
+                </div>
+              </div>
+            </div>
+
+            {duda && (
+              <Duda texto={duda.texto}
+                principal={{ texto: `Dejar ${duda.dejar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.dejar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }}
+                secundario={{ texto: `Cambiar a ${duda.cambiar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.cambiar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }} />
+            )}
+
+            <AsientoQueSale lineas={previa && totales.total !== 0 ? previa.lineas : []} etiqueta={etiqueta}
+              editar={!aMano && id ? { texto: 'Editar el asiento', hacer: () => setCompleta(true) } : null} />
+          </>}
+        </div>
+        <AyudaTeclas />
+        </div>
+        <PanelDocumento documento={documento} acepta={ACEPTA_PAPEL}
+          alElegir={(file) => { setFichero({ file, url: URL.createObjectURL(file) }); ed.poner('documento', file.name) }}
+          otra={{ nombre: 'El mayor del proveedor', contenido: <MayorDelProveedor apuntes={mayor?.apuntes ?? null} subcuenta={subcuenta} hay={!!provId} /> }} />
+      </div>
+    </div>
+  )
+}
+
+function Mas({ aMano, abrirCompleta }: { aMano: boolean; abrirCompleta: () => void }) {
+  const [abierto, setAbierto] = useState(false)
+  return (
+    <div className="kf-mas">
+      <button type="button" className="kf-boton-hueco" aria-expanded={abierto} onClick={() => setAbierto((x) => !x)}>Más</button>
+      {abierto && (
+        <ul className="kf-mas-menu" onMouseLeave={() => setAbierto(false)}>
+          {!aMano && <li><button type="button" onClick={() => { setAbierto(false); abrirCompleta() }}>La ficha completa (abono, alta del proveedor, historial, descartar…)</button></li>}
+          <li><Link to={rutaDocumentos('por-revisar')}>Volver a la lista de por revisar</Link></li>
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function MayorDelProveedor({ apuntes, subcuenta, hay }: { apuntes: { fecha: string; documento: string; concepto: string; debe: number; haber: number }[] | null; subcuenta: string; hay: boolean }) {
+  if (!hay) return <p className="kf-panel-nota">Elige el proveedor y sale su mayor.</p>
+  if (!apuntes) return <p className="kf-panel-nota" aria-busy="true">Leyendo su mayor…</p>
+  if (!apuntes.length) return <p className="kf-panel-nota">La {subcuenta || 'subcuenta del proveedor'} no tiene apuntes todavía.</p>
+  const ultimos = apuntes.slice(-30).reverse()
+  return (
+    <>
+      <table className="kf-mayor" aria-label={`El mayor de la ${subcuenta}`}>
+        <thead><tr><th>Fecha</th><th>Documento</th><th>Concepto</th><th className="kf-cifra">Debe</th><th className="kf-cifra">Haber</th></tr></thead>
+        <tbody>{ultimos.map((a, i) => <tr key={i}><td>{a.fecha.slice(8, 10)}/{a.fecha.slice(5, 7)}/{a.fecha.slice(0, 4)}</td><td>{a.documento}</td><td>{a.concepto}</td><td className="kf-cifra">{a.debe ? cifra(a.debe) : ''}</td><td className="kf-cifra">{a.haber ? cifra(a.haber) : ''}</td></tr>)}</tbody>
+      </table>
+      {subcuenta && <p className="kf-panel-nota"><Link to={rutaMayor(subcuenta)}>Ver el mayor entero de la {subcuenta}</Link></p>}
+    </>
+  )
+}
