@@ -99,6 +99,12 @@ describe('K04 · las comprobaciones de la línea', () => {
     expect(l.find((c) => c.id === 'suma')).toMatchObject({ tono: 'ambar', texto: 'Base + IVA = 357,44, y la factura dice 360,44' })
     expect(l.find((c) => c.id === 'aviso-0')).toMatchObject({ tono: 'ambar', texto: 'Falta el número de la factura: sin él no se valida ni va a Diez' })
   })
+  it('repetida: la dice duplicadaDe; si alguien confirmó que no lo es, no', () => {
+    const dup = 'Puede estar repetida: la F-1 de este proveedor tiene el mismo número.'
+    expect(comprobacionesDe({ ...base, duplicada: dup, noRepetida: false })[0]).toMatchObject({ tono: 'ambar', texto: dup })
+    expect(comprobacionesDe({ ...base, duplicada: dup, noRepetida: true })[0]).toMatchObject({ tono: 'bien', texto: 'No está repetida' })
+    expect(comprobacionesDe({ ...base, duplicada: null, noRepetida: false })[0]).toMatchObject({ tono: 'bien' })
+  })
   it('un mes cerrado: el asiento va al primer día abierto (ámbar, no rojo)', () => {
     expect(periodoAbierto('2026-07-01', { mesesCerrados: ['2026-07'], ejercicios: [] })).toEqual({ abierto: false, texto: 'El mes de la factura está cerrado: el asiento irá al primer día abierto.' })
     expect(trimestreDe('2026-07-01')).toBe('3T de 2026')
@@ -109,8 +115,12 @@ describe('K04 · la duda de la cuenta de gasto (conta_gasto_aprendido)', () => {
   const reparto = [{ cuenta: '60000000', nombre: 'Compras de mercaderías', facturas: 4 }, { cuenta: '60200000', nombre: 'Compras de envases', facturas: 1 }]
   it('si fueron a varias, las dos salidas: dejar la última o cambiar a la otra', () => {
     const d = dudaDelGasto({ reparto, confianza: 'probable', cuentaAhora: '60000000', decidida: false })
-    expect(d?.texto).toBe('4 de sus 5 facturas anteriores fueron a la 60000000, también la última; otra, a la 60200000.')
+    expect(d?.texto).toBe('Sus 5 facturas anteriores fueron 4 a la 60000000 (la última) y 1 a la 60200000.')
     expect([d?.dejar.cuenta, d?.cambiar.cuenta]).toEqual(['60000000', '60200000'])
+  })
+  it('«Dejar» es la cuenta que tiene ahora, aunque no sea la de la última', () => {
+    const d = dudaDelGasto({ reparto, confianza: 'probable', cuentaAhora: '60200000', decidida: false })
+    expect([d?.dejar.cuenta, d?.cambiar.cuenta]).toEqual(['60200000', '60000000'])
   })
   it('sin duda: si fueron todas a una, si ya se ha decidido, o si la cuenta es otra', () => {
     expect(dudaDelGasto({ reparto: reparto.slice(0, 1), confianza: 'seguro', cuentaAhora: '60000000', decidida: false })).toBeNull()

@@ -46,7 +46,7 @@ export interface DatosComprobar {
   aMano: boolean
   /** paraValidar.textoDuplicada, si puede estar repetida; null si no. */
   duplicada: string | null
-  /** conta_factura_para_revisar.no_repetida. */
+  /** conta_factura_para_revisar.no_repetida: alguien ya confirmó que NO está repetida (not_duplicate_confirmed_at). */
   noRepetida: boolean
   fecha: string
   calendario: Calendario | null
@@ -67,9 +67,8 @@ const YA_DICHAS = new Set(['nif', 'nif_forma', 'suma', 'total'])
 /** Las comprobaciones de la línea: las cuatro de la maqueta y, detrás, las demás que fallan. */
 export function comprobacionesDe(d: DatosComprobar): UnaComprobacion[] {
   const l: UnaComprobacion[] = []
-  // 1 · Repetida.
-  if (d.duplicada) l.push({ id: 'repetida', tono: 'ambar', texto: d.duplicada })
-  else if (!d.noRepetida) l.push({ id: 'repetida', tono: 'ambar', texto: 'Puede estar repetida: ya hay otra con este número.' })
+  // 1 · Repetida: la dice duplicadaDe (la misma de la ficha de hoy), salvo que alguien ya confirmara que no lo es.
+  if (d.duplicada && !d.noRepetida) l.push({ id: 'repetida', tono: 'ambar', texto: d.duplicada })
   else l.push({ id: 'repetida', tono: 'bien', texto: 'No está repetida' })
   // 2 · El periodo.
   const p = periodoAbierto(d.fecha, d.calendario)
@@ -95,18 +94,21 @@ export interface RepartoGasto { cuenta: string; nombre: string; facturas: number
 
 /**
  * La duda de la cuenta de gasto (0250): si sus facturas anteriores fueron a
- * varias cuentas, la más reciente y la siguiente. null si no hay duda, si ya
- * se ha decidido o si la cuenta que hay no es ninguna de las dos.
+ * varias cuentas. «Dejar» es la que tiene ahora la ficha; «Cambiar a», la otra
+ * de las dos más recientes. La frase dice lo que dice la base: cuántas a cada
+ * una y a cuál fue la última. null si no hay duda, si ya se ha decidido o si la
+ * cuenta que hay no es ninguna de las dos.
  */
 export function dudaDelGasto(o: { reparto: readonly RepartoGasto[]; confianza: 'seguro' | 'probable' | null; cuentaAhora: string; decidida: boolean }):
   { texto: string; dejar: RepartoGasto; cambiar: RepartoGasto } | null {
   if (o.decidida || o.confianza !== 'probable' || o.reparto.length < 2) return null
-  const [dejar, cambiar] = o.reparto
-  if (o.cuentaAhora && o.cuentaAhora !== dejar.cuenta && o.cuentaAhora !== cambiar.cuenta) return null
+  const [a, b] = o.reparto
+  const ahora = o.cuentaAhora || a.cuenta
+  if (ahora !== a.cuenta && ahora !== b.cuenta) return null
+  const [dejar, cambiar] = ahora === a.cuenta ? [a, b] : [b, a]
   const total = o.reparto.reduce((t, r) => t + r.facturas, 0)
-  const otras = cambiar.facturas === 1 ? 'otra' : `otras ${cambiar.facturas}`
   return {
-    texto: `${dejar.facturas} de sus ${total} facturas anteriores fueron a la ${dejar.cuenta}, también la última; ${otras}, a la ${cambiar.cuenta}.`,
+    texto: `Sus ${total} facturas anteriores fueron ${a.facturas} a la ${a.cuenta} (la última) y ${b.facturas} a la ${b.cuenta}${o.reparto.length > 2 ? ', y otras a otras cuentas' : ''}.`,
     dejar, cambiar,
   }
 }

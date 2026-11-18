@@ -204,7 +204,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const [decidida, setDecidida] = useState<string | null>(null)
   const duda = aprendido ? dudaDelGasto({ reparto: aprendido.reparto, confianza: aprendido.confianza, cuentaAhora: b.gastos[0]?.cuenta ?? '', decidida: decidida === `${invoiceId}:${provId}` }) : null
   const comprobaciones = aMano ? [] : comprobacionesDe({
-    aMano, duplicada: dup, noRepetida: fac?.no_repetida ?? true, fecha: b.fecha, calendario,
+    aMano, duplicada: dup, noRepetida: fac?.no_repetida ?? false, fecha: b.fecha, calendario,
     nifFicha: prov?.nif ?? null, nifLeido: leido?.proveedor.nif ?? fac?.propuesto?.nif ?? null,
     total: totales.total, totalDocumento: leido?.total ?? null, lectura: fac?.lectura?.comprobaciones ?? [], avisos: propuesta?.avisos ?? [],
   })
