@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Configuracion_Excel_Asientos xmlns="Configuracion_Excel_Asientos">
+  <Configuracion_Asientos>
+    <Campo002>2</Campo002>
+    <Campo001>1</Campo001>
+    <Campo003>12</Campo003>
+    <Campo019>26</Campo019>
+    <Campo007>5</Campo007>
+    <Campo005>3</Campo005>
+    <Campo008>6</Campo008>
+    <Campo006>4</Campo006>
+    <Campo012>9</Campo012>
+    <Campo010>7</Campo010>
+    <Campo013>10</Campo013>
+    <Campo011>8</Campo011>
+  </Configuracion_Asientos>
+</Configuracion_Excel_Asientos>

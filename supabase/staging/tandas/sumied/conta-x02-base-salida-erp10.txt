@@ -1,0 +1,6 @@
+# X02 · la base de la salida a ERP10 (1010 añade cuatro tablas; 1011 añade cinco
+# funciones). Las dos migraciones y su prueba (ROLLBACK, empresas inventadas en
+# las cuentas A y B), que comprueba también las dos vueltas atrás.
+supabase/migrations/20261117T1010_x02_salida_erp10_tablas.sql
+supabase/migrations/20261117T1011_x02_salida_erp10_funciones.sql
+supabase/staging/sql/20261117_x02_salida_erp10_prueba.sql

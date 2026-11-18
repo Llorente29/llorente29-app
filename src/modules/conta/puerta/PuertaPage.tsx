@@ -42,6 +42,7 @@ import {
 } from '@/modules/conta/lib/puerta'
 import { cabeceraMes, filasDocumentos, nadaEnColumna, primeras, type CabeceraMes, type Columna, type FilaDoc } from '@/modules/conta/lib/documentosMes'
 import { dejarFicheros, mirarFicheros, tomarFicheros } from '@/modules/conta/puerta/entregas'
+import { NOTA_DIRECCION } from '@/modules/conta/lib/correoFacturas'
 
 const NOMBRE = MARCA.nombre
 const ACEPTA = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.zip,.xlsx,.xls,.csv,.n43,.q43,.c43,.aeb,.txt,.xml,.xsig,application/pdf,image/*'
@@ -107,7 +108,8 @@ export default function PuertaPage() {
   const filas = d ? filasDocumentos(d, hoy) : null
   const porPedir = filas?.mandar.filter((x) => x.dias > 0) ?? []
   const noSe = (p?.ultimos ?? []).filter(necesitaMirarse)
-  const direccion = p?.direcciones.find((x) => x.tipo === 'documentos') ?? null
+  // E01 · Una sola fuente: la dirección de esta empresa la dice la base (la misma que Correo de facturas).
+  const direccion = p?.direccion ?? null
   const fuentesDe = (x: FilaDoc): Fuente[] => (d?.fuentes ?? []).filter((f) => x.fuentes.some((y) => y.id === f.id))
 
   const alElegir = (fs: FileList | null) => { const a = Array.from(fs ?? []); if (a.length) setSubida(a); if (elegir.current) elegir.current.value = ''; if (camara.current) camara.current.value = '' }
@@ -400,7 +402,7 @@ function TuCorreo({ p, direccion, encendida, ocupado, alCrear, alCopiar }: {
         ) : (
           <div className="cxdo-correo"><span className="cxdo-correo-dir">Aún no tienes tu dirección</span><button type="button" className="cxdo-boton-blanco" disabled={ocupado || !p} onClick={alCrear}>Crear tu dirección</button></div>
         )}
-        <p className="cxdo-correo-nota">Dáselo a tus proveedores o reenvía aquí lo que te mandan. Facturas, liquidaciones, extractos o nóminas: {NOMBRE} sabe qué es cada cosa.</p>
+        <p className="cxdo-correo-nota" data-prueba="direccion-nota">{NOTA_DIRECCION}</p>
         {direccion && !encendida
           ? <p className="cxdo-apagada" data-prueba="direccion-apagada">Apagada: aún no recibe correos.</p>
           : <ul className="cxdo-marcas">{marcas.map((m) => <li key={m}>{m}</li>)}</ul>}

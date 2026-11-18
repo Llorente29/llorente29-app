@@ -1,0 +1,4 @@
+# X04 · la pantalla de la salida a ERP10 (1530 añade una columna y dos funciones)
+# y su prueba (ROLLBACK, empresas inventadas en las cuentas A y B, con su vuelta atrás).
+supabase/migrations/20261117T1530_x04_salida_erp10_pantalla.sql
+supabase/staging/sql/20261117_x04_salida_erp10_pantalla_prueba.sql

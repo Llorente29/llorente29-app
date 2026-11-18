@@ -1,0 +1,17 @@
+# DL1·26, punto 2 · Glovo: las 39 facturas y notas de crédito de comisión del
+# 1T y el 2T que no están en los libros, a 01/10 (Julio, 13/11). Rama
+# claude/dl1-glovo-facturas-1t2t. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   1210  Cada una: su factura aprobada, su asiento (62300001 y la 47200021) y
+#         su compensación (41000002 contra 43000001), a 01/10. Validado como
+#         Julio. No crea objetos. Las ventas de marzo no van: ver el PR.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-glovo-facturas-1t2t.sql
+supabase/migrations/20261114T1210_dl1_glovo_facturas_1t2t.sql
+sin-vuelta-atras: supabase/migrations/20261114T1210_dl1_glovo_facturas_1t2t.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-glovo-facturas-1t2t · de las 39 facturas de Glovo del 1T y el 2T, las que faltan = 0
+esperado: dl1-glovo-facturas-1t2t · 62300001 de sus asientos a 01/10, menos 2.707,29 = 0.00
+esperado: dl1-glovo-facturas-1t2t · 47200021 de sus asientos a 01/10, menos 568,58 = 0.00
+esperado: dl1-glovo-facturas-1t2t · 43000001 de sus compensaciones a 01/10, más 3.275,87 = 0.00

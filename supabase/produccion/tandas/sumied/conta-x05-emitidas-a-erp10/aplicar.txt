@@ -1,0 +1,16 @@
+# X05 · Las facturas emitidas salen a ERP10 (encargo X05, 17/11). Rama
+# conta/x05-emitidas-a-erp10. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   2230  Cambia en caliente conta_erp10_por_salir, con la misma firma: el tope
+#         de cuentas por clase (2 en una recibida, 4 en una emitida, con su frase),
+#         el PDF de la factura de venta cuenta como «tiene PDF», y lo traído de
+#         otro programa por import_run_id tampoco sale. Declarado en la cabecera
+#         y con su prueba de staging.
+#   2231  Añade conta_erp10_emitidas_por_salir (solo lee): las emitidas que
+#         salen, con lo que necesita su fila.
+#
+# Nada en el camino del pedido; las dos funciones solo leen. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x05-emitidas-erp10.sql
+supabase/migrations/20261117T2230_x05_por_salir_emitidas.sql
+supabase/migrations/20261117T2231_x05_emitidas_por_salir.sql

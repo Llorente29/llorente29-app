@@ -45,6 +45,7 @@ import {
 import { guardarCambiosCierre, leerCierres, leerPedidosCierre, ponerEnEspera, quitarDeEspera, validarCierre } from '@/modules/conta/services/cierresService'
 import { numeroDeTexto, textoDeNumero } from '@/modules/conta/lib/facturasVenta'
 import { LoQueDejaElCierre } from './LoQueDejaElCierre'
+import { useSeVe } from '@/modules/conta/diseno/plantillas/pestana'
 
 const importeEs = (n: number) => textoDeNumero(n)
 
@@ -125,9 +126,11 @@ export default function CierrePage() {
   }
 
   // Intro valida y pasa al siguiente (fuera de un campo y sin diálogos ni cambios).
+  // K03 · En una pestaña escondida del núcleo, esta pantalla no escucha el teclado.
+  const seVe = useSeVe()
   useEffect(() => {
     const alTeclear = (ev: KeyboardEvent) => {
-      if (ev.key !== 'Enter' || ev.defaultPrevented || dialogo || hay || !c || c.estado !== 'por_validar') return
+      if (!seVe() || ev.key !== 'Enter' || ev.defaultPrevented || dialogo || hay || !c || c.estado !== 'por_validar') return
       const t = ev.target as HTMLElement | null
       if (t && (t.closest('input, textarea, select, button, a, [role="dialog"]'))) return
       ev.preventDefault(); void validarYSiguiente()

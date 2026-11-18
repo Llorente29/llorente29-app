@@ -7,7 +7,9 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { fechaLarga } from '@/modules/conta/lib/formato'
-import { fijarCorte, leerCorte, type CorteEmpresa } from '@/modules/conta/services/corteService'
+import { empezarSinHistorico, fijarCorte, leerCorte, nombrePrograma, type CorteEmpresa } from '@/modules/conta/services/corteService'
+import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { diaAnterior, diaSiguiente } from '@/modules/conta/lib/proponer'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
 import { Resultado, TarjetaApartado } from '@/modules/conta/empresa/campos'
@@ -15,7 +17,12 @@ import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import type { Quien } from '@/modules/conta/empresa/apartados'
 import { MARCA } from '../cuenta/marca'
 
+/** 2026-11-01 → 01/11/2026 (N05c: las fechas, como las escribe la gente). */
+const dma = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
+
 export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil: boolean; alCambiar: () => void }) {
+  const { userName } = useCuentaConta()
+  const [confirmar, setConfirmar] = useState(false)
   const [c, setC] = useState<CorteEmpresa | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [vuelta, setVuelta] = useState(0)
@@ -35,6 +42,22 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
   if (!c) return <TarjetaCargando />
 
   const fijo = c.traidos > 0
+  // N05c · El programa como en el N03 («ERP10», «Diez» o «el programa de antes»), nunca «erp10».
+  const nombreProg = nombrePrograma(c.programa)
+  const elPrograma = nombreProg ?? 'el programa de antes'
+  const dePrograma = nombreProg ? `de ${nombreProg}` : 'del programa de antes'
+  // N05c · Traído a medias y sin lo anterior: o no se puede contabilizar, o se decidió empezar ya.
+  // N06a · El día de inicio lo dice la base (conta_dia_de_inicio), no se calcula aquí.
+  const inicio = c.diaDeInicio
+  const faltaLoAnterior = !!inicio && !c.historicoTraido
+  const empezarYa = () => {
+    if (!c.ejercicio || !inicio) return
+    let texto = ''
+    void h.hacer(async () => {
+      texto = await empezarSinHistorico(quien.companyId, c.ejercicio!, userName ?? null)
+      setConfirmar(false)
+    }, () => texto)
+  }
   const empezar = () => { setDesde(c.hasta ? diaSiguiente(c.hasta) : ''); setPrograma(c.programa ?? ''); setEditando(true); h.limpiar() }
   const guardar = (ev: FormEvent) => {
     ev.preventDefault()
@@ -55,15 +78,38 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
       {!editando && (
         <p style={{ margin: 0 }} data-testid="corte-actual">
           {c.hasta
-            ? <>Hasta el <strong>{fechaLarga(c.hasta)}</strong> lo trae {c.programa ?? 'el programa anterior'}; desde el <strong>{fechaLarga(diaSiguiente(c.hasta))}</strong> asienta {MARCA.nombre}.</>
+            ? <>Hasta el <strong>{fechaLarga(c.hasta)}</strong> lo trae {elPrograma}; desde el <strong>{fechaLarga(c.diaDeInicio ?? diaSiguiente(c.hasta))}</strong> asienta {MARCA.nombre}.</>
             : <>Sin fecha de corte: {MARCA.nombre} asienta el ejercicio entero.</>}
         </p>
       )}
       {fijo && (
         <p className="cx-ayuda" data-testid="corte-fijo">
-          No se puede cambiar: ya hay {c.traidos.toLocaleString('es-ES')} {c.traidos === 1 ? 'asiento traído' : 'asientos traídos'} de {c.programa ?? 'el programa anterior'}.
+          No se puede cambiar: ya hay {c.traidos.toLocaleString('es-ES')} {c.traidos === 1 ? 'asiento traído' : 'asientos traídos'} {dePrograma}.
           Para moverla, primero se deshace lo traído y se vuelve a traer.
         </p>
+      )}
+      {!editando && faltaLoAnterior && inicio && (c.sinHistorico
+        ? (
+          <p className="cx-ayuda" data-testid="sin-historico-decidido">
+            Se trabaja sin lo anterior al {dma(inicio)} desde el {dma(new Date(c.sinHistorico.el).toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' }))}
+            {c.sinHistorico.por ? ` (lo decidió ${c.sinHistorico.por})` : ''}. Cuando lo tengas, tráelo.
+          </p>
+        )
+        : (
+          <div className="cx-columna" data-testid="sin-historico">
+            <p style={{ margin: 0 }}>Lo anterior al {dma(inicio)} es {dePrograma} y todavía no se ha traído. Hasta entonces no se puede contabilizar.</p>
+            <div><button type="button" className="cx-boton" onClick={() => { h.limpiar(); setConfirmar(true) }} disabled={h.guardando}>Empezar a trabajar ya</button></div>
+          </div>
+        ))}
+      {confirmar && inicio && (
+        <Dialogo titulo="Empezar a trabajar ya" alCerrar={() => setConfirmar(false)} cerrable sinBotonPorDefecto>
+          <p style={{ margin: 0 }} data-testid="confirmar-sin-historico">Vas a poder contabilizar desde el {dma(inicio)}. Los saldos y los listados no llevarán lo de antes hasta que lo traigas.</p>
+          {h.fallo && <p className="cx-error" role="alert">{h.fallo}</p>}
+          <div className="cx-pie cxr-dos-iguales">
+            <button type="button" className="cx-boton-sec" onClick={empezarYa} disabled={h.guardando}>{h.guardando ? 'Guardando…' : 'Empezar ya'}</button>
+            <button type="button" className="cx-boton-sec" onClick={() => setConfirmar(false)} disabled={h.guardando}>Todavía no</button>
+          </div>
+        </Dialogo>
       )}
       {editando && (
         <form onSubmit={guardar} className="cx-columna" aria-label="Fecha de corte">

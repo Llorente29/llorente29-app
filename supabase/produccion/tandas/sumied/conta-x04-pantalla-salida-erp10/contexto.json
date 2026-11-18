@@ -1,0 +1,23 @@
+{
+ "_que": "X04 · la pantalla de la salida a ERP10 · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging 5c8707d5, 17/11 09:53Z, ya con la X02), en SOLO LECTURA, el 17/11: no en producción (esta sesión no lee producción). Existe conta_erp10_salida_empresa (de la X02); la columna y las dos funciones son nuevas. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-17T16:17Z",
+ "tanda": {
+  "supabase/migrations/20261117T1530_x04_salida_erp10_pantalla.sql": "5354eb7fa98db5f6893747ca7f56ae0b"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_erp10_salida_empresa"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_erp10_salida_empresa": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

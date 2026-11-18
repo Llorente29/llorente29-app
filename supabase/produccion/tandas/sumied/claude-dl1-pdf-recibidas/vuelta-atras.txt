@@ -1,0 +1,2 @@
+# DL1 · PDF recibidas: la 1805 no tiene vuelta atrás (se declara en aplicar.txt): el documento de una factura con asiento validado ya no se cambia.
+cuenta: scripts/conta/produccion/cuentas/dl1-pdf-recibidas.sql

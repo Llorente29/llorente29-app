@@ -58,10 +58,11 @@ export function fraseDelMes(r: Revision, hoy: string): string {
   }
   if (t?.estado === 'con_fallos') return `${mayuscula(mes)} se traspasó, pero ${plural(t.no_llegaron, 'asiento no ha llegado', 'asientos no han llegado')} a Diez.`
   if (t?.estado === 'traspasando') return `${mayuscula(mes)} se está traspasando a Diez: van ${t.llegaron.toLocaleString('es-ES')} de ${t.van.toLocaleString('es-ES')}.`
-  if (!mesTerminado(r.mes, hoy)) return `${mayuscula(mes)} aún no ha terminado: se traspasa a partir del ${primerDiaSiguiente(r.mes)}.`
   const n = cuantasFaltan(r.faltan)
   if (n > 0) return `${n === 1 ? 'Falta 1 cosa' : `Faltan ${n.toLocaleString('es-ES')} cosas`} antes de traspasar ${mes}.`
   if (r.van === 0) return `${mayuscula(mes)} no tiene nada por traspasar a Diez.`
+  // SP (Julio, 15/11): el mes en curso también se traspasa, avisando de lo que pasa con lo que entre después.
+  if (!mesTerminado(r.mes, hoy)) return `${mayuscula(mes)} aún no ha terminado, pero puedes traspasar lo que lleva. Lo que entre después con fecha de ${mes} ya no viajará a Diez.`
   return `${mayuscula(mes)} está listo para traspasar.`
 }
 

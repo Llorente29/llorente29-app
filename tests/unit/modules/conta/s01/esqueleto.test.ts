@@ -207,12 +207,15 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     // V03 E2 (26/10): entra Facturación › Verifactu (tablero 25), con pantalla: sale también en el producto solo.
     // PC01 E4 (27/10): entra Facturación › Cobros (los recordatorios), con pantalla.
     // S01c (29/10): entra Compras › Correo de facturas (la dirección, la confirmación de Gmail y lo que ha llegado), con pantalla.
-    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Apuntar solo lo seguro', 'Certificados y accesos', 'Correo de facturas', 'Verifactu', 'Cobros', 'Usuarios', 'Tu cuenta', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
+    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Apuntar solo lo seguro', 'Certificados y accesos', 'Correo de facturas', 'Verifactu', 'Cobros', 'Ventas por día', 'Usuarios', 'Tu cuenta', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
     // S01o (01/11): entra Contabilidad › Apuntar solo lo seguro (el interruptor de la empresa), con pantalla.
     // DM1 · PR 1 (30/10): entra Usuarios (quién entra e «Invitar a una persona»), con pantalla.
     expect(pestanasVisibles(a, { ...NADA, solo: true }).map((t) => t.id)).toEqual(['empresa', 'impuestos', 'socios', 'ejercicio', 'apuntar-solo', 'correo-facturas', 'verifactu', 'cobros', 'personas', 'folvy'])
     // GD (nº71): «Tu cuenta» solo en una cuenta de demostración.
     expect(pestanasVisibles(a, { ...NADA, solo: true, demo: true }).map((t) => t.id)).toContain('cuenta')
+    // R06 (17/11): Ventas › Ventas por día, solo con «ventas por día» encendido (no basta con ser de hostelería).
+    expect(pestanasVisibles(a, { ...NADA, solo: true, ventasPorDia: true }).map((t) => t.id)).toContain('ventas-por-dia')
+    expect(pestanasVisibles(a, { ...NADA, solo: true, hosteleria: true }).map((t) => t.id)).not.toContain('ventas-por-dia')
     expect(de('/conta/ajustes')).toBe('ajustes.empresa')
     expect(de('/conta/ajustes/plan')).toBe('contabilidad.definiciones')
     expect(de('/conta/ajustes/tablas/numeracion')).toBe('contabilidad.definiciones')
@@ -256,12 +259,18 @@ describe('el catálogo de órdenes', () => {
   it('regla 31, contra AREAS_LIBROS: cada acción con pantalla está en UNA cinta, y su orden lleva a su dirección de Libros', () => {
     const enCintas = Object.values(CINTAS).flatMap((gs) => gs.flatMap((g) => g.ordenes))
     const conPantalla = AREAS_LIBROS.flatMap((a) => a.grupos.flatMap((g) => g.acciones)).filter((x) => !x.c05b && !['libro-diario', 'balances-pdf', 'balances-excel'].includes(x.id))
-    expect(conPantalla.length).toBe(20)   // diario 2 · mayor 3 · IVA 7 · estados 3 · cuentas anuales 2 · cierre 3
+    expect(conPantalla.length).toBe(21)   // diario 2 · mayor 3 · IVA 7 · estados 3 · cuentas anuales 2 · cierre 4 (X04: «Salida a ERP10»)
     for (const x of conPantalla) expect(enCintas.filter((id) => id === `libros.${x.id}`), x.id).toHaveLength(1)
     for (const x of conPantalla) {
       const o = ordenPorId(`libros.${x.id}`)!
       expect(de(rutaConta(('ruta' in o.a ? o.a.ruta : ''))), x.id).toBe(`contabilidad.${o.pestana}`)
     }
+  })
+  it('X04 · «Salida a ERP10» va en Cierre, detrás de «Cerrar el mes», y solo la ve la empresa con la salida encendida', () => {
+    const ids = (ctx: Contexto) => cintaDe('contabilidad', 'cierre', ctx).flatMap((g) => g.ordenes.map((o) => o.id))
+    expect(ids(NADA)).not.toContain('libros.salida-erp10')
+    expect(ids({ ...NADA, erp10: true }).slice(0, 4)).toEqual(['libros.ejercicios', 'libros.cerrar-mes', 'libros.salida-erp10', 'libros.cierre-ejercicio'])
+    expect(ordenPorId('libros.salida-erp10')?.solo).toBe('erp10')
   })
   it('S02 · PR 2: Bancos pinta su encabezado (bancos/acciones.ts): el catálogo no le pone fila; sus órdenes siguen para el buscador y Favoritos', () => {
     for (const t of ['movimientos', 'reglas', 'cuentas', 'cierre']) expect(cintaDe('bancos', t, NADA), t).toEqual([])

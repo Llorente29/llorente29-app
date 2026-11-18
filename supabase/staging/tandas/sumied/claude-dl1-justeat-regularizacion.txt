@@ -1,0 +1,5 @@
+# DL1·30 · Just Eat regularización (0035: no añade objetos; en Foodint apunta
+# un asiento). Su prueba (ROLLBACK, cuenta A): sin Foodint no hace nada; un
+# asiento validado se anula en su fecha.
+supabase/migrations/20261114T0035_dl1_justeat_regularizacion.sql
+supabase/staging/sql/20261114_dl1_justeat_regularizacion_prueba.sql

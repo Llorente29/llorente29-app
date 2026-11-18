@@ -145,8 +145,8 @@ export function TraspasoADiez({ companyId, meses, cerrados, hoy, vuelta, alCambi
   const terminado = mesTerminado(mes, hoy)
   const faltan = d ? queFalta(d.faltan) : []
   const tipos = d ? porTipo(d.por_tipo) : []
-  // El botón principal: traspasar (o seguir) cuando el mes ha terminado y hay algo que mandar.
-  const puedeEmpezar = !!d && d.conectado && terminado && d.van > 0 && t?.estado !== 'terminado'
+  // El botón principal: traspasar (o seguir) cuando hay algo que mandar. SP (Julio, 15/11): también el mes en curso, con su aviso.
+  const puedeEmpezar = !!d && d.conectado && d.van > 0 && t?.estado !== 'terminado'
   const sigue = t?.estado === 'traspasando'
   const verDetalle = fallos ?? (t?.estado === 'con_fallos' ? null : [])
 
@@ -161,7 +161,7 @@ export function TraspasoADiez({ companyId, meses, cerrados, hoy, vuelta, alCambi
       {!d && !r.error && <Hueso alto={60} />}
       {d && (
         <>
-          <p className={`cxl-traspaso-frase ${t?.estado === 'terminado' && d.mes_cerrado ? 'cxl-verde' : faltan.length && terminado && !t ? 'cxl-ambar' : ''}`} data-testid="traspaso-frase">
+          <p className={`cxl-traspaso-frase ${t?.estado === 'terminado' && d.mes_cerrado ? 'cxl-verde' : (faltan.length || !terminado) && !t ? 'cxl-ambar' : ''}`} data-testid="traspaso-frase">
             {d.conectado ? fraseDelMes(d, hoy) : 'Esta empresa no está conectada con Diez: no hay nada que traspasar.'}
           </p>
 
@@ -251,7 +251,12 @@ export function TraspasoADiez({ companyId, meses, cerrados, hoy, vuelta, alCambi
               <p>Si traspasas igual, queda apuntado que faltaban. Lo que se arregle después va al mes siguiente.</p>
             </div>
           )}
-          <p className="cxl-apoyo">Al confirmar, autorizas escribir en Diez todo lo de {nombre}: ventas, facturas recibidas, banco, asientos a mano y liquidaciones. El banco, los asientos a mano y las liquidaciones van solos; las facturas, con su PDF, por dos Excel que importas tú en Diez (pasos 2 y 3). Queda apuntado quién y cuándo. Si llega todo y cuadra, {nombre} se cierra.</p>
+          {!terminado && (
+            <div className="cxl-aviso-ambar" role="note" data-testid="traspaso-mes-en-curso">
+              <p>{mayuscula(nombre)} aún no ha terminado. Se traspasa lo que lleva hasta hoy y {nombre} no se cierra en Sumied: lo que entre después con fecha de {nombre} ya no viajará a Diez.</p>
+            </div>
+          )}
+          <p className="cxl-apoyo">Al confirmar, autorizas escribir en Diez todo lo de {nombre}: ventas, facturas recibidas, banco, asientos a mano y liquidaciones. El banco, los asientos a mano y las liquidaciones van solos; las facturas, con su PDF, por dos Excel que importas tú en Diez (pasos 2 y 3). Queda apuntado quién y cuándo. {terminado ? `Si llega todo y cuadra, ${nombre} se cierra.` : ''}</p>
           {error && <p className="cxl-sin-sitio" role="alert">{error}</p>}
           <div className="cxl-herramientas">
             <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => void confirmar()}>{ocupado ?? (faltan.length ? 'Traspasar igual' : 'Traspasar')}</button>

@@ -1,0 +1,833 @@
+{
+ "_origen": "Los 40 fallos reales de la entera de la noche del 17/11/2026 sobre main (b24801d), run 44064019251, sacados de los registros de sus dos trozos. Con la forma del informe JSON de Playwright: cada prueba, su último intento y la primera línea de su error.",
+ "suites": [
+  {
+   "title": "conta/b01/pantallas.spec.ts",
+   "file": "conta/b01/pantallas.spec.ts",
+   "specs": [
+    {
+     "title": "B01 · Bancos, las pantallas › ordenador: N17 en tres niveles, las cinco sin maqueta y los botones que confirman",
+     "file": "conta/b01/pantallas.spec.ts",
+     "line": 88,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/c01b/capturas.spec.ts",
+   "file": "conta/c01b/capturas.spec.ts",
+   "specs": [
+    {
+     "title": "ficha de Hermanos Ruiz (cuenta A): la repetida en ámbar y fuera de las cifras",
+     "file": "conta/c01b/capturas.spec.ts",
+     "line": 51,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "Panadería Luna (respuesta 2): IBAN distinto al de la ficha y posible repetida",
+     "file": "conta/c01b/capturas.spec.ts",
+     "line": 85,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "cuenta B (sin `conta`): la ficha funciona entera, con Contabilidad plegado",
+     "file": "conta/c01b/capturas.spec.ts",
+     "line": 129,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "ficha de Hermanos Ruiz (cuenta A): la repetida en ámbar y fuera de las cifras",
+     "file": "conta/c01b/capturas.spec.ts",
+     "line": 51,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "Panadería Luna (respuesta 2): IBAN distinto al de la ficha y posible repetida",
+     "file": "conta/c01b/capturas.spec.ts",
+     "line": 85,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "cuenta B (sin `conta`): la ficha funciona entera, con Contabilidad plegado",
+     "file": "conta/c01b/capturas.spec.ts",
+     "line": 129,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/c01b/flujos.spec.ts",
+   "file": "conta/c01b/flujos.spec.ts",
+   "specs": [
+    {
+     "title": "cuenta A › crear, NIF e IBAN inválidos, y completar la ficha al 100 %",
+     "file": "conta/c01b/flujos.spec.ts",
+     "line": 38,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "cuenta A › marcar pagada baja «Le debes» y el próximo pago, y Deshacer lo devuelve; la repetida ni entra",
+     "file": "conta/c01b/flujos.spec.ts",
+     "line": 166,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toContainText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "cuenta A › posible repetida (misma fecha e importe, otro número): fuera de las cifras hasta «No es repetida»",
+     "file": "conta/c01b/flujos.spec.ts",
+     "line": 227,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toContainText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "cuenta A › IBAN distinto en una factura: aviso, pago frenado (también en la base), «No es suyo» y «Es el nuevo IBAN»",
+     "file": "conta/c01b/flujos.spec.ts",
+     "line": 257,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toContainText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "cuenta A › «Artículos que le compras» y «Migrar artículos» funcionan como antes (sin migrar)",
+     "file": "conta/c01b/flujos.spec.ts",
+     "line": 339,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toHaveText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "cuenta A › marcar pagada baja «Le debes» y el próximo pago, y Deshacer lo devuelve; la repetida ni entra",
+     "file": "conta/c01b/flujos.spec.ts",
+     "line": 166,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toContainText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "cuenta A › posible repetida (misma fecha e importe, otro número): fuera de las cifras hasta «No es repetida»",
+     "file": "conta/c01b/flujos.spec.ts",
+     "line": 227,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toContainText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "cuenta A › IBAN distinto en una factura: aviso, pago frenado (también en la base), «No es suyo» y «Es el nuevo IBAN»",
+     "file": "conta/c01b/flujos.spec.ts",
+     "line": 257,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toContainText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/c02/plan.spec.ts",
+   "file": "conta/c02/plan.spec.ts",
+   "specs": [
+    {
+     "title": "cuenta A: el índice de Ajustes (N6), con «aún no» donde aún no hay pantalla",
+     "file": "conta/c02/plan.spec.ts",
+     "line": 245,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toHaveText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/i01b/impuestos.spec.ts",
+   "file": "conta/i01b/impuestos.spec.ts",
+   "specs": [
+    {
+     "title": "IVA del trimestre (tablero 9): Resumen, Modelo oficial y la puerta cerrada que dice por qué",
+     "file": "conta/i01b/impuestos.spec.ts",
+     "line": 133,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "Calendario (tablero 8): Impuestos en la barra, la tabla del plazo y por qué te salen",
+     "file": "conta/i01b/impuestos.spec.ts",
+     "line": 99,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: la tabla del calendario se sale 20 px de su tarjeta"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "IVA del trimestre (tablero 9): Resumen, Modelo oficial y la puerta cerrada que dice por qué",
+     "file": "conta/i01b/impuestos.spec.ts",
+     "line": 133,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/i01e/ficha-libro.spec.ts",
+   "file": "conta/i01e/ficha-libro.spec.ts",
+   "specs": [
+    {
+     "title": "La ficha de un proveedor traído de Diez enseña sus facturas del libro y los asientos de su cuenta, con su origen",
+     "file": "conta/i01e/ficha-libro.spec.ts",
+     "line": 64,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toContainText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "La ficha de un proveedor traído de Diez enseña sus facturas del libro y los asientos de su cuenta, con su origen",
+     "file": "conta/i01e/ficha-libro.spec.ts",
+     "line": 64,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toContainText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/pc01/cobros-y-pagos.spec.ts",
+   "file": "conta/pc01/cobros-y-pagos.spec.ts",
+   "specs": [
+    {
+     "title": "«Cuándo te paga» en la ficha de la plataforma: periodo, día de pago y margen, con su ejemplo › «Guardar cambios» lo dice con contenido (regla 8) y queda en la base",
+     "file": "conta/pc01/cobros-y-pagos.spec.ts",
+     "line": 39,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded."
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/s01e/capturas.spec.ts",
+   "file": "conta/s01e/capturas.spec.ts",
+   "specs": [
+    {
+     "title": "despues · B · plan",
+     "file": "conta/s01e/capturas.spec.ts",
+     "line": 69,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: No se pudo entrar como b.admin.carril-1@prueba.folvy.test: HTTP 520"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "despues · B · tablas-retenciones",
+     "file": "conta/s01e/capturas.spec.ts",
+     "line": 69,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: No se pudo entrar como b.admin.carril-1@prueba.folvy.test: HTTP 520"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/s01e/ficha.spec.ts",
+   "file": "conta/s01e/ficha.spec.ts",
+   "specs": [
+    {
+     "title": "S01e · la ficha de un préstamo o aplazamiento › el aplazamiento con el cuadro de un solo año: «al menos» a corto y faltan las cuotas del año siguiente",
+     "file": "conta/s01e/ficha.spec.ts",
+     "line": 105,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/b01/agregador.spec.ts",
+   "file": "conta/b01/agregador.spec.ts",
+   "specs": [
+    {
+     "title": "B01c · los movimientos del banco entran solos (proveedor simulado) › la noche reconoce lo subido por Norma 43, y Bancos dice cómo está la conexión",
+     "file": "conta/b01/agregador.spec.ts",
+     "line": 100,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toHaveCount(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/b01/conciliar.spec.ts",
+   "file": "conta/b01/conciliar.spec.ts",
+   "specs": [
+    {
+     "title": "B02 · Bancos, conciliar › Por validar: el asiento de lo casado se valida aquí, con Intro y en bloque, y no sale en Asientos",
+     "file": "conta/b01/conciliar.spec.ts",
+     "line": 252,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/c02/ficha.spec.ts",
+   "file": "conta/c02/ficha.spec.ts",
+   "specs": [
+    {
+     "title": "cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el extracto vacío",
+     "file": "conta/c02/ficha.spec.ts",
+     "line": 29,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toHaveCount(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "«Local habitual» va en el bloque de Cocina: en A sí (compra con Cocina), en B no existe",
+     "file": "conta/c02/ficha.spec.ts",
+     "line": 90,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el extracto vacío",
+     "file": "conta/c02/ficha.spec.ts",
+     "line": 29,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toHaveCount(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/d01/documentos.spec.ts",
+   "file": "conta/d01/documentos.spec.ts",
+   "specs": [
+    {
+     "title": "Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Validar y siguiente»",
+     "file": "conta/d01/documentos.spec.ts",
+     "line": 126,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(received).toBe(expected) // Object.is equality"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/p01/despacho.spec.ts",
+   "file": "conta/p01/despacho.spec.ts",
+   "specs": [
+    {
+     "title": "1 · Todos los filtros apagados: las cifras, los 8 clientes y lo que vence primero",
+     "file": "conta/p01/despacho.spec.ts",
+     "line": 82,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "1 · Todos los filtros apagados: las cifras, los 8 clientes y lo que vence primero",
+     "file": "conta/p01/despacho.spec.ts",
+     "line": 82,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/s01/esqueleto.spec.ts",
+   "file": "conta/s01/esqueleto.spec.ts",
+   "specs": [
+    {
+     "title": "G03 · Ajustes › Tu empresa: el sector se cambia con su aviso antes y después, y el menú y las puertas lo siguen",
+     "file": "conta/s01/esqueleto.spec.ts",
+     "line": 446,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toHaveText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "G03 · Ajustes › Tu empresa: el sector se cambia con su aviso antes y después, y el menú y las puertas lo siguen",
+     "file": "conta/s01/esqueleto.spec.ts",
+     "line": 446,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toHaveText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/v03/verifactu.spec.ts",
+   "file": "conta/v03/verifactu.spec.ts",
+   "specs": [
+    {
+     "title": "la rechazada (tableros 26 y 27), con la respuesta de Hacienda simulada",
+     "file": "conta/v03/verifactu.spec.ts",
+     "line": 137,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toContainText(expected) failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/v04/reabrir-iva.spec.ts",
+   "file": "conta/v04/reabrir-iva.spec.ts",
+   "specs": [
+    {
+     "title": "Reabrir para corregir el 2T: escondido en «Más», con motivo y confirmación; reabierto, en rojo y con las dos presentaciones",
+     "file": "conta/v04/reabrir-iva.spec.ts",
+     "line": 58,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: No se pudo entrar como c06.plataforma.carril-2@c06-prueba.test: HTTP 520"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "Reabrir para corregir el 2T: escondido en «Más», con motivo y confirmación; reabierto, en rojo y con las dos presentaciones",
+     "file": "conta/v04/reabrir-iva.spec.ts",
+     "line": 58,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: expect(locator).toBeVisible() failed"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "laboral/ls1-sumied.spec.ts",
+   "file": "laboral/ls1-sumied.spec.ts",
+   "specs": [
+    {
+     "title": "cada pantalla de Laboral abre sin errores, sin «Folvy» ni «local», y lo que falta dice cuándo llega",
+     "file": "laboral/ls1-sumied.spec.ts",
+     "line": 280,
+     "tests": [
+      {
+       "projectName": "ordenador",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: «local» en Sumied (tiene que decir «centro»)"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "title": "cada pantalla de Laboral abre sin errores, sin «Folvy» ni «local», y lo que falta dice cuándo llega",
+     "file": "laboral/ls1-sumied.spec.ts",
+     "line": 280,
+     "tests": [
+      {
+       "projectName": "movil",
+       "results": [
+        {
+         "status": "failed",
+         "error": {
+          "message": "Error: «local» en Sumied (tiene que decir «centro»)"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

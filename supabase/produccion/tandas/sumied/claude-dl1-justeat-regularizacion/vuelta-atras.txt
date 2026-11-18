@@ -1,0 +1,2 @@
+# DL1·30 · Just Eat regularización: la 0035 no tiene vuelta atrás (se declara en aplicar.txt): un asiento validado se anula con un contraasiento.
+cuenta: scripts/conta/produccion/cuentas/dl1-justeat-regularizacion.sql

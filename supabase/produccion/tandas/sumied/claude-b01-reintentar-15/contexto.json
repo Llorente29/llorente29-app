@@ -1,0 +1,8 @@
+{
+ "_que": "B01r26 · los 15 de la caída · contexto de producción, medido en SOLO LECTURA el 15/11 a las 07:25Z: la 0825 no añade ni cambia objetos. En Foodint: deja sin last_error 15 filas de external_send («pendiente», 14 asientos y 1 factura de la conexión 860fcb61…, paradas por «la conexión con Diez no está configurada» o «Conexión con Diez caída» el 14/11 a las 23:56Z) y las quita del detalle del traspaso de octubre («traspasando», 20 fallos → 5). external_send no tiene disparadores. Nada en el camino del pedido; la 0825 no está en el historial.",
+ "medido": "2026-11-15T07:25Z",
+ "tanda": {
+  "supabase/migrations/20261115T0825_b01r26_los_15_de_la_caida.sql": "1fcfe1ed6323c2de5f885fe43a985e41"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

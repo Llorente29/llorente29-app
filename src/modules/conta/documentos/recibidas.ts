@@ -7,7 +7,8 @@
 //     una sola. «Por revisar», «Por pagar» y «Pagadas» son las del patrón (en
 //     palabras de oficina, regla 6) y salen siempre; «Por aclarar» (falta algo:
 //     el proveedor, el PDF, el NIF), «Apuntadas solas» (S01o) y «Apartadas» (antes
-//     «Otras»: repetidas, descartadas y las de antes del corte que llevó Diez) solo
+//     «Otras»: repetidas, descartadas, las de antes del corte que llevó Diez y, N03, las de
+//     antes del día de inicio que ya estaban en el programa de antes) solo
 //     si tienen algo. Ninguna fila se
 //     queda fuera de una pestaña (regla 7).
 //   · «Por revisar» cuenta lo mismo que el chip de la barra (las facturas
@@ -20,6 +21,7 @@ import type { PestanaEstado } from '@/modules/conta/diseno/plantillas'
 import { leerOrden, ordenar, type Sentido } from '@/modules/conta/diseno/plantillas'
 import { etiquetaSoporte, faltaElPdf, limites, ventanaParaRevisar, type Canal, type FilaDocumento } from './documentos'
 import type { ExtraFactura } from '@/modules/conta/services/documentosService'
+import { etiquetaYaContabilizada } from './antesDelInicio'
 
 export type IdPestana = 'todas' | 'por-revisar' | 'solas' | 'por-aclarar' | 'por-pagar' | 'pagadas' | 'otras'
 
@@ -70,6 +72,9 @@ export function estadoDeFila(f: FilaDocumento, extra: ExtraFactura | undefined):
     case 'repetida': return { texto: 'Repetida', tono: 'neutro' }
     case 'descartada': return { texto: 'No es una factura', tono: 'neutro' }
     case 'en_diez': return { texto: 'En Diez', tono: 'neutro' }
+    // N03 · gris: informa, no avisa.
+    case 'ya_contabilizada': return { texto: etiquetaYaContabilizada(f.programa_antes), tono: 'neutro' }
+    case 'traida_en_prueba': return { texto: 'Traída · en prueba', tono: 'neutro' }   // N06b
     case 'soporte': return { texto: f.soporte ? etiquetaSoporte(f.soporte) : 'Soporte de una liquidación', tono: 'neutro' }
     default: return { texto: 'Por aclarar', tono: 'duda' }
   }
@@ -145,6 +150,8 @@ export function queEsOtra(f: FilaDocumento): string {
     case 'repetida': return 'Repetidas'
     case 'descartada': return 'No es una factura'
     case 'en_diez': return 'En Diez'
+    case 'ya_contabilizada': return etiquetaYaContabilizada(f.programa_antes)
+    case 'traida_en_prueba': return 'Traída · en prueba'   // N06b
     default: return 'Apartadas'
   }
 }

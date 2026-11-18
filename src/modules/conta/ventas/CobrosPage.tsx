@@ -48,6 +48,7 @@ import {
 import { crearRemesaCobros, leerAbonos, leerCobros, leerEnlacesPago, leerRecordatorios, leerRemesasCobros, type RemesaCobrosResumen, type SinMandato } from '@/modules/conta/services/cobrosService'
 import { ComoTePagan } from './ComoTePagan'
 import { DialogoMandato, DialogoRecordatorios } from './DialogosCobros'
+import { useSeVe } from '@/modules/conta/diseno/plantillas/pestana'
 
 const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-ES')} ${n === 1 ? uno : varios}`
 const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -130,10 +131,12 @@ export default function CobrosPage() {
   }
 
   // Intro cobra (como en el tablero), si hay algo que cobrar y no se está escribiendo en un campo.
+  // K03 · En una pestaña escondida del núcleo, esta pantalla no escucha el teclado.
+  const seVe = useSeVe()
   useEffect(() => {
     const alPulsar = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
-      if (e.key !== 'Enter' || !cobrables.length || mandatoA || verRecordatorios || (t && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(t.tagName))) return
+      if (!seVe() || e.key !== 'Enter' || !cobrables.length || mandatoA || verRecordatorios || (t && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(t.tagName))) return
       e.preventDefault(); void cobrar()
     }
     window.addEventListener('keydown', alPulsar)

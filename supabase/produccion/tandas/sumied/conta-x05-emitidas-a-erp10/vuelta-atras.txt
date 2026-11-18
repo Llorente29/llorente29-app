@@ -1,0 +1,5 @@
+# X05 · la vuelta atrás, en orden inverso: quita la función nueva y deja
+# conta_erp10_por_salir como la dejó el X04a.
+cuenta: scripts/conta/produccion/cuentas/x05-emitidas-erp10.sql
+supabase/vuelta-atras/20261117T2231_x05_emitidas_por_salir.down.sql
+supabase/vuelta-atras/20261117T2230_x05_por_salir_emitidas.down.sql

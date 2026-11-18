@@ -78,9 +78,22 @@ describe('regla T9 · nunca una e2e y un ensayo a la vez en la misma rama', () =
     expect(espera).toContain('RAMA: ${{ inputs.rama }}')
     expect(espera).toContain('node scripts/ci/esperar-e2e.mjs 45')
     expect(espera).not.toContain('concurrency')
-    expect(job(t, 'aplicar')).toMatch(/needs: \[espera-e2e\]/)
+    // B01r26: también espera a la guarda de Diez (un job previo, sin la cola).
+    expect(job(t, 'aplicar')).toMatch(/needs: \[espera-e2e(, guarda-diez)?\]/)
+    expect(job(t, 'aplicar')).toContain("needs.espera-e2e.result != 'failure'")
     expect(job(t, 'aplicar')).toContain('group: aplicar-produccion-conta')
     expect(t.slice(0, t.indexOf('\njobs:'))).not.toMatch(/\nconcurrency:/)
+  })
+  it('B01r26 · la guarda de Diez: un job previo en «lectura» (el que tiene DIEZ_LECTURA), solo GET por la puerta, y el real no aplica si falla', () => {
+    const t = wf('aplicar-produccion-conta')
+    const g = job(t, 'guarda-diez')
+    expect(g).toContain('environment: lectura')
+    expect(g).not.toContain('concurrency')
+    expect(g).not.toMatch(/PROD_CONTA_(RO_)?DB_URL/)
+    expect(g).toContain('scripts/conta/diez/guarda-desde.ts 2>&1 | node scripts/conta/salida-segura.mjs')
+    expect(g).toMatch(/if \[ "\$MODO" = real \]; then[\s\S]*?exit 1/)
+    expect(job(t, 'aplicar')).toContain("needs.guarda-diez.result != 'failure'")
+    expect(job(t, 'aplicar')).not.toContain('DIEZ_LECTURA')
   })
   it('la prueba de staging desde una rama espera; desde main, no', () => {
     const t = wf('aplicar-staging-conta')
