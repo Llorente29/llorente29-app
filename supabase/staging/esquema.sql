@@ -2678,9 +2678,20 @@ begin
   v_nif := nullif(btrim(v_doc->>'bill_to_tax_id'), '');
   v_sup := g.supplier_id;
 
+  -- S01p·20·2 · «Me lo factura otro»: el que lo factura, si sigue vivo.
+  if s.invoiced_by_supplier_id is not null then
+    select * into sp from supplier where id = s.invoiced_by_supplier_id and archived_at is null;
+  end if;
+
   if s.id is null then
     v_path := 'sin_decidir'; v_how := 'ficha'; v_q := 'sin_papel';
     v_reason := 'La recepción no tiene proveedor: no se sabe cómo factura.';
+  elsif sp.id is not null then
+    -- Manda la ficha: lo que diga el papel no crea ninguna factura ni pregunta nada. Va con el
+    -- que lo factura: a su liquidación si liquida cada mes; si no, esperando SU factura.
+    v_how := 'ficha'; v_sup := sp.id; v_company := v_unica;
+    v_path := case when sp.invoicing_mode = 'monthly_settlement' then 'liquidacion' else 'pendiente_factura' end;
+    v_reason := format('Lo factura %s en su factura de género.', sp.name);
   elsif v_tipo is null then
     -- Sin papel leído: manda la ficha.
     v_how := 'ficha'; v_company := v_unica;
@@ -3214,7 +3225,7 @@ declare v_n int := 0; r record; v_cuenta uuid;
 begin
   select account_id into v_cuenta from supplier where id = p_proveedor;
   if v_cuenta is null then raise exception 'Ese proveedor no existe.' using errcode = 'P0002'; end if;
-  update supplier set invoicing_mode = p_modo,
+  update supplier set invoicing_mode = p_modo, invoiced_by_supplier_id = null,  -- S01p·20·2
          invoicing_per_location = case when p_modo = 'delivery_note_then_invoice' then p_por_local else null end,
          invoicing_frequency = case when p_modo = 'delivery_note_then_invoice' then coalesce(p_frecuencia, invoicing_frequency)
                                     when p_modo = 'per_delivery' then 'per_delivery'
@@ -31737,10 +31748,10 @@ begin
        and public.compras_nif_norm(a.parsed_result->'document'->>'supplier_tax_id') is not null;
     v := v || jsonb_build_object('falta', 'nif', 'ofrece', v_nif.nif, 'veces', v_nif.veces, 'otros_distintos', greatest(coalesce(v_otros, 0), 0));
   end if;
-  if s.expense_category_id is null and not v_gasto then
+  if s.expense_category_id is null and not v_gasto and s.invoiced_by_supplier_id is null then  -- S01p·20·2
     v := v || jsonb_build_object('falta', 'tipo_gasto');
   end if;
-  if s.invoicing_mode is null and not v_lote then
+  if s.invoicing_mode is null and not v_lote and s.invoiced_by_supplier_id is null then
     select a.parsed_result->'document'->>'doc_type' into v_ultimo
       from goods_receipt g join goods_receipt_ai_session a on a.id = g.ai_session_id
      where g.account_id = s.account_id and g.supplier_id = s.id and g.status <> 'anulado' and a.parsed_result->'document'->>'doc_type' is not null
@@ -32073,7 +32084,7 @@ begin
   select coalesce(jsonb_agg(jsonb_build_object('tipo', 'ficha', 'proveedor', x.id, 'proveedor_nombre', x.name, 'falta', x.falta) order by x.name), '[]'::jsonb)
     into v_fichas
     from (select s.id, s.name, public.compras_ficha_le_falta(s.id) falta from supplier s
-           where s.account_id = p_cuenta and s.archived_at is null
+           where s.account_id = p_cuenta and s.archived_at is null and s.invoiced_by_supplier_id is null  -- S01p·20·2: me lo factura otro
              and (s.invoicing_mode = 'monthly_settlement'
                   or exists (select 1 from goods_receipt_path p join goods_receipt g on g.id = p.goods_receipt_id
                               where g.supplier_id = s.id and p.path in ('factura', 'pendiente_factura', 'liquidacion')))) x
