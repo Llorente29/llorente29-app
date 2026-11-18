@@ -3,10 +3,13 @@
 //
 // N07 · «Traer de ERP10», en el ordenador, CONTRA STAGING DE VERDAD, con los Excel inventados del
 // ejemplo de ERP10 (tests/conta/fixtures/importar/erp10: datos inventados que se ven inventados, T11).
-// En el carril de la e2e (se clona para el run y se borra al acabar: darlo por bueno de verdad no deja
-// nada para la siguiente), con la cuenta A, su empresa de pruebas y la sesión del administrador (la
-// misma RLS que la pantalla, nunca la clave de servicio). En orden, porque cada uno deja la empresa
-// como la necesita el siguiente:
+// En el carril de la e2e (se clona para el run y se borra al acabar), con la cuenta A y la sesión del
+// administrador (la misma RLS que la pantalla, nunca la clave de servicio). CADA PRUEBA CREA SU EMPRESA
+// (como C02c): pymes, 8 dígitos y el ejercicio 2026, sin día de inicio ni nada apuntado. Así no depende
+// del orden ni de lo que dejó otra (e2e 1504: la empresa de pruebas del carril tenía día de inicio
+// 2026-01-01 y el ejemplo, de enero a marzo, no entraba). Al acabar, se deshace lo que quedó en prueba
+// y se borra la empresa; si la base no deja borrarla (lo dado por bueno), se queda en el carril.
+// Las cuatro:
 //   1. Solo cuentas y proveedores: soltar el plan y los dos listados, ver, traer, «Solo has traído las
 //      cuentas y los proveedores. No hay saldos que comparar.», darlo por bueno, y una recibida que
 //      entró sin proveedor (preparada por la API) lo encuentra por su NIF.
@@ -20,14 +23,14 @@
 import { test, expect, type Page } from '@playwright/test'
 import { readFileSync, readdirSync } from 'node:fs'
 import * as XLSX from 'xlsx'
-import { CARRIL, CUENTA_A, enCarril, entrarComo, type Sesion } from '../sesion'
-import { rest } from '../api'
+import { CARRIL, CUENTA_A, entrarComo, type Sesion } from '../sesion'
+import { cifInventado, rest } from '../api'
 
 test.skip(CARRIL === null, 'Traer de ERP10 escribe en la empresa de la cuenta A (trae y lo da por bueno): necesita su carril.')
-test.describe.configure({ mode: 'serial' })
+// Sin «serial»: cada prueba prepara su empresa, y si una cae las otras corren igual (e2e 1504).
 
 const DIR = 'docs/conta/capturas/n07'
-const EMPRESA_A = enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')
+const NOMBRE = 'Traer ERP10 e2e'
 const FIX = 'tests/conta/fixtures/importar/erp10'
 const RUTA = '/conta/libros/diario/traer-erp10'
 const fichero = (nombre: string) => ({ name: nombre, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: readFileSync(`${FIX}/${nombre}`) })
@@ -84,20 +87,53 @@ async function soltar(page: Page, ficheros: { name: string; mimeType: string; bu
   await page.getByLabel('Elegir ficheros', { exact: true }).setInputFiles(ficheros)
 }
 
-let s: Sesion
+/** Una empresa nueva de la cuenta A, solo para esta prueba: pymes, 8 dígitos y el ejercicio 2026. */
+async function crearEmpresa(s: Sesion, que: string): Promise<string> {
+  const r = await rest<{ id: string }[]>(s, 'POST', 'company', {
+    account_id: CUENTA_A.id, legal_name: `${NOMBRE} ${que} ${Date.now()}`, tax_id: cifInventado(), tax_id_type: 'nif_es', entity_kind: 'company',
+    setup_step: 'hecho', setup_completed_at: new Date().toISOString(),
+  })
+  expect(r.status, `se crea la empresa de la prueba: ${JSON.stringify(r.datos).slice(0, 200)}`).toBe(201)
+  const id = r.datos[0].id
+  const p = await rest(s, 'POST', 'company_tax_profile', { account_id: CUENTA_A.id, company_id: id, tax_territory: 'peninsula_baleares', chart_kind: 'pymes', account_digits: 8, tax_forms: ['303'] })
+  expect(p.status, `y su perfil fiscal, pymes y 8 dígitos: ${JSON.stringify(p.datos).slice(0, 200)}`).toBe(201)
+  const y = await rest(s, 'POST', 'fiscal_year', { account_id: CUENTA_A.id, company_id: id, code: '2026', starts_on: '2026-01-01', ends_on: '2026-12-31', created_by: s.user.id })
+  expect(y.status, `y el ejercicio 2026: ${JSON.stringify(y.datos).slice(0, 200)}`).toBe(201)
+  const inicio = await rest<string | null>(s, 'POST', 'rpc/conta_empresa_dia_de_inicio', { p_company: id })
+  expect(inicio.datos, 'la empresa nueva no tiene día de inicio').toBeNull()
+  return id
+}
 
-test.beforeEach(async ({ page }) => {
+/** Lo que quedó en prueba se deshace y la empresa se borra; si no se deja (lo dado por bueno), se queda en el carril. */
+async function limpiar(s: Sesion, id: string) {
+  const enPrueba = await rest<{ id: string }[]>(s, 'GET', `import_run?select=id&company_id=eq.${id}&kind=eq.carga&status=eq.en_prueba`)
+  for (const c of enPrueba.datos ?? []) await rest(s, 'POST', 'rpc/conta_traer_deshacer', { p_carga: c.id, p_quien_nombre: 'Prueba e2e N07' })
+  const b = await rest<unknown>(s, 'DELETE', `company?id=eq.${id}&account_id=eq.${CUENTA_A.id}`)
+  if (b.status >= 300) console.log(`[N07] la empresa ${id} se queda en el carril (${b.status}): ${JSON.stringify(b.datos).slice(0, 200)}`)
+}
+
+let s: Sesion
+let empresa: string
+
+test.beforeEach(async ({ page }, info) => {
   test.skip((page.viewportSize()?.width ?? 1440) < 768, 'En el ordenador (encargo N07).')
   test.setTimeout(240_000)
   await page.setViewportSize({ width: 1456, height: 816 })
   s = await entrarComo(page, CUENTA_A.email)
+  empresa = await crearEmpresa(s, info.title.slice(6, 7))
+  // La pantalla abre la empresa elegida, que se guarda por cuenta en el navegador (como C02c).
+  await page.addInitScript(([clave, valor]) => { window.localStorage.setItem(clave, valor) }, [`folvy.conta.empresa.${CUENTA_A.id}`, empresa] as const)
+})
+
+test.afterEach(async () => {
+  if (empresa) await limpiar(s, empresa)
 })
 
 test('N07 · 1 · solo cuentas y proveedores: soltar, ver, traer, darlo por bueno; la recibida sin proveedor lo encuentra', async ({ page }) => {
   const errores = vigilar(page)
   // Lo que la pantalla no crea sola: una recibida que entró por correo sin proveedor, con el NIF inventado del 40000001 del ejemplo.
   const r = await rest<{ id: string }[]>(s, 'POST', 'supplier_invoice', {
-    account_id: CUENTA_A.id, company_id: EMPRESA_A, invoice_number: `N07-SIN-${Date.now() % 100000}`, invoice_date: '2026-11-10', status: 'en_revision',
+    account_id: CUENTA_A.id, company_id: empresa, invoice_number: `N07-SIN-${Date.now() % 100000}`, invoice_date: '2026-11-10', status: 'en_revision',
     source: 'ocr', grand_total: 121, tax_base_total: 100, tax_total: 21, created_by_name: 'Prueba e2e N07',
     reading: { factura: { proveedor: { nif: 'B00000000', nombre: 'Proveedor Ejemplo Uno' } } },
   })
@@ -148,8 +184,6 @@ test('N07 · 1 · solo cuentas y proveedores: soltar, ver, traer, darlo por buen
 
 test('N07 · 2 · deshacer lo traído en prueba', async ({ page }) => {
   const errores = vigilar(page)
-  const inicio = await rest<string | null>(s, 'POST', 'rpc/conta_empresa_dia_de_inicio', { p_company: EMPRESA_A })
-  expect(inicio.datos === null || inicio.datos > '2026-03-31', `la empresa de pruebas tiene día de inicio ${inicio.datos}: el ejemplo (enero a marzo de 2026) no entraría entero`).toBe(true)
   await page.goto(RUTA, { waitUntil: 'load' })
   await expect(page.locator('h1#cxt-titulo')).toHaveText('Traer de ERP10', { timeout: 40_000 })
   await soltar(page, TODOS.map(fichero))
