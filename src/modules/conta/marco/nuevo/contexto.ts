@@ -189,6 +189,12 @@ export function useVentasPorDia(): boolean {
   return marco ? marco.hosteleria === true || marco.ventasPorDia === true : true
 }
 
+/** R06 · ¿La empresa activa tiene «ventas por día» encendido (sube las ventas de un TPV de fuera)? */
+export function useVentasPorDiaEncendido(): boolean {
+  const marco = useContext(MarcoContexto)
+  return marco?.ventasPorDia === true
+}
+
 /**
  * G03 · Lo de gestoría (Clientes y cuotas, Tarifa y paquetes, CRM y
  * GoCardless): sale solo si el sector de la empresa activa es Gestoría. Null

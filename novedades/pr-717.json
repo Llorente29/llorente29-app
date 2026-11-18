@@ -1,0 +1,29 @@
+[
+ {
+  "id": "717-1",
+  "pr": 717,
+  "fecha": "2026-11-18T04:54:28Z",
+  "producto": "sumied",
+  "apartado": "Cierres del día",
+  "frase": "«Subir las ventas del TPV» lee los cuatro ficheros de Revo, dice qué día cuadra y cuál no, y por qué, y guarda los que cuadran; la lista dice lo que falta por subir.",
+  "ruta": null
+ },
+ {
+  "id": "717-2",
+  "pr": 717,
+  "fecha": "2026-11-18T04:54:28Z",
+  "producto": "sumied",
+  "apartado": "Formas de pago",
+  "frase": "«A qué cuenta va cada forma de pago», con el asiento de un día en vivo; al guardar, los días que la llevaban pasan a «Listo para validar».",
+  "ruta": null
+ },
+ {
+  "id": "717-3",
+  "pr": 717,
+  "fecha": "2026-11-18T04:54:28Z",
+  "producto": "sumied",
+  "apartado": "Ajustes",
+  "frase": "«Ventas por día», con las formas de pago, en las empresas con «ventas por día» encendido.",
+  "ruta": null
+ }
+]

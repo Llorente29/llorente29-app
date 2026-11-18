@@ -1,0 +1,11 @@
+# N06b · darlo por bueno, y traer solo las cuentas y los proveedores: 2224 (ERP10 en «¿De qué programa
+# vienes?»), 2240 (los candados de lo traído en prueba), 2241 (la serie 8 y las listas) y 2242 (traer y
+# darlo por bueno). Su prueba (ROLLBACK, cuenta A, el ejemplo inventado de ERP10): las seis listas
+# idénticas antes y después; la 8, solo de lo traído; solo cuentas y proveedores; en prueba no se paga,
+# casa ni cobra; no cuadra y no deja; el ensayo de la regla 10; la cuenta B no ve; las demás cuentas
+# iguales; y las cuatro vueltas atrás.
+supabase/migrations/20261117T2224_n06b_programa_erp10.sql
+supabase/migrations/20261117T2240_n06b_traida_sin_pagar.sql
+supabase/migrations/20261117T2241_n06b_serie_y_listas.sql
+supabase/migrations/20261117T2242_n06b_darlo_por_bueno.sql
+supabase/staging/sql/20261117_n06b_darlo_por_bueno_prueba.sql

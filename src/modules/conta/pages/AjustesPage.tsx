@@ -33,6 +33,7 @@ import { VerifactuAjustes } from '@/modules/conta/verifactu/VerifactuAjustes'
 import { CobrosAjustes } from '@/modules/conta/ventas/CobrosAjustes'
 import { CorreoFacturasAjustes } from '@/modules/conta/compras/CorreoFacturas'
 import { ApuntarSoloAjustes } from '@/modules/conta/compras/ApuntarSoloAjustes'
+import { VentasPorDiaAjustes } from '@/modules/conta/ventas/tpv/VentasPorDiaAjustes'
 import { ApartadoRoi } from '@/modules/conta/empresa/ApartadoRoi'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
@@ -74,6 +75,8 @@ function Entrada({ id }: { id: string }) {
   if (id === 'correo-facturas') return <>{cabeza}<CorreoFacturasAjustes /></>
   // S01o · Apuntar solo lo seguro: el interruptor de la empresa; no necesita los datos de la empresa de Ajustes.
   if (id === 'apuntar-solo') return <>{cabeza}<ApuntarSoloAjustes /></>
+  // R06 · Ventas por día: a qué cuenta va cada forma de pago del TPV; no necesita los datos de la empresa de Ajustes.
+  if (id === 'ventas-por-dia') return <>{cabeza}<VentasPorDiaAjustes /></>
   // DM1 · PR 1 · Usuarios: quién entra e «Invitar a una persona»; no necesita los datos de la empresa de Ajustes.
   if (id === 'personas') return <>{cabeza}<Usuarios /></>
   // GD · Tu cuenta: solo en una cuenta de demostración, con «Volver a empezar».

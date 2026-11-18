@@ -13,13 +13,17 @@
 //   · Después de la primera salida, el código y las cifras ya no se cambian: se
 //     ven en gris, con su porqué.
 //   · Cada cambio confirma con lo que ha quedado (regla 8), con el texto de la base.
+//   · X05: «Desde qué día sale», con el campo de fecha de Sumied (dd/mm/aaaa en
+//     español, sea cual sea el idioma del navegador), no el nativo del navegador,
+//     que en la captura del X04 salió en inglés («10/01/2026» por el 1 de octubre).
 
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaLibros } from '@/config/navegacion'
 import { fechaLarga } from '@/modules/conta/lib/formato'
 import { CampoTexto, Resultado, TarjetaApartado } from '@/modules/conta/empresa/campos'
 import { TarjetaCargando } from '@/modules/conta/ui/piezas'
+import { CampoFecha } from '@/modules/conta/ui/fecha/CampoFecha'
 import { leerSalidaEmpresa, ponerCarpeta, ponerSalida, type SalidaEmpresa } from '@/modules/conta/services/erp10Service'
 import type { Quien } from '@/modules/conta/empresa/apartados'
 
@@ -31,6 +35,7 @@ export function ApartadoSalidaErp10({ quien, movil, nombre }: { quien: Quien; mo
   const [codigo, setCodigo] = useState('')
   const [cifras, setCifras] = useState('8')
   const [desde, setDesde] = useState('')
+  const idDesde = useId()
   const [carpeta, setCarpeta] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [hecho, setHecho] = useState<string | null>(null)
@@ -79,14 +84,17 @@ export function ApartadoSalidaErp10({ quien, movil, nombre }: { quien: Quien; mo
         </label>
         <p className="cx-ayuda" id="salida-erp10-ayuda" style={{ margin: 0 }}>
           Es temporal: sirve para llevar esta empresa en Sumied y en ERP10 a la vez. Encendida, cada mes sacas de Sumied las cuentas nuevas,
-          las facturas recibidas y sus PDF, y los importas en ERP10.{salida?.encendida ? <> Se hace en <Link className="cx-enlace" to={rutaLibros('cierre', 'salida-erp10')}>Salida a ERP10</Link>.</> : null}
+          las facturas emitidas y recibidas y sus PDF, y los importas en ERP10.{salida?.encendida ? <> Se hace en <Link className="cx-enlace" to={rutaLibros('cierre', 'salida-erp10')}>Salida a ERP10</Link>.</> : null}
         </p>
         <CampoTexto etiqueta="Código de la empresa en ERP10" valor={codigo} cambiar={setCodigo} modo="numeric" deshabilitado={ocupado || fijos}
           ayuda={fijos ? 'Ya ha salido algo con este código: no se cambia.' : 'Es el número que sale entre corchetes arriba, en ERP10.'} />
         <CampoTexto etiqueta="Cifras de las subcuentas en ERP10" valor={cifras} cambiar={setCifras} modo="numeric" deshabilitado={ocupado || fijos}
           ayuda={fijos ? 'Ya han salido cuentas con estas cifras: no se cambian.' : 'Si no lo sabes, 8. Las cuentas de Sumied se rellenan con ceros por el medio.'} />
-        <CampoTexto etiqueta="Desde qué día sale" valor={desde} cambiar={setDesde} tipo="date" deshabilitado={ocupado}
-          ayuda="Si no lo dices, el día en que la empresa empezó en Sumied." />
+        <div className="cx-campo">
+          <label htmlFor={idDesde}>Desde qué día sale</label>
+          <CampoFecha id={idDesde} className="cx-input" valor={desde} alCambiar={setDesde} disabled={ocupado} aria-describedby={`${idDesde}-ayuda`} />
+          <span id={`${idDesde}-ayuda`} className="cx-ayuda">Si no lo dices, el día en que la empresa empezó en Sumied.</span>
+        </div>
         <CampoTexto etiqueta="Carpeta de los PDF en el ordenador de ERP10" valor={carpeta} cambiar={setCarpeta} deshabilitado={ocupado}
           ayuda={`Si no lo dices, ${porDefecto}. Tiene que ser la misma carpeta donde descomprimas los PDF. ERP10 los busca ahí.`} />
         <div><button type="submit" className="cx-boton" disabled={ocupado}>{ocupado ? 'Guardando…' : 'Guardar'}</button></div>

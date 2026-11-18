@@ -1,0 +1,11 @@
+# R06 · Subir las ventas del TPV y a qué cuenta va cada forma de pago. Rama
+# conta/r06-subir-ventas-tpv. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   2130  _conta_tpv_formas_de, _conta_tpv_cuenta_de, conta_tpv_formas,
+#         conta_tpv_asiento_ejemplo y conta_tpv_formas_guardar. Solo añade.
+#
+# Nada de sale ni del camino del pedido; ninguna función que exista cambia.
+# El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r06-formas-de-pago.sql
+supabase/migrations/20261117T2130_r06_formas_de_pago.sql

@@ -74,6 +74,7 @@ export function estadoDeFila(f: FilaDocumento, extra: ExtraFactura | undefined):
     case 'en_diez': return { texto: 'En Diez', tono: 'neutro' }
     // N03 · gris: informa, no avisa.
     case 'ya_contabilizada': return { texto: etiquetaYaContabilizada(f.programa_antes), tono: 'neutro' }
+    case 'traida_en_prueba': return { texto: 'Traída · en prueba', tono: 'neutro' }   // N06b
     case 'soporte': return { texto: f.soporte ? etiquetaSoporte(f.soporte) : 'Soporte de una liquidación', tono: 'neutro' }
     default: return { texto: 'Por aclarar', tono: 'duda' }
   }
@@ -150,6 +151,7 @@ export function queEsOtra(f: FilaDocumento): string {
     case 'descartada': return 'No es una factura'
     case 'en_diez': return 'En Diez'
     case 'ya_contabilizada': return etiquetaYaContabilizada(f.programa_antes)
+    case 'traida_en_prueba': return 'Traída · en prueba'   // N06b
     default: return 'Apartadas'
   }
 }

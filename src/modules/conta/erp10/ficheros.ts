@@ -1,8 +1,8 @@
 // src/modules/conta/erp10/ficheros.ts
 //
 // X03 · LO QUE ESCRIBE LOS FICHEROS DE LA SALIDA A ERP10: subcuentas.xlsx y
-// recibidas.xlsx (encargo X03, 17/11). Puro: sin red ni base. Lo usará la
-// pantalla «Salida a ERP10» (el PR siguiente) con lo que lea de
+// recibidas.xlsx (encargo X03, 17/11); X05, expedidas.xlsx. Puro: sin red ni
+// base. Lo usa la pantalla «Salida a ERP10» con lo que lee de
 // conta_erp10_por_salir y de cada asiento.
 //
 //   · Las columnas salen de la configuración de ERP10 (configuracion.ts), no se
@@ -22,7 +22,7 @@
 
 import { colocar, columnas, type Celda } from '../../../../supabase/functions/_shared/diezExcel.ts'
 import { libroXlsx } from '@/modules/conta/lib/traspasoExcelLibro'
-import { XML_RECIBIDAS, XML_SUBCUENTAS } from '@/modules/conta/erp10/configuracion'
+import { XML_EXPEDIDAS, XML_RECIBIDAS, XML_SUBCUENTAS } from '@/modules/conta/erp10/configuracion'
 
 export type Fila = (string | number)[]
 
@@ -291,7 +291,8 @@ export function tiposRetencionDelXml(xml = XML_RECIBIDAS): string[] {
 }
 
 export type SalidaRecibidas = {
-  filas: { entryId: string; numero: string; fila: Fila; pdf: string | null }[]
+  /** `usa`: las cuentas de Sumied de la fila (para ver, con las emitidas, las que chocan entre las dos). */
+  filas: { entryId: string; numero: string; fila: Fila; pdf: string | null; usa: string[] }[]
   noSalen: NoSale[]
   /** Las cuentas de Sumied que usan las filas que salen (para el fichero de subcuentas). */
   cuentas: Set<string>
@@ -304,6 +305,8 @@ export type SalidaRecibidas = {
  */
 export function prepararRecibidas(lista: readonly RecibidaParaErp10[], o: {
   plan: Plan; largo: number; carpetaPdf: string; yaSalidas?: ReadonlyMap<string, string>; xml?: string
+  /** Los nombres de PDF ya usados en la misma salida (X05: las emitidas van en el mismo zip). */
+  usados?: Set<string>
 }): SalidaRecibidas {
   const xml = o.xml ?? XML_RECIBIDAS
   const operaciones = tiposOperacionDelXml(xml); const retenciones = tiposRetencionDelXml(xml)
@@ -322,12 +325,212 @@ export function prepararRecibidas(lista: readonly RecibidaParaErp10[], o: {
   const { erp, noCaben } = convertirCuentas(leidas.flatMap(usadasPor), o.plan, o.largo, o.yaSalidas)
   const filas: SalidaRecibidas['filas'] = []
   const cuentas = new Set<string>()
-  const usados = new Set<string>()
+  const usados = o.usados ?? new Set<string>()
   for (const x of leidas) {
     const malas = usadasPor(x).filter((k) => noCaben.has(k))
     if (malas.length) { noSalen.push({ entryId: x.entryId, numero: x.numero, porque: noCaben.get(malas[0])! }); continue }
     const pdf = x.tienePdf ? nombrePdf({ fechaFactura: x.fechaFactura, proveedor: x.nombre, numero: x.numero }, usados) : null
-    filas.push({ entryId: x.entryId, numero: x.numero, fila: filaRecibida(x, erp, pdf ? rutaPdf(o.carpetaPdf, pdf) : '', xml), pdf })
+    filas.push({ entryId: x.entryId, numero: x.numero, fila: filaRecibida(x, erp, pdf ? rutaPdf(o.carpetaPdf, pdf) : '', xml), pdf, usa: usadasPor(x) })
+    for (const k of usadasPor(x)) cuentas.add(k)
+  }
+  return { filas, noSalen, cuentas }
+}
+
+// ── Las emitidas (X05) ───────────────────────────────────────────────────────────────
+//
+// La configuración de expedidas medida en ERP10 el 17/11 (XML_EXPEDIDAS) pone:
+// las tres fechas en una columna (la de la factura), número, subcuenta del
+// cliente, total, IVA 1 a 4 (base, % y cuota), ruta del PDF y contrapartidas de
+// ingreso 1 a 4 (subcuenta e importe). Los campos 124 a 126 tienen columna, pero
+// qué son está sin medir: no se escriben. No pone NIF (va en la ficha de la
+// subcuenta), tipo de operación, exención, retención, recargo, resumen de
+// facturas ni factura rectificada. Lo que necesitaría una de esas columnas no
+// sale, y se dice qué hacer en ERP10.
+
+/** Una línea del asiento de una emitida (conta_erp10_emitidas_por_salir). */
+export type LineaEmitida = {
+  cuenta: string
+  debe: number
+  haber: number
+  /** % del IVA y su base (en las líneas de IVA). */
+  tipoIva: number | null
+  baseIva: number | null
+}
+
+/** La operación, decidida en la base con el tratamiento del IVA de sus tipos. */
+export type OperacionEmitida = 'interior' | 'intra' | 'isp' | 'exenta' | 'no_sujeta'
+
+export type EmitidaParaErp10 = {
+  entryId: string
+  /** AAAA-MM-DD: la del asiento de Sumied. */
+  fecha: string
+  factura: { numero: string | null; fecha: string }
+  cliente: { nombre: string; nif: string | null }
+  /** Una rectificativa (la factura de venta lo dice, o su tipo en el libro es R1 a R5). */
+  rectificativa: boolean
+  /** El tipo de factura del libro de expedidas: F1, F2, F3, F4 (resumen)… */
+  tipoFactura: string | null
+  operacion: OperacionEmitida
+  /** Lo que lleva de recargo de equivalencia y de retención (0 si nada). */
+  recargo: number
+  retencion: number
+  lineas: LineaEmitida[]
+  tienePdf: boolean
+}
+
+/** Lo que se ha leído de una emitida, en céntimos, antes de ponerla en su fila. */
+export type EmitidaLeida = {
+  entryId: string
+  numero: string
+  fechaFactura: string
+  nombre: string
+  cliente: string
+  ingresos: { cuenta: string; importe: number }[]
+  iva: { pct: number; base: number; cuota: number }[]
+  total: number
+  tienePdf: boolean
+}
+
+/** Las contrapartidas de ingreso de la configuración: subcuenta e importe, de la 1 a la 4. */
+const CONTRAPARTIDAS = [['041', '043'], ['092', '094'], ['095', '097'], ['098', '100']] as const
+const RETENCION = ['034', '035', '036', '037', '038']
+
+const NO_VA_EMITIDA: Record<Exclude<OperacionEmitida, 'interior'>, string> = {
+  intra: 'Es una entrega a otro país de la UE, y ERP10 no la admite al importar con esta configuración. Métela a mano en ERP10.',
+  isp: 'Es una venta con inversión del sujeto pasivo, y ERP10 no la admite al importar con esta configuración. Métela a mano en ERP10.',
+  exenta: 'Es una venta exenta de IVA, y ERP10 no la admite al importar con esta configuración. Métela a mano en ERP10.',
+  no_sujeta: 'Es una venta no sujeta a IVA, y ERP10 no la admite al importar con esta configuración. Métela a mano en ERP10.',
+}
+
+/** Cuántas contrapartidas de ingreso tiene puestas la configuración (las que tienen subcuenta e importe). */
+export function contrapartidasDelXml(xml = XML_EXPEDIDAS): number {
+  const col = columnas(xml)
+  return CONTRAPARTIDAS.filter(([cta, imp]) => cta in col && imp in col).length
+}
+
+/** Cuántos tipos de IVA tiene puestos la configuración (base, % y cuota). */
+export function tiposIvaDelXml(xml = XML_EXPEDIDAS): number {
+  const col = columnas(xml)
+  let n = 0
+  while (n < 4 && [0, 1, 2].every((k) => String(10 + n * 3 + k).padStart(3, '0') in col)) n++
+  return n
+}
+
+/** Lee el asiento de una emitida. Lo que no puede ir en el fichero de ERP10 devuelve su porqué. */
+export function leerEmitida(r: EmitidaParaErp10, xml = XML_EXPEDIDAS): EmitidaLeida | NoSale {
+  const numero = String(r.factura.numero ?? '').trim()
+  const no = (porque: string): NoSale => ({ entryId: r.entryId, numero, porque })
+  const col = columnas(xml)
+  if (!numero) return no('No tiene número de factura.')
+  if (r.rectificativa || /^R/.test(r.tipoFactura ?? '')) return no('Es una rectificativa, y ERP10 no la admite al importar. Métela a mano en ERP10.')
+  if (r.tipoFactura === 'F4') return no('Es un resumen de varias facturas, y ERP10 no lo admite al importar con esta configuración. Métela a mano en ERP10.')
+  if (r.operacion !== 'interior') return no(NO_VA_EMITIDA[r.operacion])
+  if (Number(r.recargo) !== 0) return no('Lleva recargo de equivalencia, y ERP10 no lo admite al importar. Métela a mano en ERP10.')
+
+  const ingresos = new Map<string, number>()
+  const iva = new Map<number, { base: number; cuota: number }>()
+  const cli = new Map<string, number>()
+  let retenida = c(r.retencion ?? 0)
+  for (const l of r.lineas) {
+    const neto = c(l.haber) - c(l.debe)
+    if (/^7/.test(l.cuenta)) {
+      ingresos.set(l.cuenta, (ingresos.get(l.cuenta) ?? 0) + neto)
+    } else if (/^477/.test(l.cuenta)) {
+      if (l.tipoIva == null || l.baseIva == null) return no(`La línea de IVA de la cuenta ${l.cuenta} no tiene su tipo y su base.`)
+      const pct = Number(l.tipoIva)
+      const x = iva.get(pct) ?? { base: 0, cuota: 0 }
+      x.base += c(Math.abs(Number(l.baseIva))) * (neto < 0 ? -1 : 1); x.cuota += neto
+      iva.set(pct, x)
+    } else if (/^4[34]/.test(l.cuenta)) {
+      cli.set(l.cuenta, (cli.get(l.cuenta) ?? 0) - neto)
+    } else if (/^473/.test(l.cuenta)) {
+      retenida += -neto
+    } else {
+      return no(`Lleva la cuenta ${l.cuenta}, que no es de ingreso, IVA, cliente ni retención. Métela a mano en ERP10.`)
+    }
+  }
+  if (retenida !== 0 && !RETENCION.every((k) => k in col)) {
+    return no('Lleva retención, y ERP10 no la admite al importar en las emitidas con esta configuración. Métela a mano en ERP10.')
+  }
+
+  const vivos = [...ingresos].filter(([, v]) => v !== 0)
+  const maxIngresos = contrapartidasDelXml(xml)
+  const maxIva = tiposIvaDelXml(xml)
+  if (vivos.length === 0) return no('No lleva ninguna cuenta de ingreso.')
+  if (vivos.length > maxIngresos) return no(`Esta factura reparte el ingreso en ${vivos.length} cuentas y ERP10 admite ${maxIngresos} al importar. Métela a mano en ERP10.`)
+  if (iva.size === 0) return no('No lleva IVA, y ERP10 necesita saber por qué al importar. Métela a mano en ERP10.')
+  if (iva.size > maxIva) return no(`Esta factura lleva ${iva.size} tipos de IVA y ERP10 admite ${maxIva} al importar. Métela a mano en ERP10.`)
+  if (cli.size !== 1) return no(cli.size === 0 ? 'No lleva la cuenta del cliente.' : `Va a ${cli.size} cuentas de cliente y tiene que ir a una.`)
+  const [cliente, total] = [...cli][0]
+  if (total <= 0) return no('El total de la factura no es positivo.')
+  const ivas = [...iva].sort(([a], [b]) => a - b).map(([pct, x]) => ({ pct, base: x.base, cuota: x.cuota }))
+  for (const x of ivas) if (!Number.isInteger(x.pct)) return no(`Lleva un IVA del ${x.pct} %, que no es un tipo entero.`)
+
+  const leida: EmitidaLeida = {
+    entryId: r.entryId, numero, fechaFactura: r.factura.fecha, nombre: r.cliente.nombre, cliente,
+    ingresos: vivos.map(([cuenta, importe]) => ({ cuenta, importe })), iva: ivas, total, tienePdf: r.tienePdf,
+  }
+  const mal = cuadreEmitida(leida)
+  return mal ? no(`${mal} No sale.`) : leida
+}
+
+/** La regla de cuadre de una emitida: los ingresos suman las bases, y el total es bases más cuotas. Nulo si cuadra. */
+export function cuadreEmitida(x: Pick<EmitidaLeida, 'ingresos' | 'iva' | 'total'>): string | null {
+  const bases = x.iva.reduce((t, i) => t + i.base, 0)
+  const cuotas = x.iva.reduce((t, i) => t + i.cuota, 0)
+  if (x.ingresos.reduce((t, g) => t + g.importe, 0) !== bases) return 'Las cuentas de ingreso no suman las bases del IVA.'
+  if (bases + cuotas !== x.total) return 'El total no es bases más cuotas.'
+  return null
+}
+
+/** La fila del fichero de expedidas: cada dato en la columna que dice la configuración de ERP10. */
+export function filaExpedida(x: EmitidaLeida, cuentas: ReadonlyMap<string, string>, ruta: string, xml = XML_EXPEDIDAS): Fila {
+  const cta = (k: string) => cuentas.get(k) ?? k
+  // Las tres fechas (factura, contable y fiscal) van en la misma columna: la de la factura.
+  const v: Record<string, Celda> = {
+    '002': fechaCelda(x.fechaFactura), '001': fechaCelda(x.fechaFactura), '118': fechaCelda(x.fechaFactura),
+    '004': cta(x.cliente), '006': x.numero, '045': e(x.total), '057': ruta,
+  }
+  x.ingresos.forEach((g, k) => { const [s, i] = CONTRAPARTIDAS[k]; v[s] = cta(g.cuenta); v[i] = e(g.importe) })
+  // IVA 1 a 4: base, % y cuota (010-012, 013-015, 016-018, 019-021).
+  x.iva.forEach((i, k) => {
+    const b = 10 + k * 3
+    v[String(b).padStart(3, '0')] = e(i.base); v[String(b + 1).padStart(3, '0')] = i.pct; v[String(b + 2).padStart(3, '0')] = e(i.cuota)
+  })
+  return colocar(v, columnas(xml)) as Fila
+}
+
+export type SalidaExpedidas = {
+  filas: { entryId: string; numero: string; fila: Fila; pdf: string | null; usa: string[] }[]
+  noSalen: NoSale[]
+  /** Las cuentas de Sumied que usan las filas que salen (para el fichero de subcuentas). */
+  cuentas: Set<string>
+}
+
+/**
+ * Las emitidas de una salida: las que van al fichero, con su fila y el nombre de
+ * su PDF, y las que no, con su porqué. Como las recibidas.
+ */
+export function prepararExpedidas(lista: readonly EmitidaParaErp10[], o: {
+  plan: Plan; largo: number; carpetaPdf: string; yaSalidas?: ReadonlyMap<string, string>; xml?: string; usados?: Set<string>
+}): SalidaExpedidas {
+  const xml = o.xml ?? XML_EXPEDIDAS
+  const noSalen: NoSale[] = []
+  const leidas: EmitidaLeida[] = []
+  for (const r of lista) {
+    const x = leerEmitida(r, xml)
+    if ('porque' in x) noSalen.push(x); else leidas.push(x)
+  }
+  const usadasPor = (x: EmitidaLeida) => [x.cliente, ...x.ingresos.map((g) => g.cuenta)]
+  const { erp, noCaben } = convertirCuentas(leidas.flatMap(usadasPor), o.plan, o.largo, o.yaSalidas)
+  const filas: SalidaExpedidas['filas'] = []
+  const cuentas = new Set<string>()
+  const usados = o.usados ?? new Set<string>()
+  for (const x of leidas) {
+    const malas = usadasPor(x).filter((k) => noCaben.has(k))
+    if (malas.length) { noSalen.push({ entryId: x.entryId, numero: x.numero, porque: noCaben.get(malas[0])! }); continue }
+    const pdf = x.tienePdf ? nombrePdf({ fechaFactura: x.fechaFactura, proveedor: x.nombre, numero: x.numero }, usados) : null
+    filas.push({ entryId: x.entryId, numero: x.numero, fila: filaExpedida(x, erp, pdf ? rutaPdf(o.carpetaPdf, pdf) : '', xml), pdf, usa: usadasPor(x) })
     for (const k of usadasPor(x)) cuentas.add(k)
   }
   return { filas, noSalen, cuentas }
@@ -390,3 +593,4 @@ export async function libroErp10(filas: readonly Fila[]): Promise<ArrayBuffer> {
 
 export const FICHERO_SUBCUENTAS = 'subcuentas.xlsx'
 export const FICHERO_RECIBIDAS = 'recibidas.xlsx'
+export const FICHERO_EXPEDIDAS = 'expedidas.xlsx'

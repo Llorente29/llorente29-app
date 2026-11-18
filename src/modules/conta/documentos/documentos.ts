@@ -24,7 +24,8 @@ import { etiquetaYaContabilizada } from './antesDelInicio'
 /** S01 (0160) · 'descartada': «No es una factura», con su motivo; sale en «Todas» y se deshace. */
 /** S01g (0931) · 'soporte': una recepción que es soporte de la liquidación mensual de un socio (CTB): no se apunta como compra. */
 /** N03 (0956) · 'ya_contabilizada': de antes del día de inicio, y alguien dijo «Sí, ya estaba» en el programa de antes. Sale (regla 7), no se contabiliza ni cuenta en lo pendiente. */
-export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez' | 'descartada' | 'soporte' | 'ya_contabilizada'
+/** N06b · 'traida_en_prueba': traída de otro programa, con su carga todavía en prueba (o dejada fuera): se ve, no se paga ni se casa. */
+export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez' | 'descartada' | 'soporte' | 'ya_contabilizada' | 'traida_en_prueba'
 export type Canal = 'correo' | 'subida' | 'cocina' | 'portal' | 'compras' | 'a_mano'
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
@@ -230,6 +231,7 @@ export function entendido(f: FilaDocumento, solo = false): { titulo: string; por
     return { titulo, porque: f.porque ?? 'La leyó la recepción.' }
   }
   if (f.estado === 'ya_contabilizada') return { titulo: etiquetaYaContabilizada(f.programa_antes), porque: f.porque ?? null }
+  if (f.estado === 'traida_en_prueba') return { titulo: 'Traída · en prueba', porque: 'Es de lo traído de otro programa, que todavía está en prueba: se paga cuando lo des por bueno.' }
   if (!f.proveedor.id) return { titulo: 'No reconozco el emisor', porque: f.porque ?? 'No reconozco el emisor: dime quién es.' }
   const e = f.entendido
   const cuenta = e ? `${e.nombre} · ${e.cuenta}${e.sin_confirmar ? ' · sin confirmar' : ''}` : 'Sin cuenta de gasto todavía'
@@ -291,7 +293,7 @@ export const faltaElPdf = (f: Pick<FilaDocumento, 'tipo' | 'porque'>) => f.tipo 
 export function punto(f: FilaDocumento): 'verde' | 'ambar' | 'gris' | 'rojo' {
   if (f.estado === 'apuntada') return 'verde'
   if (f.estado === 'en_diez') return f.diez ? 'verde' : 'gris'
-  if (f.estado === 'repetida' || f.estado === 'descartada' || f.estado === 'ya_contabilizada') return 'gris'
+  if (f.estado === 'repetida' || f.estado === 'descartada' || f.estado === 'ya_contabilizada' || f.estado === 'traida_en_prueba') return 'gris'
   if (f.confianza === 'duda' || f.tipo === 'llegada') return 'gris'
   return 'ambar'
 }
