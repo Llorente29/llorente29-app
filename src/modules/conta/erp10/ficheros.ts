@@ -22,7 +22,7 @@
 
 import { colocar, columnas, type Celda } from '../../../../supabase/functions/_shared/diezExcel.ts'
 import { libroXlsx } from '@/modules/conta/lib/traspasoExcelLibro'
-import { XML_EXPEDIDAS, XML_RECIBIDAS, XML_SUBCUENTAS } from '@/modules/conta/erp10/configuracion'
+import { XML_ASIENTOS, XML_EXPEDIDAS, XML_RECIBIDAS, XML_SUBCUENTAS } from '@/modules/conta/erp10/configuracion'
 
 export type Fila = (string | number)[]
 
@@ -536,6 +536,118 @@ export function prepararExpedidas(lista: readonly EmitidaParaErp10[], o: {
   return { filas, noSalen, cuentas }
 }
 
+// ── Los asientos (X07) ──────────────────────────────────────────────────────────────
+//
+// La forma medida (erp10_formatos_de_salida.md, sección 15: los asientos que entraron en
+// ERP10 en el traspaso de octubre): una fila por apunte, sin títulos; cada fila lleva un
+// solo lado relleno, el debe (C subcuenta, D denominación, E concepto, F importe) o el
+// haber (G, H, I, J); las filas de un mismo asiento llevan el mismo número en A (1, 1,
+// 2, 2…, desde 1 en cada fichero); B, la fecha, repetida; L, la serie, como número;
+// subcuentas como texto de 8 cifras e importes siempre en positivo. Las columnas salen de
+// XML_ASIENTOS (su bloque es <Configuracion_Asientos>, que el lector de Diez no busca).
+// Lo no visto: un asiento de tres apuntes o más (en octubre todos eran de dos). Por la
+// forma, son tantas filas como apuntes con el mismo número en A.
+
+/** Código de la configuración → columna (1 = A), de <Configuracion_Asientos>. */
+export function columnasAsientos(xml = XML_ASIENTOS): Record<string, number> {
+  const bloque = xml.match(/<Configuracion_Asientos>([\s\S]*?)<\/Configuracion_Asientos>/)?.[1]
+  if (!bloque) throw new Error('La configuración de asientos no trae <Configuracion_Asientos>.')
+  const m: Record<string, number> = {}
+  for (const [, cod, col] of bloque.matchAll(/<Campo(\d{3})>(\d+)<\/Campo\1>/g)) m[cod] = Number(col)
+  return m
+}
+
+/** Un apunte de un asiento (conta_erp10_asientos_por_salir). */
+export type LineaAsiento = { cuenta: string; nombre: string; concepto: string | null; debe: number; haber: number }
+export type AsientoParaErp10 = {
+  entryId: string
+  serie: number
+  numero: number | null
+  /** AAAA-MM-DD. */
+  fecha: string
+  concepto: string
+  lineas: LineaAsiento[]
+}
+
+/** Lo que se ha leído de un asiento, en céntimos, con sus apuntes vivos. */
+export type AsientoLeido = { entryId: string; fecha: string; serie: number; numero: number | null; apuntes: { cuenta: string; nombre: string; concepto: string; debe: number; haber: number }[] }
+
+/** Lee un asiento. Lo que no puede ir en el fichero de ERP10 devuelve su porqué. */
+export function leerAsiento(a: AsientoParaErp10): AsientoLeido | NoSale {
+  const numero = `${a.serie}/${a.numero ?? ''}`
+  const no = (porque: string): NoSale => ({ entryId: a.entryId, numero, porque })
+  const apuntes = a.lineas
+    .map((l) => ({ cuenta: l.cuenta, nombre: (l.nombre || l.cuenta).trim(), concepto: (l.concepto || a.concepto || '').trim(), debe: c(l.debe), haber: c(l.haber) }))
+    .filter((l) => l.debe !== 0 || l.haber !== 0)
+  if (apuntes.length < 2) return no('No tiene dos apuntes con importe. Míralo en Sumied.')
+  if (apuntes.some((l) => l.debe < 0 || l.haber < 0)) return no('Lleva un importe en negativo, y ERP10 los quiere en positivo. Métela a mano en ERP10.')
+  const d = apuntes.reduce((t, l) => t + l.debe, 0), h = apuntes.reduce((t, l) => t + l.haber, 0)
+  if (d !== h) return no(`No cuadra: ${e(d)} al debe y ${e(h)} al haber.`)
+  return { entryId: a.entryId, fecha: a.fecha, serie: a.serie, numero: a.numero, apuntes }
+}
+
+/**
+ * Las filas de un asiento: una por apunte, con el número `n` en A. Un apunte con debe
+ * y haber a la vez (no debería) va en dos filas, cada una con su lado.
+ */
+export function filasAsiento(x: AsientoLeido, n: number, cuentas: ReadonlyMap<string, string>, serieErp10 = 1, xml = XML_ASIENTOS): Fila[] {
+  const col = columnasAsientos(xml)
+  const ancho = Math.max(...Object.values(col))
+  const fila = (v: Record<string, Celda>) => {
+    const f: Fila = Array(ancho).fill('')
+    for (const [cod, val] of Object.entries(v)) {
+      if (val === '' || val === null || val === undefined) continue
+      if (!(cod in col)) throw new Error(`La configuración de asientos no tiene columna para el campo ${cod}.`)
+      f[col[cod] - 1] = val as string | number
+    }
+    return f
+  }
+  const cta = (k: string) => cuentas.get(k) ?? k
+  const comun = { '001': n, '002': fechaCelda(x.fecha), '003': serieErp10 }
+  const filas: Fila[] = []
+  for (const l of x.apuntes) {
+    if (l.debe) filas.push(fila({ ...comun, '005': cta(l.cuenta), '006': l.nombre, '007': l.concepto, '008': e(l.debe) }))
+    if (l.haber) filas.push(fila({ ...comun, '010': cta(l.cuenta), '011': l.nombre, '012': l.concepto, '013': e(l.haber) }))
+  }
+  return filas
+}
+
+export type SalidaAsientos = {
+  /** En el orden del fichero: por fecha y, dentro de la fecha, por serie y número de Sumied. */
+  asientos: { entryId: string; numero: string; filas: Fila[]; usa: string[] }[]
+  noSalen: NoSale[]
+  cuentas: Set<string>
+}
+
+/**
+ * Los asientos de una salida: los que van al fichero (numerados desde 1, en orden) y
+ * los que no, con su porqué. `noCaben`: cuentas que ya se sabe que no pueden salir
+ * (por ejemplo, porque chocan con una de las facturas), además de las que no caben.
+ */
+export function prepararAsientos(lista: readonly AsientoParaErp10[], o: {
+  plan: Plan; largo: number; yaSalidas?: ReadonlyMap<string, string>; serie?: number; xml?: string; noCaben?: ReadonlyMap<string, string>
+}): SalidaAsientos {
+  const noSalen: NoSale[] = []
+  const leidos: AsientoLeido[] = []
+  const orden = [...lista].sort((a, b) => a.fecha.localeCompare(b.fecha) || a.serie - b.serie || (a.numero ?? 0) - (b.numero ?? 0) || a.entryId.localeCompare(b.entryId))
+  for (const a of orden) {
+    const x = leerAsiento(a)
+    if ('porque' in x) noSalen.push(x); else leidos.push(x)
+  }
+  const usadasPor = (x: AsientoLeido) => [...new Set(x.apuntes.map((l) => l.cuenta))]
+  const conv = convertirCuentas(leidos.flatMap(usadasPor), o.plan, o.largo, o.yaSalidas)
+  const asientos: SalidaAsientos['asientos'] = []
+  const cuentas = new Set<string>()
+  for (const x of leidos) {
+    const usa = usadasPor(x)
+    const mala = usa.find((k) => conv.noCaben.has(k) || o.noCaben?.has(k))
+    if (mala) { noSalen.push({ entryId: x.entryId, numero: `${x.serie}/${x.numero ?? ''}`, porque: (conv.noCaben.get(mala) ?? o.noCaben!.get(mala))! }); continue }
+    asientos.push({ entryId: x.entryId, numero: `${x.serie}/${x.numero ?? ''}`, filas: filasAsiento(x, asientos.length + 1, conv.erp, o.serie ?? 1, o.xml ?? XML_ASIENTOS), usa })
+    for (const k of usa) cuentas.add(k)
+  }
+  return { asientos, noSalen, cuentas }
+}
+
 // ── Las subcuentas ─────────────────────────────────────────────────────────────────
 
 /** Código de la configuración → columna (1 = A). Copia mínima de columnas() de Diez para <Configuracion_Subcuentas>. */
@@ -594,3 +706,4 @@ export async function libroErp10(filas: readonly Fila[]): Promise<ArrayBuffer> {
 export const FICHERO_SUBCUENTAS = 'subcuentas.xlsx'
 export const FICHERO_RECIBIDAS = 'recibidas.xlsx'
 export const FICHERO_EXPEDIDAS = 'expedidas.xlsx'
+export const FICHERO_ASIENTOS = 'asientos.xlsx'

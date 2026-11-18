@@ -23,7 +23,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { hayBase, mensaje, rpc, tabla } from '@/modules/conta/services/bd'
-import type { EmitidaParaErp10, LineaRecibida, Operacion, OperacionEmitida } from '@/modules/conta/erp10/ficheros'
+import type { AsientoParaErp10, EmitidaParaErp10, LineaRecibida, Operacion, OperacionEmitida } from '@/modules/conta/erp10/ficheros'
 import type { Comprobar } from '@/modules/conta/erp10/comparar'
 
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -306,4 +306,34 @@ export async function ponerIgualado(companyId: string, o: { mes: string; fichero
     p_company: companyId, p_mes: o.mes, p_fichero: o.fichero, p_fecha: o.fecha, p_cuentas: o.cuentas, p_con_diferencia: o.conDiferencia, p_quien_nombre: o.quien,
   })
   return String(r.texto)
+}
+
+// ── X07 · Los asientos, con cada apunte ───────────────────────────────────────────
+//
+// Nombre dentro de cadena (regla 40), de la migración 20261118T0746_x07_asientos_por_salir y
+// cruzado con la e2e contra staging: conta_erp10_asientos_por_salir (asientos: entryId, serie,
+// numero, fecha, concepto, origen, lineas [cuenta, plantilla, nombre, concepto, debe, haber];
+// cuentas; yaSalidas).
+
+export interface AsientoDeLaBase extends AsientoParaErp10 { origen: string; lineas: (AsientoParaErp10['lineas'][number] & { plantilla: string })[] }
+export interface AsientosPorSalir { asientos: AsientoDeLaBase[]; cuentas: CuentaDeLaBase[]; yaSalidas: Map<string, string> }
+export const SIN_ASIENTOS: AsientosPorSalir = { asientos: [], cuentas: [], yaSalidas: new Map() }
+
+export function aAsientos(r: Record<string, unknown>): AsientosPorSalir {
+  return {
+    asientos: ((r.asientos ?? []) as Record<string, unknown>[]).map((a) => ({
+      entryId: String(a.entryId), serie: n(a.serie), numero: a.numero == null ? null : Number(a.numero), fecha: String(a.fecha), concepto: String(a.concepto ?? ''), origen: String(a.origen ?? ''),
+      lineas: ((a.lineas ?? []) as Record<string, unknown>[]).map((l) => ({
+        cuenta: String(l.cuenta), plantilla: String(l.plantilla), nombre: String(l.nombre ?? ''), concepto: s(l.concepto), debe: n(l.debe), haber: n(l.haber),
+      })),
+    })),
+    cuentas: ((r.cuentas ?? []) as Record<string, unknown>[]).map((c) => ({
+      codigo: String(c.codigo), plantilla: String(c.plantilla), nombre: String(c.nombre ?? ''), nif: s(c.nif), gastoHabitual: null,
+    })),
+    yaSalidas: new Map(Object.entries((r.yaSalidas ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)])),
+  }
+}
+
+export async function leerAsientosPorSalir(companyId: string, mes: string): Promise<AsientosPorSalir> {
+  return aAsientos(await rpc<Record<string, unknown>>('conta_erp10_asientos_por_salir', { p_company: companyId, p_mes: mes }))
 }

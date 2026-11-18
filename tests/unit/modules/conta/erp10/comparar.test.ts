@@ -122,6 +122,13 @@ describe('Lo que todavía no sale por aquí', () => {
     const banco = r.cuentas.find((x) => x.cuenta === '57200001')!
     expect([banco.grupo, banco.partidas.map((p) => [p.clase, p.importe]), banco.bloquea]).toEqual(['no_igual', [['desconocida', -5000], ['no_sale_aqui', -150000]], true])
   })
+  it('X07 · un asiento que lleva I.V.A. y no es factura (hay que meterlo a mano) cuenta como «no sale por aquí»', () => {
+    const iva = as(10, { origen: 'manual', serie: 4, lineas: [['57200001', 50], ['75900000', -50]] })
+    const nh = { porSacar: new Set<string>(), noPueden: new Map([[id(10), 'Lleva I.V.A. y no es una factura: métela a mano en ERP10 para que entre en su libro.']]) }
+    const r = comparar([], base([['57200001', 50, 'Banco'], ['75900000', -50, 'Ingresos']], [iva]), nh)
+    expect(r.noSale.map((x) => x.cuenta)).toEqual(['57200001', '75900000'])
+    expect(r.igualable).toBe(true)
+  })
   it('una emitida que hay que meter a mano (su porqué lo dice) cuenta como «no sale por aquí»', () => {
     const rect = as(7, { factura: 'R-1', lineas: [['43000001', -24.2], ['70000000', 20], ['47700021', 4.2]] })
     const nh = { porSacar: new Set<string>(), noPueden: new Map([[id(7), 'Es una rectificativa, y ERP10 no la admite al importar. Métela a mano en ERP10.']]) }

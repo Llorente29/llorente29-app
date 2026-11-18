@@ -111,7 +111,9 @@ export function claseDe(a: AsientoSumied, salidos: ReadonlySet<string>, nh: LoQu
   if (a.deshace && salidos.has(a.deshace)) return 'cambiada'
   if (nh.porSacar.has(a.entryId)) return 'por_sacar'
   const porque = nh.noPueden.get(a.entryId)
-  if (porque !== undefined) return /Métela a mano en ERP10\.?$/.test(porque.trim()) ? 'no_sale_aqui' : 'no_pudo'
+  // Lo que hay que meter a mano en ERP10 (una emitida rectificativa, un asiento que lleva I.V.A. y no es factura) no es un
+  // fallo: todavía no sale por aquí. X07: «… métela a mano en ERP10 para que entre en su libro.» también.
+  if (porque !== undefined) return /mano en ERP10/i.test(porque) ? 'no_sale_aqui' : 'no_pudo'
   return 'no_sale_aqui'
 }
 

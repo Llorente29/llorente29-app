@@ -85,12 +85,12 @@ describe('Lo que sale de un mes', () => {
     expect(carpetaDeLaSalida({ carpeta: 'D:\\ERP10\\Doc', codigo: '0007' })).toBe('D:\\ERP10\\Doc')
   })
 
-  it('las filas de «Qué sale», con sus cifras de verdad; las emitidas salen como las recibidas; asientos y días del TPV se cuentan y no salen', () => {
+  it('las filas de «Qué sale», con sus cifras de verdad; las emitidas salen como las recibidas; los asientos, sin sus apuntes (aquí no los trae), no van; los días del TPV se cuentan y no salen', () => {
     expect(s.filas.map((f) => [f.que, f.cuantos, f.importe, f.estado, f.texto, f.sale])).toEqual([
       ['Cuentas nuevas', 4, null, 'Listo', 'ERP10 no las tiene todavía; van las primeras', true],
       ['Facturas recibidas', 2, 242, 'Mira esto', '1 sin PDF · 2 no pueden salir', true],
       ['Facturas emitidas', 2, 231, 'Mira esto', '1 sin PDF · 1 no puede salir', true],
-      ['Asientos', 2, 1030, 'Todavía no sale por aquí', 'Nóminas, bancos, traspasos; aún no van', false],
+      ['Asientos', 0, 0, 'Nada', 'Ninguno este mes', true],
       ['Días de ventas del TPV', 1, 500, 'Todavía no sale por aquí', 'Irán como asiento; aún no van', false],
       ['Los PDF', 2, null, 'Listo', 'Con el nombre de su factura, para que ERP10 los pegue solo', true],
     ])
@@ -105,7 +105,7 @@ describe('Lo que sale de un mes', () => {
       ['F-2026/0001', 'Cliente Inventado X05, S.L.', 121, '20261005_Cliente-Inventado-X05-S-L_F-2026-0001.pdf'],
       ['F-2026/0002', 'Cliente Inventado X05, S.L.', 110, null],
     ])
-    expect(s.listas.asientos).toHaveLength(2)
+    expect(s.listas.asientos).toHaveLength(0)
     expect(s.listas.tpv.map((p) => p.concepto)).toEqual(['Ventas del día inventado'])
   })
 
