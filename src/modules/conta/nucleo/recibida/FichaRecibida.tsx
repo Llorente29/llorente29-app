@@ -71,9 +71,11 @@ function casillasDe(raiz: HTMLElement | null): HTMLElement[] {
 }
 
 /** Una casilla que busca en una lista (el proveedor, la cuenta): escribe, F4 o ↓ abre, Intro elige. */
-function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cuenta, duda, placeholder }: {
+function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cuenta, duda, placeholder, cargando }: {
   id: string; valor: string; ponerTexto: (t: string) => void; lista: (t: string) => T[]; texto: (x: T) => string; elegir: (x: T) => void
   etiqueta: string; cuenta?: string | null; duda?: boolean; placeholder?: string
+  /** La lista aún no ha llegado: Intro no se escapa a la casilla siguiente con la búsqueda sin resolver (e2e 1510). */
+  cargando?: boolean
 }) {
   const [abierta, setAbierta] = useState(false)
   const [sel, setSel] = useState(0)
@@ -85,6 +87,8 @@ function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cu
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)) }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAbierta(false) }
     else if (e.key === 'Enter' && opciones[sel]) { e.preventDefault(); e.stopPropagation(); elegir(opciones[sel]); setAbierta(false) }
+    // Escrito y sin nada que elegir (la lista aún no ha llegado, o no encaja nada): Intro se queda aquí y lo dice.
+    else if (e.key === 'Enter' && valor.trim()) { e.preventDefault(); e.stopPropagation() }
   }
   return (
     <div className="kf-con-sugerencias">
@@ -94,6 +98,11 @@ function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cu
       {abierta && opciones.length > 0 && (
         <ul className="kf-sugerencias" id={`${id}-lista`} role="listbox">
           {opciones.map((o, i) => <li key={i} role="option" aria-selected={i === sel} onMouseDown={(e) => { e.preventDefault(); elegir(o); setAbierta(false) }}>{texto(o)}</li>)}
+        </ul>
+      )}
+      {abierta && opciones.length === 0 && valor.trim() !== '' && (
+        <ul className="kf-sugerencias" id={`${id}-lista`} role="listbox">
+          <li aria-disabled="true" data-prueba="buscador-vacio">{cargando ? 'Buscando…' : `Ninguno encaja con «${valor.trim()}»`}</li>
         </ul>
       )}
     </div>
@@ -193,12 +202,15 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const mayor = useUltimo(useLeer(accountId && empresa && delProv?.subcuenta ? () => mayorDelProveedor(accountId, empresa, delProv.subcuenta!.id, hoy) : null, `${accountId}:${empresa}:${delProv?.subcuenta?.id}:mayor:${vuelta}`).datos, `${id}:${provId}`)
   const aprendido = useUltimo(useLeer(empresa && provId && !aMano ? () => gastoAprendido(empresa, provId) : null, `${empresa}:${provId}:${invoiceId}:aprendido:${vuelta}`).datos, `${id}:${provId}`)
   const sinPropuesta = aMano || propuesta === null
-  const aManoCuentas = useLeer(accountId && empresa && sinPropuesta ? () => cuentasAMano(accountId, empresa, provId || null) : null, `${accountId}:${empresa}:${provId}:cuentas-a-mano`).datos ?? null
+  // Una vez por empresa: la subcuenta del proveedor sale de delProveedor (ya leído), no de volver a leer el contexto entero.
+  const aManoCuentas = useLeer(accountId && empresa && sinPropuesta ? () => cuentasAMano(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-a-mano`).datos ?? null
 
   // ── El asiento que sale ──
   const cuentasPlan: CuentaDelPlan[] = useMemo(() => cuentasGasto.map((c) => ({ codigo: c.codigo, nombre: c.nombre })), [cuentasGasto])
   const nombreGasto = useCallback((c: string) => cuentasPlan.find((x) => x.codigo === c)?.nombre ?? nombresProp?.get(c) ?? 'Cuenta', [cuentasPlan, nombresProp])
-  const cuentasAsiento = useMemo(() => (propuesta ? cuentasDeLaPropuesta(propuesta.lineas, (c) => nombresProp?.get(c) ?? 'Cuenta') : aManoCuentas?.cuentas ?? null), [propuesta, nombresProp, aManoCuentas])
+  const subProv = delProv?.subcuenta ?? null
+  const cuentasAsiento = useMemo(() => (propuesta ? cuentasDeLaPropuesta(propuesta.lineas, (c) => nombresProp?.get(c) ?? 'Cuenta')
+    : aManoCuentas ? { ...aManoCuentas.cuentas, proveedor: subProv ? { codigo: subProv.codigo, nombre: subProv.nombre } : null } : null), [propuesta, nombresProp, aManoCuentas, subProv])
   const previa = cuentasAsiento ? asientoVistaPrevia(b, cuentasAsiento, nombreGasto, nombreLocal) : null
   const totales = totalesDe(b)
 
@@ -371,7 +383,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   // nueva, el proveedor. Se vuelve a mirar cada vez que la ficha termina de pintarse o aparece la duda (la duda puede
   // llegar antes que la ficha), una vez por factura, y nunca encima de lo que alguien ya ha empezado a escribir en ella.
   const claveFicha = aMano ? 'nueva' : invoiceId
-  const pintada = aMano || (!!fac && !!ficha)
+  const pintada = aMano ? proveedoresL !== null : (!!fac && !!ficha)
   const focoPuesto = useRef('')
   const tocada = useRef('')
   // Quien empieza a escribir o pulsa en esta factura ya ha elegido dónde está: el foco no se le mueve.
@@ -439,7 +451,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
           {cargando ? <p className="kf-panel-nota" aria-busy="true">Abriendo la factura…</p> : <>
             <div className="kf-fila" style={{ gridTemplateColumns: '1.1fr 1.1fr 2.9fr 1.7fr' }}>
               <Casilla rotulo="Proveedor" origen={origen.proveedor} htmlFor="kf-proveedor">
-                <Buscador id="kf-proveedor" etiqueta="Proveedor" valor={textoProv ?? (provId ? subcuenta || prov?.nombre || '' : '')} cuenta={subcuenta || null}
+                <Buscador id="kf-proveedor" etiqueta="Proveedor" cargando={proveedoresL === null} valor={textoProv ?? (provId ? subcuenta || prov?.nombre || '' : '')} cuenta={subcuenta || null}
                   placeholder={aMano ? 'Código, nombre o NIF' : undefined}
                   ponerTexto={setTextoProv} lista={(t) => { const q = t.toLowerCase(); return proveedores.filter((p) => !q || p.nombre.toLowerCase().includes(q) || (p.nif ?? '').toLowerCase().includes(q)) }}
                   texto={(p) => `${p.nombre}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { ed.poner('proveedorId', p.id); setTextoProv(null) }} />
@@ -522,7 +534,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 </h2>
                 {b.gastos.map((g, i) => (
                   <div className="kf-gasto" key={i} data-una={b.gastos.length === 1 ? 'si' : undefined}>
-                    <Buscador id={`kf-cuenta-${i}`} etiqueta={`Cuenta de gasto ${i + 1}`} valor={textoCuenta[i] ?? g.cuenta} cuenta={g.cuenta || null} duda={!!duda && i === 0}
+                    <Buscador id={`kf-cuenta-${i}`} etiqueta={`Cuenta de gasto ${i + 1}`} cargando={cuentasGastoL === null} valor={textoCuenta[i] ?? g.cuenta} cuenta={g.cuenta || null} duda={!!duda && i === 0}
                       ponerTexto={(t) => setTextoCuenta((x) => ({ ...x, [i]: t }))} lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8)}
                       texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }} />
                     <input readOnly tabIndex={-1} aria-label={`Nombre de la cuenta ${i + 1}`} value={g.cuenta ? nombreGasto(g.cuenta) : ''} data-duda={duda && i === 0 ? 'si' : undefined} />

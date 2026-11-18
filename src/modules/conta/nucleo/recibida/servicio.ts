@@ -11,8 +11,9 @@
 //   · La duda de la cuenta de gasto: conta_gasto_aprendido (0250), con su
 //     reparto por cuenta.
 //   · Las cuentas de una recibida escrita a mano, antes de existir (no hay
-//     propuesta que leer): la subcuenta del proveedor, la 472 de cada tipo y la
-//     4751, con los mismos enlaces que la propuesta (cargarContexto).
+//     propuesta que leer): la 472 de cada tipo y la 4751, con los mismos
+//     enlaces que la propuesta (cargarContexto), una vez por empresa. La
+//     subcuenta del proveedor sale de delProveedor.
 //   · La marca que tiene la factura (no se puede cambiar desde aquí: 0790 no
 //     la guarda).
 
@@ -86,8 +87,8 @@ export async function gastoAprendido(companyId: string, supplierId: string): Pro
   return { cuenta: s(r?.cuenta), confianza: conf, facturas: Number(r?.facturas ?? 0), reparto }
 }
 
-/** Las cuentas del asiento de una recibida escrita a mano (aún sin propuesta), con los enlaces de la propuesta. */
-export async function cuentasAMano(accountId: string, companyId: string, supplierId: string | null): Promise<{ cuentas: CuentasFicha; nombres: Map<string, string>; mesesCerrados: string[]; ejercicios: { inicio: string; fin: string; abierto: boolean }[] }> {
+/** Las cuentas del asiento de una recibida escrita a mano (aún sin propuesta), con los enlaces de la propuesta: la 472 de cada tipo y la 4751. Una vez por empresa. */
+export async function cuentasAMano(accountId: string, companyId: string): Promise<{ cuentas: CuentasFicha; nombres: Map<string, string>; mesesCerrados: string[]; ejercicios: { inicio: string; fin: string; abierto: boolean }[] }> {
   const ctx = await cargarContexto(accountId, companyId)
   const iva = new Map<number, { codigo: string; nombre: string }>()
   const codigos: string[] = []
@@ -95,9 +96,7 @@ export async function cuentasAMano(accountId: string, companyId: string, supplie
     const c = ctx.enlace('tax_rate', t.id, 'soportado')
     if (c && !iva.has(t.rate)) { iva.set(t.rate, { codigo: c, nombre: '' }); codigos.push(c) }
   }
-  const prov = supplierId ? ctx.enlace('supplier', supplierId, 'principal') : null
   const ret = ctx.hoja('4751')
-  if (prov) codigos.push(prov)
   if (ret) codigos.push(ret)
   const nombres = new Map<string, string>()
   if (codigos.length) {
@@ -108,7 +107,8 @@ export async function cuentasAMano(accountId: string, companyId: string, supplie
   const conNombre = (codigo: string) => ({ codigo, nombre: nombres.get(codigo) ?? 'Cuenta' })
   return {
     cuentas: {
-      proveedor: prov ? conNombre(prov) : null,
+      // La del proveedor la pone la ficha (delProveedor): así esto se lee una vez por empresa.
+      proveedor: null,
       iva: new Map([...iva.entries()].map(([k, v]) => [k, conNombre(v.codigo)])),
       retencion: ret ? conNombre(ret) : null,
     },
