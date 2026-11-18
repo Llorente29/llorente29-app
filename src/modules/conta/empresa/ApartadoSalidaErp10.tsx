@@ -26,6 +26,7 @@ import { TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { CampoFecha } from '@/modules/conta/ui/fecha/CampoFecha'
 import { leerSalidaEmpresa, ponerCarpeta, ponerSalida, type SalidaEmpresa } from '@/modules/conta/services/erp10Service'
 import type { Quien } from '@/modules/conta/empresa/apartados'
+import { refrescarContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
 
 export function ApartadoSalidaErp10({ quien, movil, nombre }: { quien: Quien; movil: boolean; nombre: string | null }) {
   const [salida, setSalida] = useState<SalidaEmpresa | null>(null)
@@ -67,6 +68,8 @@ export function ApartadoSalidaErp10({ quien, movil, nombre }: { quien: Quien; mo
       if (encendida && (carpeta.trim() || null) !== (salida?.carpeta ?? null)) textos.push(await ponerCarpeta(quien.companyId, carpeta, nombre))
       setHecho(textos.join(' '))
       setVuelta((v) => v + 1)
+      // X08 · Encender o apagar la salida enciende o apaga su entrada (Libros › Cierre) sin recargar.
+      refrescarContextoEsqueleto()
     } catch (x) {
       setFallo(`No se ha cambiado: ${x instanceof Error ? x.message : 'no ha contestado'}`)
     } finally {

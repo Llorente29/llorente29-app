@@ -94,7 +94,12 @@ export function SalidaErp10() {
     const porSacar = new Set([...s.ficheros.expedidas, ...s.ficheros.recibidas, ...s.ficheros.asientos].map((f) => f.entryId))
     return comparar(subido.filas, comprobar.datos, { porSacar, noPueden: new Map(s.noPuedenSalir.map((x) => [x.entryId, x.porque])) })
   }, [subido, comprobar.datos, s])
-  const [fila, setFila] = useState<FilaQueSale['id']>('recibidas')
+  // X08 · Sin elegir, el detalle de abajo es la primera fila que sale con algo (o la primera con algo): no «Ninguna factura recibida» si salen asientos.
+  const [filaElegida, setFila] = useState<FilaQueSale['id'] | null>(null)
+  const fila: FilaQueSale['id'] = filaElegida
+    ?? s?.filas.find((f) => f.sale && f.cuantos > 0 && f.id !== 'cuentas' && f.id !== 'pdf')?.id
+    ?? s?.filas.find((f) => f.cuantos > 0)?.id
+    ?? 'recibidas'
   const [verLotes, setVerLotes] = useState(false)
   const [verSinPdf, setVerSinPdf] = useState(false)
   const [sinPdfAceptadas, setSinPdfAceptadas] = useState(false)
@@ -272,7 +277,7 @@ export function SalidaErp10() {
       <div className="cxe-cabeza">
         <h1 className="cxe-titulo" id="cxe-titulo">Salida a ERP10</h1>
         <select className="cxe-mes" aria-label="Mes" value={mes ?? ''} disabled={paso === 2 || !!haciendo}
-          onChange={(e) => { setMes(e.target.value); setFila('recibidas') }}>
+          onChange={(e) => { setMes(e.target.value); setFila(null) }}>
           {meses.map((m) => <option key={m} value={m}>{mesEnPalabras(m).replace(/^./, (x) => x.toUpperCase())}</option>)}
         </select>
         {pasos}

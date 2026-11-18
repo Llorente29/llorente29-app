@@ -192,10 +192,13 @@ export function ordenDisponible(o: Orden, ctx: Contexto): boolean {
 
 /** Las acciones de una página, con lo que no se puede usar aquí ya quitado; los grupos vacíos, fuera. */
 export interface GrupoDeCinta { titulo: string; ordenes: Orden[]; dePantalla?: string; ver?: boolean }
-export function cintaDe(producto: IdProducto, pestana: string | null, ctx: Contexto): GrupoDeCinta[] {
+export function cintaDe(producto: IdProducto, pestana: string | null, ctx: Contexto, aqui?: { pathname: string; search: string }): GrupoDeCinta[] {
   if (!pestana) return []
+  // X08 · La página en la que se está no se esconde de su «Ver:» aunque el contexto aún no se haya leído
+  // (con el de vacío, «Salida a ERP10» salía como «Ver: Elegir» hasta que llegaba la salida encendida).
+  const sirve = (o: Orden) => ordenDisponible(o, ctx) || (!!aqui && esLaActual(o, aqui.pathname, aqui.search))
   return (CINTAS[`${producto}.${pestana}`] ?? [])
-    .map((g) => ({ titulo: g.titulo, ordenes: g.ordenes.map(ordenPorId).filter((o): o is Orden => !!o && ordenDisponible(o, ctx)), dePantalla: g.dePantalla, ver: g.ver }))
+    .map((g) => ({ titulo: g.titulo, ordenes: g.ordenes.map(ordenPorId).filter((o): o is Orden => !!o && sirve(o)), dePantalla: g.dePantalla, ver: g.ver }))
     .filter((g) => g.ordenes.length > 0 || !!g.dePantalla)
 }
 

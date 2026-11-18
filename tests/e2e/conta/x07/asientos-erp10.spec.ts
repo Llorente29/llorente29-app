@@ -193,7 +193,7 @@ test('X07 · contra staging: una nómina y un pago salen como asientos, con su f
   await expect(page.locator('.cxe-hecho')).toHaveText(/^Igualado: .+ queda igual en Sumied y en ERP10 \(sumas_y_saldos_x07\.xlsx, a .+\)\. Lo dio por igualado .+\.$/, { timeout: 30_000 })
   // La captura, con la pantalla acabada: la tabla con sus filas, el chip verde, el panel que lo dice y nada en ámbar.
   await expect(page.getByText(/^Igualado el \d\d\/\d\d\/\d{4}/)).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByRole('complementary', { name: 'Por qué no queda igual' })).toContainText('Igualado: no queda nada por mirar.')
+  await expect(page.getByRole('complementary', { name: 'Igualado' })).toContainText('Igualado: no queda nada por mirar.')
   await expect(grupoIgual.getByRole('row').filter({ hasText: hecho.sueldos })).toBeVisible()
   await expect(page.locator('.cxe-fila-filo')).toHaveCount(0)
   await expect(page.locator('.cxe-grupo-ambar')).toHaveCount(0)
