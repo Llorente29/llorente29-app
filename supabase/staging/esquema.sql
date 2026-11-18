@@ -41062,7 +41062,8 @@ begin
        and not exists (select 1 from public.conta_erp10_salida_partida p where p.entry_id = e.id and p.estado = 'salida')
        and not exists (select 1 from public.vat_book_entry v where v.entry_id = e.id and v.account_id = e.account_id and v.import_run_id is not null)
        and not exists (select 1 from public.supplier_invoice si where si.journal_entry_id = e.id and si.account_id = e.account_id and si.source = 'traida')
-       and not exists (select 1 from public.customer_invoice ci where ci.entry_id = e.id and ci.company_id = e.company_id and ci.origin = 'traida')
+       and not exists (select 1 from public.customer_invoice ci where ci.entry_id = e.id and ci.company_id = e.company_id
+                          and (ci.origin = 'traida' or ci.import_run_id is not null))
   ),
   libro as (
     select v.entry_id,
@@ -41144,7 +41145,8 @@ begin
                 when lb.emi then 'emitida'
                 when b.source_type in ('customer_invoice', 'sales_day') then 'emitida'
                 else 'recibida' end as clase,
-           exists (select 1 from public.journal_entry_document d where d.entry_id = b.id and d.account_id = v_c.account_id) as tiene_pdf,
+           (exists (select 1 from public.journal_entry_document d where d.entry_id = b.id and d.account_id = v_c.account_id)
+            or exists (select 1 from public.customer_invoice ci where ci.entry_id = b.id and ci.account_id = v_c.account_id and ci.pdf_path is not null)) as tiene_pdf,
            array_remove(array[
              case when lb.entry_id is null and b.source_type in ('supplier_invoice', 'customer_invoice', 'sales_day')
                   then 'Es una factura y no tiene su registro de IVA: no sale hasta que lo tenga.' end,
@@ -41154,14 +41156,17 @@ begin
                               translate(to_char(coalesce(lb.cuota_sop, 0) + coalesce(lb.cuota_rep, 0), 'FM999,999,990.00'), ',.', '.,')) end,
              case when lb.entry_id is not null and public.conta_iva_presentado(v_c.id, b.entry_date) is not null
                   then 'Cae en un trimestre de IVA ya presentado: no sale.' end,
-             case when lb.entry_id is not null and li.cuentas_base > 4
-                  then format('Reparte la base en %s cuentas y ERP10 admite 4: no sale.', li.cuentas_base) end,
+             case when lb.entry_id is not null and lb.rec and li.cuentas_base > 2
+                  then format('Esta factura reparte el gasto en %s cuentas y ERP10 admite 2 al importar. Métela a mano en ERP10.', li.cuentas_base)
+                  when lb.entry_id is not null and not lb.rec and li.cuentas_base > 4
+                  then format('Esta factura reparte el ingreso en %s cuentas y ERP10 admite 4 al importar. Métela a mano en ERP10.', li.cuentas_base) end,
              case when m.entry_id is not null
                   then format('Usa la cuenta %s, que no se puede pasar a ERP10: no sale.', m.cuentas) end,
              case when r.entry_id is not null
                   then 'Su número de factura y NIF ya están en otra que sale o ya salió: no sale.' end
            ], null) as bloquean,
-           (lb.entry_id is not null and not exists (select 1 from public.journal_entry_document d where d.entry_id = b.id and d.account_id = v_c.account_id)) as sin_pdf
+           (lb.entry_id is not null and not exists (select 1 from public.journal_entry_document d where d.entry_id = b.id and d.account_id = v_c.account_id)
+            and not exists (select 1 from public.customer_invoice ci where ci.entry_id = b.id and ci.account_id = v_c.account_id and ci.pdf_path is not null)) as sin_pdf
       from base b
       left join libro lb on lb.entry_id = b.id
       left join lineas li on li.entry_id = b.id
@@ -41207,7 +41212,7 @@ end $_$;
 -- Name: FUNCTION conta_erp10_por_salir(p_company uuid, p_mes date); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_erp10_por_salir(p_company uuid, p_mes date) IS 'X02 · Lo que saldría a ERP10 hasta ese mes (lo de antes que no salió, marcado «de otro mes»): una partida por asiento con su clase, avisos y si sale; las cuentas nuevas con su código en ERP10; y el resumen del paso 1. Solo lee.';
+COMMENT ON FUNCTION public.conta_erp10_por_salir(p_company uuid, p_mes date) IS 'X02 (X04a, X05) · Lo que saldría a ERP10 hasta ese mes (lo de antes que no salió, marcado «de otro mes»): una partida por asiento con su clase, avisos y si sale; las cuentas nuevas con su código en ERP10; y el resumen del paso 1. Solo lee.';
 
 
 --
