@@ -126,8 +126,7 @@ test('N07 · 1 · solo cuentas y proveedores: soltar, ver, traer, darlo por buen
   await expect(page.getByText('Solo has traído las cuentas y los proveedores. No hay saldos que comparar.')).toBeVisible({ timeout: 60_000 })
   // Las frases dicen las cuentas como la tabla «Lo traído» (las nuevas, y las que ya estaban).
   const que = `${await cuentasComoLaTabla(page)}, 4 proveedores y 1 cliente`
-  // La confirmación de «Traerlo» se ve también en el paso 3 (regla 8; e2e 1492).
-  await expect(page.getByRole('status').filter({ hasText: `He traído ${que}. Lo de antes sigue sin traer.` })).toBeVisible()
+  // La confirmación de «Traerlo» (regla 8) es la línea del paso 3: «Traído en prueba el … por …: …» (e2e 1496).
   await expect(page.getByText(`: ${que}. Lo traído no se puede pagar ni cobrar hasta darlo por bueno.`)).toBeVisible()
   await page.screenshot({ path: `${DIR}/solo-cuentas-paso3.png` })
   await cabeA1366(page, 'solo cuentas · paso 3')
@@ -138,8 +137,10 @@ test('N07 · 1 · solo cuentas y proveedores: soltar, ver, traer, darlo por buen
   const [b1, b2] = [dialogo.getByRole('button', { name: 'Darlo por bueno' }), dialogo.getByRole('button', { name: 'Todavía no' })]
   expect((await b1.boundingBox())?.width, 'los dos botones del mismo tamaño').toBe((await b2.boundingBox())?.width)
   await b1.click()
-  await expect(page.getByText(`Hecho. Lo traído de ERP10 ya es parte de tu contabilidad: ${que}. 1 factura que había entrado sin proveedor ya lo tiene.`, { exact: true })).toBeVisible({ timeout: 60_000 })
-  await expect(page.getByText('La primera factura de cada proveedor te pedirá a qué cuenta de gasto va: ERP10 no la da en su listado.')).toBeVisible()
+  // La confirmación de «Darlo por bueno»: lo que enseña después, arriba del paso 1, leído de la base.
+  const dado = page.getByRole('status').filter({ hasText: /^Dado por bueno el \d\d\/\d\d a las \d\d:\d\d por / })
+  await expect(dado).toContainText(`Lo traído de ERP10 ya es parte de tu contabilidad: ${que}. 1 factura que había entrado sin proveedor ya lo tiene.`, { timeout: 60_000 })
+  await expect(dado).toContainText('La primera factura de cada proveedor te pedirá a qué cuenta de gasto va: ERP10 no la da en su listado.')
   const f = await rest<{ supplier_id: string | null }[]>(s, 'GET', `supplier_invoice?select=supplier_id&id=eq.${sinProveedor}`)
   expect(f.datos[0]?.supplier_id, 'la recibida sin proveedor ya lo tiene').not.toBeNull()
   expect(errores).toEqual([])
@@ -155,11 +156,11 @@ test('N07 · 2 · deshacer lo traído en prueba', async ({ page }) => {
   await page.getByRole('button', { name: 'Ver lo que entra' }).click()
   await expect(page.getByRole('table', { name: 'Qué entra' }).getByRole('row', { name: /Asientos/ })).toContainText('11.499,00', { timeout: 30_000 })
   await page.getByRole('button', { name: 'Traerlo' }).click()
-  await expect(page.getByRole('status').filter({ hasText: /^Traído en prueba: 10 asientos \(26 apuntes, 11\.499,00 al debe y al haber\)/ })).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('status').filter({ hasText: /^Traído en prueba el .*: 10 asientos y 5 facturas\. Lo traído no se puede pagar ni cobrar hasta darlo por bueno\.$/ })).toBeVisible({ timeout: 60_000 })
   await page.getByRole('button', { name: 'Deshacer el traspaso' }).first().click()
   const dialogo = page.getByRole('dialog', { name: 'Deshacer el traspaso' })
   await dialogo.getByRole('button', { name: 'Deshacer el traspaso' }).click()
-  await expect(page.getByText(/^Deshecho: se han quitado 10 asientos, 5 facturas/)).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('status').filter({ hasText: /^Deshecho el .*: se ha quitado todo lo traído \(10 asientos, 5 facturas, .*\)\. La empresa queda como estaba antes de traerlo\.$/ })).toBeVisible({ timeout: 60_000 })
   await expect(page.getByRole('button', { name: 'Ver lo que entra' })).toBeVisible()
   expect(errores).toEqual([])
 })
@@ -183,7 +184,7 @@ test('N07 · 3 · con un sumas y saldos que no cuadra no deja, y enseña la cuen
   await cabeA1366(page, 'no cuadra')
   await page.getByRole('button', { name: 'Deshacer el traspaso' }).first().click()
   await page.getByRole('dialog', { name: 'Deshacer el traspaso' }).getByRole('button', { name: 'Deshacer el traspaso' }).click()
-  await expect(page.getByText(/^Deshecho:/)).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('status').filter({ hasText: /^Deshecho el .*: se ha quitado todo lo traído/ })).toBeVisible({ timeout: 60_000 })
   expect(errores).toEqual([])
 })
 
@@ -217,6 +218,6 @@ test('N07 · 4 · el ejemplo entero: soltar, ver, traer, comparar (cuadra) y dar
   const dialogo = page.getByRole('dialog', { name: 'Darlo por bueno' })
   await expect(dialogo).toContainText('Vas a dar por bueno lo traído de ERP10: 10 asientos y 5 facturas, hasta el 31/03/2026. Cuadra con el sumas y saldos. Después ya no se podrá deshacer.')
   await dialogo.getByRole('button', { name: 'Darlo por bueno' }).click()
-  await expect(page.getByText(/^Hecho\. 10 asientos de antes del .* ya están en tu contabilidad, y 3 facturas pendientes han pasado: 2 a Pagos y 1 a Cobros\.$/)).toBeVisible({ timeout: 90_000 })
+  await expect(page.getByRole('status').filter({ hasText: /^Dado por bueno el .*\. 10 asientos de antes del .* ya están en tu contabilidad, y 3 facturas pendientes han pasado: 2 a Pagos y 1 a Cobros\.$/ })).toBeVisible({ timeout: 90_000 })
   expect(errores).toEqual([])
 })

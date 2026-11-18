@@ -26,11 +26,11 @@ import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import {
   AVISO_PAGOS_A_MEDIAS, MODOS, SIN_CUENTA_DE_GASTO, SIN_SALDOS, TODAVIA_NO, abrirExcel, avisosPaso1, avisosPaso2, comprobacionesPaso1, filasPaso1,
-  conLoDeLaTabla, filasPaso2, filasPaso3, leerCarga, lineaEnPrueba, paraLaBase, puedeTraer, puedeVerLoQueEntra, queSeTrajoSoloCuentas, soloCuentas,
+  conLoDeLaTabla, filasPaso2, lineaDadoPorBueno, lineaDeshecho, filasPaso3, leerCarga, lineaEnPrueba, paraLaBase, puedeTraer, puedeVerLoQueEntra, queSeTrajoSoloCuentas, soloCuentas,
   soltadosQueNoSeTraen,
   type Aviso, type Modo, type Subido,
 } from '@/modules/conta/lib/traer'
-import { antesDeDarlo, asientosApuntados, darPorBueno, deshacer, diaDeInicio, leerEnPrueba, leerYaEnSumied, traer } from '@/modules/conta/services/traerService'
+import { antesDeDarlo, asientosApuntados, darPorBueno, deshacer, diaDeInicio, leerEnPrueba, leerUltima, leerYaEnSumied, traer, type Ultima } from '@/modules/conta/services/traerService'
 
 // Con el punto de los miles también en las de cuatro cifras («1.650,00», como en la maqueta): el español de serie no lo pone.
 const n = (x: number | undefined) => (x ?? 0).toLocaleString('es-ES')
@@ -51,6 +51,7 @@ export function TraerErp10() {
   const [vuelta, setVuelta] = useState(0)
   // Envuelto, para distinguir «todavía leyendo» (null) de «no hay nada en prueba» ({ p: null }).
   const enPrueba = useLeer(async () => ({ p: await leerEnPrueba(L.accountId, L.companyId) }), `${L.companyId}:${vuelta}:${L.vuelta}`)
+  const ultima = useLeer(() => leerUltima(L.accountId, L.companyId), `${L.companyId}:${vuelta}:${L.vuelta}`)
   const inicio = useLeer(() => diaDeInicio(L.companyId), `${L.companyId}:${vuelta}:${L.vuelta}`)
 
   const [modo, setModo] = useState<Modo>('nueva')
@@ -61,7 +62,6 @@ export function TraerErp10() {
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
   const [encima, setEncima] = useState(false)
   const [haciendo, setHaciendo] = useState<string | null>(null)
-  const [hecho, setHecho] = useState<string[] | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   const [confirmar, setConfirmar] = useState<'dar' | 'deshacer' | null>(null)
   const [cuenta, setCuenta] = useState<string | null>(null)
@@ -105,20 +105,21 @@ export function TraerErp10() {
 
   async function soltar(fs: FileList | File[] | null) {
     if (!fs || !fs.length) return
-    setHecho(null); setFallo(null)
+    setFallo(null)
     const nuevos = await abrir(fs)
     // Uno nuevo con el mismo nombre sustituye al de antes.
     setSubidos((ant) => [...ant.filter((a) => !nuevos.some((x) => x.nombre === a.nombre)), ...nuevos])
   }
   const alSoltar = (e: DragEvent) => { e.preventDefault(); setEncima(false); void soltar(e.dataTransfer.files) }
 
-  async function hacer(que: string, f: () => Promise<string[]>, despues?: () => void) {
-    setHaciendo(que); setFallo(null); setHecho(null)
+  // La confirmación de cada botón (regla 8) es lo que la pantalla enseña DESPUÉS, leído de la base: la línea
+  // «Traído en prueba el … por …» del paso 3 y, al darlo por bueno o deshacerlo, la de «lo último» del paso 1.
+  // No un aviso aparte: un aviso vive en la pantalla y se pierde si se vuelve a montar (e2e 1492 y 1496).
+  async function hacer(que: string, f: () => Promise<unknown>, despues?: () => void) {
+    setHaciendo(que); setFallo(null)
     try {
-      setHecho(await f())
+      await f()
       despues?.()
-      // Solo se vuelve a leer lo de esta pantalla. L.recargar() hacía que Libros volviera a leer lo suyo y,
-      // mientras, desmontaba la pantalla: se perdía la confirmación (regla 8; e2e 1492, en el paso 3 sin ella).
       setVuelta((v) => v + 1)
     } catch (e) {
       setFallo(`${e instanceof Error ? e.message : 'No ha contestado.'}`)
@@ -191,19 +192,20 @@ export function TraerErp10() {
         <div className="cxe-botones">
           {paso === 1 && <>
             <button type="button" className="cxe-sec" aria-expanded={como} onClick={() => setComo((v) => !v)}>Cómo se saca de ERP10</button>
-            <button type="button" className="cxe-grande" disabled={!ver.puede} title={ver.porque ?? undefined} onClick={() => { setPaso(2); setHecho(null) }}>Ver lo que entra</button>
+            <button type="button" className="cxe-grande" disabled={!ver.puede} title={ver.porque ?? undefined} onClick={() => setPaso(2)}>Ver lo que entra</button>
           </>}
           {paso === 2 && <>
             <button type="button" className="cxe-sec" onClick={() => setPaso(1)}>Volver a los ficheros</button>
             <button type="button" className="cxe-grande" disabled={!puede2 || !!haciendo}
               onClick={() => { void hacer('Trayendo en prueba…', async () => {
-                const r = await traer(L.companyId, ej, datos, L.quien)
-                return [soloCuentas(carga) ? conLoDeLaTabla(r.texto, queSeTrajoSoloCuentas(r.cuentas, r.texto)) : r.texto]
+                await traer(L.companyId, ej, datos, L.quien)
               }, () => { setSubidos([]); setPaso(1) }) }}>Traerlo</button>
           </>}
           {paso === 3 && <button type="button" className="cxe-grande" disabled={!a?.puede || !!haciendo} title={a && !a.puede ? fraseAntes : undefined} onClick={() => setConfirmar('dar')}>Darlo por bueno</button>}
         </div>
       </div>
+
+      {paso === 1 && ultima.datos && <LoUltimo u={ultima.datos} />}
 
       {paso === 3 && p && (
         <div className="cxt-prueba" role="status">{lineaEnPrueba(p.quien, new Date(p.cuando), queSeTrajo)}</div>
@@ -410,9 +412,9 @@ export function TraerErp10() {
             <div className="cxt-confirmar-botones">
               {confirmar === 'dar'
                 ? <button type="button" className="cxe-grande" disabled={!!haciendo}
-                    onClick={() => { void hacer('Dándolo por bueno…', async () => [comoLaTabla(await darPorBueno(p.id, L.quien)), ...(p.soloCuentas ? [SIN_CUENTA_DE_GASTO] : [])]) }}>Darlo por bueno</button>
+                    onClick={() => { void hacer('Dándolo por bueno…', () => darPorBueno(p.id, L.quien)) }}>Darlo por bueno</button>
                 : <button type="button" className="cxe-grande" disabled={!!haciendo}
-                    onClick={() => { void hacer('Deshaciendo…', async () => [await deshacer(p.id, L.quien)]) }}>Deshacer el traspaso</button>}
+                    onClick={() => { void hacer('Deshaciendo…', () => deshacer(p.id, L.quien)) }}>Deshacer el traspaso</button>}
               <button type="button" className="cxe-sec cxt-igual" disabled={!!haciendo} onClick={() => setConfirmar(null)}>Todavía no</button>
             </div>
           </div>
@@ -421,10 +423,26 @@ export function TraerErp10() {
 
       <div className="cxe-estado" role="status" aria-live="polite">
         {haciendo && <span>{haciendo}</span>}
-        {hecho && !haciendo && hecho.map((h) => <span key={h} className="cxe-hecho cxt-hecho">{h}</span>)}
-        {!haciendo && !hecho && paso === 1 && !ver.puede && subidos.length > 0 && <span className="cxt-gris">{ver.porque}</span>}
+        {!haciendo && paso === 1 && !ver.puede && subidos.length > 0 && <span className="cxt-gris">{ver.porque}</span>}
       </div>
       {fallo && <div className="cxe-estado cxe-mal" role="alert">{fallo}</div>}
     </section>
+  )
+}
+
+/** Lo último que se dio por bueno o se deshizo, arriba del paso 1: la confirmación de esos dos botones, leída de la base. */
+function LoUltimo({ u }: { u: Ultima }) {
+  const cuando = new Date(u.cuando)
+  // Las facturas, las que se trajeron: las emitidas traídas no existen hasta darlo por bueno, y la base las cuenta 0 al quitar.
+  if (u.estado === 'deshecha') {
+    const quitado = { ...u.quitado, recibidas: u.cuentas.facturas_recibidas ?? u.quitado.recibidas ?? 0, emitidas: u.cuentas.facturas_emitidas ?? u.quitado.emitidas ?? 0 }
+    return <div className="cxt-prueba cxt-ultimo" role="status">{lineaDeshecho(u.quien, cuando, quitado)}</div>
+  }
+  const texto = u.soloCuentas && u.texto ? conLoDeLaTabla(u.texto, queSeTrajoSoloCuentas(u.cuentas, u.textoAlTraer)) : (u.texto ?? 'Hecho.')
+  return (
+    <div className="cxt-prueba cxt-ultimo cxt-ultimo-bueno" role="status">
+      {lineaDadoPorBueno(u.quien, cuando, texto)}
+      {u.soloCuentas && <> {SIN_CUENTA_DE_GASTO}</>}
+    </div>
   )
 }

@@ -269,6 +269,29 @@ export function conLoDeLaTabla(frase: string, que: string): string {
   return frase.replace(/\b[\d.]+ cuentas?(, [^.]*?)?(?=\.( |$))/, que)
 }
 
+/** «el 18/11 a las 18:40»: cuándo, en Madrid. */
+const cuandoEs = (cuando: Date) =>
+  cuando.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' a las')
+
+/**
+ * La confirmación de «Darlo por bueno», tal como queda: lo que guardó la base al darlo por bueno (su
+ * texto, sin el «Hecho.» del principio), con quién y cuándo. Se lee de la base, no de un aviso de
+ * la pantalla: se ve aunque la pantalla se vuelva a montar.
+ */
+export function lineaDadoPorBueno(quien: string | null, cuando: Date, textoDeLaBase: string): string {
+  return `Dado por bueno el ${cuandoEs(cuando)}${quien ? ` por ${quien}` : ''}. ${textoDeLaBase.replace(/^Hecho\.\s*/, '')}`
+}
+
+/** La confirmación de «Deshacer el traspaso», con lo que se quitó (lo que guardó la base al deshacer). */
+export function lineaDeshecho(quien: string | null, cuando: Date, quitado: Record<string, number>): string {
+  const q = (k: string) => quitado[k] ?? 0
+  const partes = [
+    cuantos(q('asientos'), 'asiento', 'asientos'), cuantos(q('recibidas') + q('emitidas'), 'factura', 'facturas'),
+    cuantos(q('cuentas'), 'cuenta', 'cuentas'), cuantos(q('proveedores'), 'proveedor', 'proveedores'), cuantos(q('clientes'), 'cliente', 'clientes'),
+  ]
+  return `Deshecho el ${cuandoEs(cuando)}${quien ? ` por ${quien}` : ''}: se ha quitado todo lo traído (${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}). La empresa queda como estaba antes de traerlo.`
+}
+
 export const AVISO_PAGOS_A_MEDIAS = 'Si alguna factura quedó pagada a medias en ERP10, aquí sale como pendiente entera. Revísalas en Pagos.'
 export const SIN_SALDOS = 'Solo has traído las cuentas y los proveedores. No hay saldos que comparar.'
 export const SIN_CUENTA_DE_GASTO = 'La primera factura de cada proveedor te pedirá a qué cuenta de gasto va: ERP10 no la da en su listado.'

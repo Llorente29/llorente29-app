@@ -8,7 +8,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   abrirExcel, avisosPaso1, avisosPaso2, comprobacionesPaso1, filasPaso1, filasPaso2, filasPaso3, leerCarga, paraLaBase, puedeTraer,
-  puedeVerLoQueEntra, soloCuentas, soltadosQueNoSeTraen, queSeTrajoSoloCuentas, conLoDeLaTabla, type FicheroExcel,
+  puedeVerLoQueEntra, soloCuentas, soltadosQueNoSeTraen, queSeTrajoSoloCuentas, conLoDeLaTabla, lineaDadoPorBueno, lineaDeshecho, type FicheroExcel,
 } from '@/modules/conta/lib/traer'
 
 const D = 'tests/conta/fixtures/importar/erp10'
@@ -144,5 +144,18 @@ describe('N07 · solo cuentas: la frase dice lo mismo que la tabla', () => {
       .toBe('Vas a dar por bueno lo traído de ERP10: 0 cuentas nuevas (las 16 ya estaban), 4 proveedores y 1 cliente. Después ya no se podrá deshacer.')
     expect(conLoDeLaTabla('Hecho. Lo traído de ERP10 ya es parte de tu contabilidad: 16 cuentas, 4 proveedores y 1 cliente. 1 factura que había entrado sin proveedor ya lo tiene.', que))
       .toBe('Hecho. Lo traído de ERP10 ya es parte de tu contabilidad: 0 cuentas nuevas (las 16 ya estaban), 4 proveedores y 1 cliente. 1 factura que había entrado sin proveedor ya lo tiene.')
+  })
+})
+
+describe('N07 · las confirmaciones de «Darlo por bueno» y «Deshacer», leídas de la base', () => {
+  const el = new Date('2026-11-18T17:40:00Z')
+  it('darlo por bueno: quién, cuándo y el texto que guardó la base, sin su «Hecho.»', () => {
+    expect(lineaDadoPorBueno('Admin Norte', el, 'Hecho. 10 asientos de antes del 01/04/2026 ya están en tu contabilidad, y 3 facturas pendientes han pasado: 2 a Pagos y 1 a Cobros.'))
+      .toBe('Dado por bueno el 18/11 a las 18:40 por Admin Norte. 10 asientos de antes del 01/04/2026 ya están en tu contabilidad, y 3 facturas pendientes han pasado: 2 a Pagos y 1 a Cobros.')
+  })
+  it('deshacer: lo que se quitó, sin decir «carga»', () => {
+    const t = lineaDeshecho('Admin Norte', el, { asientos: 10, recibidas: 3, emitidas: 0, cuentas: 0, proveedores: 4, clientes: 1 })
+    expect(t).toBe('Deshecho el 18/11 a las 18:40 por Admin Norte: se ha quitado todo lo traído (10 asientos, 3 facturas, 0 cuentas, 4 proveedores y 1 cliente). La empresa queda como estaba antes de traerlo.')
+    expect(t).not.toMatch(/carga/)
   })
 })

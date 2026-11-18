@@ -36,6 +36,10 @@
 /* Mientras está en prueba: arriba y siempre a la vista. */
 .cxt-prueba { padding: 8px 16px; background: var(--cx-ambar-suave); color: var(--cx-texto); border-bottom: 1px solid var(--cx-linea); font-size: .9rem; }
 
+/* Lo último que se dio por bueno (verde) o se deshizo (gris), arriba del paso 1: la confirmación de esos botones. */
+.cxt-ultimo { background: var(--cx-neutro-suave); }
+.cxt-ultimo-bueno { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+
 /* Paso 3: las etiquetas de arriba, los grupos de la tabla y el total. */
 .cxt-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .cxt-chip { padding: 3px 10px; border-radius: 999px; background: var(--cx-neutro-suave); font-size: .82rem; white-space: nowrap; }

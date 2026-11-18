@@ -44,6 +44,38 @@ export async function leerEnPrueba(accountId: string, companyId: string): Promis
   }
 }
 
+/** Lo último que se dio por bueno o se deshizo en la empresa: su confirmación, leída de la base (regla 8). */
+export interface Ultima {
+  estado: 'dada_por_buena' | 'deshecha'
+  quien: string | null
+  cuando: string
+  /** Al darlo por bueno: el texto que guardó la base. */
+  texto: string | null
+  /** Al deshacer: lo que se quitó. */
+  quitado: Record<string, number>
+  soloCuentas: boolean
+  cuentas: Record<string, number>
+  textoAlTraer: string | null
+}
+
+export async function leerUltima(accountId: string, companyId: string): Promise<Ultima | null> {
+  const { data, error } = await tabla('import_run')
+    .select('id, status, created_by_name, started_at, counts, detail')
+    .eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'carga').in('status', ['dada_por_buena', 'deshecha'])
+    .order('started_at', { ascending: false }).limit(1)
+  if (error) throw new Error(mensaje('No se ha podido leer lo último traído', error))
+  const r = (data ?? [])[0] as Record<string, unknown> | undefined
+  if (!r) return null
+  const d = (r.detail ?? {}) as Record<string, Record<string, unknown> | unknown>
+  const estado = r.status === 'deshecha' ? 'deshecha' : 'dada_por_buena'
+  const hecho = (d[estado === 'deshecha' ? 'deshecha' : 'dada'] ?? {}) as Record<string, unknown>
+  return {
+    estado, quien: hecho.por ? String(hecho.por) : null, cuando: String(hecho.el ?? r.started_at),
+    texto: hecho.texto ? String(hecho.texto) : null, quitado: (hecho.quitado ?? {}) as Record<string, number>,
+    soloCuentas: d.solo_plan === true, cuentas: (r.counts ?? {}) as Record<string, number>, textoAlTraer: d.texto ? String(d.texto) : null,
+  }
+}
+
 /** Lo que ya está en Sumied: los códigos de cuenta de la empresa y los NIF de proveedores y clientes de la cuenta. */
 export async function leerYaEnSumied(accountId: string, companyId: string): Promise<YaEnSumied> {
   const [c, s, p] = await Promise.all([
