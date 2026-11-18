@@ -9,4 +9,3 @@
 # No toca ningún dato. Nada en el camino del pedido. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/q05-interruptor-nucleo.sql
 supabase/migrations/20261118T2029_q05_interruptor_nucleo.sql
-esperado: q05-interruptor-nucleo · funciones de la ficha que aún no conocen conta_nucleo = 0
