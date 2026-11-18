@@ -15,6 +15,7 @@
 //   · «Pedírselas»: la petición queda confirmada por la persona; el correo lo
 //     manda ella desde el suyo (mailto) mientras no haya dominio de correo.
 
+import { fraseDe, falloDeLlamada, FRASE_DOCUMENTO, type ClaseFallo } from '../../../../supabase/functions/_shared/lecturaFallo'
 import { supabase } from '@/lib/supabase'
 import { rpc, tabla, hayBase, mensaje } from '@/modules/conta/services/bd'
 import { validar } from '@/modules/conta/services/diarioService'
@@ -131,11 +132,39 @@ export async function plazoDeLaFicha(accountId: string, supplierId: string): Pro
 
 export interface Subida { archivo: string; bien: boolean; texto: string; factura: string | null }
 
+/** E02 · La clase del fallo de una llamada a ocr-albaran: lo que dice su cuerpo; sin cuerpo (red, la plataforma), una caída. */
+async function falloDeInvocar(error: unknown): Promise<{ clase: ClaseFallo }> {
+  const ctx = (error as { context?: unknown } | null)?.context
+  if (typeof Response !== 'undefined' && ctx instanceof Response) {
+    const cuerpo = await ctx.clone().json().catch(() => null)
+    return falloDeLlamada(ctx.status, cuerpo)
+  }
+  return falloDeLlamada(null, null)
+}
+
+/**
+ * E02 · Lo que dice la ventana de una llegada sin leer: la frase de su clase si
+ * la tiene (document_inbox.read_failure, de la 20261118T0600); si es de antes del
+ * E02 y su porqué es el texto técnico de la lectura («albarán», «non-2xx»), la de
+ * «este documento»; si no, su porqué tal cual. Regla 40: document_inbox.read_failure.
+ */
+export async function porqueDeLlegada(inboxId: string, porque: string | null): Promise<string | null> {
+  const { data } = await tabla('document_inbox').select('read_failure').eq('id', inboxId).maybeSingle()
+  const clase = (data as Fila | null)?.read_failure
+  if (clase === 'caida' || clase === 'documento') return fraseDe(clase)
+  return porqueSinTecnicismos(porque)
+}
+
+/** E02 · Un porqué de antes con el texto técnico de la lectura pasa a la frase de «este documento». */
+export const porqueSinTecnicismos = (porque: string | null): string | null =>
+  porque && /albar[aá]n legible|non-2xx|edge function|error del servicio de ia|fallo llamando a la ia/i.test(porque) ? FRASE_DOCUMENTO : porque
+
 /** Lee un fichero ya subido en modo factura. Devuelve la sesión de lectura. */
 async function leerEnModoFactura(accountId: string, ruta: string): Promise<string> {
   hayBase()
   const { data, error } = await supabase!.functions.invoke('ocr-albaran', { body: { account_id: accountId, file_paths: [ruta], modo: 'factura' } })
-  if (error) throw new Error(`no se ha podido leer (${error.message})`)
+  // E02 · Nunca «Edge Function returned a non-2xx status code»: la frase de su clase (la lectura está caída o este documento).
+  if (error) throw new Error(fraseDe((await falloDeInvocar(error)).clase))
   const id = (data as Fila | null)?.session_id
   if (typeof id !== 'string') throw new Error('la lectura no ha devuelto su sesión')
   return id
