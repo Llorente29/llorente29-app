@@ -7,6 +7,8 @@
  * línea de «en prueba» y la confirmación. Solo tokens de tokens.css: ningún color escrito aquí.
  */
 
+.cxt-fila-modos { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cxt-como { white-space: nowrap; font-size: .9rem; }
 .cxt-modos { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--cx-radio-boton); background: var(--cx-neutro-suave); align-self: flex-start; }
 .cxt-modo { height: 32px; padding: 0 14px; border: 0; border-radius: calc(var(--cx-radio-boton) - 2px); background: transparent; font: inherit; font-size: .9rem; color: var(--cx-apoyo); cursor: pointer; }
 .cxt-modo[aria-pressed='true'] { background: var(--cx-blanco); color: var(--cx-texto); font-weight: 700; box-shadow: var(--cx-sombra-entrada); }
@@ -20,9 +22,12 @@
 .cxe-tabla tr.cxt-fila-mira[aria-selected='true'] td { background: var(--cx-azul-suave); }
 .cxt-todavia { color: var(--cx-apoyo); font-size: .85rem; border-bottom: 0 !important; padding-top: 10px !important; }
 
-/* «Cómo está»: la etiqueta y su nota, en una línea (como en la maqueta). */
-.cxt .cxe-tabla td:last-child { white-space: nowrap; }
-.cxt .cxe-tabla td:first-child { white-space: nowrap; }
+/* «Cómo está» y «Cómo entra»: la etiqueta entera; la nota, si no cabe, sigue debajo (cortada no se lee: e2e 1508). */
+.cxt .cxe-tabla .cxe-etq { white-space: nowrap; }
+.cxt .cxe-tabla td:first-child strong { white-space: nowrap; }
+.cxt .cxe-tabla td.cxt-leido { white-space: normal; }
+/* «Todavía no se trae por aquí…» es una sola celda (y la primera de su fila): sin partir, ensanchaba la tabla. */
+.cxt .cxe-tabla td.cxt-todavia { white-space: normal; }
 
 /* La zona de soltar, con su borde de rayas. */
 .cxt-soltar { margin: 8px; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 2px dashed var(--cx-borde-control); border-radius: var(--cx-radio-caja); font-size: .9rem; }

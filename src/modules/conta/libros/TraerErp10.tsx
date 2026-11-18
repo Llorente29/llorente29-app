@@ -190,10 +190,7 @@ export function TraerErp10() {
         </select>
         {pasos}
         <div className="cxe-botones">
-          {paso === 1 && <>
-            <button type="button" className="cxe-sec" aria-expanded={como} onClick={() => setComo((v) => !v)}>Cómo se saca de ERP10</button>
-            <button type="button" className="cxe-grande" disabled={!ver.puede} title={ver.porque ?? undefined} onClick={() => setPaso(2)}>Ver lo que entra</button>
-          </>}
+          {paso === 1 && <button type="button" className="cxe-grande" disabled={!ver.puede} title={ver.porque ?? undefined} onClick={() => setPaso(2)}>Ver lo que entra</button>}
           {paso === 2 && <>
             <button type="button" className="cxe-sec" onClick={() => setPaso(1)}>Volver a los ficheros</button>
             <button type="button" className="cxe-grande" disabled={!puede2 || !!haciendo}
@@ -215,10 +212,14 @@ export function TraerErp10() {
       {paso === 1 && (
         <div className="cxe-cuerpo">
           <div className="cxe-izq">
-            <div className="cxt-modos" role="group" aria-label="Qué traes">
-              {(['nueva', 'ejercicio'] as const).map((m) => (
-                <button key={m} type="button" className="cxt-modo" aria-pressed={modo === m} onClick={() => setModo(m)}>{MODOS[m].texto}</button>
-              ))}
+            {/* «Cómo se saca de ERP10», aquí y no en la cabecera: con dos botones, a 1456 los pasos se pisaban (capturas de la e2e 1508). */}
+            <div className="cxt-fila-modos">
+              <div className="cxt-modos" role="group" aria-label="Qué traes">
+                {(['nueva', 'ejercicio'] as const).map((m) => (
+                  <button key={m} type="button" className="cxt-modo" aria-pressed={modo === m} onClick={() => setModo(m)}>{MODOS[m].texto}</button>
+                ))}
+              </div>
+              <button type="button" className="cxe-enlace cxt-como" aria-expanded={como} onClick={() => setComo((v) => !v)}>Cómo se saca de ERP10</button>
             </div>
             <p className="cxt-ayuda">{MODOS[modo].ayuda}</p>
             <div className="cxe-marco">
@@ -230,7 +231,7 @@ export function TraerErp10() {
                       <tr key={f.tipo} className={f.estado === 'mira' ? 'cxt-fila-mira' : undefined}>
                         <td><strong>{f.que}</strong>{f.siLoTiene && <span className="cxt-gris"> · si lo tiene</span>}</td>
                         <td>{f.fichero ?? ''}</td>
-                        <td className="cxe-num"><strong>{f.haLeido ?? ''}</strong></td>
+                        <td className="cxe-num cxt-leido"><strong>{f.haLeido ?? ''}</strong></td>
                         <td><span className={`cxe-etq ${ETIQUETA[f.estado][0]}`}>{ETIQUETA[f.estado][1]}</span>{f.nota}</td>
                       </tr>
                     ))}
