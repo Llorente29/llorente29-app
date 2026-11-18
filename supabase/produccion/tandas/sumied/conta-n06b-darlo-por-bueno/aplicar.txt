@@ -1,0 +1,17 @@
+# N06b · Traer de otro programa: darlo por bueno, y traer solo las cuentas y los proveedores.
+# Rama conta/n06b-darlo-por-bueno. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2224  Cambia: el CHECK de conta_programa_anterior admite «erp10» (solo amplía).
+#   2240  Añade: _conta_traida_en_prueba y tres candados (BEFORE) para que una recibida traída en prueba
+#         no se pague ni se meta en un pago a mano o una remesa.
+#   2241  Cambia: journal_entry admite la serie 8 solo para lo traído (solo amplía); Pagos y Bancos no
+#         enseñan lo traído en prueba (cuatro listas) y Facturas recibidas lo marca; lo cobrado allí cuenta
+#         como cobrado en conta_factura_cobro.
+#   2242  Cambia las tres funciones de traer del N06a (misma firma, con respaldo) y añade darlo por bueno.
+#
+# No cambia ni una fila. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/n06b-darlo-por-bueno.sql
+supabase/migrations/20261117T2224_n06b_programa_erp10.sql
+supabase/migrations/20261117T2240_n06b_traida_sin_pagar.sql
+supabase/migrations/20261117T2241_n06b_serie_y_listas.sql
+supabase/migrations/20261117T2242_n06b_darlo_por_bueno.sql

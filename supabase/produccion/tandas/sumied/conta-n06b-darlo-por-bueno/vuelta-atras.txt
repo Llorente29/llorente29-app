@@ -1,0 +1,9 @@
+# N06b · la vuelta atrás, en orden inverso: la 2242 (quita darlo por bueno y devuelve las tres de traer
+# del N06a), la 2241 (las cinco funciones y la vista como estaban, y el CHECK sin la 8; para si ya hay
+# asientos en la 8), la 2240 (quita los candados) y la 2224 (el CHECK sin «erp10»; para si alguna empresa
+# ya dijo que viene de ERP10).
+cuenta: scripts/conta/produccion/cuentas/n06b-darlo-por-bueno.sql
+supabase/vuelta-atras/20261117T2242_n06b_darlo_por_bueno.down.sql
+supabase/vuelta-atras/20261117T2241_n06b_serie_y_listas.down.sql
+supabase/vuelta-atras/20261117T2240_n06b_traida_sin_pagar.down.sql
+supabase/vuelta-atras/20261117T2224_n06b_programa_erp10.down.sql

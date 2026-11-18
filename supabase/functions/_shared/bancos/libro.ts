@@ -22,8 +22,11 @@
 
 import { eurosExactos } from '../euros.ts'
 
-export type Serie = 1 | 2 | 3 | 4 | 9
-export const NOMBRE_SERIE: Record<Serie, string> = { 1: 'Ventas', 2: 'Compras', 3: 'Banco', 4: 'General', 9: 'Nóminas' }
+// N06b · La 8 es la de LO TRAÍDO de otro programa (ERP10…): solo la escribe darlo por bueno, numerada
+// del 1 en adelante por fecha; su número de allí va aparte («n.º en ERP10»). No está en SERIES: no se
+// elige al apuntar a mano (el CHECK de la base tampoco lo deja).
+export type Serie = 1 | 2 | 3 | 4 | 8 | 9
+export const NOMBRE_SERIE: Record<Serie, string> = { 1: 'Ventas', 2: 'Compras', 3: 'Banco', 4: 'General', 8: 'Lo traído', 9: 'Nóminas' }
 export const SERIES: readonly Serie[] = [1, 2, 3, 9, 4]
 
 export type LibroIva = 'issued' | 'received' | 'investment' | 'not_subject'

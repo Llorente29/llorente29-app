@@ -36,6 +36,7 @@ import { deDondeSale, estadoDe, estadoMes, mesDe, nombreMes, type AsientoDiario,
 import { TablaAsiento } from '@/modules/conta/diseno/plantillas'
 import { apoyoApunte, columnasApuntes, lineasDeApuntes } from '@/modules/conta/libro/apuntesAsiento'
 import { NOMBRE_CONFIANZA, NOMBRE_SERIE, cuadre } from '@/modules/conta/lib/libro'
+import { nombrePrograma } from '@/modules/conta/services/corteService'
 import { PagoDeModelo } from '@/modules/conta/libro/PagoDeModelo'
 import {
   cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
@@ -393,7 +394,7 @@ function DetalleContable({ a, companyId }: { a: AsientoDiario; companyId: string
     <dl className="cxd-detalle">
       <dt>Serie</dt><dd>{NOMBRE_SERIE[a.serie]} · código {a.serie}</dd>
       <dt>Número</dt><dd>{a.numero ?? 'se pone al validar'}</dd>
-      {a.traido && <><dt>Traído</dt><dd>{a.traido.programa}{a.traido.serie ? ` · serie ${a.traido.serie}` : ''}{a.traido.numero ? ` · nº ${a.traido.numero}` : ''}</dd></>}
+      {a.traido && <><dt>Traído</dt><dd>{nombrePrograma(a.traido.programa) ?? a.traido.programa}{a.traido.numero ? ` · n.º en ${nombrePrograma(a.traido.programa) ?? a.traido.programa} ${a.traido.serie ? `${a.traido.serie}/` : ''}${a.traido.numero}` : ''}</dd></>}
       <dt>Validado</dt><dd>{a.validadoEn ? `${fechaLarga(a.validadoEn.slice(0, 10))}${a.validadoPor ? ` · ${a.validadoPor}` : ''}` : 'aún no'}</dd>
       <dt>Orden en la cadena</dt><dd>{a.cadena ?? '—'}</dd>
       <dt>Huella</dt><dd className="cxd-codigo" title={a.huella ?? undefined}>{corta(a.huella)}</dd>

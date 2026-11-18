@@ -72,6 +72,7 @@ describe('N06a · paraLaBase con el ejemplo de ERP10 (LEEME)', () => {
     const sql = readFileSync('supabase/staging/sql/20261117_n06a_carga_prueba.sql', 'utf8')
     const m = /'n06a\.datos', \$carga\$(.*?)\$carga\$/s.exec(sql)
     expect(m).not.toBeNull()
-    expect(JSON.parse(m![1])).toEqual(datos)
+    // N06b añadió el sumas y saldos (sumas), que el ejemplo de la prueba del N06a no llevaba.
+    expect(JSON.parse(m![1])).toEqual({ ...datos, sumas: undefined })
   })
 })

@@ -27,7 +27,7 @@ import { EncabezadoLibro } from '@/modules/conta/libros/EncabezadoLibro'
 import { fraseDelPeriodo } from '@/modules/conta/libros/encabezado'
 
 const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`
-const SERIES: Record<number, string> = { 1: 'Ventas', 2: 'Compras', 3: 'Bancos', 4: 'General' }
+const SERIES: Record<number, string> = { 1: 'Ventas', 2: 'Compras', 3: 'Bancos', 4: 'General', 8: 'Lo traído', 9: 'Nóminas' }   // N06b: la 8 y la 9
 const textoSaldo = (n: number) => (Math.round(n * 100) === 0 ? '0,00 €' : `${eurosExactos(Math.abs(n))} ${n > 0 ? 'D' : 'H'}`)
 
 export function LibroMayor() {
