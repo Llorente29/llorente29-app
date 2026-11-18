@@ -1,0 +1,3 @@
+# X07 · los asientos salen a ERP10.
+# Primero, la medida de los asientos que hoy no salen (solo lee, ROLLBACK).
+supabase/staging/sql/20261118_x07_asientos_medida.sql
