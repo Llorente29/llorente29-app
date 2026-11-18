@@ -91,7 +91,13 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await page.setViewportSize({ width: ancho, height: alto })
     const s = await entrarEnLaGestoria(page)
     const grande = ancho === 1456
-    for (const n of [1, 2, 3, 4]) await sinDocumento(s, factura(t, n))
+    // Las tres primeras se validan: sin PDF en la semilla, se marcan «Sin documento». La cuarta NO: es la que no se
+    // puede validar en ninguna de las dos pantallas (falta su PDF, paraValidar.faltaDocumento). La de antes era la del
+    // proveedor sin subcuenta, pero desde la D07b la base le crea la suya al validar: sí se podía (e2e 1503).
+    for (const n of [1, 2, 3]) await sinDocumento(s, factura(t, n))
+    // El envío a Diez de la gestoría, escrito en el registro (para saberlo, no suponerlo).
+    const diez = await rest(s, `conta_diez_envio_empresa?select=enviar,modo,desde&account_id=eq.${NUCLEO.id}&company_id=eq.${enCarril('c0e20000-0000-4000-8000-0000000000e3')}`).catch((e) => String(e))
+    console.log(`[K04 ${ancho}] el envío a Diez de la gestoría: ${JSON.stringify(diez)}`)
     // A 1366 × 768, la cinta plegada (así cabe la ficha sin rodar).
     if (!grande) {
       const plegar = page.getByRole('button', { name: /Plegar los botones/ })
@@ -159,6 +165,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await abrirFicha(page, factura(t, 4))
     await page.locator('body').press('Enter')
     await expect(aviso(page)).toContainText('No paso a la siguiente', { timeout: 60_000 })
+    await expect(aviso(page)).toContainText('Falta su PDF')
     await expect(page).toHaveURL(new RegExp(factura(t, 4)))
     if (grande) await page.screenshot({ path: `${DIR}/no-se-valida-${ancho}.png` })
 
