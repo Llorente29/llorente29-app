@@ -105,7 +105,7 @@ describe('confirmar y deshacer: las mismas llamadas al motor que la pantalla de 
   it('en bloque: uno a uno, y lo que falla se dice uno a uno', async () => {
     motor.confirmar.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('ya estaba casado'))
     const r = await confirmarVarios(ctx, [mov({ id: 'a', propuesta: propuesta() }), mov({ id: 'b', propuesta: propuesta() })], (m) => m.id)
-    expect(r).toEqual({ bien: 1, de: 2, mal: ['b: ya estaba casado'], recalculado: false })
+    expect(r).toEqual({ bien: 1, de: 2, importeCent: 35744, mal: ['b: ya estaba casado'], recalculado: false })
   })
   it('deshacer: nucleo.deshacer(casado, motivo)', async () => {
     await deshacerCasado(mov({ id: 'c', estado: 'casado', casado: { id: 'cas1', tipo: 'x', porque: '', porQuien: 'folvy', asientoId: 'a', asientoConcepto: null } }))
