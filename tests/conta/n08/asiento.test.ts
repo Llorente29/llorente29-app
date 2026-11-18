@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { abrirExcel, leerCarga } from '@/modules/conta/lib/traer'
-import { atajoDeSubcuenta, conConceptoDeCabecera, cuadrarLaUltima, lineaNueva, siguienteCasilla, siguienteTipo, totales } from '@/modules/conta/lib/asientoNucleo'
+import { atajoDeSubcuenta, conConceptoDeCabecera, cuadrarLaUltima, lineaNueva, siguienteCasilla, totales } from '@/modules/conta/lib/asientoNucleo'
 import { problemasMano, type LineaMano } from '@/modules/conta/lib/diario'
 
 const fichero = readFileSync('tests/conta/fixtures/importar/erp10/plan_de_cuentas.xlsx')
@@ -65,7 +65,7 @@ describe('la última línea cuadra sola', () => {
   it('tres líneas: la tercera, con subcuenta y sin importe, pone en el haber lo que falta', () => {
     const r = cuadrarLaUltima([L('62100000', '1.000,00'), L('47200000', '210,00'), L('57200001')])
     expect(r.rellena).toBe('haber')
-    expect(r.lineas[2].haber).toBe('1210,00')
+    expect(r.lineas[2].haber).toBe('1.210,00')
     expect(totales(r.lineas)).toMatchObject({ debe: 1210, haber: 1210, descuadre: 0, cuadra: true })
     // Y lo que guarda la pantalla de hoy lo da por bueno: la misma validación.
     expect(problemasMano('Alquiler de octubre', '2026-11-18', r.lineas, new Set(PLAN.map((c) => c.code)))).toEqual([])
@@ -106,13 +106,5 @@ describe('el teclado', () => {
   })
   it('con importe en el debe, Intro salta el haber; al final de la última, abre una línea', () => {
     expect(siguienteCasilla(1, 'debe', 2, L('62100000', '100'))).toEqual({ fila: 2, casilla: 'subcuenta', nuevaLinea: true })
-  })
-  it('F8: asiento → emitida → recibida → asiento; sin la emitida, a la recibida y lo dice', () => {
-    expect(siguienteTipo('asiento', true)).toEqual({ tipo: 'emitida', frase: null })
-    expect(siguienteTipo('emitida', true)).toEqual({ tipo: 'recibida', frase: null })
-    expect(siguienteTipo('recibida', true)).toEqual({ tipo: 'asiento', frase: null })
-    const sin = siguienteTipo('asiento', false)
-    expect(sin.tipo).toBe('recibida')
-    expect(sin.frase).toMatch(/emitida todavía no está/)
   })
 })

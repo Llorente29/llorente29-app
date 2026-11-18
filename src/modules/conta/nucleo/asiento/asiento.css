@@ -1,0 +1,106 @@
+/* src/modules/conta/nucleo/asiento/asiento.css
+ *
+ * N08 · La ficha del asiento del núcleo (maqueta nucleo_5_asiento). Una rejilla como la de ERP10:
+ * filas finas, sin tarjetas, las cifras a la derecha y el total con su raya. Solo los tokens del
+ * núcleo (--k-*, nucleo.css); escritos aquí, solo el velo y las sombras, como en nucleo.css.
+ */
+
+.cxa { display: flex; flex-direction: column; min-height: 0; background: var(--k-blanco); border: 1px solid var(--k-borde); border-radius: 8px; overflow: hidden; color: var(--k-tinta); font-size: 14px; position: relative; }
+
+/* La cabeza: título, estado, de quién es, y a la derecha ‹ › Más y el botón. */
+.cxa-cabeza { display: flex; align-items: center; gap: 14px; padding: 10px 14px 10px 16px; min-height: 52px; flex-shrink: 0; }
+.cxa-titulo { margin: 0; font-size: 19px; font-weight: 700; }
+.cxa-estado { color: var(--k-apoyo); font-size: 14px; }
+.cxa-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 999px; background: var(--k-gris); font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxa-chip a { color: var(--k-azul); }
+.cxa-punto { width: 8px; height: 8px; border-radius: 50%; background: var(--k-apoyo); flex-shrink: 0; }
+.cxa-chip-hecho .cxa-punto { background: var(--k-bien); }
+.cxa-botones { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.cxa-flecha, .cxa-sec { height: 32px; min-width: 32px; padding: 0 12px; border: 1px solid var(--k-raya); border-radius: 6px; background: var(--k-blanco); color: var(--k-tinta); font-size: 15px; cursor: pointer; }
+.cxa-flecha { padding: 0; font-size: 18px; }
+.cxa-flecha:disabled, .cxa-sec:disabled { color: var(--k-raya); cursor: default; }
+.cxa-principal { height: 32px; display: inline-flex; align-items: center; gap: 10px; padding: 0 22px; border: 0; border-radius: 6px; background: var(--k-azul); color: var(--k-blanco); font-size: 16px; font-weight: 700; cursor: pointer; }
+.cxa-principal:disabled { opacity: .6; cursor: default; }
+.cxa-principal kbd { padding: 0 6px; border: 1px solid var(--k-blanco); border-radius: 4px; font: inherit; font-size: 12px; font-weight: 400; }
+.cxa-mas-caja { position: relative; }
+.cxa-mas { position: absolute; right: 0; top: 36px; z-index: 4; min-width: 140px; padding: 4px; background: var(--k-blanco); border: 1px solid var(--k-borde); border-radius: 6px; box-shadow: 0 6px 18px rgba(31, 41, 51, .12); }
+.cxa-mas button { width: 100%; text-align: left; padding: 6px 10px; border: 0; background: none; border-radius: 4px; cursor: pointer; }
+.cxa-mas button:hover { background: var(--k-gris); }
+
+/* El cuerpo: el asiento a la izquierda; el documento y el mayor a la derecha. */
+.cxa-cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.28fr) minmax(0, 1fr); border-top: 1px solid var(--k-borde); }
+.cxa-izq { display: flex; flex-direction: column; min-height: 0; padding: 12px 16px 0; gap: 10px; }
+
+.cxa-cabecera { display: grid; grid-template-columns: 110px 130px minmax(0, 1fr); gap: 10px; flex-shrink: 0; }
+.cxa-campo { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--k-apoyo); }
+.cxa-campo input, .cxa-campo select { height: 26px; padding: 0 7px; border: 1px solid var(--k-raya); border-radius: 3px; background: var(--k-blanco); color: var(--k-tinta); font: inherit; font-size: 14px; min-width: 0; }
+.cxa-campo input[readonly] { background: var(--k-gris); }
+.cxa-serie-doc { display: flex; align-items: center; height: 26px; border: 1px solid var(--k-raya); border-radius: 3px; color: var(--k-tinta); }
+.cxa-serie-doc select { height: 24px; border: 0; padding: 0 2px 0 6px; }
+.cxa-doc { padding: 0 6px; color: var(--k-apoyo); }
+
+/* La rejilla: filas finas, cuenta antes del texto y en negrita, cifras a la derecha. */
+.cxa-rejilla-marco { flex: 1; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--k-borde); border-radius: 4px; }
+.cxa-rueda { flex: 1; min-height: 0; overflow: auto; padding: 0 8px; }
+.cxa-rejilla { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
+.cxa-rejilla th { position: sticky; top: 0; z-index: 1; background: var(--k-blanco); text-align: left; font-weight: 400; color: var(--k-apoyo); font-size: 13px; padding: 6px 8px 4px; }
+.cxa-rejilla td { padding: 0 8px; height: 25px; border-bottom: 1px solid var(--k-gris); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
+.cxa-rejilla .cxa-num { text-align: right; font-variant-numeric: tabular-nums; }
+.cxa-rejilla .cxa-c-cuenta { width: 104px; font-weight: 600; }
+.cxa-rejilla .cxa-c-nombre { width: 32%; }
+.cxa-rejilla th:nth-child(4), .cxa-rejilla th:nth-child(5) { width: 104px; }
+.cxa-rejilla .cxa-c-local { width: 110px; }
+.cxa-rejilla select { width: 100%; height: 23px; border: 0; background: transparent; font: inherit; color: inherit; }
+.cxa-rejilla tr.cxa-elegida td { background: var(--k-azul-claro); }
+.cxa-rejilla td a { color: inherit; text-decoration: none; }
+.cxa-rejilla input { width: 100%; height: 23px; border: 0; padding: 0; background: transparent; font: inherit; color: inherit; }
+.cxa-rejilla .cxa-num input { text-align: right; font-variant-numeric: tabular-nums; }
+.cxa-rejilla input:focus { outline: 1px solid var(--k-azul); outline-offset: 1px; background: var(--k-blanco); }
+.cxa-gris, .cxa-rejilla input.cxa-gris { color: var(--k-apoyo); }
+.cxa-celda { display: flex; align-items: center; gap: 4px; }
+.cxa-origen { color: var(--k-azul); font-size: 11px; font-weight: 400; flex-shrink: 0; }
+.cxa-c-cuenta .cxa-origen { margin-left: 6px; }
+.cxa-campo input[aria-invalid='true'] { border-color: var(--k-mira); }
+.cxa-otra { align-self: flex-start; margin: 6px 0 8px 8px; padding: 0; border: 0; background: none; color: var(--k-azul); font-size: 14px; font-weight: 600; cursor: pointer; }
+.cxa-rueda .s-hoja-buscar { position: absolute; left: 0; top: 24px; z-index: 3; width: 420px; }
+
+/* El total, con su raya. */
+.cxa-total { flex-shrink: 0; display: grid; grid-template-columns: auto auto minmax(0, 1fr) 112px 112px; align-items: center; gap: 12px; padding: 7px 16px; border-top: 2px solid var(--k-tinta); }
+.cxa-cuadra, .cxa-descuadre { padding: 1px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.cxa-cuadra { background: var(--k-azul-boton); color: var(--k-bien); }
+.cxa-descuadre { background: var(--k-gris); color: var(--k-mira); }
+.cxa-total-nota { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxa-total-cifra { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.cxa-problemas { flex-shrink: 0; padding: 6px 10px; border-left: 3px solid var(--k-mira); background: var(--k-gris); font-size: 13px; }
+
+/* La ayuda de teclas. */
+.cxa-teclas { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0 -16px; padding: 8px 16px; list-style: none; border-top: 1px solid var(--k-borde); color: var(--k-apoyo); font-size: 12px; }
+.cxa-teclas kbd { display: inline-block; margin-right: 4px; padding: 0 5px; border: 1px solid var(--k-raya); border-radius: 4px; background: var(--k-blanco); color: var(--k-tinta); font: inherit; font-weight: 600; }
+
+/* A la derecha: el documento y el mayor. */
+.cxa-der { display: flex; flex-direction: column; min-height: 0; background: var(--k-gris); border-left: 1px solid var(--k-borde); }
+.cxa-pestanas { flex-shrink: 0; display: inline-flex; align-self: flex-start; gap: 2px; margin: 12px 14px; padding: 3px; border-radius: 6px; background: var(--k-gris-pestana); }
+.cxa-pestanas button { height: 30px; padding: 0 14px; border: 0; border-radius: 4px; background: transparent; color: var(--k-apoyo); font-size: 14px; cursor: pointer; }
+.cxa-pestanas button[aria-selected='true'] { background: var(--k-blanco); color: var(--k-tinta); font-weight: 600; }
+.cxa-doc-zona { flex: 1; display: flex; align-items: center; justify-content: center; border-top: 1px solid var(--k-borde); }
+.cxa-soltar { width: 72%; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 36px 24px; border: 2px dashed var(--k-apoyo); border-radius: 8px; text-align: center; color: var(--k-apoyo); cursor: pointer; }
+.cxa-soltar strong { color: var(--k-tinta); font-size: 15px; }
+.cxa-soltar-icono { color: var(--k-azul); font-size: 28px; line-height: 1; }
+.cxa-soltar-encima { border-color: var(--k-azul); background: var(--k-azul-claro); }
+.cxa-papel { flex: 1; width: 100%; min-height: 0; border: 0; border-top: 1px solid var(--k-borde); object-fit: contain; background: var(--k-blanco); }
+.cxa-mayor { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--k-blanco); border-top: 1px solid var(--k-borde); }
+.cxa-mayor-cabeza { display: flex; align-items: baseline; gap: 6px; padding: 8px 16px; }
+.cxa-mayor-cabeza a { margin-left: auto; color: var(--k-azul); font-size: 13px; }
+.cxa-mayor-cabeza kbd { font: inherit; font-size: 11px; padding: 0 4px; border: 1px solid var(--k-raya); border-radius: 3px; }
+.cxa-mayor .cxa-rejilla th:nth-child(1) { width: 64px; }
+.cxa-mayor .cxa-rejilla th:nth-child(2) { width: 76px; }
+.cxa-mayor .cxa-rejilla th:nth-child(n+4) { width: 92px; }
+.cxa-mayor-nada { margin: 16px; color: var(--k-apoyo); }
+
+/* Anular: la pregunta, con sus dos botones. */
+.cxa-velo { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgba(31, 41, 51, .28); }
+.cxa-confirmar { width: 420px; padding: 18px 20px; background: var(--k-blanco); border-radius: 8px; box-shadow: 0 10px 30px rgba(31, 41, 51, .2); display: flex; flex-direction: column; gap: 12px; }
+.cxa-confirmar h2 { margin: 0; font-size: 17px; }
+.cxa-confirmar-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cxa-confirmar-botones button { justify-content: center; }

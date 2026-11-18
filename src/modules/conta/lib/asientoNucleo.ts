@@ -9,8 +9,8 @@
 //   · el concepto de la cabecera pasa solo a las líneas, y el local de una línea a la siguiente;
 //   · la última línea rellena sola el debe o el haber que falta para cuadrar;
 //   · los totales (debe, haber y descuadre), como ERP10;
-//   · Intro de casilla en casilla, y al final de la línea, la siguiente;
-//   · F8: asiento → emitida → recibida → asiento, el orden de ERP10 («asiento general, factura expedida o factura recibida»).
+//   · Intro de casilla en casilla, y al final de la línea, la siguiente.
+// F4, F5 y F8 son del teclado común del marco (nucleo/teclado.ts): se usan, no se copian.
 
 import { cuadreMano, importeMano, type LineaMano } from '@/modules/conta/lib/diario'
 
@@ -82,7 +82,13 @@ export function conConceptoDeCabecera(lineas: readonly LineaMano[], antes: strin
   return lineas.map((l) => (l.concepto === antes || !l.concepto.trim() ? { ...l, concepto: ahora } : l))
 }
 
-const dos = (n: number) => (Math.round(n * 100) / 100).toFixed(2).replace('.', ',')
+/** «1.210,00»: como se escribe un importe (con el punto de los miles también en cuatro cifras). */
+export function importeEscrito(n: number): string {
+  const c = Math.round(Math.abs(n) * 100)
+  const enteros = String(Math.floor(c / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return `${n < 0 ? '-' : ''}${enteros},${String(c % 100).padStart(2, '0')}`
+}
+const dos = importeEscrito
 
 /**
  * La última línea rellena sola lo que falta para cuadrar: si tiene subcuenta y ni debe ni haber,
@@ -121,17 +127,4 @@ export function siguienteCasilla(fila: number, casilla: Casilla, filas: number, 
   const saltaHaber = casilla === 'debe' && linea.debe.trim() !== ''
   if (casilla === 'haber' || saltaHaber) return { fila: fila + 1, casilla: 'subcuenta', nuevaLinea: fila + 1 >= filas }
   return { fila, casilla: CASILLAS[i + 1], nuevaLinea: false }
-}
-
-/** F8: el tipo de introducción, en el orden de ERP10 (asiento general → factura expedida → factura recibida). */
-export type TipoIntroduccion = 'asiento' | 'recibida' | 'emitida'
-
-/**
- * El siguiente con F8. Si la emitida del núcleo aún no está, del asiento se pasa a la recibida
- * y la frase lo dice (encargo N08, punto 4).
- */
-export function siguienteTipo(actual: TipoIntroduccion, hayEmitida: boolean): { tipo: TipoIntroduccion; frase: string | null } {
-  if (actual === 'asiento') return hayEmitida ? { tipo: 'emitida', frase: null } : { tipo: 'recibida', frase: 'La factura emitida todavía no está en las pantallas nuevas: vas a la recibida.' }
-  if (actual === 'emitida') return { tipo: 'recibida', frase: null }
-  return { tipo: 'asiento', frase: null }
 }
