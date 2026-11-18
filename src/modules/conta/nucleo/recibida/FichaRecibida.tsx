@@ -52,6 +52,7 @@ import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, Comprobaciones, Duda, EstadoFicha } from '../ficha/piezas'
 import { PanelDocumento } from '../ficha/PanelDocumento'
 import { cifra } from '../ficha/textos'
+import { useUltimo } from '../ficha/useUltimo'
 import { cuentasQueEncajan, queHaceIntro, type CuentaDelPlan } from '../ficha/teclas'
 import { origenes } from './origen'
 import { comprobacionesDe, dondeVaElFoco, dudaDelGasto, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
@@ -123,21 +124,23 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   // ── Lo que se lee: lo mismo que la ficha de hoy ──
   const id = aMano ? '' : invoiceId
   const f = useLeer(id ? () => leerFactura(id) : null, `${id}:${vuelta}`)
-  const fac = f.datos
+  // Lo último leído de ESTA factura mientras se vuelve a leer (useUltimo): la ficha no se vacía ni pierde su cuenta.
+  const fac = useUltimo(f.datos, id)
   const empresa = activa?.id ?? fac?.company_id ?? null
   const filtros = filtrosDe(query)
   const { desde, hasta } = ventanaDe(filtros.mes, hoy)
   const lista = useLeer(empresa && accountId ? () => colaRecibidas(accountId, empresa, desde, hasta, filtros) : null, `${accountId}:${empresa}:${desde}:${hasta}:${search}:${vuelta}`)
-  const ids = useMemo(() => lista.datos ?? [], [lista.datos])
+  const listaDatos = useUltimo(lista.datos, `${empresa}:${search}`)
+  const ids = useMemo(() => listaDatos ?? [], [listaDatos])
   const pos = ids.indexOf(invoiceId)
-  const ficha = useLeer(accountId && id ? () => leerFichaRecibida(accountId, id) : null, `${accountId}:${id}:ficha:${vuelta}`).datos
+  const ficha = useUltimo(useLeer(accountId && id ? () => leerFichaRecibida(accountId, id) : null, `${accountId}:${id}:ficha:${vuelta}`).datos, id)
   const localPropuesto = ficha ? ficha.localId ?? ficha.recepcion?.localId ?? null : undefined
   const papel = useLeer(fac && ficha ? async () => ({ url: await urlDelPapel(fac, ficha.lectura?.ruta ?? null) }) : null, `${id}:papel:${ficha ? 'f' : '-'}:${fac?.llegada?.ruta ?? fac?.papel ?? ''}`)
   const plazo = useLeer(fac?.proveedor?.id && accountId ? () => plazoDeLaFicha(accountId, fac.proveedor!.id) : null, `${accountId}:${fac?.proveedor?.id}:plazo`).datos
   const vista = useLeer(fac && accountId && fac.company_id && fac.fecha && !fac.asiento && localPropuesto !== undefined
     ? () => verPropuestaFactura(accountId, fac.company_id!, fac.id, fac.fecha!, localPropuesto) : null,
   `${accountId}:${id}:${fac?.fecha}:${fac?.proveedor?.id}:${localPropuesto}:${vuelta}`)
-  const extra = useLeer(accountId && id ? () => leerExtrasFacturas(accountId, [id]).then((m) => m.get(id) ?? null) : null, `${accountId}:${id}:extra:${vuelta}`).datos
+  const extra = useUltimo(useLeer(accountId && id ? () => leerExtrasFacturas(accountId, [id]).then((m) => m.get(id) ?? null) : null, `${accountId}:${id}:extra:${vuelta}`).datos, id)
   const proveedoresL = useLeer(accountId ? () => proveedoresDeLaCuenta(accountId) : null, `${accountId}:proveedores`).datos
   const proveedores = useMemo(() => proveedoresL ?? [], [proveedoresL])
   const localesL = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}:locales`).datos
@@ -150,8 +153,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const marca = useLeer(accountId && id ? () => marcaDeLaFactura(accountId, id) : null, `${accountId}:${id}:marca`).datos ?? null
 
   // ── El borrador: lo guardado, como en la ficha de hoy ──
-  const propuesta = fac?.asiento ? undefined : vista.datos ? (vista.datos.propuesta ?? null) : vista.error ? null : undefined
-  const nombresProp = vista.datos?.propuesta ? vista.datos.nombres : null
+  const vistaDatos = useUltimo(vista.datos, `${id}:${fac?.proveedor?.id ?? ''}`)
+  const propuesta = fac?.asiento ? undefined : vistaDatos ? (vistaDatos.propuesta ?? null) : vista.error ? null : undefined
+  const nombresProp = vistaDatos?.propuesta ? vistaDatos.nombres : null
   const lineaGasto = propuesta?.lineas.find((l) => l.debe > 0 && /^6/.test(l.cuenta)) ?? null
   const gastoPropuesto = lineaGasto?.cuenta ?? fac?.proveedor?.gasto?.cuenta ?? null
   const venceFicha = fac?.fecha && plazo && plazo.dias !== null ? calcularVencimiento(fac.fecha, plazo.dias, plazo.fijos) : null
@@ -186,8 +190,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const provId = b.proveedorId || fac?.proveedor?.id || ''
   const prov = proveedores.find((p) => p.id === provId) ?? (fac?.proveedor && fac.proveedor.id === provId ? { id: provId, nombre: fac.proveedor.nombre, nif: fac.proveedor.nif } : null)
   const delProv = useLeer(accountId && empresa && provId ? () => delProveedor(accountId, empresa, provId) : null, `${accountId}:${empresa}:${provId}:del`).datos ?? null
-  const mayor = useLeer(accountId && empresa && delProv?.subcuenta ? () => mayorDelProveedor(accountId, empresa, delProv.subcuenta!.id, hoy) : null, `${accountId}:${empresa}:${delProv?.subcuenta?.id}:mayor:${vuelta}`).datos ?? null
-  const aprendido = useLeer(empresa && provId && !aMano ? () => gastoAprendido(empresa, provId) : null, `${empresa}:${provId}:${invoiceId}:aprendido:${vuelta}`).datos ?? null
+  const mayor = useUltimo(useLeer(accountId && empresa && delProv?.subcuenta ? () => mayorDelProveedor(accountId, empresa, delProv.subcuenta!.id, hoy) : null, `${accountId}:${empresa}:${delProv?.subcuenta?.id}:mayor:${vuelta}`).datos, `${id}:${provId}`)
+  const aprendido = useUltimo(useLeer(empresa && provId && !aMano ? () => gastoAprendido(empresa, provId) : null, `${empresa}:${provId}:${invoiceId}:aprendido:${vuelta}`).datos, `${id}:${provId}`)
   const sinPropuesta = aMano || propuesta === null
   const aManoCuentas = useLeer(accountId && empresa && sinPropuesta ? () => cuentasAMano(accountId, empresa, provId || null) : null, `${accountId}:${empresa}:${provId}:cuentas-a-mano`).datos ?? null
 
