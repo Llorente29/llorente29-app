@@ -12,6 +12,7 @@
 --           marcada_persona (lo dijo alguien en la ficha), contestada (respuesta E03),
 --           sin_marca.
 --   asiento validado | sin validar.
+-- Corte fijo (el #241): solo las recibidas creadas antes del 18/11/2026 a las 00:00 de Madrid.
 -- Lo esperado: las «marcada_sola · sin validar» pasan a «sin_marca · sin validar»;
 -- las «· validado», igual; el total de cada cuenta, igual.
 with base as (
@@ -26,7 +27,9 @@ with base as (
                    and h.cambios @> '[{"campo": "iva_no_deducible"}]'::jsonb) as persona
     from public.supplier_invoice si
     join public.company c on c.id = si.company_id and c.account_id = si.account_id
-   where coalesce(si.reading, '{}'::jsonb) ? 'factura' and coalesce(si.source, '') not in ('lote', 'liquidacion', 'traida')
+   -- corte (el #241): solo las recibidas creadas antes del 18/11/2026 a las 00:00 de Madrid.
+   where si.created_at < timestamptz '2026-11-18 00:00:00+01'
+     and coalesce(si.reading, '{}'::jsonb) ? 'factura' and coalesce(si.source, '') not in ('lote', 'liquidacion', 'traida')
      and si.status not in ('anulada', 'descartada', 'repetida')
      and public._conta_nif_clave(c.tax_id) is not null
 ), casos as (
