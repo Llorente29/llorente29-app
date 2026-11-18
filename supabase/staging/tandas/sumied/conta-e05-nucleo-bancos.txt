@@ -1,0 +1,6 @@
+# E05 · Bancos del núcleo. La 2248 solo añade (una función nueva, se puede pasar dos
+# veces): va de verdad desde la rama (W05), para que la e2e de la pantalla la use.
+# Su prueba (ROLLBACK: validado al momento, el pago y el ingreso, que el motor lo ve
+# y bank_casar lo casa sin otro asiento, lo que no deja y la vuelta atrás).
+supabase/migrations/20261118T2248_e05_banco_a_mano.sql
+supabase/staging/sql/20261118_e05_banco_a_mano_prueba.sql
