@@ -78,16 +78,21 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await zonaActiva(page).getByLabel('Buscar factura').first().fill('')
 
     // 3 · F5 desde una fila con cuenta: el plan contable (cada fila enlaza con su mayor).
-    // El plan abre con «Las que usas», y la gestoría de prueba no tiene asientos:
-    // se pasa a «Todas» y se abre la 57200001 (la cuenta del banco que le da la semilla del K02).
+    // El plan abre con «Las que usas» y con el grupo 4 elegido, y la gestoría de prueba
+    // no tiene asientos y solo tiene la 57200001 (la cuenta del banco que le da la
+    // semilla del K02), en el grupo 5: se pasa a «Todas», se elige el grupo 5 y se
+    // abren 57 y 572 hasta su fila.
     await boton(page, 'Definiciones', 'plan')
     await abierta(page, 'Plan contable')
     const plan = zonaActiva(page)
     const codigo = '57200001'
     await plan.getByRole('button', { name: 'Todas', exact: true }).first().click()
     await expect(plan.getByRole('button', { name: 'Todas', exact: true }).first()).toHaveAttribute('aria-pressed', 'true')
+    const grupo5 = plan.getByRole('group', { name: 'Grupo del plan' }).getByRole('button', { name: /^5 · Cuentas financieras/ })
+    await grupo5.click()
+    await expect(grupo5).toHaveAttribute('aria-pressed', 'true')
     const fila = plan.locator(`[role="row"]:has(a[href*="/conta/plan/${codigo}"])`).first()
-    for (const grupo of ['5', '57', '572']) {
+    for (const grupo of ['57', '572']) {
       const abrir = plan.getByRole('button', { name: new RegExp(`^Abrir ${grupo} · `) }).first()
       // O el grupo por abrir, o ya la fila (si el árbol no tiene ese nivel).
       await expect(abrir.or(fila).first()).toBeVisible({ timeout: 30_000 })
