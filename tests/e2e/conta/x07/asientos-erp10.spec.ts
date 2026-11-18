@@ -6,7 +6,8 @@
 // acabar), con la cuenta A y su empresa de pruebas, con la sesión del administrador:
 //   0. Por la API: la salida, encendida DESDE HOY (así lo único que sale es lo de esta
 //      prueba y lo de hoy de otras del carril), una nómina de cuatro apuntes (uno al
-//      debe y tres al haber, con céntimos) y un pago de dos, validados, sin I.V.A.
+//      debe y tres al haber, con céntimos y su retención) y un pago de dos, validados,
+//      sin I.V.A.
 //   1. Paso 1: la fila «Asientos», con los dos y su importe, y «Listo».
 //   2. «Descargar los ficheros»: asientos.xlsx con una fila por apunte, el mismo número
 //      en A por asiento, la fecha en B, la serie en L, un solo lado relleno.
@@ -49,7 +50,7 @@ async function cuenta(s: Sesion, hoja: string, nombre: string): Promise<string> 
   return hay?.code ?? (await api<{ code: string }>(s, 'POST', 'rpc/company_account_add', { p_company: EMPRESA_A, p_hoja: hoja, p_nombre: nombre, p_quien_nombre: QUIEN })).code
 }
 
-async function asiento(s: Sesion, hoy: string, concepto: string, lineas: { cuenta: string; debe?: number; haber?: number }[]) {
+async function asiento(s: Sesion, hoy: string, concepto: string, lineas: { cuenta: string; debe?: number; haber?: number; retencion?: unknown }[]) {
   const p = await api<{ id: string }>(s, 'POST', 'rpc/journal_entry_proponer', {
     p_company: EMPRESA_A,
     p_entry: { series: 4, fecha: hoy, concepto, source_type: 'manual', confianza: 'seguro', porque: 'Asiento de la prueba e2e del X07.' },
@@ -67,9 +68,11 @@ async function preparar(s: Sesion, hoy: string) {
   const ss = await cuenta(s, '476', 'Seguridad Social inventada X07')
   const pendiente = await cuenta(s, '465', 'Nóminas pendientes inventadas X07')
   const banco = await cuenta(s, '572', 'Banco inventado X07')
+  // La retención va con su tipo, su base y su modelo (lo pide validar); va en withholding_rate_id, no es I.V.A.
+  const [adm] = await api<{ id: string }[]>(s, 'GET', 'withholding_rate?select=id&is_system=is.true&valid_to=is.null&code=eq.administradores')
   const n = Date.now() % 100000
   await asiento(s, hoy, `E2E X07 · nómina ${n}`, [
-    { cuenta: sueldos, debe: 1250 }, { cuenta: irpf, haber: 187.5 }, { cuenta: ss, haber: 79.38 }, { cuenta: pendiente, haber: 983.12 },
+    { cuenta: sueldos, debe: 1250 }, { cuenta: irpf, haber: 437.5, retencion: { tipo_id: adm.id, base: 1250, modelo: '111' } }, { cuenta: ss, haber: 79.38 }, { cuenta: pendiente, haber: 733.12 },
   ])
   await asiento(s, hoy, `E2E X07 · pago ${n}`, [{ cuenta: '41000002', debe: 82.1 }, { cuenta: banco, haber: 82.1 }])
   return { cuentas: [sueldos, irpf, ss, pendiente, banco, '41000002'], sueldos, banco }
@@ -152,7 +155,7 @@ test('X07 · contra staging: una nómina y un pago salen como asientos, con su f
   expect(cuadra(nomina)).toBe(0)
   expect(cuadra(pago)).toBe(0)
   expect(nomina.find((x) => x.debe === hecho.sueldos)?.f).toBe(1250)
-  expect(nomina.map((x) => x.j).filter(Boolean).sort()).toEqual([187.5, 79.38, 983.12].sort())
+  expect(nomina.map((x) => x.j).filter(Boolean).sort()).toEqual([437.5, 79.38, 733.12].sort())
   // Números seguidos desde el 1, sin huecos.
   const numeros = [...new Set(filas.map((x) => x.a as number))]
   expect(numeros).toEqual(numeros.map((_, i) => i + 1))
@@ -190,7 +193,7 @@ test('X07 · contra staging: una nómina y un pago salen como asientos, con su f
   await expect(page.locator('.cxe-hecho')).toHaveText(/^Igualado: .+ queda igual en Sumied y en ERP10 \(sumas_y_saldos_x07\.xlsx, a .+\)\. Lo dio por igualado .+\.$/, { timeout: 30_000 })
   // La captura, con la pantalla acabada: la tabla con sus filas, el chip verde, el panel que lo dice y nada en ámbar.
   await expect(page.getByText(/^Igualado el \d\d\/\d\d\/\d{4}/)).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByText('Igualado: no queda nada por mirar.')).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Por qué no queda igual' })).toContainText('Igualado: no queda nada por mirar.')
   await expect(grupoIgual.getByRole('row').filter({ hasText: hecho.sueldos })).toBeVisible()
   await expect(page.locator('.cxe-fila-filo')).toHaveCount(0)
   await expect(page.locator('.cxe-grupo-ambar')).toHaveCount(0)
