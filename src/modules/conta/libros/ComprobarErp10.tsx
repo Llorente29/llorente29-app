@@ -27,6 +27,8 @@ import { conDiferencia, explicar, type Comparacion, type Comprobar, type CuentaC
 export interface Subido { nombre: string; fecha: string; avisos: string[] }
 
 const euros = (cent: number) => importe(cent / 100)
+/** El día de Madrid de un sello de tiempo (para no decir el día de antes pasada la medianoche). */
+const hoyDe = (sello: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date(sello))
 const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const PLEGADAS = 2
 /** Las anchuras de las cinco columnas, las mismas en la tabla y en su total (que va fuera, para que no ruede). */
@@ -43,6 +45,10 @@ export function ComprobarErp10(p: {
   aMano: (entryId: string) => void
   volver: (entryId: string) => void
   ocupado: boolean
+  /** X07: está volviendo a comparar; lo de antes sigue a la vista. */
+  cargando?: boolean
+  /** El mes que se compara (para saber si lo último igualado es este). */
+  mes?: string | null
 }) {
   const entrada = useRef<HTMLInputElement | null>(null)
   const [abiertos, setAbiertos] = useState<{ igual: boolean; noSale: boolean }>({ igual: false, noSale: false })
@@ -72,12 +78,16 @@ export function ComprobarErp10(p: {
   }
 
   const c = p.comparacion
+  // X07 · Lo igualado de esta comparación (el mes, el fichero y la fecha): la pantalla se ve acabada.
+  const g = p.base?.igualado
+  const igualado = g && g.mes === p.mes && g.fichero === p.subido.nombre && g.fechaSaldos === p.subido.fecha ? g : null
+  const pendientes = c ? c.noIgual.filter((x) => x.bloquea).length : 0
   const elegida = c?.cuentas.find((x) => x.cuenta === p.elegida) ?? c?.noIgual[0] ?? c?.noSale[0] ?? null
   const ultimoLote = p.base?.lotes.length ? p.base.lotes[p.base.lotes.length - 1].id : null
   const codigoSumied = (erp: string) => p.base?.saldos.find((s) => (s.erp ?? s.codigo) === erp)?.codigo ?? erp
 
   const filaCuenta = (x: CuentaComparada) => (
-    <tr key={x.cuenta} className={`cxe-fila${x.grupo === 'no_igual' ? ' cxe-fila-filo' : ''}`} aria-selected={elegida?.cuenta === x.cuenta} tabIndex={0}
+    <tr key={x.cuenta} className={`cxe-fila${x.grupo === 'no_igual' && x.bloquea ? ' cxe-fila-filo' : ''}`} aria-selected={elegida?.cuenta === x.cuenta} tabIndex={0}
       onClick={() => p.elegir(x.cuenta)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); p.elegir(x.cuenta) } }}>
       <td><span className="cxe-cuenta">{x.cuenta}</span></td>
       <td>{x.nombre}</td>
@@ -107,21 +117,25 @@ export function ComprobarErp10(p: {
       <div className="cxe-izq">
         <div className="cxe-franja">
           <span className="cxe-chip-gris">Comparado con {p.subido.nombre} de ERP10, a {dm(p.subido.fecha)}</span>
-          {c && (c.noIgual.length
-            ? <span className="cxe-chip-ambar">{conDiferencia(c.noIgual.length)}</span>
-            : <span className="cxe-chip-verde">Todo queda igual</span>)}
+          {c && (igualado
+            ? <span className="cxe-chip-verde">Igualado el {fechaLarga(hoyDe(igualado.cuando))}{igualado.quien ? `, por ${igualado.quien}` : ''}</span>
+            : pendientes
+              ? <span className="cxe-chip-ambar">{conDiferencia(pendientes)}</span>
+              : <span className="cxe-chip-verde">{c.noIgual.length ? 'Todas las diferencias, explicadas' : 'Todo queda igual'}</span>)}
           <span className="cxe-franja-fin">{subirBoton('Subir otro Excel', 'cxe-enlace')}</span>
         </div>
         {p.subido.avisos.map((a) => <p key={a} className="cxe-aviso-linea" role="note">{a}</p>)}
         {p.error && <p className="cxe-mal" role="alert">{p.error}</p>}
         {!c && !p.error && <div aria-busy="true" aria-label="Comparando" className="cxe-marco"><p className="cx-ayuda" style={{ padding: 12 }}>Comparando con lo de Sumied…</p></div>}
         {c && (
-          <div className="cxe-marco">
+          <div className="cxe-marco" aria-busy={p.cargando || undefined}>
             <div className="cxe-rueda">
               <table className="cxe-tabla cxe-comparar" aria-label="Cuenta a cuenta">
                 <Columnas />
                 <thead><tr><th>Cuenta</th><th>Nombre</th><th className="cxe-num">Saldo en Sumied</th><th className="cxe-num">Saldo en ERP10</th><th className="cxe-num">Diferencia</th></tr></thead>
-                {grupo(c.noIgual, `${c.noIgual.length} ${c.noIgual.length === 1 ? 'cuenta no queda igual' : 'cuentas no quedan igual'}`, 'cxe-grupo-ambar', null)}
+                {pendientes
+                  ? grupo(c.noIgual, `${c.noIgual.length} ${c.noIgual.length === 1 ? 'cuenta no queda igual' : 'cuentas no quedan igual'}`, 'cxe-grupo-ambar', null)
+                  : grupo(c.noIgual, `${c.noIgual.length} ${c.noIgual.length === 1 ? 'cuenta tiene' : 'cuentas tienen'} la diferencia explicada`, 'cxe-grupo-verde', null)}
                 {grupo(c.noSale, `${c.noSale.length} ${c.noSale.length === 1 ? 'cuenta lleva' : 'cuentas llevan'} cosas que todavía no salen por aquí · ${euros(sumaNoSale)}`, 'cxe-grupo-gris', 'noSale')}
                 {grupo(c.igual, `${c.igual.length} ${c.igual.length === 1 ? 'cuenta queda igual' : 'cuentas quedan igual'}`, 'cxe-grupo-verde', 'igual')}
               </table>
@@ -143,6 +157,11 @@ export function ComprobarErp10(p: {
           {elegida && <Link className="cx-enlace" to={rutaMayor(codigoSumied(elegida.cuenta))}>Abrir su mayor</Link>}
         </div>
         <div className="cxe-der-cuerpo">
+          {igualado && (
+            <div className="cxe-nota cxe-nota-verde" role="note">
+              <p><strong>Igualado: no queda nada por mirar.</strong> Lo dio por igualado {igualado.quien ?? 'alguien de la cuenta'} el {fechaLarga(hoyDe(igualado.cuando))}, con {igualado.fichero} a {dm(igualado.fechaSaldos)}.</p>
+            </div>
+          )}
           {!elegida && c && <div className="cxe-nota"><p><strong>Todo queda igual.</strong> Las {c.cuentas.length} cuentas tienen el mismo saldo en Sumied y en ERP10.</p></div>}
           {elegida && <PorQue x={elegida} c={c!} ultimoLote={ultimoLote} aMano={p.aMano} volver={p.volver} ocupado={p.ocupado} />}
         </div>
@@ -185,5 +204,5 @@ function PorQue({ x, c, ultimoLote, aMano, volver, ocupado }: {
 }
 
 function mesYQuien(g: NonNullable<Comprobar['igualado']>): string {
-  return `el ${fechaLarga(g.cuando.slice(0, 10))}${g.quien ? `, por ${g.quien}` : ''} (${g.fichero}, a ${dm(g.fechaSaldos)})`
+  return `el ${fechaLarga(hoyDe(g.cuando))}${g.quien ? `, por ${g.quien}` : ''} (${g.fichero}, a ${dm(g.fechaSaldos)})`
 }

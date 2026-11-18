@@ -127,3 +127,4 @@
 @container (max-width: 1080px) {
   .cxe-paso:not([aria-current='step']) .cxe-paso-etq { display: none; }
 }
+.cxe-nota-verde { border-color: var(--cx-verde-oscuro); background: var(--cx-verde-suave); }

@@ -139,6 +139,13 @@ test('X06 · contra staging: sacar, subir el sumas y saldos de ERP10, ver la fac
   await igualar.click()
   const mes = MESES[Number(hoy.slice(5, 7)) - 1]
   await expect(page.locator('.cxe-hecho')).toHaveText(new RegExp(`^Igualado: ${mes} de ${hoy.slice(0, 4)} queda igual en Sumied y en ERP10 \\(sumas_y_saldos\\.xlsx, a ${dm(fin).replace('/', '\\/')}; \\d+ cuentas\\)\\. Lo dio por igualado .+ el \\d\\d/\\d\\d/\\d{4} a las \\d\\d:\\d\\d\\.$`), { timeout: 30_000 })
+  // X07 · La captura, con la pantalla acabada: la tabla con sus filas (no «Comparando…»), el chip verde y el panel que lo dice.
+  await expect(page.getByText(/^Igualado el \d\d\/\d\d\/\d{4}/)).toBeVisible({ timeout: 30_000 })
+  await expect(porque).toContainText('Igualado: no queda nada por mirar.')
+  await expect(tabla.getByRole('row').filter({ hasText: '41000002' })).toBeVisible()
+  await expect(page.getByText('3 cuentas tienen la diferencia explicada', { exact: true })).toBeVisible()
+  await expect(page.locator('.cxe-fila-filo')).toHaveCount(0)
+  await expect(page.locator('.cxe-marco[aria-busy="true"]')).toHaveCount(0)
   await page.screenshot({ path: `${DIR}/paso3-igualado.png` })
   expect(errores).toEqual([])
 })

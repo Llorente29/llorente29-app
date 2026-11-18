@@ -25,16 +25,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaAjustes, rutaAsiento } from '@/config/navegacion'
-import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
+import { useLeer, useLeerConservando, useLibros } from '@/modules/conta/libros/contexto'
 import { fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
-import { XML_EXPEDIDAS, XML_RECIBIDAS, XML_SUBCUENTAS } from '@/modules/conta/erp10/configuracion'
+import { XML_ASIENTOS, XML_EXPEDIDAS, XML_RECIBIDAS, XML_SUBCUENTAS } from '@/modules/conta/erp10/configuracion'
 import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepararDescarga, soloUna, type Clase, type FilaQueSale, type Salida } from '@/modules/conta/erp10/salida'
 import { comparar, fechaDelSumas } from '@/modules/conta/erp10/comparar'
 import { abrirExcel, leerSumasYSaldos, reconocer, texto as textoDe, type FilaSumas } from '@/modules/conta/lib/traer'
 import { ComprobarErp10, type Subido } from '@/modules/conta/libros/ComprobarErp10'
 import {
-  apuntarLote, bajarPdf, carpetaDeLaSalida, leerCambiadas, leerComprobar, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
+  apuntarLote, bajarPdf, carpetaDeLaSalida, leerAsientosPorSalir, leerCambiadas, leerComprobar, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
   ponerAMano, ponerIgualado, volverASacar,
 } from '@/modules/conta/services/erp10Service'
 
@@ -49,10 +49,11 @@ const XLSX_TIPO = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 const ETIQUETA: Record<FilaQueSale['estado'], string> = { Listo: 'cxe-etq-listo', 'Mira esto': 'cxe-etq-mira', 'Todavía no sale por aquí': 'cxe-etq-gris', Nada: 'cxe-etq-gris' }
 
-type Descargado = { cuentas: number; emitidas: number; recibidas: number; pdfs: number; zips: string[]; texto: string }
+type Descargado = { cuentas: number; emitidas: number; recibidas: number; asientos: number; pdfs: number; zips: string[]; texto: string }
 
-const facturas = (n: number, clase: Clase) => `${n} ${n === 1 ? 'factura' : 'facturas'} ${clase === 'emitida' ? (n === 1 ? 'emitida' : 'emitidas') : (n === 1 ? 'recibida' : 'recibidas')}`
-const CLASES: Clase[] = ['emitida', 'recibida']
+const facturas = (n: number, clase: Clase) => clase === 'asiento' ? `${n} ${n === 1 ? 'asiento' : 'asientos'}`
+  : `${n} ${n === 1 ? 'factura' : 'facturas'} ${clase === 'emitida' ? (n === 1 ? 'emitida' : 'emitidas') : (n === 1 ? 'recibida' : 'recibidas')}`
+const CLASES: Clase[] = ['emitida', 'recibida', 'asiento']
 
 export function SalidaErp10() {
   const L = useLibros()
@@ -64,16 +65,17 @@ export function SalidaErp10() {
   const [vuelta, setVuelta] = useState(0)
   const encendida = salida.datos?.encendida === true
 
-  const datos = useLeer(encendida && mes ? async () => {
-    const [ps, rs, es, cambiadas, lotes] = await Promise.all([
-      leerPorSalir(L.companyId, mes), leerRecibidasPorSalir(L.companyId, mes), leerEmitidasPorSalir(L.companyId, mes),
+  // X07: al refrescar lo del mismo mes (después de sacar o de volver a sacar), lo de antes se queda a la vista.
+  const datos = useLeerConservando(encendida && mes ? async () => {
+    const [ps, rs, es, as, cambiadas, lotes] = await Promise.all([
+      leerPorSalir(L.companyId, mes), leerRecibidasPorSalir(L.companyId, mes), leerEmitidasPorSalir(L.companyId, mes), leerAsientosPorSalir(L.companyId, mes),
       leerCambiadas(L.companyId), leerLotes(L.accountId, L.companyId),
     ])
-    return { ps, rs, es, cambiadas, lotes }
-  } : null, `${L.companyId}:${mes}:${vuelta}:${L.vuelta}`)
+    return { ps, rs, es, as, cambiadas, lotes }
+  } : null, `${L.companyId}:${mes}:${vuelta}:${L.vuelta}`, `${L.companyId}:${mes}`)
 
   const carpeta = salida.datos ? carpetaDeLaSalida(salida.datos) : ''
-  const s: Salida | null = useMemo(() => (datos.datos ? armarSalida(datos.datos.ps, datos.datos.rs, datos.datos.es, carpeta) : null), [datos.datos, carpeta])
+  const s: Salida | null = useMemo(() => (datos.datos ? armarSalida(datos.datos.ps, datos.datos.rs, datos.datos.es, carpeta, datos.datos.as) : null), [datos.datos, carpeta])
 
   const [paso, setPaso] = useState<1 | 2 | 3>(1)
   // Paso 3: el sumas y saldos subido (con su cabecera, para la fecha), la comparación y la cuenta elegida.
@@ -84,10 +86,12 @@ export function SalidaErp10() {
   const [dicho, setDicho] = useState<string | null>(null)
   const [vueltaC, setVueltaC] = useState(0)
   const fecha = subido && mes ? fechaDelSumas(subido.cabecera, mes) : null
-  const comprobar = useLeer(paso === 3 && fecha ? () => leerComprobar(L.companyId, fecha) : null, `${L.companyId}:${fecha}:${vueltaC}:${L.vuelta}`)
+  // X07: mientras vuelve a comparar (al igualar, al apuntar a mano, al volver a sacar), la tabla que había se queda a la vista.
+  const comprobar = useLeerConservando(paso === 3 && fecha ? () => leerComprobar(L.companyId, fecha) : null, `${L.companyId}:${fecha}:${vueltaC}:${L.vuelta}`,
+    `${L.companyId}:${fecha}:${subido?.nombre ?? ''}`)
   const comparacion = useMemo(() => {
     if (!subido || !comprobar.datos || !s) return null
-    const porSacar = new Set([...s.ficheros.expedidas, ...s.ficheros.recibidas].map((f) => f.entryId))
+    const porSacar = new Set([...s.ficheros.expedidas, ...s.ficheros.recibidas, ...s.ficheros.asientos].map((f) => f.entryId))
     return comparar(subido.filas, comprobar.datos, { porSacar, noPueden: new Map(s.noPuedenSalir.map((x) => [x.entryId, x.porque])) })
   }, [subido, comprobar.datos, s])
   const [fila, setFila] = useState<FilaQueSale['id']>('recibidas')
@@ -172,9 +176,12 @@ export function SalidaErp10() {
       const cuentas = s.ficheros.subcuentas.length
       const nE = s.ficheros.expedidas.length
       const nR = s.ficheros.recibidas.length
-      const texto = `Descargado: ${cuentas} ${cuentas === 1 ? 'cuenta nueva' : 'cuentas nuevas'}, ${facturas(nE, 'emitida')} (${importe(s.totalEmitidas)} €) y ${facturas(nR, 'recibida')} (${importe(s.totalRecibidas)} €).`
+      const nA = s.ficheros.asientos.length
+      const partes = [`${cuentas} ${cuentas === 1 ? 'cuenta nueva' : 'cuentas nuevas'}`, `${facturas(nE, 'emitida')} (${importe(s.totalEmitidas)} €)`, `${facturas(nR, 'recibida')} (${importe(s.totalRecibidas)} €)`]
+      if (nA) partes.push(`${facturas(nA, 'asiento')} (${importe(s.totalAsientos)} €)`)
+      const texto = `Descargado: ${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}.`
         + (zips.length ? ` Los PDF, en ${zips.length === 1 ? 'un fichero comprimido' : `${zips.length} ficheros comprimidos`}.` : '') + ' Queda apuntado.'
-      setHecho({ cuentas, emitidas: nE, recibidas: nR, pdfs: pdfs.length, zips: zips.map((z) => z.nombre), texto })
+      setHecho({ cuentas, emitidas: nE, recibidas: nR, asientos: nA, pdfs: pdfs.length, zips: zips.map((z) => z.nombre), texto })
       setPaso(2)
     } catch (e) {
       setFallo(`No se ha descargado nada: ${e instanceof Error ? e.message : 'no ha contestado'}`)
@@ -213,8 +220,8 @@ export function SalidaErp10() {
     setFallo(null); setDicho(null); setHaciendo('Preparando la factura…')
     try {
       await volverASacar(L.companyId, entryId, L.quien)
-      const [ps, rs, es] = await Promise.all([leerPorSalir(L.companyId, mes), leerRecibidasPorSalir(L.companyId, mes), leerEmitidasPorSalir(L.companyId, mes)])
-      const una = soloUna(armarSalida(ps, rs, es, carpeta), entryId)
+      const [ps, rs, es, as] = await Promise.all([leerPorSalir(L.companyId, mes), leerRecibidasPorSalir(L.companyId, mes), leerEmitidasPorSalir(L.companyId, mes), leerAsientosPorSalir(L.companyId, mes)])
+      const una = soloUna(armarSalida(ps, rs, es, carpeta, as), entryId)
       if (!una) throw new Error('ha vuelto a lo que sale, pero su fila no se puede preparar: mírala en el paso 1.')
       const { libros, pdfs } = await sacar(una, mes)
       const nombre = [...una.listas.emitidas, ...una.listas.recibidas][0]?.numero ?? 'la factura'
@@ -267,7 +274,7 @@ export function SalidaErp10() {
         </select>
         {pasos}
         <div className="cxe-botones">
-          {paso === 1 && <button type="button" className="cxe-grande" disabled={!s || !!haciendo || !(s.ficheros.recibidas.length + s.ficheros.expedidas.length)} onClick={() => { void descargar() }}>Descargar los ficheros</button>}
+          {paso === 1 && <button type="button" className="cxe-grande" disabled={!s || !!haciendo || !(s.ficheros.recibidas.length + s.ficheros.expedidas.length + s.ficheros.asientos.length)} onClick={() => { void descargar() }}>Descargar los ficheros</button>}
           {paso === 2 && <>
             <button type="button" className="cxe-sec" onClick={() => setPaso(1)}>Volver</button>
             <button type="button" className="cxe-grande" onClick={() => { setPaso(3); setHecho(null); setMarcados(new Set()); setSubido(null); setVuelta((v) => v + 1) }}>Ya lo he importado</button>
@@ -383,6 +390,7 @@ export function SalidaErp10() {
                       ...(hecho.cuentas ? [{ f: 'subcuentas.xlsx', b: 'Subcuentas', q: `${hecho.cuentas} ${hecho.cuentas === 1 ? 'cuenta nueva' : 'cuentas nuevas'}` }] : []),
                       ...(hecho.emitidas ? [{ f: 'expedidas.xlsx', b: 'Facturas, eligiendo «Facturas emitidas»', q: facturas(hecho.emitidas, 'emitida') }] : []),
                       ...(hecho.recibidas ? [{ f: 'recibidas.xlsx', b: 'Facturas, eligiendo «Facturas recibidas»', q: facturas(hecho.recibidas, 'recibida') }] : []),
+                      ...(hecho.asientos ? [{ f: 'asientos.xlsx', b: 'Asientos', q: `${facturas(hecho.asientos, 'asiento')}: nóminas, pagos y cobros, bancos` }] : []),
                       ...hecho.zips.map((z) => ({ f: z, b: 'Su carpeta de documentos', q: `Descomprímelos en ${carpeta} antes de importar las facturas.` })),
                     ].map((x, i) => (
                       <tr key={x.f}>
@@ -394,7 +402,7 @@ export function SalidaErp10() {
                   </tbody>
                 </table>
               </div>
-              <div className="cxe-pie"><strong>En este orden.</strong><span className="cxe-pie-gris">Primero las cuentas; después las emitidas y las recibidas.</span></div>
+              <div className="cxe-pie"><strong>En este orden.</strong><span className="cxe-pie-gris">Primero las cuentas; después las emitidas, las recibidas y los asientos.</span></div>
             </div>
           </div>
           <aside className="cxe-der" aria-labelledby="cxe-donde">
@@ -402,7 +410,7 @@ export function SalidaErp10() {
             <div className="cxe-der-cuerpo">
               <div className="cxe-nota">
                 <p>Contabilidad › pestaña <strong>Importaciones</strong> › grupo</p>
-                <div className="cxe-chips"><span className="cxe-chip cxe-chip-si">Facturas</span><span className="cxe-chip">Asientos</span><span className="cxe-chip">Balances</span><span className="cxe-chip cxe-chip-si">Subcuentas</span><span className="cxe-chip">Asientos TXT</span><small>IMPORTACIÓN DESDE FICHERO</small></div>
+                <div className="cxe-chips"><span className="cxe-chip cxe-chip-si">Facturas</span><span className={`cxe-chip${hecho.asientos ? ' cxe-chip-si' : ''}`}>Asientos</span><span className="cxe-chip">Balances</span><span className="cxe-chip cxe-chip-si">Subcuentas</span><span className="cxe-chip">Asientos TXT</span><small>IMPORTACIÓN DESDE FICHERO</small></div>
               </div>
               <div className="cxe-nota"><p><strong>Queda apuntado.</strong> Qué salió, cuándo y quién lo descargó.</p></div>
               <div className="cxe-nota">
@@ -412,6 +420,7 @@ export function SalidaErp10() {
                     <p>Antes de importar nada, carga en ERP10 cómo lee Sumied cada fichero:</p>
                     <ul style={{ margin: '6px 0', paddingLeft: 18 }}>
                       <li><button type="button" className="cxe-enlace" onClick={() => bajar(new TextEncoder().encode(XML_EXPEDIDAS.replace(/\n/g, '\r\n')), 'ConfiguracionExpedidas.XML', 'application/xml')}>ConfiguracionExpedidas.XML</button>: En ERP10: Importaciones › Facturas › Configurar Excel › Configuración, con «Facturas emitidas».</li>
+                      <li><button type="button" className="cxe-enlace" onClick={() => bajar(new TextEncoder().encode(XML_ASIENTOS.replace(/\n/g, '\r\n')), 'ConfiguracionAsientos.XML', 'application/xml')}>ConfiguracionAsientos.XML</button>: En ERP10: Importaciones › Asientos › Configurar Excel › Configuración, con «No importar facturas» marcada.</li>
                       <li><button type="button" className="cxe-enlace" onClick={() => bajar(new TextEncoder().encode(XML_RECIBIDAS.replace(/\n/g, '\r\n')), 'ConfiguracionRecibidas.XML', 'application/xml')}>ConfiguracionRecibidas.XML</button>: En ERP10: Importaciones › Facturas › Configurar Excel › Configuración, con «Facturas recibidas».</li>
                       <li><button type="button" className="cxe-enlace" onClick={() => bajar(new TextEncoder().encode(XML_SUBCUENTAS.replace(/\n/g, '\r\n')), 'ConfiguracionSubcuentas.XML', 'application/xml')}>ConfiguracionSubcuentas.XML</button>: En ERP10: Importaciones › Subcuentas › Configurar Excel › Configuración.</li>
                     </ul>
@@ -426,7 +435,7 @@ export function SalidaErp10() {
       {s && paso === 3 && (
         <ComprobarErp10 subido={subido} base={comprobar.datos} comparacion={comparacion} error={errorSubir ?? comprobar.error}
           elegida={elegida} elegir={setElegida} subir={(f) => { void subir(f) }} aMano={(id) => { void aMano(id) }} volver={(id) => { void volverASacarla(id) }}
-          ocupado={!!haciendo} />
+          ocupado={!!haciendo} cargando={comprobar.cargando || datos.cargando} mes={mes} />
       )}
 
       <div className="cxe-estado" role="status" aria-live="polite">
