@@ -144,6 +144,9 @@ on:
       - 'scripts/e2e/carril/**'
       - 'scripts/e2e/carril.sh'
       - 'scripts/e2e/por-fichero.sh'
+      # Q03: lo que había en pantalla cuando falla una prueba (el reporter que añade por-fichero.sh).
+      - 'scripts/e2e/reporter-pantalla.mjs'
+      - 'scripts/e2e/pantalla.mjs'
       - 'scripts/e2e/trozos.mjs'
       - 'scripts/e2e/area.mjs'
       - '.github/workflows/e2e-staging-conta.yml'
