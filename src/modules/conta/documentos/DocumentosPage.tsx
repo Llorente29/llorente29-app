@@ -35,6 +35,8 @@ import { SIN_APUNTADAS, lineaDeArriba, motivoDeRevisar, motivoPideRoi } from '@/
 import { PreguntaRoi } from '@/modules/conta/empresa/ApartadoRoi'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
+import { pasadasSolas } from '@/modules/conta/services/pasadaSolaService'
+import { ayerEnMadrid } from '@/modules/conta/services/inicioService'
 import { AvisoLecturaCaida } from './AvisoLecturaCaida'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
@@ -89,6 +91,9 @@ export default function DocumentosPage() {
   // S01p·20 · 1 · Las llegadas sin fichero que son un correo de plataforma: su asunto (la fila lo enseña).
   const sinFichero = useMemo(() => (datos.datos?.filas ?? []).filter((x) => x.tipo === 'llegada' && !x.archivo).map((x) => x.id), [datos.datos])
   const correos = useLeer(accountId && sinFichero.length ? () => leerCorreosDeLlegadas(accountId, sinFichero) : null, `${accountId}:${sinFichero.join(',')}:correos`)
+  // E04 · Desde Inicio, «N facturas pasadas solas a su sociedad»: solo esas, y se dice (regla 7: lo pide el enlace, no lo esconde nadie).
+  const soloPasadas = query.get('pasadas') === '1'
+  const pasadas = useLeer(soloPasadas && activa ? () => pasadasSolas(activa.id, ayerEnMadrid(hoy)) : null, `${activa?.id}:${hoy}:pasadas:${vuelta}`)
   // S01o · Lo que Sumied apuntó solo (con su porqué) y por qué se quedaron las demás. Si no se puede leer, la lista sale igual y lo dice.
   const solas = useLeer(activa ? () => leerApuntadasSolas(activa.id) : null, `${activa?.id}:${vuelta}:apuntadas-solas`)
   const sol = solas.datos ?? SIN_APUNTADAS
@@ -161,6 +166,7 @@ export default function DocumentosPage() {
 
   const d = datos.datos
   const todasLasFilas = (d?.filas ?? []).map((x) => (correos.datos?.has(x.id) ? { ...x, correo: correos.datos.get(x.id)! } : x))
+    .filter((x) => !soloPasadas || (pasadas.datos?.ids.includes(x.id) ?? true))
   const base = filtrarSinPestana(todasLasFilas, mapa, f)
   const pestanas = pestanasConNumero(base, mapa)
   const filas = filasDeLaLista(todasLasFilas, mapa, f)
@@ -348,6 +354,13 @@ export default function DocumentosPage() {
           <p className="s-aviso-lista">Elige el PDF o la foto de la factura con «Subir factura»{movil ? ', o hazle una foto' : ''}: la leo y la pongo aquí, en «Por revisar».</p>
         )}
       </div>
+      {soloPasadas && pasadas.datos && (
+        <p className="s-aviso-lista" data-tono="ok" data-prueba="solo-pasadas">
+          {pasadas.datos.n === 1 ? 'La factura que he pasado sola a esta sociedad desde ayer, porque iba a su nombre.' : `Las ${pasadas.datos.n} facturas que he pasado solas a esta sociedad desde ayer, porque iban a su nombre.`}{' '}
+          <button type="button" className="s-boton s-boton-enlace" onClick={() => cambiar({ pasadas: null })}>Ver todas</button>
+        </p>
+      )}
+      {soloPasadas && pasadas.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No he podido saber cuáles he pasado solas: {pasadas.error}. Salen todas.</p>}
       {fallo && <p className="s-aviso-lista" data-tono="falta" role="alert">{fallo}</p>}
       {hecho && <p className="s-aviso-lista" data-tono="seguro" role="status">{hecho}</p>}
       {datos.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer las facturas: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p>}

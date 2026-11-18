@@ -431,6 +431,11 @@ function HechoYo({ companyId, hoy }: { companyId: string; hoy: string }) {
           <Dato n={h.v.asientosSolos} uno="asiento validado solo" varios="asientos validados solos" />
           <Dato n={h.v.asientosParaRevisar} uno="asiento propuesto para revisar" varios="asientos propuestos para revisar" />
           <Dato n={h.v.datosDeLaEmpresa} uno="dato de tu empresa puesto por mí" varios="datos de tu empresa puestos por mí" />
+          {/* E04 · Las facturas a nombre de esta sociedad que llegaron a otra y he pasado solas aquí. */}
+          {h.v.pasadasSolas !== null && (
+            <Dato n={h.v.pasadasSolas} uno="factura pasada sola a su sociedad" varios="facturas pasadas solas a su sociedad"
+              a={h.v.pasadasSolas > 0 ? `${rutaDocumentos('todas')}&pasadas=1` : undefined} />
+          )}
         </div>
       )}
       <Link className="cxi-hecho-enlace" to={rutaAjustes('folvy')}>Ver todo y deshacer lo que no te guste</Link>
@@ -438,8 +443,14 @@ function HechoYo({ companyId, hoy }: { companyId: string; hoy: string }) {
   )
 }
 
-function Dato({ n, uno, varios }: { n: number; uno: string; varios: string }) {
-  return <div className="cxi-hecho-dato"><span className="cxi-hecho-numero">{n}</span><span className="cxi-hecho-texto">{n === 1 ? uno : varios}</span></div>
+function Dato({ n, uno, varios, a }: { n: number; uno: string; varios: string; /** E04 · Un enlace a verlas. */ a?: string }) {
+  const texto = n === 1 ? uno : varios
+  return (
+    <div className="cxi-hecho-dato">
+      <span className="cxi-hecho-numero">{n}</span>
+      {a ? <Link className="cxi-hecho-texto" to={a} data-prueba="hecho-pasadas-solas">{texto}</Link> : <span className="cxi-hecho-texto">{texto}</span>}
+    </div>
+  )
 }
 
 // ── «Cerrar <mes>» ─────────────────────────────────────────────────────────

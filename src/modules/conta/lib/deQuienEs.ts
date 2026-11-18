@@ -57,10 +57,10 @@ export function casoDeQuien(o: { nifEmpresa: string | null; nifLeido: string | n
 export interface BotonDeQuien { que: RespuestaDeQuien | 'pasar'; texto: string; principal: boolean }
 
 /**
- * Los dos botones de cada pregunta, del mismo tamaño; el que más se usará, relleno:
- *   · otra sociedad: lo normal es que se leyó bien y es de la otra → «Pasarla a …»;
- *   · fuera: va a nombre de otro de verdad → «Su IVA no se deduce»;
- *   · sin leer: casi siempre la lectura no sacó el destinatario, y es vuestra → «Sí es nuestra, se deduce».
+ * Los dos botones de cada pregunta, del mismo tamaño:
+ *   · otra sociedad: lo normal es que se leyó bien y es de la otra → «Pasarla a …», relleno;
+ *   · fuera y sin leer (E04, Julio): ninguno relleno. Quitar un IVA no puede ser lo
+ *     que se pulsa sin pensar: «Su IVA no se deduce» y «Sí es nuestra, se deduce», iguales, en hueco.
  */
 export function botonesDeQuien(q: Pick<DeQuien, 'caso' | 'sociedadCorta' | 'sociedad'>): BotonDeQuien[] {
   if (q.caso === 'otra_sociedad') {
@@ -70,14 +70,31 @@ export function botonesDeQuien(q: Pick<DeQuien, 'caso' | 'sociedadCorta' | 'soci
     ]
   }
   if (q.caso === 'fuera' || q.caso === 'sin_leer') {
-    const fuera = q.caso === 'fuera'
     return [
-      { que: 'no_deduce', texto: 'Su IVA no se deduce', principal: fuera },
-      { que: 'deduce', texto: 'Sí es nuestra, se deduce', principal: !fuera },
+      { que: 'no_deduce', texto: 'Su IVA no se deduce', principal: false },
+      { que: 'deduce', texto: 'Sí es nuestra, se deduce', principal: false },
     ]
   }
   return []
 }
+
+/**
+ * E04 · Si se pasa sola a la otra sociedad: la misma regla que la base
+ * (_conta_pasar_sola, 20261118T1950). Va a nombre de OTRA sociedad de la misma
+ * cuenta, sin asiento validado, sin respuesta de una persona (y, en la base,
+ * sin pagos ni banco: eso no lo ve la pantalla).
+ */
+export function sePasaSola(o: {
+  nifEmpresa: string | null; nifLeido: string | null; otrasSociedades: readonly { id: string; nif: string | null }[]
+  conIva: boolean; validado: boolean; respuesta: RespuestaDeQuien | null
+}): { pasa: boolean; sociedadId: string | null } {
+  const c = casoDeQuien(o)
+  const pasa = c.caso === 'otra_sociedad' && !o.validado && o.respuesta === null
+  return { pasa, sociedadId: pasa ? c.sociedadId : null }
+}
+
+/** E04 · «Es de: [sociedad ▾]»: en una cuenta con más de una sociedad, cuando no se sabe de quién es (fuera o sin leer). */
+export const eligeSociedad = (caso: CasoDeQuien | null, sociedades: number): boolean => (caso === 'fuera' || caso === 'sin_leer') && sociedades > 1
 
 /** La etiqueta de la fila en la lista: dice qué falta, no por qué técnicamente. */
 export const ETIQUETA_DE_QUIEN = '¿De quién es?'

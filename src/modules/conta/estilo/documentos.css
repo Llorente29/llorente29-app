@@ -389,3 +389,8 @@
 .cxf-de-quien-botones { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--s-2); max-width: 100%; }
 .cxf-de-quien-botones > .s-boton { width: 100%; justify-content: center; }
 @media (max-width: 767px) { .cxf-de-quien-botones { display: grid; grid-auto-flow: row; } }
+
+/* E04 · «Es de: [sociedad ▾]» debajo de la frase, y su «Pasarla a …» al lado; en el móvil, uno debajo del otro. */
+.cxf-de-quien-es { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-2); }
+.cxf-de-quien-es label { display: inline-flex; align-items: center; gap: var(--s-2); }
+@media (max-width: 767px) { .cxf-de-quien-es, .cxf-de-quien-es label { display: grid; } .cxf-de-quien-es .s-control { width: 100%; } }
