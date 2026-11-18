@@ -16,40 +16,10 @@
 // 768, el marco con los botones desplegados (respuesta K02 · 1).
 
 import { test, expect, type Page } from '@playwright/test'
-import { correoDePrueba, enCarril, entrarComo } from '../sesion'
+import { entrarComo } from '../sesion'
+import { abierta, cargada, EMPRESA, GESTORIA, noRueda, NUCLEO } from './comun'
 
-const NUCLEO = { id: enCarril('c0e20000-0000-4000-8000-0000000000e0'), email: correoDePrueba('nucleo@prueba.folvy.test') }
-const EMPRESA = 'Empresa de Ejemplo Núcleo, S.L.'
-const GESTORIA = 'Gestoría de Ejemplo Núcleo, S.L.'
 const DIR = 'docs/conta/capturas/k02'
-
-/** La página no rueda: el documento mide lo que la ventana (como mucho 1 px de redondeo). */
-async function noRueda(page: Page, donde: string) {
-  const m = await page.evaluate(() => ({ alto: document.documentElement.scrollHeight, ventana: window.innerHeight, y: window.scrollY }))
-  expect(m.alto, `${donde}: el documento mide ${m.alto} y la ventana ${m.ventana}`).toBeLessThanOrEqual(m.ventana + 1)
-  expect(m.y, `${donde}: la página se ha movido`).toBe(0)
-}
-
-/** Espera a que la pantalla de dentro haya cargado (sin el esqueleto de carga) y que el marco siga sin rodar. */
-async function abierta(page: Page, donde: string) {
-  await expect(page.locator('.k-zona')).toBeVisible({ timeout: 30_000 })
-  await expect(page.locator('.k-zona .cx-hueso').first()).toHaveCount(0, { timeout: 30_000 })
-  await noRueda(page, donde)
-}
-
-/**
- * Arreglo 1 (respuesta K02 · 1): la captura, con la pantalla CARGADA. Sin
- * peticiones en vuelo y, si es una lista, con sus filas o con su frase de que
- * no hay ninguna (nunca a medias: las pestañas con «—» y la tabla en gris).
- */
-async function cargada(page: Page, donde: string) {
-  await abierta(page, donde)
-  await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => { /* lo que siga abierto (un canal en vivo) no cuenta */ })
-  const zona = page.locator('.k-zona')
-  if (await zona.locator('table').count()) {
-    await expect(zona.locator('tbody tr').first().or(zona.getByText(/no hay|ninguna|todavía no/i).first())).toBeVisible({ timeout: 30_000 })
-  }
-}
 
 async function verBotones(page: Page) {
   const ver = page.getByRole('button', { name: 'Ver los botones' })

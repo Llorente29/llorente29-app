@@ -11,7 +11,10 @@
 //   «Descargar los ficheros».
 //   Paso 2 · «Impórtalo en ERP10»: los ficheros en el orden en que se importan,
 //   con su botón de ERP10, «La primera vez» y «Dónde está en ERP10».
-//   El paso 3 se ve, apagado: llega en la siguiente versión.
+//   Paso 3 · «Comprueba que queda igual» (X06, ComprobarErp10.tsx): se sube el
+//   sumas y saldos de ERP10 y se compara cuenta a cuenta, con el porqué de cada
+//   diferencia, «Volver a sacar solo esa», «Ya la he metido a mano» y «Darlo por
+//   igualado». Se llega con «Ya lo he importado» o pulsando el paso, si ya ha salido algo.
 //
 // Al descargar: se preparan los libros y los PDF (con lo que lleva hecho a
 // la vista), se apunta lo que sale y SOLO si se apunta se entregan los ficheros
@@ -19,16 +22,20 @@
 //
 // Solo con la salida encendida en la empresa (Ajustes › Ejercicio).
 
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaAjustes, rutaAsiento } from '@/config/navegacion'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { XML_EXPEDIDAS, XML_RECIBIDAS, XML_SUBCUENTAS } from '@/modules/conta/erp10/configuracion'
-import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepararDescarga, type Clase, type FilaQueSale, type Salida } from '@/modules/conta/erp10/salida'
+import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepararDescarga, soloUna, type Clase, type FilaQueSale, type Salida } from '@/modules/conta/erp10/salida'
+import { comparar, fechaDelSumas } from '@/modules/conta/erp10/comparar'
+import { abrirExcel, leerSumasYSaldos, reconocer, texto as textoDe, type FilaSumas } from '@/modules/conta/lib/traer'
+import { ComprobarErp10, type Subido } from '@/modules/conta/libros/ComprobarErp10'
 import {
-  apuntarLote, bajarPdf, carpetaDeLaSalida, leerCambiadas, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
+  apuntarLote, bajarPdf, carpetaDeLaSalida, leerCambiadas, leerComprobar, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
+  ponerAMano, ponerIgualado, volverASacar,
 } from '@/modules/conta/services/erp10Service'
 
 function bajar(bytes: ArrayBuffer | Uint8Array, nombre: string, tipo: string) {
@@ -68,7 +75,21 @@ export function SalidaErp10() {
   const carpeta = salida.datos ? carpetaDeLaSalida(salida.datos) : ''
   const s: Salida | null = useMemo(() => (datos.datos ? armarSalida(datos.datos.ps, datos.datos.rs, datos.datos.es, carpeta) : null), [datos.datos, carpeta])
 
-  const [paso, setPaso] = useState<1 | 2>(1)
+  const [paso, setPaso] = useState<1 | 2 | 3>(1)
+  // Paso 3: el sumas y saldos subido (con su cabecera, para la fecha), la comparación y la cuenta elegida.
+  const [subido, setSubido] = useState<(Subido & { cabecera: string[]; filas: FilaSumas[] }) | null>(null)
+  const [errorSubir, setErrorSubir] = useState<string | null>(null)
+  const [elegida, setElegida] = useState<string | null>(null)
+  // Lo que confirma el paso 3 (regla 8): lo apuntado a mano, lo vuelto a sacar, lo igualado.
+  const [dicho, setDicho] = useState<string | null>(null)
+  const [vueltaC, setVueltaC] = useState(0)
+  const fecha = subido && mes ? fechaDelSumas(subido.cabecera, mes) : null
+  const comprobar = useLeer(paso === 3 && fecha ? () => leerComprobar(L.companyId, fecha) : null, `${L.companyId}:${fecha}:${vueltaC}:${L.vuelta}`)
+  const comparacion = useMemo(() => {
+    if (!subido || !comprobar.datos || !s) return null
+    const porSacar = new Set([...s.ficheros.expedidas, ...s.ficheros.recibidas].map((f) => f.entryId))
+    return comparar(subido.filas, comprobar.datos, { porSacar, noPueden: new Map(s.noPuedenSalir.map((x) => [x.entryId, x.porque])) })
+  }, [subido, comprobar.datos, s])
   const [fila, setFila] = useState<FilaQueSale['id']>('recibidas')
   const [verLotes, setVerLotes] = useState(false)
   const [verSinPdf, setVerSinPdf] = useState(false)
@@ -98,6 +119,19 @@ export function SalidaErp10() {
     return () => window.removeEventListener('resize', medir)
   }, [salida.datos, paso])
 
+  // «Darlo por igualado» con Intro, si se puede y no se está escribiendo en otro sitio: pulsa su botón (si está encendido).
+  useEffect(() => {
+    if (paso !== 3) return
+    const tecla = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (e.key !== 'Enter' || (t && /^(INPUT|SELECT|TEXTAREA|BUTTON|A)$/.test(t.tagName)) || (t && t.closest('tr[tabindex]'))) return
+      const b = document.querySelector<HTMLButtonElement>('button.cxe-igualar')
+      if (b && !b.disabled) b.click()
+    }
+    window.addEventListener('keydown', tecla)
+    return () => window.removeEventListener('keydown', tecla)
+  }, [paso])
+
   if (salida.error) return <ErrorConReintento mensaje={salida.error} reintentar={salida.recargar} />
   if (!salida.datos) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando la salida a ERP10"><Hueso alto={40} /></div>
   if (!encendida) {
@@ -109,26 +143,32 @@ export function SalidaErp10() {
     )
   }
 
+  /** Prepara los libros y los PDF de una salida, la apunta y, solo si se apunta, entrega los ficheros. */
+  async function sacar(sx: Salida, m: string) {
+    const { libros, partidas } = await prepararDescarga(sx)
+    const pdfs: { nombre: string; bytes: Uint8Array }[] = []
+    for (const [i, p] of sx.ficheros.pdfs.entries()) {
+      setHaciendo(`Preparando los PDF: ${i + 1} de ${sx.ficheros.pdfs.length}`)
+      pdfs.push({ nombre: p.nombre, bytes: await bajarPdf(p.ruta) })
+    }
+    const zips = pdfs.length ? comprimirPdfs(pdfs) : []
+    if (!partidas.length) throw new Error('No hay ninguna factura que pueda salir este mes.')
+    setHaciendo('Apuntando lo que sale…')
+    const ficheros = [...libros.map((l) => ({ nombre: l.nombre, filas: l.filas, huella: l.huella })),
+      ...zips.map((z) => ({ nombre: z.nombre, filas: z.pdfs, huella: `${z.bytes.length}` }))]
+    await apuntarLote(L.companyId, m, ficheros, partidas, L.quien)
+    // Solo si se ha apuntado, se entregan.
+    for (const l of libros) bajar(l.bytes, l.nombre, XLSX_TIPO)
+    for (const z of zips) bajar(z.bytes, z.nombre, 'application/zip')
+    return { libros, zips, pdfs }
+  }
+
   async function descargar() {
     if (!s || !mes) return
     setFallo(null); setHecho(null)
     try {
       setHaciendo('Preparando los ficheros…')
-      const { libros, partidas } = await prepararDescarga(s)
-      const pdfs: { nombre: string; bytes: Uint8Array }[] = []
-      for (const [i, p] of s.ficheros.pdfs.entries()) {
-        setHaciendo(`Preparando los PDF: ${i + 1} de ${s.ficheros.pdfs.length}`)
-        pdfs.push({ nombre: p.nombre, bytes: await bajarPdf(p.ruta) })
-      }
-      const zips = pdfs.length ? comprimirPdfs(pdfs) : []
-      if (!partidas.length) throw new Error('No hay ninguna factura que pueda salir este mes.')
-      setHaciendo('Apuntando lo que sale…')
-      const ficheros = [...libros.map((l) => ({ nombre: l.nombre, filas: l.filas, huella: l.huella })),
-        ...zips.map((z) => ({ nombre: z.nombre, filas: z.pdfs, huella: `${z.bytes.length}` }))]
-      await apuntarLote(L.companyId, mes, ficheros, partidas, L.quien)
-      // Solo si se ha apuntado, se entregan.
-      for (const l of libros) bajar(l.bytes, l.nombre, XLSX_TIPO)
-      for (const z of zips) bajar(z.bytes, z.nombre, 'application/zip')
+      const { zips, pdfs } = await sacar(s, mes)
       const cuentas = s.ficheros.subcuentas.length
       const nE = s.ficheros.expedidas.length
       const nR = s.ficheros.recibidas.length
@@ -143,11 +183,73 @@ export function SalidaErp10() {
     }
   }
 
+  // ── Paso 3 ──
+  async function subir(f: File) {
+    setErrorSubir(null); setFallo(null); setDicho(null)
+    try {
+      const ex = abrirExcel(f.name, await f.arrayBuffer())
+      const r = reconocer(ex)
+      if (!r || r.tipo !== 'sumas_saldos') throw new Error(`${f.name} no es un sumas y saldos de ERP10. Sácalo de ERP10 en Excel y súbelo tal cual.`)
+      const leido = leerSumasYSaldos(r.hoja, r.fila)
+      const cabecera = r.hoja.filas.slice(0, r.fila).flat().map((c) => textoDe(c)).filter(Boolean)
+      setSubido({ nombre: f.name, fecha: mes ? fechaDelSumas(cabecera, mes) : '', avisos: leido.avisos, cabecera, filas: leido.filas })
+      setElegida(null)
+      setVueltaC((v) => v + 1)
+    } catch (e) {
+      setErrorSubir(e instanceof Error ? e.message : 'No se ha podido leer el fichero.')
+    }
+  }
+  async function aMano(entryId: string) {
+    setFallo(null); setDicho(null); setHaciendo('Apuntando…')
+    try {
+      setDicho(await ponerAMano(L.companyId, entryId, L.quien))
+      setVueltaC((v) => v + 1)
+    } catch (e) {
+      setFallo(`No se ha apuntado: ${e instanceof Error ? e.message : 'no ha contestado'}`)
+    } finally { setHaciendo(null) }
+  }
+  async function volverASacarla(entryId: string) {
+    if (!mes) return
+    setFallo(null); setDicho(null); setHaciendo('Preparando la factura…')
+    try {
+      await volverASacar(L.companyId, entryId, L.quien)
+      const [ps, rs, es] = await Promise.all([leerPorSalir(L.companyId, mes), leerRecibidasPorSalir(L.companyId, mes), leerEmitidasPorSalir(L.companyId, mes)])
+      const una = soloUna(armarSalida(ps, rs, es, carpeta), entryId)
+      if (!una) throw new Error('ha vuelto a lo que sale, pero su fila no se puede preparar: mírala en el paso 1.')
+      const { libros, pdfs } = await sacar(una, mes)
+      const nombre = [...una.listas.emitidas, ...una.listas.recibidas][0]?.numero ?? 'la factura'
+      setDicho(`Vuelve a salir la ${nombre}: ${libros.map((l) => l.nombre).join(' y ')} con una factura${pdfs.length ? ' y su PDF (pdf.zip)' : ''}. Queda apuntado como una salida más. Impórtalo en ERP10 y sube otra vez el sumas y saldos.`)
+    } catch (e) {
+      setFallo(`No se ha vuelto a sacar: ${e instanceof Error ? e.message : 'no ha contestado'}`)
+    } finally {
+      setHaciendo(null); setVuelta((v) => v + 1); setVueltaC((v) => v + 1)
+    }
+  }
+  async function igualar() {
+    if (!mes || !subido || !fecha || !comparacion?.igualable || haciendo) return
+    setFallo(null); setDicho(null); setHaciendo('Apuntando…')
+    try {
+      setDicho(await ponerIgualado(L.companyId, { mes, fichero: subido.nombre, fecha, cuentas: comparacion.cuentas.length, conDiferencia: comparacion.noIgual.length, quien: L.quien }))
+      setVueltaC((v) => v + 1)
+    } catch (e) {
+      setFallo(`No se ha dado por igualado: ${e instanceof Error ? e.message : 'no ha contestado'}`)
+    } finally { setHaciendo(null) }
+  }
+  const hayLotes = (datos.datos?.lotes.length ?? 0) > 0
+  const porQueNoIgualar = !subido ? 'Primero sube el sumas y saldos de ERP10.'
+    : !comparacion ? 'Comparando…'
+    : !comparacion.igualable ? 'Queda alguna diferencia sin explicar o por hacer.' : undefined
+
   const pasos = (
     <ol className="cxe-pasos" aria-label="Pasos">
-      <li className={`cxe-paso${paso > 1 ? ' cxe-paso-hecho' : ''}`} aria-current={paso === 1 ? 'step' : undefined}><span className="cxe-paso-num">1</span>Mira lo que sale</li>
-      <li className="cxe-paso" aria-current={paso === 2 ? 'step' : undefined}><span className="cxe-paso-num">2</span>Impórtalo en ERP10</li>
-      <li className="cxe-paso cxe-paso-apagado" aria-disabled="true"><span className="cxe-paso-num">3</span><span className="cxe-paso-texto">Comprueba que queda igual<span className="cxe-paso-luego">Llega en la siguiente versión</span></span></li>
+      <li className={`cxe-paso${paso > 1 ? ' cxe-paso-hecho' : ''}`} aria-current={paso === 1 ? 'step' : undefined}>
+        {paso === 3 ? <button type="button" className="cxe-paso-boton" aria-label="Mira lo que sale" title="Mira lo que sale" onClick={() => setPaso(1)}><span className="cxe-paso-num">1</span><span className="cxe-paso-etq">Mira lo que sale</span></button> : <><span className="cxe-paso-num">1</span><span className="cxe-paso-etq">Mira lo que sale</span></>}
+      </li>
+      <li className={`cxe-paso${paso > 2 ? ' cxe-paso-hecho' : ''}`} aria-current={paso === 2 ? 'step' : undefined}><span className="cxe-paso-num">2</span><span className="cxe-paso-etq">Impórtalo en ERP10</span></li>
+      <li className="cxe-paso" aria-current={paso === 3 ? 'step' : undefined}>
+        {paso === 1 && hayLotes ? <button type="button" className="cxe-paso-boton" aria-label="Comprueba que queda igual" title="Comprueba que queda igual" onClick={() => setPaso(3)}><span className="cxe-paso-num">3</span><span className="cxe-paso-etq">Comprueba que queda igual</span></button>
+          : <><span className="cxe-paso-num">3</span><span className="cxe-paso-etq">Comprueba que queda igual</span></>}
+      </li>
     </ol>
   )
 
@@ -165,12 +267,16 @@ export function SalidaErp10() {
         </select>
         {pasos}
         <div className="cxe-botones">
-          {paso === 1
-            ? <button type="button" className="cxe-grande" disabled={!s || !!haciendo || !(s.ficheros.recibidas.length + s.ficheros.expedidas.length)} onClick={() => { void descargar() }}>Descargar los ficheros</button>
-            : <>
-                <button type="button" className="cxe-sec" onClick={() => setPaso(1)}>Volver</button>
-                <button type="button" className="cxe-grande" onClick={() => { setPaso(1); setHecho(null); setMarcados(new Set()); setVuelta((v) => v + 1) }}>Ya lo he importado</button>
-              </>}
+          {paso === 1 && <button type="button" className="cxe-grande" disabled={!s || !!haciendo || !(s.ficheros.recibidas.length + s.ficheros.expedidas.length)} onClick={() => { void descargar() }}>Descargar los ficheros</button>}
+          {paso === 2 && <>
+            <button type="button" className="cxe-sec" onClick={() => setPaso(1)}>Volver</button>
+            <button type="button" className="cxe-grande" onClick={() => { setPaso(3); setHecho(null); setMarcados(new Set()); setSubido(null); setVuelta((v) => v + 1) }}>Ya lo he importado</button>
+          </>}
+          {paso === 3 && <>
+            <button type="button" className="cxe-grande cxe-igualar" disabled={!!porQueNoIgualar || !!haciendo} title={porQueNoIgualar} onClick={() => { void igualar() }}>
+              Darlo por igualado <kbd className="cxe-kbd">Intro</kbd>
+            </button>
+          </>}
         </div>
       </div>
 
@@ -317,9 +423,16 @@ export function SalidaErp10() {
         </div>
       )}
 
+      {s && paso === 3 && (
+        <ComprobarErp10 subido={subido} base={comprobar.datos} comparacion={comparacion} error={errorSubir ?? comprobar.error}
+          elegida={elegida} elegir={setElegida} subir={(f) => { void subir(f) }} aMano={(id) => { void aMano(id) }} volver={(id) => { void volverASacarla(id) }}
+          ocupado={!!haciendo} />
+      )}
+
       <div className="cxe-estado" role="status" aria-live="polite">
         {haciendo && <span>{haciendo}</span>}
-        {hecho && !haciendo && <span className="cxe-hecho">{hecho.texto}</span>}
+        {hecho && !haciendo && paso !== 3 && <span className="cxe-hecho">{hecho.texto}</span>}
+        {dicho && !haciendo && paso === 3 && <span className="cxe-hecho">{dicho}</span>}
       </div>
       {fallo && <div className="cxe-estado cxe-mal" role="alert">{fallo}</div>}
     </section>

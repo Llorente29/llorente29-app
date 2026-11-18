@@ -24,6 +24,7 @@
 import { supabase } from '@/lib/supabase'
 import { hayBase, mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import type { EmitidaParaErp10, LineaRecibida, Operacion, OperacionEmitida } from '@/modules/conta/erp10/ficheros'
+import type { Comprobar } from '@/modules/conta/erp10/comparar'
 
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
 const n = (v: unknown): number => (v === null || v === undefined || v === '' ? 0 : Number(v))
@@ -251,4 +252,58 @@ export async function bajarPdf(ruta: string): Promise<Uint8Array> {
   const { data, error } = await supabase!.storage.from('conta-documentos').download(ruta)
   if (error || !data) throw new Error(`No se ha podido bajar el PDF ${ruta.split('/').pop()}: ${error?.message ?? 'no ha contestado'}`)
   return new Uint8Array(await data.arrayBuffer())
+}
+
+// ── X06 · «Comprueba que queda igual» ───────────────────────────────────────────────
+//
+// Nombres dentro de cadenas (regla 40), de la migración 20261118T0515_x06_comprobar_salida
+// y cruzados con la e2e contra staging: conta_erp10_comprobar (fecha, ejercicio, desde,
+// codigo, largo, saldos, asientos, lotes, igualado), conta_erp10_a_mano_poner,
+// conta_erp10_volver_a_sacar y conta_erp10_igualado_poner (texto).
+
+export function aComprobar(r: Record<string, unknown>): Comprobar {
+  const ej = (r.ejercicio ?? {}) as Record<string, unknown>
+  const g = r.igualado as Record<string, unknown> | null
+  return {
+    fecha: String(r.fecha), ejercicio: { desde: String(ej.desde), hasta: String(ej.hasta) }, desde: String(r.desde), codigo: String(r.codigo), largo: Number(r.largo),
+    saldos: ((r.saldos ?? []) as Record<string, unknown>[]).map((s) => ({
+      codigo: String(s.codigo), plantilla: s.plantilla == null ? null : String(s.plantilla), nombre: String(s.nombre ?? ''), saldo: n(s.saldo), erp: s.erp == null ? null : String(s.erp),
+    })),
+    asientos: ((r.asientos ?? []) as Record<string, unknown>[]).map((a) => {
+      const sa = a.salida as Record<string, unknown> | null
+      const am = a.aMano as Record<string, unknown> | null
+      return {
+        entryId: String(a.entryId), serie: n(a.serie), numero: a.numero == null ? null : Number(a.numero), fecha: String(a.fecha), concepto: String(a.concepto ?? ''),
+        origen: String(a.origen), estado: String(a.estado), deshace: s(a.deshace), factura: s(a.factura), tercero: s(a.tercero),
+        salida: sa ? { lote: String(sa.lote), mes: String(sa.mes), salioEn: String(sa.salioEn), clase: String(sa.clase) } : null,
+        aMano: am ? { quien: s(am.quien), cuando: String(am.cuando) } : null,
+        lineas: ((a.lineas ?? []) as Record<string, unknown>[]).map((l) => ({ cuenta: String(l.cuenta), importe: n(l.importe) })),
+      }
+    }),
+    lotes: ((r.lotes ?? []) as Record<string, unknown>[]).map((l) => ({ id: String(l.id), mes: String(l.mes), creadoEn: String(l.creadoEn), quien: s(l.quien) })),
+    igualado: g ? { mes: String(g.mes), fichero: String(g.fichero), fechaSaldos: String(g.fechaSaldos), quien: s(g.quien), cuando: String(g.cuando) } : null,
+  }
+}
+
+export async function leerComprobar(companyId: string, fecha: string): Promise<Comprobar> {
+  return aComprobar(await rpc<Record<string, unknown>>('conta_erp10_comprobar', { p_company: companyId, p_fecha: fecha }))
+}
+
+/** «Ya la he metido a mano». Devuelve la frase de la base. */
+export async function ponerAMano(companyId: string, entryId: string, quien: string | null): Promise<string> {
+  const r = await rpc<{ texto: string }>('conta_erp10_a_mano_poner', { p_company: companyId, p_entry: entryId, p_quien_nombre: quien })
+  return String(r.texto)
+}
+
+/** «Volver a sacar solo esa»: su partida pasa a retirada y vuelve a lo que sale. */
+export async function volverASacar(companyId: string, entryId: string, quien: string | null): Promise<void> {
+  await rpc('conta_erp10_volver_a_sacar', { p_company: companyId, p_entry: entryId, p_quien_nombre: quien })
+}
+
+/** «Darlo por igualado». Devuelve la frase de la base. */
+export async function ponerIgualado(companyId: string, o: { mes: string; fichero: string; fecha: string; cuentas: number; conDiferencia: number; quien: string | null }): Promise<string> {
+  const r = await rpc<{ texto: string }>('conta_erp10_igualado_poner', {
+    p_company: companyId, p_mes: o.mes, p_fichero: o.fichero, p_fecha: o.fecha, p_cuentas: o.cuentas, p_con_diferencia: o.conDiferencia, p_quien_nombre: o.quien,
+  })
+  return String(r.texto)
 }

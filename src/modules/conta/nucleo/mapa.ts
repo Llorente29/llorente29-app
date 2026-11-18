@@ -246,11 +246,17 @@ export const MODULOS: Modulo[] = [
 export interface EntradaPersona { id: string; etiqueta: string; ruta: string; prefijos: string[]; hueco?: boolean; solo?: Condicion }
 
 /** Ajustes (las entradas de su índice, menos las que son de Definiciones) y Novedades. */
-const DE_DEFINICIONES = new Set(['empresa', 'ejercicio', 'plan', 'tablas', 'numeracion'])
+// K03 (respuesta K02 · 2, arreglo 2): Ajustes trae las MISMAS entradas que el apartado Ajustes de
+// hoy (esqueleto/productos.ts, PAGINAS_AJUSTES): todas las del índice menos las que viven en
+// Contabilidad › Definiciones desde el S02 (el plan, las tablas y la numeración). «Tu empresa» y
+// «Ejercicio» están aquí Y en Definiciones › Empresa (decisión 5: además, no en vez de).
+// «Certificados y accesos» es un hueco («llega…»): como hoy, no sale en el producto vendido solo.
+// «Ventas por día» (R06), solo con su interruptor, como en el índice de hoy (la condición «tpv»).
+const DE_DEFINICIONES = new Set(['plan', 'tablas', 'numeracion'])
 export const MENU_PERSONA: EntradaPersona[] = [
   ...INDICE_AJUSTES.flatMap((g) => g.entradas)
     .filter((e) => !DE_DEFINICIONES.has(e.id))
-    .map((e): EntradaPersona => ({ id: `ajustes.${e.id}`, etiqueta: e.etiqueta, ruta: e.ruta, prefijos: [e.ruta], hueco: !!e.hueco, ...(e.soloDemo ? { solo: 'demo' as const } : {}) })),
+    .map((e): EntradaPersona => ({ id: `ajustes.${e.id}`, etiqueta: e.etiqueta, ruta: e.ruta, prefijos: [e.ruta], hueco: !!e.hueco, ...(e.soloDemo ? { solo: 'demo' as const } : {}), ...(e.soloVentasPorDia ? { solo: 'tpv' as const } : {}) })),
   { id: 'novedades', etiqueta: 'Novedades', ruta: R.novedades, prefijos: [R.novedades] },
 ]
 

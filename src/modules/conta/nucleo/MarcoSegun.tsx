@@ -5,16 +5,22 @@
 // núcleo; si no, el de hoy, tal cual (decisión 2 de Julio, 17/11). Es el mismo
 // componente en todas las rutas, así que React lo conserva al cambiar de
 // pantalla (como conserva hoy el Marco): el marco no se monta de nuevo.
+//
+// K03 · Dentro de una pestaña de trabajo del núcleo (que vuelve a pintar la
+// ruta entera, con su `enMarco`), ya hay marco: solo la pantalla.
 
 import type { ReactNode } from 'react'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { Marco } from '@/modules/conta/marco/Marco'
+import { usePestana } from '@/modules/conta/diseno/plantillas/pestana'
 import { cualMarco, useNucleoEncendido } from './interruptor'
 import { MarcoNucleo } from './MarcoNucleo'
 
 export function MarcoSegun({ children, sinPregunta = false }: { children: ReactNode; sinPregunta?: boolean }) {
+  const enPestana = usePestana() !== null
   const movil = useIsMobile()
   const encendido = useNucleoEncendido()
+  if (enPestana) return <>{children}</>
   return cualMarco({ encendido, movil }) === 'nucleo'
     ? <MarcoNucleo sinPregunta={sinPregunta}>{children}</MarcoNucleo>
     : <Marco sinPregunta={sinPregunta}>{children}</Marco>

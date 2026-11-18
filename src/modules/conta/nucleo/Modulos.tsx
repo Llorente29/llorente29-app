@@ -3,8 +3,11 @@
 // K02 · Los módulos, a la izquierda (maqueta nucleo_1): Contabilidad,
 // Facturación, Impuestos, Personal y Despacho, cada uno con su icono en un
 // cuadrado y su nombre debajo; el elegido, en azul claro. Arriba, «« Plegar»:
-// plegados, solo los iconos (el nombre, al pasar el ratón). Plegar se recuerda
-// por persona (conta_user_pref.barraDesplegada, la misma de la barra de hoy).
+// plegados, solo los iconos. Plegar se recuerda por persona
+// (conta_user_pref.barraDesplegada, la misma de la barra de hoy).
+// K03 (respuesta K02 · 2, arreglo 3): plegados, cada icono dice su nombre al
+// pasar el ratón Y al llegar con el teclado: un rótulo propio a su derecha
+// (un `title` no sale con el teclado), y el lector lee su aria-label.
 
 import { ICONOS_NUCLEO } from './iconos'
 import type { IdModulo, Modulo } from './mapa'
@@ -28,7 +31,7 @@ export function Modulos({ modulos, elegido, elegir, plegados, alternar }: {
           return (
             <li key={m.id}>
               <button type="button" className="k-modulo" aria-current={m.id === elegido ? 'true' : undefined}
-                title={plegados ? m.etiqueta : undefined} aria-label={plegados ? m.etiqueta : undefined} onClick={() => elegir(m)}>
+                data-nombre={m.etiqueta} aria-label={plegados ? m.etiqueta : undefined} onClick={() => elegir(m)}>
                 <span className="k-modulo-icono" aria-hidden="true"><Dibujo size={18} strokeWidth={1.75} /></span>
                 {!plegados && <span className="k-modulo-nombre">{m.etiqueta}</span>}
               </button>

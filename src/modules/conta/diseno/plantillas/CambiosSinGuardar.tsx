@@ -20,6 +20,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { Boton } from '../Boton'
 import { Icono } from '../Icono'
 import { useAvisoSalir, type AvisoSalirControl, type OpcionesAvisoSalir } from './avisoSalir'
+import { usePestanaActiva } from './pestana'
 import { cuentaCambios, resumenCambios, type CambioCampo } from './cambios'
 
 /**
@@ -65,10 +66,12 @@ export function BarraCambios({ cambios, onDescartar, onGuardar, guardando = fals
   mensaje?: MensajeGuardado | null
 }) {
   const hay = cambios.length > 0
+  // K03 · En una pestaña escondida del núcleo, Ctrl S es de la que se ve.
+  const activa = usePestanaActiva()
   const guardar = useRef(onGuardar)
   useEffect(() => { guardar.current = onGuardar }, [onGuardar])
   useEffect(() => {
-    if (!hay || guardando) return
+    if (!hay || guardando || !activa) return
     const tecla = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault()
@@ -77,7 +80,7 @@ export function BarraCambios({ cambios, onDescartar, onGuardar, guardando = fals
     }
     window.addEventListener('keydown', tecla)
     return () => window.removeEventListener('keydown', tecla)
-  }, [hay, guardando])
+  }, [hay, guardando, activa])
 
   if (!hay) {
     if (!mensaje) return null
