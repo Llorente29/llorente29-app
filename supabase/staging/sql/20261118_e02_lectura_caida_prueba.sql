@@ -86,11 +86,16 @@ do $$ begin
     raise exception 'PRUEBA E02 · 1: los permisos de las funciones no son los esperados.';
   end if;
   begin
-    perform pg_temp.e02_llegada(99, 'caida', 'cortada', interval '0');
-    raise exception 'PRUEBA E02 · 1: el CHECK deja una caída con causa de documento.';
+    perform pg_temp.e02_llegada(99, 'caida', null, interval '0');
+    raise exception 'PRUEBA E02 · 1: el CHECK deja una clase sin causa.';
   exception when check_violation then null;
   end;
-  raise notice '1 OK: las columnas, su CHECK y los permisos.';
+  begin
+    perform pg_temp.e02_llegada(98, 'otra', 'tiempo', interval '0');
+    raise exception 'PRUEBA E02 · 1: el CHECK deja una clase que no es caida ni documento.';
+  exception when check_violation then null;
+  end;
+  raise notice '1 OK: las columnas, sus dos CHECK y los permisos.';
 end $$;
 
 -- 2 · «Este documento» no hace caer la lectura -----------------------------------------------------

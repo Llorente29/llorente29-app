@@ -2,12 +2,12 @@
 --
 -- E02 · La lectura caída se ve y se avisa (encargo E02, respuesta E01 · 1, 18/11).
 -- cambia: public.document_inbox · prueba: supabase/staging/sql/20261118_e02_lectura_caida_prueba.sql
---   (el CHECK de las tres columnas nuevas toma un instante el cierre exclusivo de
+--   (los dos CHECK de las columnas nuevas toma un instante el cierre exclusivo de
 --   document_inbox, que existe: no es del camino del pedido y solo mira columnas
 --   que añade este fichero, todas nulas al crearlo.)
 --
--- Solo AÑADE: tres columnas que admiten nulos en document_inbox (con su CHECK,
--- que solo mira esas columnas), dos índices pequeños, una tabla de un solo
+-- Solo AÑADE: tres columnas que admiten nulos en document_inbox (con dos CHECK,
+-- que solo miran esas columnas), dos índices pequeños, una tabla de un solo
 -- estado, cuatro funciones nuevas y un cron. No cambia ninguna función que
 -- exista: ni _queue_system_alert (regla 2: no se le añade nada), ni
 -- conta_factura_desde_lectura, ni la lista de documentos.
@@ -41,12 +41,17 @@
 alter table public.document_inbox add column if not exists read_failure text;
 alter table public.document_inbox add column if not exists read_failure_cause text;
 alter table public.document_inbox add column if not exists read_failure_at timestamptz;
+-- Dos CHECK cortos que solo miran las columnas nuevas (W05: así van de verdad a staging
+-- desde la rama): clase y causa van las dos o ninguna, y la clase es una de las dos.
+-- Que la causa case con su clase lo garantiza _shared/lecturaFallo.ts (falloDeLlamada solo
+-- acepta el par si casa; lo prueban tests/conta/e02): en un CHECK no cabe en lo que el
+-- analizador de staging lee de cada restricción (120 caracteres).
 do $$ begin
-  if not exists (select 1 from pg_constraint where conname = 'document_inbox_read_failure_check') then
-    alter table public.document_inbox add constraint document_inbox_read_failure_check check (
-      (read_failure is null and read_failure_cause is null)
-      or (read_failure = 'caida' and read_failure_cause in ('tope_gasto', 'clave', 'limite', 'proveedor', 'tiempo'))
-      or (read_failure = 'documento' and read_failure_cause in ('cortada', 'no_json', 'sin_minimo', 'rechazo', 'fichero')));
+  if not exists (select 1 from pg_constraint where conname = 'document_inbox_e02_par') then
+    alter table public.document_inbox add constraint document_inbox_e02_par check ((read_failure is null) = (read_failure_cause is null));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'document_inbox_e02_clase') then
+    alter table public.document_inbox add constraint document_inbox_e02_clase check (read_failure in ('caida', 'documento'));
   end if;
 end $$;
 comment on column public.document_inbox.read_failure is
