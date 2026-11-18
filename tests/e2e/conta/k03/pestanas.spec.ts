@@ -78,27 +78,23 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await zonaActiva(page).getByLabel('Buscar factura').first().fill('')
 
     // 3 · F5 desde una fila con cuenta: el plan contable (cada fila enlaza con su mayor).
+    // El plan abre con «Las que usas», y la gestoría de prueba no tiene asientos:
+    // se pasa a «Todas» y se abre la 57200001 (la cuenta del banco que le da la semilla del K02).
     await boton(page, 'Definiciones', 'plan')
     await abierta(page, 'Plan contable')
     const plan = zonaActiva(page)
-    // Una fila con una cuenta de 3 cifras o más; si el árbol empieza cerrado, se abre el grupo 5 hasta encontrarla.
-    const conCuenta = plan.locator('[role="row"]').filter({ has: page.locator('a[href*="/conta/plan/"]') })
-    const codigoDe = async () => plan.evaluate((z) => {
-      for (const fila of Array.from(z.querySelectorAll('[role="row"]'))) {
-        const a = fila.querySelector('a[href*="/conta/plan/"]')
-        const m = /\/conta\/plan\/([0-9]{3,})/.exec(a?.getAttribute('href') ?? '')
-        if (m) return m[1]
-      }
-      return null
-    })
-    await expect(conCuenta.first()).toBeVisible({ timeout: 30_000 })
-    for (const grupo of ['5', '57']) {
-      if (await codigoDe()) break
+    const codigo = '57200001'
+    await plan.getByRole('button', { name: 'Todas', exact: true }).first().click()
+    await expect(plan.getByRole('button', { name: 'Todas', exact: true }).first()).toHaveAttribute('aria-pressed', 'true')
+    const fila = plan.locator(`[role="row"]:has(a[href*="/conta/plan/${codigo}"])`).first()
+    for (const grupo of ['5', '57', '572']) {
       const abrir = plan.getByRole('button', { name: new RegExp(`^Abrir ${grupo} · `) }).first()
-      if (await abrir.count()) await abrir.click()
+      // O el grupo por abrir, o ya la fila (si el árbol no tiene ese nivel).
+      await expect(abrir.or(fila).first()).toBeVisible({ timeout: 30_000 })
+      if (await fila.isVisible()) break
+      await abrir.click()
     }
-    await expect.poll(codigoDe, { timeout: 15_000 }).not.toBeNull()
-    const codigo = (await codigoDe())!
+    await expect(fila).toBeVisible({ timeout: 15_000 })
     await page.evaluate(() => { (window as unknown as { k03SinRecargar: boolean }).k03SinRecargar = true })
     await plan.locator(`[role="row"]:has(a[href*="/conta/plan/${codigo}"])`).first().focus()
     await expect(page.locator('.k-trabajo-mayor')).toContainText(codigo)
