@@ -81,7 +81,8 @@ export function AclararDocumento({ fila, accountId, companyId, quien, alCerrar, 
   return (
     <>
       <Dialogo titulo={titulo} explicacion={(llegada ? (porque.datos ?? porqueSinTecnicismos(fila.porque)) : fila.porque) ?? 'Hay algo que aclarar.'} alCerrar={alCerrar} acciones={acciones}>
-        {llegada && !sinPdf && !correo && <button type="button" className="s-boton s-boton-enlace" onClick={() => void verDocumento()}>Ver el documento</button>}
+        {/* E03 · Un enlace normal, del ancho de su texto: suelto en la columna del diálogo se estiraba de lado a lado y su foco parecía una casilla. */}
+        {llegada && !sinPdf && !correo && <p style={{ margin: 0 }}><button type="button" className="s-boton s-boton-enlace" onClick={() => void verDocumento()}>Ver el documento</button></p>}
         <input ref={pdf} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="s-oculto" aria-label="Elegir el PDF"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void hacer('pdf', () => (correo ? subirPdfDelCorreo(accountId, fila.id, f) : subirPdfDeLlegada(accountId, fila.id, f))); e.target.value = '' }} />
         {correo && <p className="s-apoyo" data-prueba="correo-sin-factura">Llegó por correo y no he sacado de él ninguna factura ni liquidación. «Volver a leer» lo pide otra vez a la entrada: si ahora se entiende, entra y sale de aquí.</p>}
