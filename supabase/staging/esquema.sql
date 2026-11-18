@@ -41491,10 +41491,16 @@ begin
                 when lb.rec then 'recibida'
                 when lb.emi then 'emitida'
                 when b.source_type in ('customer_invoice', 'sales_day') then 'emitida'
-                else 'recibida' end as clase,
+                -- X07: con libro de I.V.A. que no es de recibidas ni de expedidas: asiento, que no sale (abajo).
+                else 'asiento' end as clase,
            (exists (select 1 from public.journal_entry_document d where d.entry_id = b.id and d.account_id = v_c.account_id)
             or exists (select 1 from public.customer_invoice ci where ci.entry_id = b.id and ci.account_id = v_c.account_id and ci.pdf_path is not null)) as tiene_pdf,
            array_remove(array[
+             -- X07: lo que lleva I.V.A. y no es una factura no sale como asiento (dejaría incompleto el libro de ERP10).
+             case when (lb.entry_id is not null and not lb.rec and not lb.emi and b.source_type not in ('customer_invoice', 'sales_day'))
+                       or (lb.entry_id is null and exists (select 1 from public.journal_line jl where jl.entry_id = b.id and jl.account_id = v_c.account_id
+                                                            and (jl.vat_book is not null or jl.tax_rate_id is not null)))
+                  then 'Lleva I.V.A. y no es una factura: métela a mano en ERP10 para que entre en su libro.' end,
              case when lb.entry_id is null and b.source_type in ('supplier_invoice', 'customer_invoice', 'sales_day')
                   then 'Es una factura y no tiene su registro de IVA: no sale hasta que lo tenga.' end,
              case when lb.entry_id is not null and (coalesce(li.sop, 0) <> coalesce(lb.cuota_sop, 0) or coalesce(li.rep, 0) <> coalesce(lb.cuota_rep, 0))
@@ -41559,7 +41565,7 @@ end $_$;
 -- Name: FUNCTION conta_erp10_por_salir(p_company uuid, p_mes date); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_erp10_por_salir(p_company uuid, p_mes date) IS 'X02 (X04a, X05) · Lo que saldría a ERP10 hasta ese mes (lo de antes que no salió, marcado «de otro mes»): una partida por asiento con su clase, avisos y si sale; las cuentas nuevas con su código en ERP10; y el resumen del paso 1. Solo lee.';
+COMMENT ON FUNCTION public.conta_erp10_por_salir(p_company uuid, p_mes date) IS 'X02 (X04a, X05, X07) · Lo que saldría a ERP10 hasta ese mes (lo de antes que no salió, marcado «de otro mes»): una partida por asiento con su clase, avisos y si sale; las cuentas nuevas con su código en ERP10; y el resumen del paso 1. Solo lee.';
 
 
 --
