@@ -32,6 +32,10 @@ export const AREAS_LIBROS: Area[] = [
       { id: 'libro-diario', nombre: 'Libro diario', sinonimos: ['asientos', 'diario detallado'] },
       { id: 'diario-resumido', nombre: 'Diario resumido', sinonimos: ['resumen mensual'] },
     ] },
+    // N07: «Traer de ERP10», en la pestaña Importar (esqueleto/ordenes.ts), al lado de lo de Diez.
+    { etiqueta: 'De otro programa', acciones: [
+      { id: 'traer-erp10', nombre: 'Traer de ERP10', sinonimos: ['erp10', 'cegid', 'traer', 'importar de erp10', 'plan de cuentas de erp10', 'proveedores de erp10', 'cambiar de programa'] },
+    ] },
     { etiqueta: 'Con Diez', acciones: [
       { id: 'pendientes-diez', nombre: 'Pendientes de adjuntar en Diez', sinonimos: ['pdf pendiente', 'adjuntar en diez', 'documentos diez', 'cegid'] },
     ] },

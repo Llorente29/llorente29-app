@@ -183,7 +183,9 @@ export const PRODUCTOS: Producto[] = [
       { id: 'definiciones', etiqueta: 'Definiciones', icono: 'definiciones', ruta: R.plan, prefijos: [R.plan, R.tablas, R.analitica] },
       // S02 · PR 2: el cierre del mes del banco vive aquí, junto al de la contabilidad (bancos/cierre lleva aquí).
       { id: 'cierre', etiqueta: 'Cierre y Registro', icono: 'cierre', ruta: `${R.libros}/cierre/ejercicios`, prefijos: [`${R.libros}/cierre`, `${R.libros}/anuales`, `${R.bancos}/cierre`] },
-      { id: 'importar', etiqueta: 'Importar', icono: 'importar', ruta: R.pendientesDiez, prefijos: [R.pendientesDiez], solo: 'diez' },
+      // N07: Importar ya no es solo de Diez: abre «Traer de ERP10», que es para cualquier empresa que venga de
+      // otro programa. Con Diez, «Pendientes de adjuntar en Diez» sigue en su cinta, al lado.
+      { id: 'importar', etiqueta: 'Importar', icono: 'importar', ruta: R.traerErp10, prefijos: [R.traerErp10, R.pendientesDiez] },
     ],
   },
   {
