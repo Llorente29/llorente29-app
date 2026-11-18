@@ -12,6 +12,7 @@
 //     recibe la mercancía con Folvy y la cuenta no es solo de contabilidad.
 //   · Las cuentas, siempre nombre · código.
 
+import { ETIQUETA_DE_QUIEN } from '@/modules/conta/lib/deQuienEs'
 import { calcularVencimiento } from '@/modules/conta/lib/cifras'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { etiquetaYaContabilizada } from './antesDelInicio'
@@ -57,6 +58,8 @@ export interface FilaDocumento {
   /** S01g · Solo las de soporte: de qué liquidación (proveedor, mes y local) y la liquidación, si ya está. */
   soporte?: Soporte | null
   asiento: { id: string; estado: string; solo: boolean } | null
+  /** E03 · Va a nombre de otro y nadie lo ha contestado: sale en «Por aclarar» con «¿De quién es?». */
+  de_quien?: { caso: string; sociedad: string | null } | null
   llego: string
   archivo?: string | null
   /** S01p·20 · 1 · Si es un correo de plataforma del que no salió nada: su correo y su asunto (lo pone la pantalla). */
@@ -233,6 +236,8 @@ export function entendido(f: FilaDocumento, solo = false): { titulo: string; por
   if (f.estado === 'ya_contabilizada') return { titulo: etiquetaYaContabilizada(f.programa_antes), porque: f.porque ?? null }
   if (f.estado === 'traida_en_prueba') return { titulo: 'Traída · en prueba', porque: 'Es de lo traído de otro programa, que todavía está en prueba: se paga cuando lo des por bueno.' }
   if (!f.proveedor.id) return { titulo: 'No reconozco el emisor', porque: f.porque ?? 'No reconozco el emisor: dime quién es.' }
+  // E03 · Lo que falta es saber de quién es: la etiqueta lo dice; el porqué, a nombre de quién va.
+  if (f.de_quien) return { titulo: ETIQUETA_DE_QUIEN, porque: f.porque ?? null }
   const e = f.entendido
   const cuenta = e ? `${e.nombre} · ${e.cuenta}${e.sin_confirmar ? ' · sin confirmar' : ''}` : 'Sin cuenta de gasto todavía'
   const casa = f.recepcion ? ` · casa con la recepción del ${diaMes(f.recepcion.fecha)}` : ''

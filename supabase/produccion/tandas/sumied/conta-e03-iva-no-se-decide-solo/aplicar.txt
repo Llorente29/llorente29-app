@@ -1,0 +1,17 @@
+# E03 · Sumied pregunta, no decide. Rama conta/e03-iva-no-se-decide-solo. Se ensaya y
+# se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1833  Solo añade: la respuesta de una persona (supplier_invoice.recipient_answer…),
+#         a nombre de quién va (_conta_de_quien, conta_de_quien_es), contestar
+#         (conta_recibida_de_quien) y pasarla a otra sociedad (conta_recibida_pasar_a).
+#   1835  Cambia en caliente, con su respaldo: el IVA no deducible ya no se decide
+#         solo, el disparador respeta la respuesta, la ficha de hoy contesta, «apunta
+#         sola» y validar esperan a la respuesta, y la lista la pone en «Por aclarar».
+#   1836  Lo que marcó Sumied solo, sin asiento validado, vuelve a ser pregunta; lo que
+#         decidió una persona en la ficha queda como su respuesta. UPDATE: «autorizo».
+#
+# Nada del camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/e03-de-quien-es.sql
+supabase/migrations/20261118T1833_e03_de_quien_es.sql
+supabase/migrations/20261118T1835_e03_no_decide_solo.sql
+supabase/migrations/20261118T1836_e03_lo_marcado_vuelve_a_pregunta.sql

@@ -52,6 +52,8 @@ import { fraseFechaDelAsiento } from '@/modules/conta/lib/fechaDelAsiento'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import { IvaNoDeducibleFicha } from '@/modules/conta/documentos/IvaNoDeducibleFicha'
+import { PreguntaDeQuien } from '@/modules/conta/documentos/PreguntaDeQuien'
+import { leerDeQuien } from '@/modules/conta/services/deQuienService'
 import { BloqueComision } from '@/modules/conta/documentos/BloqueComision'
 import { chipComision, estadoPagoComision } from '@/modules/conta/documentos/comision'
 import { leerComision } from '@/modules/conta/services/comisionService'
@@ -168,6 +170,8 @@ export default function RevisarFacturaPage() {
   }, [search, navegar])
 
   const fichaLeida = useLeer(accountId && invoiceId ? () => leerFichaRecibida(accountId, invoiceId) : null, `${accountId}:${invoiceId}:ficha:${vuelta}`)
+  // E03 · ¿A nombre de quién va? Si no es de la empresa, se pregunta arriba y no se valida hasta contestar.
+  const deQuien = useLeer(invoiceId ? () => leerDeQuien(invoiceId) : null, `${invoiceId}:de-quien:${vuelta}`)
   const ficha = useUltimo(fichaLeida.datos, invoiceId)
   const localPropuesto = ficha ? ficha.localId ?? ficha.recepcion?.localId ?? null : undefined
   const papel = useLeer(fac && ficha ? async () => ({ url: await urlDelPapel(fac, ficha.lectura?.ruta ?? null) }) : null,
@@ -580,6 +584,7 @@ export default function RevisarFacturaPage() {
 
   const hayCambios = ed.hay
   const sePuedeValidar = !yaApuntada && !apuntando && !sinProveedor && !!fac.fecha && !hayCambios && !faltaDoc && !yaEstaba && !traida
+    && deQuien.datos?.pregunta !== true  // E03 · primero, contestar «¿de quién es?»
   // B01·13 · Una factura aprobada que se puede pagar: «Pagar» es el principal y «Validar» va al lado,
   // en secundario (un solo botón azul). Antes «Validar» tapaba a «Pagar» hasta tener asiento (e2e 41609431355).
   const conPagar = puedePagarAqui && !!cuentaPago && quienPagaFicha.datos?.yoPuedo === true
@@ -683,6 +688,9 @@ export default function RevisarFacturaPage() {
         <AvisoIbanDistinto iban={desdeDocumento.iban} ficha={fichaProv.datos} factura={facturaOrigen} quien={quien} accountId={fac.account_id} alHacer={(t) => decir(t)} />
       )}
       <Veredicto tipo={v.tipo} titulo={v.titulo} porque={v.porque} detalle={v.detalle} quien={MARCA.nombre} />
+      {/* E03 · La pregunta, arriba, en la franja de las dudas: Sumied no decide solo que su IVA no se deduce. */}
+      {!descartada && <PreguntaDeQuien invoiceId={invoiceId} q={deQuien.datos ?? null} quien={userName ?? null}
+        alContestar={(t) => decir(t)} alPasar={(t) => { refrescarCuentasMenu(); if (siguiente) ir(siguiente, t); else decir(t) }} />}
       {!soloLectura && <div className="cxf-barra"><BarraCambios cambios={ed.cambios} onDescartar={() => { ed.descartar(); setMensaje(null) }} onGuardar={() => void guardar()} guardando={guardando} mensaje={mensaje} /></div>}
       {descartada && (
         <section className="s-bloque-ficha" aria-label="No es una factura">

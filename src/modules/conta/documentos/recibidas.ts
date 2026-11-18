@@ -17,6 +17,7 @@
 //   · Los filtros (buscar, fecha, proveedor, local y cómo llegó), el orden y la
 //     fila donde ibas viven en la dirección (diseno/plantillas/lista.ts).
 
+import { ETIQUETA_DE_QUIEN } from '@/modules/conta/lib/deQuienEs'
 import type { PestanaEstado } from '@/modules/conta/diseno/plantillas'
 import { leerOrden, ordenar, type Sentido } from '@/modules/conta/diseno/plantillas'
 import { etiquetaSoporte, faltaElPdf, limites, ventanaParaRevisar, type Canal, type FilaDocumento } from './documentos'
@@ -65,6 +66,7 @@ export function estadoDeFila(f: FilaDocumento, extra: ExtraFactura | undefined):
       if (f.tipo === 'llegada') return { texto: faltaElPdf(f) ? 'Falta el PDF' : 'Sin leer', tono: 'duda' }
       if (f.tipo === 'recepcion') return { texto: 'Aún no es factura', tono: 'duda' }
       if (!f.proveedor.id) return { texto: 'Proveedor nuevo', tono: 'duda' }
+      if (f.de_quien) return { texto: ETIQUETA_DE_QUIEN, tono: 'duda' }   // E03 · lo que falta: saber de quién es
       return { texto: 'Por aclarar', tono: 'duda' }
     case 'apuntada':
       if (extra?.sola) return { texto: 'Apuntada sola', tono: 'seguro' }
