@@ -53,8 +53,9 @@ begin
       (3, date '2026-11-19', date '2026-11-19', timestamptz '2026-11-19 08:00:00+01'),
       (4, date '2026-11-19', date '2026-11-19', timestamptz '2026-11-19 09:00:00+01'),
       (5, date '2026-11-19', date '2026-11-19', timestamptz '2026-11-19 10:00:00+01')) t(n, desde, hasta, llego) loop
-    -- Lo que trae cada uno: (caso, día, importe, lo que dice el banco).
-    delete from _r08;
+    -- Lo que trae cada uno: (caso, día, importe, lo que dice el banco). «truncate», no «delete» sin
+    -- «where»: staging no lo deja (safeupdate; e2e 44607984575).
+    truncate _r08;
     insert into _r08 select * from (values
       (1, 'ingreso', date '2026-11-05', 6000.00::numeric, 'TRANSFERENCIA RECIBIDA CLIENTE EJEMPLO', 'Cliente Ejemplo'),
       (2, 'telefonia', date '2026-11-12', -31.50, 'RECIBO TELEFONIA EJEMPLO', 'Recibo Telefonía Ejemplo'),
