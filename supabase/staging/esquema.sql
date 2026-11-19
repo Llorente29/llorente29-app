@@ -41355,6 +41355,111 @@ COMMENT ON FUNCTION public.conta_erp10_comprobar(p_company uuid, p_fecha date) I
 
 
 --
+-- Name: conta_erp10_dias_tpv_por_salir(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_dias_tpv_por_salir(p_company uuid, p_mes date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_ps jsonb;
+  v_ids uuid[];
+  v_r jsonb;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  if auth.uid() is not null and not public.belongs_to_account(v_c.account_id) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  -- Las mismas reglas que enseña la pantalla: solo los días que salen.
+  v_ps := public.conta_erp10_por_salir(v_c.id, p_mes);
+  select coalesce(array_agg((p ->> 'entry_id')::uuid), '{}') into v_ids
+    from jsonb_array_elements(v_ps -> 'partidas') p
+   where p ->> 'clase' = 'emitida' and p ->> 'origen' = 'sales_day' and (p ->> 'sale')::boolean;
+
+  with e as (
+    select e.* from public.journal_entry e
+     where e.id = any (v_ids) and e.company_id = v_c.id and e.account_id = v_c.account_id
+  ),
+  revo as (
+    select d.entry_id, d.programa, d.primer_numero::text as primero, d.ultimo_numero::text as ultimo, d.documentos as facturas,
+           (select count(distinct o.contador) from public.conta_tpv_documento o where o.dia_id = d.id)::int as contadores
+      from public.conta_tpv_dia d join e on e.id = d.entry_id
+     where d.company_id = v_c.id and d.account_id = v_c.account_id
+  ),
+  folvy as (
+    select distinct on (s.entry_id) s.entry_id, s.location_id, o.name as local, s.first_invoice as primero, s.last_invoice as ultimo,
+           s.tickets_count as facturas, s.unit_key,
+           (select count(*) from public.sales_day_summary z where z.entry_id = s.entry_id)::int as resumenes
+      from public.sales_day_summary s join e on e.id = s.entry_id
+      left join public.locations o on o.id = s.location_id
+     where s.company_id = v_c.id and s.account_id = v_c.account_id
+     order by s.entry_id, s.sales_day, s.id
+  ),
+  lineas as (
+    select l.entry_id, l.position, a.id as cuenta_id, a.code, a.template_code, a.name, l.debit, l.credit,
+           t.rate as tipo_iva, l.tax_base as base_iva, l.vat_book
+      from public.journal_line l
+      join e on e.id = l.entry_id
+      join public.company_account a on a.id = l.company_account_id and a.account_id = l.account_id
+      left join public.tax_rate t on t.id = l.tax_rate_id
+     where l.account_id = v_c.account_id
+  ),
+  contado as (
+    select a.id, a.code, a.template_code, a.name from public.company_account a
+     where a.company_id = v_c.id and a.account_id = v_c.account_id and a.code like '430%'
+       and (a.name ilike '%contado%' or a.plain_name ilike '%contado%') and a.status is distinct from 'cerrada'
+  ),
+  cuentas as (
+    select distinct l.cuenta_id as id, l.code, l.template_code, l.name from lineas l
+    union
+    select c.id, c.code, c.template_code, c.name from contado c
+  ),
+  terceros as (
+    select distinct on (c.id) c.id,
+           coalesce((select s.tax_id from public.supplier s where s.id::text = k.entity_id and s.account_id = v_c.account_id and k.entity = 'supplier'),
+                    (select p.tax_id from public.party p where p.id::text = k.entity_id and p.account_id = v_c.account_id and k.entity = 'customer')) as nif
+      from cuentas c
+      join public.company_account_link k on k.company_account_id = c.id and k.company_id = v_c.id and k.account_id = v_c.account_id
+                                        and k.entity in ('supplier', 'customer') and k.role = 'principal'
+     order by c.id, k.created_at
+  )
+  select jsonb_build_object(
+    'mes', v_ps -> 'mes', 'codigo', v_ps -> 'codigo', 'largo', v_ps -> 'largo',
+    'dias', coalesce((select jsonb_agg(jsonb_build_object(
+        'entryId', e.id, 'serie', e.series, 'numero', e.number, 'fecha', e.entry_date, 'concepto', e.concept,
+        'origen', case when r.entry_id is not null then 'revo' when f.entry_id is not null then 'folvy' end,
+        'local', coalesce(f.local, case r.programa when 'revo' then 'Revo' else r.programa end),
+        'localId', f.location_id,
+        'primero', coalesce(r.primero, f.primero), 'ultimo', coalesce(r.ultimo, f.ultimo), 'facturas', coalesce(r.facturas, f.facturas),
+        'contadores', r.contadores, 'unidad', f.unit_key, 'resumenes', f.resumenes,
+        'lineas', (select jsonb_agg(jsonb_build_object('cuenta', l.code, 'plantilla', l.template_code, 'nombre', l.name,
+                      'debe', l.debit, 'haber', l.credit, 'tipoIva', l.tipo_iva, 'baseIva', l.base_iva, 'libro', l.vat_book) order by l.position)
+                     from lineas l where l.entry_id = e.id))
+        order by e.entry_date, e.series, e.number)
+      from e left join revo r on r.entry_id = e.id left join folvy f on f.entry_id = e.id), '[]'::jsonb),
+    'contado', coalesce((select jsonb_agg(jsonb_build_object('codigo', c.code, 'plantilla', c.template_code, 'nombre', c.name) order by c.code)
+      from contado c), '[]'::jsonb),
+    'cuentas', coalesce((select jsonb_agg(jsonb_build_object('codigo', c.code, 'plantilla', c.template_code, 'nombre', c.name,
+        'nif', t.nif, 'gastoHabitual', null) order by c.code)
+      from cuentas c left join terceros t on t.id = c.id), '[]'::jsonb),
+    'yaSalidas', coalesce((select jsonb_object_agg(s.codigo_erp10, s.codigo)
+      from public.conta_erp10_subcuenta_salida s where s.company_id = v_c.id and s.account_id = v_c.account_id), '{}'::jsonb)
+  ) into v_r;
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_dias_tpv_por_salir(p_company uuid, p_mes date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_dias_tpv_por_salir(p_company uuid, p_mes date) IS 'X08 · De cada día de ventas que sale a ERP10 ese mes (los de conta_erp10_por_salir de clase «emitida» y origen «sales_day» que salen): de dónde viene (Revo o el TPV de Folvy), su local, su rango de facturas (primero, último, cuántas) y sus contadores, cada apunte de su asiento con su cuenta, plantilla, nombre, debe, haber y su I.V.A.; las cuentas «Clientes de contado» (430 que dicen «contado»); las cuentas que usan con su NIF; y las ya salidas. Solo lee.';
+
+
+--
 -- Name: conta_erp10_emitidas_por_salir(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -67868,6 +67973,83 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.e2e_e04_preparar(p_lado text) IS 'SOLO STAGING (semilla E04): lo de e2e_e03_preparar y la recibida a nombre de la segunda sociedad pasada sola, para su e2e.';
+
+
+--
+-- Name: e2e_e05_preparar(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.e2e_e05_preparar(p_lado text, p_motor text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_acc uuid; emp uuid; v_banco uuid; v_ca uuid; v_codigo text; v_st uuid; v_m uuid; v_n int;
+  v_sello text := upper(to_hex((extract(epoch from clock_timestamp()) * 1000)::bigint % 1679616));
+  r jsonb := '{}'::jsonb; c record; v_prop jsonb;
+begin
+  if p_lado is null or p_lado !~ '^[a-z0-9]{1,12}$' then raise exception 'E05 e2e: el lado en minúsculas.'; end if;
+  if coalesce(p_motor, '') = '' then raise exception 'E05 e2e: falta la versión del motor.'; end if;
+  -- La cuenta del núcleo de quien llama, en la plantilla o en un carril (el segundo grupo es el carril).
+  select up.account_id into v_acc from public.user_profiles up
+   where up.user_id = auth.uid() and up.role = 'admin' and up.active
+     and up.account_id::text ~ '^c0e20000-[0-9a-f]{4}-4000-8000-0000000000e0$'
+   order by up.created_at limit 1;
+  if v_acc is null then raise exception 'E05 e2e: solo para la persona de la cuenta del núcleo (o la de su carril).' using errcode = '42501'; end if;
+  select id into emp from public.company where account_id = v_acc and legal_name = 'Empresa de Ejemplo Núcleo, S.L.';
+  if emp is null then raise exception 'E05 e2e: falta la empresa general de la cuenta del núcleo (semilla K02).'; end if;
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
+  select v_acc, emp, 'pymes', x.code, left(x.code, 3), x.name, 'template', 'serie'
+    from (values ('62600000', 'Servicios bancarios y similares'), ('62800000', 'Suministros')) x(code, name)
+   where not exists (select 1 from public.company_account a where a.company_id = emp and a.code = x.code);
+
+  -- Su banco y su 572, cada vez otro.
+  select 50 + count(*) into v_n from public.company_account where company_id = emp and code ~ '^57200[0-9]{3}$' and code >= '57200050';
+  v_codigo := '57200' || lpad(v_n::text, 3, '0');
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
+  values (v_acc, emp, 'pymes', v_codigo, '572', 'Banco E05 ' || p_lado, 'own', 'manual') returning id into v_ca;
+  insert into public.treasury_account (account_id, company_id, kind, name, iban, pgc_hint, is_active)
+  values (v_acc, emp, 'bank', 'Banco E05 ' || p_lado, 'ES00' || '9999' || lpad(v_n::text, 16, '0'), '572', true) returning id into v_banco;
+  insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+  values (v_acc, emp, v_ca, 'bank_account', v_banco::text, 'principal', 'manual');
+  insert into public.bank_statement (account_id, company_id, treasury_account_id, source, format, file_name, period_from, period_to,
+    movements_count, new_count, repeated_count, continuity, opening_balance, closing_balance, balanced, imported_by_name)
+  values (v_acc, emp, v_banco, 'fichero', 'n43', 'extracto-e05.n43', date '2026-10-01', date '2026-10-31', 5, 5, 0, 'primero', 1000, 1214.10, true, 'Prueba e2e E05')
+  returning id into v_st;
+
+  for c in select * from (values
+      ('seguro1', date '2026-10-06', -12.50::numeric, 'COMISION MANTENIMIENTO CUENTA', 'Comisión de mantenimiento', 'seguro', '62600000'),
+      ('seguro2', date '2026-10-13', -8.40::numeric, 'COMISION TRANSFERENCIA', 'Comisión de transferencia', 'seguro', '62600000'),
+      ('probable', date '2026-10-20', -45.00::numeric, 'RECIBO ELECTRICIDAD EJEMPLO', 'Electricidad Ejemplo', 'probable', '62800000'),
+      ('aclarar', date '2026-10-24', 300.00::numeric, 'INGRESO EFECTIVO', 'Ingreso efectivo', null, null),
+      ('casado', date '2026-10-27', -20.00::numeric, 'RECIBO AGUA EJEMPLO', 'Agua Ejemplo', 'seguro', '62800000')) t(caso, fecha, importe, banco, limpio, confianza, cuenta) loop
+    v_prop := case when c.cuenta is null then null else jsonb_build_object(
+      'que', case when c.cuenta = '62600000' then 'Es una comisión del banco.' else 'Es la luz o el agua.' end,
+      'destino', jsonb_build_object('tipo', 'cuenta', 'concepto', c.limpio, 'lineas', jsonb_build_array(jsonb_build_object('cuenta', c.cuenta, 'importe', abs(c.importe)))),
+      'preseleccionar', c.confianza = 'seguro', 'motor', p_motor) end;
+    insert into public.bank_movement (account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount,
+      bank_concept, clean_concept, fingerprint, soft_fingerprint, status, confidence, reason, proposal)
+    values (v_acc, emp, v_banco, v_st, c.fecha, c.fecha, c.importe, c.banco, c.limpio,
+      format('e05-%s-%s-%s', p_lado, c.caso, v_sello), format('e05-suave-%s-%s-%s', p_lado, c.caso, v_sello),
+      case when c.cuenta is null then 'por_aclarar' else 'propuesto' end, c.confianza,
+      case when c.cuenta is null then 'No sé qué es: un ingreso en efectivo sin nada que lo nombre.'
+           when c.confianza = 'seguro' then 'Mismo texto que las comisiones de siempre.' else 'El texto se parece al de la luz de otros meses.' end,
+      v_prop)
+    returning id into v_m;
+    if c.caso = 'casado' then
+      perform public.bank_casar(v_m, v_prop->'destino', 'seguro', 'Casado solo: el agua de todos los meses.', '[]'::jsonb, 'folvy', null);
+    end if;
+    r := r || jsonb_build_object(c.caso, v_m);
+  end loop;
+  return jsonb_build_object('cuenta', v_acc, 'empresa', emp, 'banco', v_banco, 'cuenta572', v_codigo, 'movs', r);
+end $_$;
+
+
+--
+-- Name: FUNCTION e2e_e05_preparar(p_lado text, p_motor text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.e2e_e05_preparar(p_lado text, p_motor text) IS 'SOLO STAGING (semilla E05): un banco con su extracto y cinco movimientos (seguros, probable, sin saber, casado) en la empresa general de la cuenta del núcleo, para su e2e.';
 
 
 --
@@ -178040,6 +178222,15 @@ GRANT ALL ON FUNCTION public.conta_erp10_comprobar(p_company uuid, p_fecha date)
 
 
 --
+-- Name: FUNCTION conta_erp10_dias_tpv_por_salir(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_dias_tpv_por_salir(p_company uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_dias_tpv_por_salir(p_company uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_dias_tpv_por_salir(p_company uuid, p_mes date) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_erp10_emitidas_por_salir(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
 --
 
@@ -182762,6 +182953,15 @@ GRANT ALL ON FUNCTION public.e2e_e03_preparar(p_lado text) TO service_role;
 REVOKE ALL ON FUNCTION public.e2e_e04_preparar(p_lado text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.e2e_e04_preparar(p_lado text) TO authenticated;
 GRANT ALL ON FUNCTION public.e2e_e04_preparar(p_lado text) TO service_role;
+
+
+--
+-- Name: FUNCTION e2e_e05_preparar(p_lado text, p_motor text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.e2e_e05_preparar(p_lado text, p_motor text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.e2e_e05_preparar(p_lado text, p_motor text) TO authenticated;
+GRANT ALL ON FUNCTION public.e2e_e05_preparar(p_lado text, p_motor text) TO service_role;
 
 
 --
