@@ -33,6 +33,7 @@ import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import LlevarACompras from '@/modules/conta/documentos/LlevarACompras'
 import RecibidaAMano from '@/modules/conta/documentos/RecibidaAMano'
 import RecibidaSegun from '@/modules/conta/nucleo/recibida/RecibidaSegun'
+import BancosSegun from '@/modules/conta/nucleo/bancos/BancosSegun'
 import FacturasPage from '@/modules/conta/ventas/FacturasPage'
 import FacturaVentaPage from '@/modules/conta/ventas/FacturaVentaPage'
 import LlevarAVentas from '@/modules/conta/ventas/LlevarAVentas'
@@ -142,7 +143,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.librosAccion, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?', true) },
     // B01 · Bancos en tres niveles (N17): Movimientos, Reglas, Cuentas y extractos, Cierre del mes.
     // Respuesta 4: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto».
-    { path: CONTA.rutas.bancos, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
+    // E05 · Bancos a secas: dentro del núcleo, la pantalla nueva; fuera, la de hoy (BancosSegun). Sus pestañas (bancos/…), las de hoy.
+    { path: CONTA.rutas.bancos, element: enMarco(<BancosSegun hoy={<BancosPage />} />, '¿Qué es la transferencia de 1.278,17?', true) },
     { path: CONTA.rutas.bancosPestana, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
     // I01b · Impuestos (tableros 8, 9 y 10): el calendario, sus pestañas y el IVA de un periodo.
     // LS1 · Laboral (28/10): las pantallas de Folvy › Personal, dentro de Sumied.

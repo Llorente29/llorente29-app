@@ -1,0 +1,10 @@
+# E05 · Bancos del núcleo. Rama conta/e05-nucleo-bancos.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2248  Solo añade: «Escribir uno a mano», el asiento de tesorería (serie 3, la
+#         572 del banco contra la cuenta) de un movimiento que no ha venido en el
+#         extracto, validado al momento. Cuando llega, el motor de hoy lo enlaza.
+#
+# Nada del camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/e05-nucleo-bancos.sql
+supabase/migrations/20261118T2248_e05_banco_a_mano.sql
