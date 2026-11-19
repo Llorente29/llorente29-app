@@ -45,6 +45,9 @@
 
 /* R08 · Conciliar en un paso (maqueta nucleo_10). */
 .kb-cuantos { white-space: nowrap; flex-shrink: 0; color: var(--k-apoyo); }
+/* Nada se corta: si la pastilla no cabe en la línea, pasa entera a la de abajo. */
+.kb-bancos > .kf-cabecera { flex-wrap: wrap; row-gap: 6px; }
+.kb-bancos .kb-cuadre { flex: 0 0 auto; }
 .kb-cuantos strong { color: var(--k-tinta); }
 .kb-fila input[type='checkbox'] { margin: 0; width: 14px; height: 14px; }
 .kb-fila[data-marcado] { background: #eef4fc; box-shadow: inset 3px 0 0 var(--k-azul); }
@@ -68,9 +71,9 @@
 .kb-van-titulo { display: flex; align-items: center; gap: 8px; }
 .kb-van-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
 .kb-van-tabla td { padding: 3px 4px; border-top: 1px solid var(--k-gris); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.kb-van-tabla td:nth-child(1) { width: 42px; }
+.kb-van-tabla td:nth-child(1) { width: 48px; text-overflow: clip; }
 .kb-van-tabla td:nth-child(3) { width: 34%; }
-.kb-van-tabla td:nth-child(4) { width: 72px; text-align: right; }
+.kb-van-tabla td:nth-child(4) { width: 80px; text-align: right; }
 .kb-nota { border-left: 3px solid var(--k-azul); background: var(--k-blanco); padding: 8px 10px; }
 .kb-apartado { display: flex; flex-direction: column; gap: 6px; background: var(--k-gris); border-radius: 4px; padding: 10px; }
 .kb-apartado p { margin: 0; }

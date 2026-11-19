@@ -8,8 +8,8 @@
 //      la 2120: la e2e de la rama corre contra staging sin la 2040 ni la 2120, que cambian funciones
 //      y solo van de verdad desde main); su fila, «Apartado» con el importe tachado, y a la derecha
 //      por qué, con el salto de saldo y «Volver a abrirlo»;
-//   2. la pastilla: el saldo del banco es el del último de los tres extractos del 19/11 (1.094,39,
-//      «extracto del 19/11, 10:00»), contra lo que está en el diario;
+//   2. la pastilla, entera: el saldo del banco es el del último de los tres extractos del 19/11
+//      (1.094,39, «extracto del 19/11»), contra lo que está en el diario;
 //   3. Espacio y Mayús ↓ marcan las cinco nóminas: «5 marcados · 6.119,71», y a la derecha «Los 5
 //      asientos que van al diario», que cuadran;
 //   4. F4, «465» e Intro eligen la 46500000; Intro concilia: «5 movimientos a la 46500000», las cinco
@@ -82,7 +82,8 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
 
       // ── 2 · La pastilla: el saldo del último extracto del 19/11, contra el diario ──
       await expect(pantalla(page).locator('.kf-estado')).toContainText('Banco 1.094,39')
-      await expect(pantalla(page).locator('.kf-estado')).toContainText('extracto del 19/11, 10:00')
+      await expect(pantalla(page).locator('.kf-estado')).toContainText('extracto del 19/11')
+      await expect(pantalla(page).locator('.kb-cuadre')).toBeInViewport({ ratio: 1 })
 
       await fila(page, telefonia).click()
       const apartado = page.locator('[data-prueba="apartado"]')
@@ -115,6 +116,8 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(cuenta).toHaveValue(/^46500000 · /)
       await expect(van.locator('.kb-etiqueta')).toHaveText('Cuadran')
       await expect(van).toContainText('46500000 al debe')
+      for (const id of p.nominas) await expect(fila(page, id)).toContainText('46500000')
+      await expect(fila(page, p.nominas[0])).toContainText('Nómina · Empleada')
       await expect(van).toContainText(`Cada uno, contra el banco (${p.cuenta572}) al haber.`)
       await expect(page.locator('#kb-conciliar-n')).toBeFocused()
       await expect(page.locator('#kb-conciliar-n')).toBeInViewport()

@@ -268,7 +268,8 @@ export default function PantallaBancos() {
                 {movs.length === 0 && <p className="kf-panel-nota">{cuadre?.frase}</p>}
                 {movs.map((x, i) => {
                   const ip = ingresoPago(x)
-                  const c = conCuenta(x)
+                  // Marcado y con la cuenta de abajo elegida, la que va a llevar (maqueta).
+                  const c = marcados.has(x.id) && cuentaBarra && conciliable(x) ? cuentaBarra.codigo : conCuenta(x)
                   const palabra = palabraDe(x)
                   const marcado = marcados.has(x.id)
                   const tachar = palabra === 'Apartado'
@@ -278,7 +279,7 @@ export default function PantallaBancos() {
                       <span role="gridcell"><input type="checkbox" aria-label={`Marcar ${quienEs(x)}`} checked={marcado} disabled={!conciliable(x)} tabIndex={-1}
                         onChange={() => { setMarcados((s) => alternar(s, x)); ancla.current = i }} onClick={(e) => e.stopPropagation()} /></span>
                       <span role="gridcell">{fechaVista(x.fecha).slice(0, 5)}</span>
-                      <span role="gridcell" className="kb-texto" title={textoDelBanco(x)}>{textoDelBanco(x)}</span>
+                      <span role="gridcell" className="kb-texto" title={textoDelBanco(x)}>{x.conceptoLimpio.trim() || textoDelBanco(x)}</span>
                       <span role="gridcell" className="kb-texto" title={c ? `${c} ${nombreDe(c)}` : undefined}>{c ? <><strong className="kb-codigo">{c}</strong> {nombreDe(c)}</> : ''}</span>
                       <span role="gridcell" className="kf-cifra">{tachar && ip.ingresoCent !== null ? <s>{euros(ip.ingresoCent)}</s> : euros(ip.ingresoCent)}</span>
                       <span role="gridcell" className="kf-cifra">{tachar && ip.pagoCent !== null ? <s>{euros(ip.pagoCent)}</s> : euros(ip.pagoCent)}</span>

@@ -95,7 +95,7 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(pantalla(page).locator('[data-prueba="por-conciliar"]')).toHaveText('4 por conciliar · 1 conciliado · 0 apartados')
       const etiquetas: [keyof Preparado['movs'], string][] = [['seguro1', 'Por conciliar'], ['seguro2', 'Por conciliar'], ['probable', 'Por conciliar'], ['aclarar', 'Por conciliar'], ['casado', 'Conciliado']]
       for (const [k, t] of etiquetas) await expect(fila(page, p.movs[k]).locator('.kb-etiqueta')).toHaveText(t)
-      await expect(fila(page, p.movs.probable)).toContainText('RECIBO ELECTRICIDAD EJEMPLO')
+      await expect(fila(page, p.movs.probable)).toContainText('Electricidad Ejemplo') // R08: lo que dice el banco, limpio (maqueta)
       await expect(fila(page, p.movs.probable)).toContainText('62800000')
       await expect(fila(page, p.movs.probable)).toContainText('45,00')
       await expect(fila(page, p.movs.aclarar)).toContainText('300,00')

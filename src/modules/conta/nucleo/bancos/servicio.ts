@@ -73,11 +73,12 @@ export async function saldoDiario(companyId: string, hasta: string, cuenta: stri
   return Math.round(Number(s ?? 0) * 100)
 }
 
-/** R08 · «extracto de hoy, 13:17» o «extracto del 16/11, 03:02». */
+/** R08 · «extracto de hoy, 13:17» o «extracto del 16/11». */
 export function cuandoDelExtracto(hasta: string | null, llego: string | null, hoy: string): string {
   if (!hasta) return ''
   const hora = llego ? new Date(llego).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' }) : ''
-  return `extracto ${hasta === hoy ? 'de hoy' : `del ${fechaVista(hasta).slice(0, 5)}`}${hora ? `, ${hora}` : ''}`
+  // La hora, solo si es de hoy (la maqueta: «extracto de hoy, 13:17»); de otro día basta el día.
+  return hasta === hoy ? `extracto de hoy${hora ? `, ${hora}` : ''}` : `extracto del ${fechaVista(hasta).slice(0, 5)}`
 }
 
 /** R08 · Aparta lo que el banco no cobró (bank_apartar_no_cobrados). Devuelve lo apartado. */
