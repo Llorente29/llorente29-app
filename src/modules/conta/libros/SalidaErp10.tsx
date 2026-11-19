@@ -419,7 +419,7 @@ export function SalidaErp10() {
           {!pruebaPrimero && sinComprobar.length > 0 && <p className="cx-ayuda">{sinComprobar.map((c) => (c === 'recibida' ? 'Las facturas recibidas' : c === 'emitida' ? 'Las facturas emitidas' : 'Los asientos')).join(', ')} esperan a que compruebes en el paso 3 lo de prueba.</p>}
           <div className="cxe-confirmar-botones">
             <button type="button" className="cxe-sec" onClick={() => setConfirmar(false)} disabled={!!haciendo}>No, todavía no</button>
-            <button type="button" className="cxe-grande" onClick={() => { void sacarPorLaConexion() }} disabled={!!haciendo}>{pruebaPrimero ? 'Sacar solo esta para probar' : 'Meterlas en ERP10'}</button>
+            <button type="button" className="cxe-grande" onClick={() => { void sacarPorLaConexion() }} disabled={!!haciendo}>{pruebaPrimero ? (aSacar[0]?.clase === 'asiento' ? 'Sacar solo este para probar' : 'Sacar solo esta para probar') : 'Meterlas en ERP10'}</button>
           </div>
         </div>
       )}

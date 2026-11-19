@@ -372,7 +372,7 @@ for (const tam of TAMANOS) {
     const aviso = page.getByRole('alertdialog', { name: 'Sacar a ERP10' })
     await expect(aviso).toContainText(new RegExp(`^Va a entrar en ERP10 un solo asiento de ${mesTexto}, para probar: el 4/\\d+ de Sumied, ${concepto} \\(30,25 €\\)\\. Si algo sale mal, se corrige a mano en ERP10: Sumied no puede borrarlo\\.`))
     await page.screenshot({ path: `${DIR}/paso1-asiento-${tam.width}.png` })
-    await aviso.getByRole('button', { name: 'Sacar solo esta para probar' }).click()
+    await aviso.getByRole('button', { name: 'Sacar solo este para probar' }).click()
     await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible({ timeout: 60_000 })
     await expect(page.locator('.cxe-hecho')).toHaveText(new RegExp(`^Han entrado en ERP10 1 asiento de ${mesTexto} \\(1/\\d+\\)\\.$`))
     expect(pedidas).toHaveLength(1)
