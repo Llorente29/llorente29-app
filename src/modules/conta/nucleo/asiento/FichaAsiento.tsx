@@ -12,8 +12,13 @@
 // cuadrado y la línea nueva vacía, Intro guarda y pasa al siguiente (la maqueta). F4 en la cuenta
 // busca; F5 y F8 son del marco (nucleo/teclado.ts: la fila lleva `data-cuenta`); Esc lo deja sin
 // guardar, con la pregunta del K03 (useAvisoSalir).
+//
+// Las piezas comunes de la ficha del núcleo (K04, nucleo/ficha), usadas y no copiadas: el marco
+// (kf-ficha, la cabecera, el aviso), EstadoFicha, Casilla y CasillaFecha, AyudaTeclas, PanelDocumento,
+// el atajo de la cuenta (cuentasQueEncajan, en lib/asientoNucleo) y la cifra. Lo propio del asiento: la
+// rejilla de ERP10, su total con «Cuadra» o el descuadre, y la columna «Local» con varios locales.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { rutaAsiento, rutaLibroDiario, rutaMayor, rutaNuevoAsiento } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -25,7 +30,11 @@ import { useNombreDePestana, useSeVe } from '@/modules/conta/diseno/plantillas/p
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { problemasMano, type AsientoDiario, type LineaMano } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE, SERIES, type Serie } from '@/modules/conta/lib/libro'
-import { atajoDeSubcuenta, conConceptoDeCabecera, cuadrarLaUltima, importeEscrito, lineaNueva, siguienteCasilla, totales, type Casilla } from '@/modules/conta/lib/asientoNucleo'
+import { atajoDeSubcuenta, conConceptoDeCabecera, cuadrarLaUltima, lineaNueva, siguienteCasilla, totales, type Casilla as CasillaRejilla } from '@/modules/conta/lib/asientoNucleo'
+import { AyudaTeclas, Casilla, CasillaFecha, EstadoFicha, type TonoEstado } from '@/modules/conta/nucleo/ficha/piezas'
+import { PanelDocumento } from '@/modules/conta/nucleo/ficha/PanelDocumento'
+import { fechaVista } from '@/modules/conta/nucleo/ficha/teclas'
+import { cifra } from '@/modules/conta/nucleo/ficha/textos'
 import { anular, cuentasDeApunte, guardarAMano, leerAsiento, leerEjercicios, localesDeLaCuenta, validar, type CuentaPlan, type EjercicioLibro, type LocalEmpresa } from '@/modules/conta/services/diarioService'
 import { guardarExpedidaPdf } from '@/modules/conta/services/documentosService'
 import { useLeer } from '@/modules/conta/libros/contexto'
@@ -34,18 +43,16 @@ import { asientosDeAlLado, leerMayorDeCuenta, type MovimientoMayor } from '@/mod
 import { useFicheroElegido } from '@/modules/conta/libro/ficheroElegido'
 import { claseDeFichero, motivoExpedida } from '@/modules/conta/lib/expedidaPdf'
 
-/** «1.850,00» */
-const cifra = importeEscrito
-const ddmmaaaa = (f: string) => f.split('-').reverse().join('/')
-/** «31/07/2026», «31/7/26» o «31/7» (del año de la fecha de antes) → «2026-07-31»; null si no es una fecha. */
-function leerFecha(t: string, antes: string): string | null {
-  const m = /^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2}|\d{4}))?$/.exec(t.trim())
-  if (!m) return null
-  const a = m[3] ? (m[3].length === 2 ? `20${m[3]}` : m[3]) : antes.slice(0, 4)
-  const f = `${a}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
-  const d = new Date(`${f}T12:00:00Z`)
-  return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== f ? null : f
-}
+const ddmmaaaa = fechaVista
+/** La ayuda de teclas del asiento, con las palabras de su maqueta (nucleo_5_asiento). */
+const TECLAS_DEL_ASIENTO = [
+  { tecla: 'Intro', texto: 'guarda y pasa al siguiente' },
+  { tecla: 'Tab', texto: 'casilla siguiente' },
+  { tecla: 'F4', texto: 'busca la cuenta: escribe 6400 y sale 64000000' },
+  { tecla: 'F5', texto: 'abre el mayor de la cuenta en otra pestaña' },
+  { tecla: 'F8', texto: 'cambia a factura recibida o emitida' },
+  { tecla: 'Esc', texto: 'lo deja sin guardar' },
+] as const
 const DIGITOS_POR_DEFECTO = 8
 
 interface Base { cuentas: CuentaPlan[]; locales: LocalEmpresa[]; ejercicios: EjercicioLibro[] }
@@ -79,8 +86,8 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
   const nombreEstado = !asiento ? 'Nuevo' : asiento.estado === 'propuesto' ? 'Propuesto' : asiento.estado === 'borrador' ? 'Borrador' : asiento.estado === 'anulado' ? 'Anulado' : 'Validado'
 
   // ── Lo que se escribe (nuevo) ──
-  const [fecha, setFecha] = useState(hoyEnMadrid())
-  const [fechaEscrita, setFechaEscrita] = useState(ddmmaaaa(hoyEnMadrid()))
+  const hoy = hoyEnMadrid()
+  const [fecha, setFecha] = useState(hoy)
   const [serie, setSerie] = useState<Serie>(4)
   const [concepto, setConcepto] = useState('')
   const [lineas, setLineas] = useState<LineaMano[]>([lineaNueva('', null, null)])
@@ -132,7 +139,7 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
   const ir = (id: string | null) => { if (id) pedirSalir(() => navegar(rutaAsiento(id))) }
 
   // ── La rejilla ──
-  const foco = useRef<{ fila: number; casilla: Casilla } | null>(null)
+  const foco = useRef<{ fila: number; casilla: CasillaRejilla } | null>(null)
   useEffect(() => {
     if (!foco.current) return
     rejilla.current?.querySelector<HTMLElement>(`[data-fila="${foco.current.fila}"][data-casilla="${foco.current.casilla}"]`)?.focus()
@@ -163,7 +170,7 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
     const r = cuadrarLaUltima(lineas.slice(0, i + 1))
     if (r.rellena) { setLineas(r.lineas); setRellenada(i) }
   }
-  function teclasRejilla(e: KeyboardEvent<HTMLInputElement>, i: number, casilla: Casilla) {
+  function teclasRejilla(e: KeyboardEvent<HTMLInputElement>, i: number, casilla: CasillaRejilla) {
     if (e.key === 'F4' && casilla === 'subcuenta' && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); setBuscando(i); return }
     if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
     e.preventDefault()
@@ -185,7 +192,7 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
   function teclasCabecera(e: KeyboardEvent<HTMLElement>) {
     if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey) return
     e.preventDefault()
-    const campos = [...(e.currentTarget.closest('.cxa-cabecera')?.querySelectorAll<HTMLElement>('input, select') ?? [])]
+    const campos = [...(e.currentTarget.querySelectorAll<HTMLElement>('input, select') ?? [])]
     const k = campos.indexOf(e.target as HTMLElement)
     if (k >= 0 && k < campos.length - 1) campos[k + 1].focus()
     else { foco.current = { fila: 0, casilla: 'subcuenta' }; setLineas((ls) => [...ls]) }
@@ -273,207 +280,153 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
     return () => window.removeEventListener('keydown', f)
   }, [])
 
-  // La ficha ocupa lo que queda debajo de su borde de arriba: rueda la rejilla, no la página.
-  const caja = useRef<HTMLElement | null>(null)
-  const [alto, setAlto] = useState<number | null>(null)
-  useLayoutEffect(() => {
-    const medir = () => {
-      const el = caja.current
-      if (!el) return
-      let debajo = parseFloat(getComputedStyle(el).marginBottom) || 0
-      for (let x = el.parentElement; x && x !== document.body; x = x.parentElement) {
-        const c = getComputedStyle(x)
-        debajo += (parseFloat(c.paddingBottom) || 0) + (parseFloat(c.borderBottomWidth) || 0)
-      }
-      setAlto(Math.max(420, Math.floor(window.innerHeight - el.getBoundingClientRect().top - window.scrollY - debajo - 2)))
-    }
-    medir()
-    window.addEventListener('resize', medir)
-    return () => window.removeEventListener('resize', medir)
-  }, [base, existente])
-
   // La cuenta de la línea elegida: la del mayor de la derecha.
   const cuentaElegida = asiento ? asiento.apuntes[fila]?.cuentaId ?? null : porCodigo.get(lineas[fila]?.cuenta.trim() ?? '')?.id ?? null
-  const [panel, setPanel] = useState<'documento' | 'mayor'>('documento')
 
-  if (fallo && !base) return <div className="cxa cx-tarjeta" role="alert">{fallo}</div>
-  if (!base || existente === null) return <div className="cxa cx-tarjeta" aria-busy="true" aria-label="Cargando el asiento" />
-  if (entryId && !asiento) return <div className="cxa cx-tarjeta" role="alert">Ese asiento no existe o no es de esta empresa. <Link to={rutaNuevoAsiento()}>Escribir uno nuevo</Link></div>
+  if (fallo && !base) return <div className="kf-ficha cxa"><p className="kf-aviso" data-tono="mal" role="alert">{fallo}</p></div>
+  if (!base || existente === null) return <div className="kf-ficha cxa" aria-busy="true" aria-label="Cargando el asiento"><p className="kf-panel-nota">Abriendo el asiento…</p></div>
+  if (entryId && !asiento) return <div className="kf-ficha cxa"><p className="kf-aviso" data-tono="mal" role="alert">Ese asiento no existe o no es de esta empresa. <Link to={rutaNuevoAsiento()}>Escribir uno nuevo</Link></p></div>
 
   const filas = asiento
     ? asiento.apuntes.map((a) => ({ cuenta: a.cuenta, nombre: a.nombreCuenta, concepto: a.concepto ?? asiento.concepto, debe: a.debe ? cifra(a.debe) : '', haber: a.haber ? cifra(a.haber) : '' }))
     : null
   const verProblemas = intentado && problemas.length > 0
   const deSumied = !!asiento && (asiento.estado === 'propuesto' || asiento.origen !== 'manual')
+  const estado: { tono: TonoEstado; fuerte: string; resto: string } = !asiento ? { tono: 'gris', fuerte: 'Lo escribes tú.', resto: '' }
+    : deSumied ? { tono: asiento.estado === 'propuesto' ? 'verde' : 'gris', fuerte: asiento.estado === 'propuesto' ? 'Lo propone Sumied.' : 'Lo propuso Sumied.', resto: asiento.porque ?? '' }
+      : { tono: 'gris', fuerte: 'Lo escribiste tú.', resto: '' }
+  const tonoHecho = hecho && /^Guardado como borrador/.test(hecho.texto) ? 'falta' : 'ok'
+  const ejercicioDelPanel = ejercicio ?? (asiento ? base.ejercicios.find((e) => asiento.fecha >= e.inicio && asiento.fecha <= e.fin) ?? null : null)
 
   return (
-    <section className="cxa" ref={caja} style={alto ? { height: alto } : undefined} aria-labelledby="cxa-titulo">
-      <div className="cxa-cabeza">
-        <h1 className="cxa-titulo" id="cxa-titulo">Asiento</h1>
-        <span className="cxa-estado">{nombreEstado}</span>
-        {hecho ? (
-          <span className="cxa-chip cxa-chip-hecho" role="status"><span className="cxa-punto" aria-hidden="true" />{hecho.texto} <Link to={rutaAsiento(hecho.id)}>Verlo</Link></span>
-        ) : (
-          <span className="cxa-chip" role="status"><span className="cxa-punto" aria-hidden="true" />
-            {deSumied ? <><strong>Lo propone Sumied.</strong> {asiento?.porque ?? ''}</> : asiento ? <><strong>Lo escribiste tú.</strong></> : <><strong>Lo escribes tú.</strong></>}
-          </span>
-        )}
-        <div className="cxa-botones">
-          <button type="button" className="cxa-flecha" aria-label="El asiento de antes" disabled={!lado.antes} onClick={() => ir(lado.antes)}>‹</button>
-          <button type="button" className="cxa-flecha" aria-label="El asiento de después" disabled={!lado.despues} onClick={() => ir(lado.despues)}>›</button>
-          <div className="cxa-mas-caja">
-            <button type="button" className="cxa-sec" aria-expanded={mas} disabled={!asiento || asiento.estado !== 'validado'} onClick={() => setMas((v) => !v)}>Más</button>
-            {mas && asiento && <div className="cxa-mas" role="menu"><button type="button" role="menuitem" onClick={() => { setMas(false); setAnulando(true) }}>Anular</button></div>}
+    <div className="kf-ficha cxa" aria-labelledby="cxa-titulo">
+      <header className="kf-cabecera">
+        <h1 id="cxa-titulo">Asiento</h1>
+        <span className="kf-cola">{nombreEstado}</span>
+        <EstadoFicha {...estado} />
+        <div className="kf-cabecera-botones">
+          <button type="button" className="kf-flecha" aria-label="El asiento de antes" disabled={!lado.antes} onClick={() => ir(lado.antes)}>‹</button>
+          <button type="button" className="kf-flecha" aria-label="El asiento de después" disabled={!lado.despues} onClick={() => ir(lado.despues)}>›</button>
+          <div className="kf-mas">
+            <button type="button" className="kf-boton-hueco" aria-expanded={mas} disabled={!asiento || asiento.estado !== 'validado'} onClick={() => setMas((v) => !v)}>Más</button>
+            {mas && asiento && <div className="kf-mas-menu" role="menu"><button type="button" role="menuitem" onClick={() => { setMas(false); setAnulando(true) }}>Anular</button></div>}
           </div>
-          {editable && <button type="button" className="cxa-principal" disabled={ocupado} onClick={() => void guardarYSiguiente()}>{ocupado ? 'Guardando…' : 'Guardar y siguiente'} <kbd>Intro</kbd></button>}
+          {editable && <button type="button" className="kf-guardar" disabled={ocupado} onClick={() => void guardarYSiguiente()}>{ocupado ? 'Guardando…' : 'Guardar y siguiente'} <kbd>Intro</kbd></button>}
           {asiento && (asiento.estado === 'propuesto' || asiento.estado === 'borrador') && (
-            <button type="button" className="cxa-principal" disabled={ocupado} onClick={() => void validarPropuesto()}>{ocupado ? 'Validando…' : 'Validar y siguiente'} <kbd>Intro</kbd></button>
+            <button type="button" className="kf-guardar" disabled={ocupado} onClick={() => void validarPropuesto()}>{ocupado ? 'Validando…' : 'Validar y siguiente'} <kbd>Intro</kbd></button>
           )}
         </div>
-      </div>
+      </header>
+      {hecho && <p className="kf-aviso" data-tono={tonoHecho} role="status">{hecho.texto} <Link className="kf-enlace" to={rutaAsiento(hecho.id)}>Verlo</Link></p>}
+      {(verProblemas || fallo) && <p className="kf-aviso" data-tono="falta" role="alert">{fallo ?? problemas.join(' ')}</p>}
 
-      <div className="cxa-cuerpo">
-        <div className="cxa-izq">
-          <div className="cxa-cabecera" onKeyDown={teclasCabecera}>
-            <label className="cxa-campo cxa-fecha"><span>Fecha</span>
-              {editable
-                ? <input value={fechaEscrita} aria-invalid={leerFecha(fechaEscrita, fecha) === null} onChange={(e) => { setFechaEscrita(e.target.value); const f = leerFecha(e.target.value, fecha); if (f) setFecha(f) }}
-                    onBlur={() => setFechaEscrita(ddmmaaaa(fecha))} />
-                : <input readOnly value={ddmmaaaa(asiento!.fecha)} />}</label>
-            <label className="cxa-campo cxa-serie"><span>Serie / documento</span>
-              {editable ? (
-                <span className="cxa-serie-doc">
-                  <select aria-label="Serie" value={serie} onChange={(e) => setSerie(Number(e.target.value) as Serie)}>
-                    {SERIES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  <span className="cxa-doc" title="El número lo pone la validación">/ —</span>
-                </span>
-              ) : <input readOnly value={`${asiento!.serie} / ${asiento!.numero ? String(asiento!.numero).padStart(4, '0') : '—'}`} />}
-            </label>
-            <label className="cxa-campo cxa-concepto"><span>Concepto del asiento</span>
-              {editable
-                ? <input value={concepto} onChange={(e) => { const v = e.target.value; setLineas((ls) => conConceptoDeCabecera(ls, concepto, v)); setConcepto(v) }} />
-                : <input readOnly value={asiento!.concepto} />}</label>
-          </div>
+      <div className="kf-cuerpo">
+        <div className="kf-izquierda">
+          <div className="cxa-izq">
+            <div className="kf-fila cxa-cabecera" onKeyDown={teclasCabecera}>
+              <Casilla rotulo="Fecha" htmlFor="cxa-fecha">
+                {editable ? <CasillaFecha id="cxa-fecha" etiqueta="Fecha" iso={fecha} hoy={hoy} poner={(x) => { if (x) setFecha(x) }} casilla={false} />
+                  : <input id="cxa-fecha" readOnly value={ddmmaaaa(asiento!.fecha)} />}
+              </Casilla>
+              <Casilla rotulo="Serie / documento" htmlFor="cxa-serie">
+                {editable ? (
+                  <span className="cxa-serie-doc">
+                    <select id="cxa-serie" aria-label="Serie" value={serie} onChange={(e) => setSerie(Number(e.target.value) as Serie)}>
+                      {SERIES.map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select>
+                    <span className="cxa-doc" title="El número lo pone la validación">/ —</span>
+                  </span>
+                ) : <input id="cxa-serie" readOnly value={`${asiento!.serie} / ${asiento!.numero ? String(asiento!.numero).padStart(4, '0') : '—'}`} />}
+              </Casilla>
+              <Casilla rotulo="Concepto del asiento" htmlFor="cxa-concepto">
+                {editable
+                  ? <input id="cxa-concepto" value={concepto} onChange={(e) => { const v = e.target.value; setLineas((ls) => conConceptoDeCabecera(ls, concepto, v)); setConcepto(v) }} />
+                  : <input id="cxa-concepto" readOnly value={asiento!.concepto} />}
+              </Casilla>
+            </div>
 
-          <div className="cxa-rejilla-marco" ref={rejilla}>
-            <div className="cxa-rueda">
-              <table className="cxa-rejilla" aria-label="Apuntes">
-                <thead><tr><th className="cxa-c-cuenta">Cuenta</th><th className="cxa-c-nombre">Nombre</th><th>Concepto</th><th className="cxa-num">Debe</th><th className="cxa-num">Haber</th>{columnaLocal && !filas && <th className="cxa-c-local">Local</th>}</tr></thead>
-                <tbody>
-                  {filas ? filas.map((f, i) => (
-                    <tr key={i} data-cuenta={f.cuenta} className={i === fila ? 'cxa-elegida' : undefined} tabIndex={0} onFocus={() => setFila(i)} onClick={() => setFila(i)}>
-                      <td className="cxa-c-cuenta"><Link to={rutaMayor(f.cuenta)} tabIndex={-1}>{f.cuenta}</Link></td>
-                      <td className="cxa-c-nombre">{f.nombre}</td><td className="cxa-gris">{f.concepto}</td>
-                      <td className="cxa-num">{f.debe}</td><td className="cxa-num">{f.haber}</td>
-                    </tr>
-                  )) : lineas.map((l, i) => {
-                    const cta = porCodigo.get(l.cuenta.trim())
-                    return (
-                      <tr key={i} data-cuenta={cta?.code} className={i === fila ? 'cxa-elegida' : undefined}>
-                        <td className="cxa-c-cuenta">
-                          <input data-fila={i} data-casilla="subcuenta" aria-label={`Cuenta de la línea ${i + 1}`} aria-keyshortcuts="F4" value={l.cuenta}
-                            onFocus={() => setFila(i)} onChange={(e) => cambia(i, { cuenta: e.target.value })}
-                            onBlur={(e) => { if (buscando === null && e.target.value.trim()) { ponerCuenta(i, e.target.value); alSalirDeLaCuenta(i) } }}
-                            onKeyDown={(e) => teclasRejilla(e, i, 'subcuenta')} />
-                          {buscando === i && (
-                            <BuscarCuentaHoja cuentas={plan.map((c) => ({ codigo: c.code, nombre: c.nombre }))} inicial={l.cuenta}
-                              alElegir={(c) => { cambia(i, { cuenta: c.codigo }); setBuscando(null); foco.current = { fila: i, casilla: 'concepto' } }}
-                              alCerrar={(volver) => { setBuscando(null); if (volver) foco.current = { fila: i, casilla: 'subcuenta' } }} />
-                          )}
-                        </td>
-                        <td className="cxa-c-nombre">{cta?.nombre ?? ''}</td>
-                        <td><input className="cxa-gris" data-fila={i} data-casilla="concepto" aria-label={`Concepto de la línea ${i + 1}`} value={l.concepto}
-                          onFocus={() => setFila(i)} onChange={(e) => cambia(i, { concepto: e.target.value })} onKeyDown={(e) => teclasRejilla(e, i, 'concepto')} /></td>
-                        <td className="cxa-num"><span className="cxa-celda">{rellenada === i && l.debe && <small className="cxa-origen">Sumied</small>}<input inputMode="decimal" data-fila={i} data-casilla="debe" aria-label={`Debe de la línea ${i + 1}`} value={l.debe}
-                          onFocus={() => setFila(i)} onChange={(e) => cambia(i, { debe: e.target.value })} onKeyDown={(e) => teclasRejilla(e, i, 'debe')} /></span></td>
-                        <td className="cxa-num"><span className="cxa-celda">{rellenada === i && l.haber && <small className="cxa-origen">Sumied</small>}<input inputMode="decimal" data-fila={i} data-casilla="haber" aria-label={`Haber de la línea ${i + 1}`} value={l.haber}
-                          onFocus={() => setFila(i)} onChange={(e) => cambia(i, { haber: e.target.value })} onKeyDown={(e) => teclasRejilla(e, i, 'haber')} /></span></td>
-                        {columnaLocal && (
-                          <td className="cxa-c-local"><select aria-label={`Local de la línea ${i + 1}`} value={l.comun ? 'comun' : l.localId ?? ''}
-                            onChange={(e) => cambia(i, e.target.value === 'comun' ? { comun: true, localId: null } : { comun: false, localId: e.target.value || null })}>
-                            <option value="">—</option>
-                            {base.locales.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
-                            <option value="comun">Común</option>
-                          </select></td>
-                        )}
+            <div className="cxa-rejilla-marco" ref={rejilla}>
+              <div className="cxa-rueda">
+                <table className="cxa-rejilla" aria-label="Apuntes">
+                  <thead><tr><th className="cxa-c-cuenta">Cuenta</th><th className="cxa-c-nombre">Nombre</th><th>Concepto</th><th className="cxa-num">Debe</th><th className="cxa-num">Haber</th>{columnaLocal && !filas && <th className="cxa-c-local">Local</th>}</tr></thead>
+                  <tbody>
+                    {filas ? filas.map((f, i) => (
+                      <tr key={i} data-cuenta={f.cuenta} className={i === fila ? 'cxa-elegida' : undefined} tabIndex={0} onFocus={() => setFila(i)} onClick={() => setFila(i)}>
+                        <td className="cxa-c-cuenta"><Link to={rutaMayor(f.cuenta)} tabIndex={-1}>{f.cuenta}</Link></td>
+                        <td className="cxa-c-nombre">{f.nombre}</td><td className="cxa-gris">{f.concepto}</td>
+                        <td className="cxa-num">{f.debe}</td><td className="cxa-num">{f.haber}</td>
                       </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              {editable && <button type="button" className="cxa-otra" onClick={otraLinea}>+ Otra línea</button>}
-            </div>
-            <div className="cxa-total" aria-label="Total">
-              <strong>Total</strong>
-              {t.cuadra
-                ? <span className="cxa-cuadra">Cuadra</span>
-                : t.descuadre !== 0 ? <span className="cxa-descuadre">Descuadre {cifra(Math.abs(t.descuadre))}</span> : <span />}
-              <span className="cxa-gris cxa-total-nota">Si no cuadra, lo dice aquí y no deja guardar</span>
-              <span className="cxa-num cxa-total-cifra">{cifra(t.debe)}</span>
-              <span className="cxa-num cxa-total-cifra">{cifra(t.haber)}</span>
+                    )) : lineas.map((l, i) => {
+                      const cta = porCodigo.get(l.cuenta.trim())
+                      return (
+                        <tr key={i} data-cuenta={cta?.code} className={i === fila ? 'cxa-elegida' : undefined}>
+                          <td className="cxa-c-cuenta">
+                            <input data-fila={i} data-casilla="subcuenta" aria-label={`Cuenta de la línea ${i + 1}`} aria-keyshortcuts="F4" value={l.cuenta}
+                              onFocus={() => setFila(i)} onChange={(e) => cambia(i, { cuenta: e.target.value })}
+                              onBlur={(e) => { if (buscando === null && e.target.value.trim()) { ponerCuenta(i, e.target.value); alSalirDeLaCuenta(i) } }}
+                              onKeyDown={(e) => teclasRejilla(e, i, 'subcuenta')} />
+                            {buscando === i && (
+                              <BuscarCuentaHoja cuentas={plan.map((c) => ({ codigo: c.code, nombre: c.nombre }))} inicial={l.cuenta}
+                                alElegir={(c) => { cambia(i, { cuenta: c.codigo }); setBuscando(null); foco.current = { fila: i, casilla: 'concepto' } }}
+                                alCerrar={(volver) => { setBuscando(null); if (volver) foco.current = { fila: i, casilla: 'subcuenta' } }} />
+                            )}
+                          </td>
+                          <td className="cxa-c-nombre">{cta?.nombre ?? ''}</td>
+                          <td><input className="cxa-gris" data-fila={i} data-casilla="concepto" aria-label={`Concepto de la línea ${i + 1}`} value={l.concepto}
+                            onFocus={() => setFila(i)} onChange={(e) => cambia(i, { concepto: e.target.value })} onKeyDown={(e) => teclasRejilla(e, i, 'concepto')} /></td>
+                          <td className="cxa-num"><span className="cxa-celda">{rellenada === i && l.debe && <small className="kf-origen">Sumied</small>}<input inputMode="decimal" data-fila={i} data-casilla="debe" aria-label={`Debe de la línea ${i + 1}`} value={l.debe}
+                            onFocus={() => setFila(i)} onChange={(e) => cambia(i, { debe: e.target.value })} onKeyDown={(e) => teclasRejilla(e, i, 'debe')} /></span></td>
+                          <td className="cxa-num"><span className="cxa-celda">{rellenada === i && l.haber && <small className="kf-origen">Sumied</small>}<input inputMode="decimal" data-fila={i} data-casilla="haber" aria-label={`Haber de la línea ${i + 1}`} value={l.haber}
+                            onFocus={() => setFila(i)} onChange={(e) => cambia(i, { haber: e.target.value })} onKeyDown={(e) => teclasRejilla(e, i, 'haber')} /></span></td>
+                          {columnaLocal && (
+                            <td className="cxa-c-local"><select aria-label={`Local de la línea ${i + 1}`} value={l.comun ? 'comun' : l.localId ?? ''}
+                              onChange={(e) => cambia(i, e.target.value === 'comun' ? { comun: true, localId: null } : { comun: false, localId: e.target.value || null })}>
+                              <option value="">—</option>
+                              {base.locales.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+                              <option value="comun">Común</option>
+                            </select></td>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                {editable && <button type="button" className="kf-enlace-plano cxa-otra" onClick={otraLinea}>+ Otra línea</button>}
+              </div>
+              <div className="cxa-total" aria-label="Total">
+                <strong>Total</strong>
+                {t.cuadra
+                  ? <span className="kf-etiqueta" data-tono="bien">Cuadra</span>
+                  : t.descuadre !== 0 ? <span className="kf-etiqueta" data-tono="ambar">Descuadre {cifra(Math.abs(t.descuadre))}</span> : <span />}
+                <span className="kf-apoyo cxa-total-nota">Si no cuadra, lo dice aquí y no deja guardar</span>
+                <span className="cxa-num cxa-total-cifra">{cifra(t.debe)}</span>
+                <span className="cxa-num cxa-total-cifra">{cifra(t.haber)}</span>
+              </div>
             </div>
           </div>
-          {(verProblemas || fallo) && (
-            <div className="cxa-problemas" role="alert">{fallo ?? problemas.join(' ')}</div>
-          )}
-          <ul className="cxa-teclas" aria-label="Teclas">
-            <li><kbd>Intro</kbd> guarda y pasa al siguiente</li>
-            <li><kbd>Tab</kbd> casilla siguiente</li>
-            <li><kbd>F4</kbd> busca la cuenta: escribe 6400 y sale 64000000</li>
-            <li><kbd>F5</kbd> abre el mayor de la cuenta en otra pestaña</li>
-            <li><kbd>F8</kbd> cambia a factura recibida o emitida</li>
-            <li><kbd>Esc</kbd> lo deja sin guardar</li>
-          </ul>
+          <AyudaTeclas teclas={TECLAS_DEL_ASIENTO} />
         </div>
 
-        <aside className="cxa-der" aria-label="El documento y el mayor">
-          <div className="cxa-pestanas" role="tablist">
-            <button type="button" role="tab" aria-selected={panel === 'documento'} onClick={() => setPanel('documento')}>El documento</button>
-            <button type="button" role="tab" aria-selected={panel === 'mayor'} onClick={() => setPanel('mayor')}>El mayor de la cuenta</button>
-          </div>
-          {panel === 'documento'
-            ? <Documento pdf={pdf} elegir={elegirPdf} editable={editable} />
-            : <Mayor accountId={accountId} companyId={activa?.id ?? null} cuentaId={cuentaElegida} cuenta={cuentaElegida ? porId.get(cuentaElegida) ?? null : null} ejercicio={ejercicio ?? (asiento ? base.ejercicios.find((e) => asiento.fecha >= e.inicio && asiento.fecha <= e.fin) ?? null : null)} />}
-        </aside>
+        <PanelDocumento
+          documento={pdf ? { url: pdf.url, foto: !!claseDeFichero(pdf.fichero.name, pdf.fichero.type)?.startsWith('image/'), titulo: pdf.fichero.name } : null}
+          otra={{ nombre: 'El mayor de la cuenta', contenido: <Mayor accountId={accountId} companyId={activa?.id ?? null} cuentaId={cuentaElegida} cuenta={cuentaElegida ? porId.get(cuentaElegida) ?? null : null} ejercicio={ejercicioDelPanel} /> }}
+          alElegir={editable ? (f) => elegirPdf(f) : undefined} acepta="application/pdf,image/*"
+          textoSoltar="Un PDF o una foto. El asiento se puede guardar sin documento." />
       </div>
 
       {anulando && asiento && (
         <div className="cxa-velo" role="dialog" aria-modal="true" aria-labelledby="cxa-anular">
           <div className="cxa-confirmar">
             <h2 id="cxa-anular">Anular el asiento {asiento.serie} / {String(asiento.numero ?? '').padStart(4, '0')}</h2>
-            <label className="cxa-campo"><span>Por qué</span><input autoFocus value={motivo} onChange={(e) => setMotivo(e.target.value)} /></label>
+            <Casilla rotulo="Por qué" htmlFor="cxa-motivo"><input id="cxa-motivo" autoFocus value={motivo} onChange={(e) => setMotivo(e.target.value)} /></Casilla>
             <div className="cxa-confirmar-botones">
-              <button type="button" className="cxa-principal" disabled={!motivo.trim() || ocupado} onClick={() => void hacerAnular()}>Anular</button>
-              <button type="button" className="cxa-sec" onClick={() => setAnulando(false)}>Todavía no</button>
+              <button type="button" className="kf-guardar" disabled={!motivo.trim() || ocupado} onClick={() => void hacerAnular()}>Anular</button>
+              <button type="button" className="kf-boton-hueco" onClick={() => setAnulando(false)}>Todavía no</button>
             </div>
           </div>
         </div>
       )}
       {aviso}
-    </section>
-  )
-}
-
-function Documento({ pdf, elegir, editable }: { pdf: { fichero: File; url: string } | null; elegir: (f: File | null) => void; editable: boolean }) {
-  const [encima, setEncima] = useState(false)
-  const input = useRef<HTMLInputElement | null>(null)
-  if (pdf) {
-    return claseDeFichero(pdf.fichero.name, pdf.fichero.type)?.startsWith('image/')
-      ? <img className="cxa-papel" src={pdf.url} alt={pdf.fichero.name} />
-      : <iframe className="cxa-papel" src={pdf.url} title={pdf.fichero.name} />
-  }
-  return (
-    <div className="cxa-doc-zona">
-      <div className={`cxa-soltar${encima ? ' cxa-soltar-encima' : ''}`}
-        onDragOver={(e) => { if (editable) { e.preventDefault(); setEncima(true) } }} onDragLeave={() => setEncima(false)}
-        onDrop={(e) => { e.preventDefault(); setEncima(false); if (editable && e.dataTransfer.files[0]) elegir(e.dataTransfer.files[0]) }}
-        onClick={() => { if (editable) input.current?.click() }}>
-        <span className="cxa-soltar-icono" aria-hidden="true">↥</span>
-        <strong>Arrastra aquí el justificante</strong>
-        <span>Un PDF o una foto. El asiento se puede guardar sin documento.</span>
-        <input ref={input} type="file" accept="application/pdf,image/*" hidden aria-label="Elegir el justificante" onChange={(e) => elegir(e.target.files?.[0] ?? null)} />
-      </div>
     </div>
   )
 }
@@ -483,20 +436,20 @@ function Mayor({ accountId, companyId, cuentaId, cuenta, ejercicio }: { accountI
     `${companyId}:${cuentaId}:${ejercicio?.id}`)
   const movs: MovimientoMayor[] | null = leido.datos
   const fallo = leido.error
-  if (!cuentaId || !cuenta) return <p className="cxa-mayor-nada">Elige una línea con su cuenta.</p>
-  if (fallo) return <p className="cxa-mayor-nada" role="alert">{fallo}</p>
+  if (!cuentaId || !cuenta) return <p className="kf-panel-nota">Elige una línea con su cuenta.</p>
+  if (fallo) return <p className="kf-panel-nota" role="alert">{fallo}</p>
   return (
     <div className="cxa-mayor">
-      <div className="cxa-mayor-cabeza"><strong>{cuenta.code}</strong> {cuenta.nombre}{ejercicio && <span className="cxa-gris"> · {ejercicio.code}</span>}<Link to={rutaMayor(cuenta.code)}>Abrir <kbd>F5</kbd></Link></div>
-      <div className="cxa-rueda">
-        <table className="cxa-rejilla" aria-label={`Mayor de la ${cuenta.code}`}>
-          <thead><tr><th>Fecha</th><th>Documento</th><th>Concepto</th><th className="cxa-num">Debe</th><th className="cxa-num">Haber</th><th className="cxa-num">Saldo</th></tr></thead>
+      <div className="cxa-mayor-cabeza"><strong>{cuenta.code}</strong> {cuenta.nombre}{ejercicio && <span className="cxa-gris"> · {ejercicio.code}</span>}<Link className="kf-enlace" to={rutaMayor(cuenta.code)}>Abrir <kbd>F5</kbd></Link></div>
+      <div>
+        <table className="kf-mayor" aria-label={`Mayor de la ${cuenta.code}`}>
+          <thead><tr><th>Fecha</th><th>Documento</th><th>Concepto</th><th className="kf-cifra">Debe</th><th className="kf-cifra">Haber</th><th className="kf-cifra">Saldo</th></tr></thead>
           <tbody>
             {movs === null ? <tr><td colSpan={6} className="cxa-gris">Leyendo…</td></tr>
               : movs.length === 0 ? <tr><td colSpan={6} className="cxa-gris">Sin movimientos en el ejercicio.</td></tr>
                 : movs.map((m, i) => (
                   <tr key={i}><td>{m.fecha.slice(8, 10)}/{m.fecha.slice(5, 7)}</td><td>{m.serie} / {m.numero ? String(m.numero).padStart(4, '0') : '—'}</td><td>{m.concepto}</td>
-                    <td className="cxa-num">{m.debe ? cifra(m.debe) : ''}</td><td className="cxa-num">{m.haber ? cifra(m.haber) : ''}</td><td className="cxa-num">{cifra(m.saldo)}</td></tr>
+                    <td className="kf-cifra">{m.debe ? cifra(m.debe) : ''}</td><td className="kf-cifra">{m.haber ? cifra(m.haber) : ''}</td><td className="kf-cifra">{cifra(m.saldo)}</td></tr>
                 ))}
           </tbody>
         </table>

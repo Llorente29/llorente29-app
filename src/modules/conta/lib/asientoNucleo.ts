@@ -5,7 +5,7 @@
 // LineaMano, problemasMano y cuadreMano de lib/diario): aquí solo lo que el teclado y la
 // rejilla deciden antes de guardar.
 //
-//   · el atajo de la subcuenta: «5511» da la 55100001, «551.1» también, y vale parte del nombre;
+//   · cuál queda con el atajo de la subcuenta (el atajo es el de la pieza común, cuentasQueEncajan);
 //   · el concepto de la cabecera pasa solo a las líneas, y el local de una línea a la siguiente;
 //   · la última línea rellena sola el debe o el haber que falta para cuadrar;
 //   · los totales (debe, haber y descuadre), como ERP10;
@@ -13,6 +13,8 @@
 // F4, F5 y F8 son del teclado común del marco (nucleo/teclado.ts): se usan, no se copian.
 
 import { cuadreMano, importeMano, type LineaMano } from '@/modules/conta/lib/diario'
+import { cuentasQueEncajan } from '@/modules/conta/nucleo/ficha/teclas'
+import { cifra } from '@/modules/conta/nucleo/ficha/textos'
 
 /** Una subcuenta del plan de la empresa, lo que el atajo necesita. */
 export interface SubcuentaAtajo { code: string; nombre: string }
@@ -20,45 +22,14 @@ export interface SubcuentaAtajo { code: string; nombre: string }
 /** Lo que da un atajo: la subcuenta, o las que encajan si hay más de una (para la lista de F4). */
 export interface Atajo { codigo: string | null; candidatas: SubcuentaAtajo[] }
 
-/** Dónde se parte un atajo sin punto: después de la cuenta de mayor (tres cifras), como ERP10. */
-const MAYOR = 3
-
 /**
- * El atajo de la subcuenta, como en ERP10:
- *   · «551.1»: lo de antes del punto, ceros hasta el largo de la empresa y lo de después → 55100001;
- *   · «5511» (cifras, menos que el largo): igual, partiendo después de las tres de la cuenta de mayor;
- *   · las cifras justas: esa subcuenta;
- *   · letras: las subcuentas cuyo nombre lo lleva; si es una sola, esa.
- * Solo devuelve un código que existe en el plan.
+ * El atajo de la subcuenta, como en ERP10 («5511» y «551.1» dan la 55100001; letras, parte del nombre):
+ * es el de la pieza común del núcleo (cuentasQueEncajan, K04), que se usa y no se copia. Aquí solo se
+ * dice cuál queda: la que encaja, si es una sola; si no, las que encajan, para elegir con F4.
  */
 export function atajoDeSubcuenta(texto: string, digitos: number, plan: readonly SubcuentaAtajo[]): Atajo {
-  const t = texto.trim()
-  if (!t) return { codigo: null, candidatas: [] }
-  const existe = (c: string) => plan.find((x) => x.code === c) ?? null
-  const relleno = (antes: string, despues: string): string | null => {
-    const ceros = digitos - antes.length - despues.length
-    return ceros >= 0 ? `${antes}${'0'.repeat(ceros)}${despues}` : null
-  }
-  const conPunto = /^(\d+)\.(\d+)$/.exec(t)
-  if (conPunto) {
-    const c = relleno(conPunto[1], conPunto[2])
-    const x = c ? existe(c) : null
-    return { codigo: x?.code ?? null, candidatas: x ? [x] : [] }
-  }
-  if (/^\d+$/.test(t)) {
-    if (t.length === digitos) { const x = existe(t); return { codigo: x?.code ?? null, candidatas: x ? [x] : [] } }
-    if (t.length > MAYOR && t.length < digitos) {
-      const c = relleno(t.slice(0, MAYOR), t.slice(MAYOR))
-      const x = c ? existe(c) : null
-      if (x) return { codigo: x.code, candidatas: [x] }
-    }
-    // Pocas cifras: las que empiezan así, para elegir con F4.
-    const empiezan = plan.filter((x) => x.code.startsWith(t))
-    return { codigo: empiezan.length === 1 ? empiezan[0].code : null, candidatas: empiezan }
-  }
-  const q = t.toLowerCase()
-  const porNombre = plan.filter((x) => x.nombre.toLowerCase().includes(q))
-  return { codigo: porNombre.length === 1 ? porNombre[0].code : null, candidatas: porNombre }
+  const r = cuentasQueEncajan(texto, plan.map((c) => ({ codigo: c.code, nombre: c.nombre })), digitos)
+  return { codigo: r.length === 1 ? r[0].codigo : null, candidatas: r.map((c) => ({ code: c.codigo, nombre: c.nombre })) }
 }
 
 /**
@@ -82,13 +53,8 @@ export function conConceptoDeCabecera(lineas: readonly LineaMano[], antes: strin
   return lineas.map((l) => (l.concepto === antes || !l.concepto.trim() ? { ...l, concepto: ahora } : l))
 }
 
-/** «1.210,00»: como se escribe un importe (con el punto de los miles también en cuatro cifras). */
-export function importeEscrito(n: number): string {
-  const c = Math.round(Math.abs(n) * 100)
-  const enteros = String(Math.floor(c / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-  return `${n < 0 ? '-' : ''}${enteros},${String(c % 100).padStart(2, '0')}`
-}
-const dos = importeEscrito
+/** «1.210,00»: el importe como se escribe; la cifra de la pieza común (textos.ts, K04). */
+const dos = (n: number) => cifra(n)
 
 /**
  * La última línea rellena sola lo que falta para cuadrar: si tiene subcuenta y ni debe ni haber,
