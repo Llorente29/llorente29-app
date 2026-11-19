@@ -176,7 +176,8 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
       const mov = listado(page).locator('tbody tr[data-clase="movimiento"]').first()
       await mov.click()
       await expect(mov).toHaveAttribute('aria-selected', 'true')
-      await expect(page.getByRole('button', { name: 'Abrir el asiento' })).toBeEnabled()
+      // El de esta pestaña: la de sumas y saldos sigue montada (escondida) con su panel.
+      await expect(listado(page).getByRole('button', { name: 'Abrir el asiento' })).toBeEnabled()
       await cargada(page, 'el mayor con un movimiento')
       await capturar(page, `3-mayor-${sufijo}`)
       await mov.focus()
