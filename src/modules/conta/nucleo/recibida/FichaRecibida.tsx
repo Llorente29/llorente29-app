@@ -17,9 +17,14 @@
 // validar, guarda, dice por qué y no pasa.
 //
 // Lo que esta ficha no hace, y sigue en la ficha de hoy (Más › «La ficha
-// completa»): los abonos, la comisión de una plataforma, dar de alta un
-// proveedor desde lo leído, el IBAN, pagar, el historial y descartar. Las
-// validadas y las descartadas se abren con la de hoy.
+// completa»): los abonos, la comisión de una plataforma, el IBAN, pagar, el
+// historial y descartar. Las validadas y las descartadas se abren con la de hoy.
+//
+// K04b · El emisor que no se reconoce: la franja dice «Mira esto · No conozco
+// al que la emite», el NIF y el nombre leídos quedan en sus casillas («PDF») y
+// debajo, en ámbar, «Darlo de alta» (AltaDesdeFactura, la de la ficha de hoy)
+// y «Es uno que ya tengo» (el foco al proveedor, con su lista abierta). Hasta
+// que tenga proveedor no se valida, y si se intenta, lo dice.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as KE } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -55,10 +60,14 @@ import { cifra } from '../ficha/textos'
 import { useUltimo } from '../ficha/useUltimo'
 import { cuentasQueEncajan, queHaceIntro, type CuentaDelPlan } from '../ficha/teclas'
 import { origenes } from './origen'
-import { comprobacionesDe, dondeVaElFoco, dudaDelGasto, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
+import { casillasVacias, comprobacionesDe, dondeVaElFoco, dudaDelGasto, emisorDesconocido, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
 import { calendarioDe, cuentasAMano, delProveedor, gastoAprendido, marcaDeLaFactura, mayorDelProveedor, textoOperacion } from './servicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
+import { AltaDesdeFactura } from '@/modules/conta/documentos/ProveedorDesdeFactura'
+import { fraseAltaEnFactura } from '@/modules/conta/lib/altaProveedor'
 
+/** Los nombres de los cambios sin guardar, con los rótulos de esta ficha (K04b: «N.º de factura», como la casilla). */
+const ETIQUETAS_NUCLEO = { ...ETIQUETAS, numero: 'N.º de factura' }
 const VACIO: BorradorFicha = borradorDe({ proveedorId: null, numero: null, fecha: null, vence: null, retencion: null, recargo: null, gasto: null, local: null, formaPago: null, pagada: false, tipos: [], lineas: [], base: null, cuota: null })
 const vacioAMano = (hoy: string): BorradorFicha => ({ ...VACIO, fecha: hoy, iva: [{ base: '', tipo: '21', cuota: '' }, { base: '', tipo: '10', cuota: '' }] })
 const num = (x: string): number | null => { const n = Number(x.replace(/\./g, '').replace(',', '.')); return x.trim() && Number.isFinite(n) ? n : null }
@@ -71,14 +80,19 @@ function casillasDe(raiz: HTMLElement | null): HTMLElement[] {
 }
 
 /** Una casilla que busca en una lista (el proveedor, la cuenta): escribe, F4 o ↓ abre, Intro elige. */
-function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cuenta, duda, placeholder, cargando }: {
+function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cuenta, duda, placeholder, cargando, abrir = 0 }: {
   id: string; valor: string; ponerTexto: (t: string) => void; lista: (t: string) => T[]; texto: (x: T) => string; elegir: (x: T) => void
   etiqueta: string; cuenta?: string | null; duda?: boolean; placeholder?: string
   /** La lista aún no ha llegado: Intro no se escapa a la casilla siguiente con la búsqueda sin resolver (e2e 1510). */
   cargando?: boolean
+  /** K04b · Cada vez que cambia (y no es 0), el foco a la casilla con su lista abierta, como F4. */
+  abrir?: number
 }) {
   const [abierta, setAbierta] = useState(false)
   const [sel, setSel] = useState(0)
+  const [abiertaCon, setAbiertaCon] = useState(0)
+  if (abrir !== abiertaCon) { setAbiertaCon(abrir); if (abrir) { setAbierta(true); setSel(0) } }
+  useEffect(() => { if (abrir) document.getElementById(id)?.focus() }, [abrir, id])
   const opciones = abierta ? lista(valor).slice(0, 12) : []
   const teclas = (e: KE<HTMLInputElement>) => {
     if (e.key === 'F4' || (e.key === 'ArrowDown' && !abierta)) { e.preventDefault(); setAbierta(true); setSel(0); return }
@@ -150,7 +164,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     ? () => verPropuestaFactura(accountId, fac.company_id!, fac.id, fac.fecha!, localPropuesto) : null,
   `${accountId}:${id}:${fac?.fecha}:${fac?.proveedor?.id}:${localPropuesto}:${vuelta}`)
   const extra = useUltimo(useLeer(accountId && id ? () => leerExtrasFacturas(accountId, [id]).then((m) => m.get(id) ?? null) : null, `${accountId}:${id}:extra:${vuelta}`).datos, id)
-  const proveedoresL = useLeer(accountId ? () => proveedoresDeLaCuenta(accountId) : null, `${accountId}:proveedores`).datos
+  const [vueltaProv, setVueltaProv] = useState(0)
+  const proveedoresL = useUltimo(useLeer(accountId ? () => proveedoresDeLaCuenta(accountId) : null, `${accountId}:proveedores:${vueltaProv}`).datos, accountId ?? '')
   const proveedores = useMemo(() => proveedoresL ?? [], [proveedoresL])
   const localesL = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}:locales`).datos
   const locales = useMemo(() => localesL ?? [], [localesL])
@@ -184,7 +199,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const nombreProveedor = useCallback((pid: string) => proveedores.find((p) => p.id === pid)?.nombre ?? (fac?.proveedor?.id === pid ? fac.proveedor.nombre : 'otro proveedor'), [proveedores, fac])
   const nombreLocal = useCallback((lid: string) => locales.find((l) => l.id === lid)?.nombre ?? null, [locales])
   const formato = useMemo(() => formatoCampo(nombreProveedor, nombreLocal), [nombreProveedor, nombreLocal])
-  const ed = useCambiosSinGuardar<BorradorFicha>(original, ETIQUETAS, formato)
+  const ed = useCambiosSinGuardar<BorradorFicha>(original, ETIQUETAS_NUCLEO, formato)
   const b = ed.valor
   const { reiniciar } = ed
   const deFactura = useRef(`${aMano}:${invoiceId}`)
@@ -217,7 +232,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   // ── Lo que se dice: origen, comprobaciones, la duda, la franja ──
   const leido = fac?.lectura?.factura ?? null
   const origen = origenes({
-    leido: leido ? { nif: leido.proveedor.nif, numero: leido.numero, fecha: leido.fecha } : null,
+    leido: leido ? { nif: leido.proveedor.nif, numero: leido.numero, fecha: leido.fecha, nombre: leido.proveedor.nombre } : null,
     deRecepcion: !!fac?.leido_en_recepcion && !fac?.lectura?.factura?.numero,
     proveedor: prov ? { id: prov.id, nif: prov.nif, regimen: delProv?.regimen ?? null } : null,
     proveedorCambiado: !!fac && b.proveedorId !== (fac.proveedor?.id ?? ''),
@@ -226,14 +241,21 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const [decidida, setDecidida] = useState<string | null>(null)
   const duda = aprendido ? dudaDelGasto({ reparto: aprendido.reparto, confianza: aprendido.confianza, cuentaAhora: b.gastos[0]?.cuenta ?? '', decidida: decidida === `${invoiceId}:${provId}` }) : null
   const comprobaciones = aMano ? [] : comprobacionesDe({
-    aMano, duplicada: dup, noRepetida: fac?.no_repetida ?? false, fecha: b.fecha, calendario,
+    aMano, duplicada: dup, noRepetida: fac?.no_repetida ?? false, fecha: b.fecha, calendario, numero: b.numero, hayFicha: !!prov,
     nifFicha: prov?.nif ?? null, nifLeido: leido?.proveedor.nif ?? fac?.propuesto?.nif ?? null,
     total: totales.total, totalDocumento: leido?.total ?? null, lectura: fac?.lectura?.comprobaciones ?? [], avisos: propuesta?.avisos ?? [],
   })
   const faltaDoc = !aMano && fac ? faltaDocumento({ tieneDocumento: !!(fac.llegada || fac.papel || ficha?.lectura?.ruta || fichero), sinPdf: b.sinPdf, fuente: ficha?.fuente ?? null }) : null
   if (faltaDoc) comprobaciones.push({ id: 'documento', tono: 'rojo', texto: faltaDoc.replace(/\.$/, '') })
-  const estado = estadoDeLaFicha({ aMano, leida: !!fac?.lectura, comprobaciones, hayDudaGasto: !!duda })
-  useNombreDePestana(nombreDePestana(aMano ? prov?.nombre : prov?.nombre ?? fac?.proveedor?.nombre))
+  // K04b · El emisor que no se reconoce, y lo que falta: la franja no dice «Rellenada» con casillas vacías.
+  const leidoEmisor = leido ? { nombre: leido.proveedor.nombre ?? fac?.propuesto?.nombre ?? null, nif: leido.proveedor.nif ?? fac?.propuesto?.nif ?? null }
+    : fac?.propuesto ? { nombre: fac.propuesto.nombre, nif: fac.propuesto.nif } : null
+  const emisor = fac ? emisorDesconocido({ aMano, proveedorId: provId, leido: leidoEmisor, proveedores }) : null
+  const vacias = aMano ? [] : casillasVacias({ proveedor: !!provId, numero: b.numero, fecha: b.fecha, total: totales.total, cuentaGasto: b.gastos.some((g) => g.cuenta.trim() !== '') })
+  const estado = estadoDeLaFicha({ aMano, leida: !!fac?.lectura, comprobaciones, hayDudaGasto: !!duda, desconocido: emisor?.que === 'alta', vacias })
+  const [altaAbierta, setAltaAbierta] = useState<string | null>(null)
+  const [abrirProveedor, setAbrirProveedor] = useState(0)
+  useNombreDePestana(nombreDePestana(aMano ? prov?.nombre : prov?.nombre ?? fac?.proveedor?.nombre ?? emisor?.nombre, !aMano))
 
   // ── Guardar, validar y pasar ──
   const siguiente = pos >= 0 && pos < ids.length - 1 ? ids[pos + 1] : null
@@ -288,6 +310,10 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       if (!fac) return
       const g = await guardarCambios()
       if (g !== true) { setAviso({ tono: 'mal', texto: g }); return }
+      // K04b · Sin proveedor no se valida: se dice, y no se pasa.
+      if (!b.proveedorId && !fac.proveedor?.id) {
+        setAviso({ tono: 'falta', texto: `${ed.hay ? 'Guardada, sin validar' : 'Sin validar'}: no conozco al que la emite${emisor?.nombre ? ` (${emisor.nombre})` : ''}. Dalo de alta o elige uno que ya tengas. No paso a la siguiente.` }); return
+      }
       const a = await leerAntesDelInicio(fac.id).catch(() => null)
       if (a?.preguntar || a?.traida || a?.respuesta === 'ya_estaba') {
         setAviso({ tono: 'falta', texto: 'Guardada. Es de antes del día de inicio de Sumied: contesta si ya estaba contabilizada en «Más › La ficha completa». No paso a la siguiente.' }); return
@@ -344,6 +370,23 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     setTimeout(() => document.getElementById('kf-proveedor')?.focus(), 0)
   }
 
+  /** K04b · Elige el proveedor y lo guarda ya en la factura (solo ese campo), como «elegirYGuardar» de la ficha de hoy. */
+  async function elegirYGuardar(pid: string, nombre: string, texto: string) {
+    if (!fac) return
+    ed.poner('proveedorId', pid)
+    setTextoProv(null)
+    try {
+      const r = await guardarCambiosRecibida(fac, cambiosParaLaBase({ ...original, proveedorId: pid }, ['proveedorId']),
+        { quien: userName, nombres: { proveedor: nombre }, localPropuesto: localPropuesto ?? null })
+      if (r.fallos.length) setAviso({ tono: 'falta', texto: `${texto} No se ha guardado en la factura (${r.fallos.map((x) => x.porque.replace(/\.$/, '')).join(' · ')}): pulsa Intro para guardarla.` })
+      else setAviso({ tono: 'ok', texto: `${texto} Guardado en la factura: ya se puede validar.` })
+    } catch (e) {
+      setAviso({ tono: 'falta', texto: `${texto} No se ha guardado en la factura (${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}): pulsa Intro para guardarla.` })
+    }
+    ed.reiniciar({ ...b, proveedorId: pid })
+    setVueltaProv((v) => v + 1); setVuelta((v) => v + 1)
+  }
+
   const salida = useAvisoSalir({ hay: ed.hay, cambios: ed.cambios, donde: prov ? `${prov.nombre}${b.numero ? ` ${b.numero}` : ''}` : 'la factura nueva',
     onGuardar: async () => { const g = await guardarCambios(); return g === true ? true : g }, onDescartar: ed.descartar })
 
@@ -390,19 +433,19 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const marcarTocada = () => { if (pintada) tocada.current = claveFicha }
   useEffect(() => {
     if (!seVe()) return
-    const donde = dondeVaElFoco({ pintada, yaPuesto: focoPuesto.current === claveFicha, tocada: tocada.current === claveFicha, aMano, hayDuda: !!duda })
+    const donde = dondeVaElFoco({ pintada, yaPuesto: focoPuesto.current === claveFicha, tocada: tocada.current === claveFicha, aMano, hayDuda: !!duda || !!emisor })
     if (!donde) return
     const x = raiz.current?.querySelector<HTMLElement>(donde === 'proveedor' ? '#kf-proveedor' : '.kf-duda .kf-boton-ambar')
     if (!x) return
     x.focus()
     focoPuesto.current = claveFicha
-  }, [claveFicha, pintada, aMano, duda, seVe])
+  }, [claveFicha, pintada, aMano, duda, emisor, seVe])
 
   // ── Lo que no es de esta ficha: la de hoy, dentro de la pestaña ──
   const validada = !!fac?.asiento && fac.asiento.estado === 'validado'
   const descartada = fac?.estado === 'descartada'
   if (!aMano && (completa || (fac && (esAbono(fac) || validada || descartada)))) {
-    return <>{completa && <p className="kf-aviso" data-tono="ok"><button type="button" className="kf-enlace" onClick={() => setCompleta(false)}>‹ Volver a la ficha de siempre del núcleo</button></p>}<RevisarFacturaPage /></>
+    return <>{completa && <p className="kf-aviso" data-tono="ok"><button type="button" className="kf-enlace" onClick={() => setCompleta(false)}>‹ Volver a la ficha nueva</button></p>}<RevisarFacturaPage /></>
   }
   if (!aMano && f.error) return <div className="kf-ficha"><p className="kf-aviso" data-tono="mal">No se ha podido abrir la factura: {f.error}</p></div>
   const cargando = !aMano && (!fac || !ficha)
@@ -450,16 +493,32 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
         <div className="kf-formulario">
           {cargando ? <p className="kf-panel-nota" aria-busy="true">Abriendo la factura…</p> : <>
             <div className="kf-fila" style={{ gridTemplateColumns: '1.1fr 1.1fr 2.9fr 1.7fr' }}>
-              <Casilla rotulo="Proveedor" origen={origen.proveedor} htmlFor="kf-proveedor">
-                <Buscador id="kf-proveedor" etiqueta="Proveedor" cargando={proveedoresL === null} valor={textoProv ?? (provId ? subcuenta || prov?.nombre || '' : '')} cuenta={subcuenta || null}
+              <Casilla rotulo="Proveedor" origen={origen.proveedor} htmlFor="kf-proveedor" duda={!!emisor}>
+                <Buscador id="kf-proveedor" etiqueta="Proveedor" cargando={proveedoresL === null} abrir={abrirProveedor} duda={!!emisor} valor={textoProv ?? (provId ? subcuenta || prov?.nombre || '' : '')} cuenta={subcuenta || null}
                   placeholder={aMano ? 'Código, nombre o NIF' : undefined}
                   ponerTexto={setTextoProv} lista={(t) => { const q = t.toLowerCase(); return proveedores.filter((p) => !q || p.nombre.toLowerCase().includes(q) || (p.nif ?? '').toLowerCase().includes(q)) }}
-                  texto={(p) => `${p.nombre}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { ed.poner('proveedorId', p.id); setTextoProv(null) }} />
+                  texto={(p) => `${p.nombre}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { if (emisor) void elegirYGuardar(p.id, p.nombre, `Elegido ${p.nombre}.`); else { ed.poner('proveedorId', p.id); setTextoProv(null) } }} />
               </Casilla>
-              <Casilla rotulo="N.I.F." origen={origen.nif} htmlFor="kf-nif"><input id="kf-nif" readOnly tabIndex={-1} value={prov?.nif ?? ''} /></Casilla>
-              <Casilla rotulo="Nombre" origen={origen.nombre} htmlFor="kf-nombre"><input id="kf-nombre" readOnly tabIndex={-1} value={prov?.nombre ?? ''} /></Casilla>
+              <Casilla rotulo="N.I.F." origen={origen.nif} htmlFor="kf-nif"><input id="kf-nif" readOnly tabIndex={-1} value={prov?.nif ?? emisor?.nif ?? ''} /></Casilla>
+              <Casilla rotulo="Nombre" origen={origen.nombre} htmlFor="kf-nombre"><input id="kf-nombre" readOnly tabIndex={-1} value={prov?.nombre ?? emisor?.nombre ?? ''} title={prov?.nombre ?? emisor?.nombre ?? undefined} /></Casilla>
               <Casilla rotulo="Tipo de operación" origen={origen.tipoOperacion} htmlFor="kf-operacion"><input id="kf-operacion" readOnly tabIndex={-1} value={textoOperacion(delProv?.regimen ?? null) ?? ''} /></Casilla>
             </div>
+            {emisor?.que === 'alta' && altaAbierta !== invoiceId && (
+              <Duda texto={`No conozco al que la emite${emisor.nombre ? `: ${emisor.nombre}` : ''}${emisor.nif ? ` · NIF ${emisor.nif}` : ''}. Hasta que tenga proveedor no se valida.`}
+                principal={{ texto: 'Darlo de alta', hacer: () => setAltaAbierta(invoiceId) }}
+                secundario={{ texto: 'Es uno que ya tengo', hacer: () => setAbrirProveedor((n) => n + 1) }} />
+            )}
+            {emisor?.que === 'alta' && altaAbierta === invoiceId && accountId && fac && (
+              <AltaDesdeFactura accountId={accountId} otros={proveedores.map((p) => ({ name: p.nombre, taxId: p.nif }))}
+                leido={{ nombre: emisor.nombre, nif: emisor.nif, direccion: leido?.proveedor.direccion ?? null, correo: leido?.proveedor.email ?? null, telefono: leido?.proveedor.telefono ?? null, web: leido?.proveedor.web ?? null }}
+                factura={{ id: fac.id, numero: fac.numero ?? null }} alCancelar={() => setAltaAbierta(null)}
+                alCrear={(p) => { setAltaAbierta(null); void elegirYGuardar(p.id, p.name, fraseAltaEnFactura(p.name)) }} />
+            )}
+            {emisor?.que === 'es_uno_tuyo' && (
+              <Duda texto={`El NIF de la factura${emisor.nif ? ` (${emisor.nif})` : ''} es el de ${emisor.nombre}.`}
+                principal={{ texto: `Es ${emisor.nombre}: elegirlo`, hacer: () => void elegirYGuardar(emisor.proveedorId, emisor.nombre, `Elegido ${emisor.nombre}: el NIF de la factura es el suyo.`) }}
+                secundario={{ texto: 'Es uno que ya tengo', hacer: () => setAbrirProveedor((n) => n + 1) }} />
+            )}
             <div className="kf-fila" style={{ gridTemplateColumns: '1.7fr 1.1fr 1.1fr 1.1fr 1.7fr' }}>
               <Casilla rotulo="N.º de factura" origen={origen.numero} htmlFor="kf-numero"><input id="kf-numero" data-casilla value={b.numero} onChange={(e) => ed.poner('numero', e.target.value)} /></Casilla>
               <Casilla rotulo="Fecha factura" origen={origen.fecha} htmlFor="kf-fecha"><CasillaFecha id="kf-fecha" etiqueta="Fecha factura" iso={b.fecha} hoy={hoy} poner={(x) => ed.poner('fecha', x)} /></Casilla>

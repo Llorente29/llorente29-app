@@ -26,6 +26,14 @@
 // clase de documento, Esc volver a la pantalla, Alt Av Pág / Re Pág moverse
 // entre pestañas.
 //
+// K05 · 0b · LAS PESTAÑAS SON DE SU EMPRESA (Julio, 19/11). Cada pestaña es
+// de la empresa con la que se abrió. Al cambiar de empresa arriba, solo se ven
+// las de la nueva (o su Inicio); las de la otra se aparcan tal cual, montadas y
+// con lo escrito, y vuelven al volver. Cada pestaña lleva SU empresa en el
+// contexto (PestanaViva): lo que lee y guarda su pantalla (el plan, las
+// sugerencias, el mayor, validar) es de su empresa, se vea la que se vea
+// arriba. Abajo, «N pestañas abiertas en …», que lleva a esa empresa.
+//
 // Por eso aquí NO se pinta `children` (la pantalla de la ruta): la pintan las
 // pestañas, cada una con su dirección (rutas.ts).
 //
@@ -57,7 +65,10 @@ import type { CambiosDePestana } from '@/modules/conta/diseno/plantillas/pestana
 import { cintaVisible, modulosVisibles, MODULOS, sitioDe, type Boton, type IdModulo, type Modulo } from './mapa'
 import { conEjercicio, ejercicioAEnsenar } from './ejercicio'
 import { frasesDeEstado } from './estado'
-import { aGuardar, alNavegar, cerrar, claveDe, deAlLado, INICIO, nombrePorDefecto, pestanasGuardadas, type EstadoPestanas } from './pestanas'
+import {
+  abiertasEnOtras, aGuardarPorEmpresa, alNavegar, cambiarDeEmpresa, cerrar, claveDe, deAlLado, fraseAbiertasEn, INICIO, llaveDe, nombrePorDefecto, pestanasDeEmpresasGuardadas,
+  type EstadoPestanas, type PestanasDeEmpresas,
+} from './pestanas'
 import { cuentaDe, teclaDelMarco } from './teclado'
 import { Arriba } from './Arriba'
 import { Cinta } from './Cinta'
@@ -99,7 +110,7 @@ function ubicacionDe(url: string, id: string): Location {
 export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sinPregunta?: boolean }) {
   const solo = useProductoSolo()
   const { accountId, userId, userName } = useCuentaConta()
-  const { activa } = useEmpresas()
+  const { activa, empresas, elegir: elegirEmpresa } = useEmpresas()
   const ubicacion = useLocation()
   const { pathname, search } = ubicacion
   const navegar = useNavigate()
@@ -115,17 +126,36 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
 
   // ── K03 · Las pestañas de trabajo. La de la dirección es la que se ve.
   const url = `${pathname}${search}`
-  const [estado, setEstado] = useState<EstadoPestanas>(() => pestanasGuardadas(leerGuardadas(), url, Date.now()))
-  const [ubicaciones, setUbicaciones] = useState<Record<string, Location>>(() => ({ [claveDe(url)]: ubicacion }))
+  // K05 · 0b · Las de la empresa de arriba se ven; las de las demás, aparcadas (pestanas.ts, cambiarDeEmpresa).
+  const [todas, setTodas] = useState<PestanasDeEmpresas>(() => pestanasDeEmpresasGuardadas(leerGuardadas(), url, Date.now()))
+  const estado = todas.estado
+  const empresaVista = todas.empresa
+  const setEstado = useCallback((f: (e: EstadoPestanas) => EstadoPestanas) => setTodas((x) => ({ ...x, estado: f(x.estado) })), [])
+  const [ubicaciones, setUbicaciones] = useState<Record<string, Location>>(() => ({ [llaveDe(todas.empresa, claveDe(url))]: ubicacion }))
+  if (activa && empresaVista !== activa.id) {
+    const nueva = activa.id
+    // La primera vez que se sabe la empresa, la dirección de lo que se ve pasa a ser suya.
+    if (empresaVista === null) setUbicaciones((u) => Object.fromEntries(Object.entries(u).map(([k, v]) => [k.startsWith('|') ? `${nueva}${k}` : k, v])))
+    setTodas((x) => cambiarDeEmpresa(x, nueva, Date.now()).t)
+  }
+  // Al cambiar de empresa, la dirección es la de la pestaña que queda activa (la suya de antes, o su Inicio).
+  const empresaAntes = useRef(empresaVista)
+  const activaAhora = estado.abiertas.find((p) => p.id === estado.activa)?.url ?? null
+  useEffect(() => {
+    const antes = empresaAntes.current
+    empresaAntes.current = empresaVista
+    if (antes === null || antes === empresaVista || !activaAhora) return
+    if (activaAhora !== `${window.location.pathname}${window.location.search}`) navegar(activaAhora)
+  }, [empresaVista, activaAhora, navegar])
   const [vistaUbicacion, setVistaUbicacion] = useState(ubicacion)
   if (vistaUbicacion !== ubicacion) {
     setVistaUbicacion(ubicacion)
-    setEstado((e) => alNavegar(e, url, Date.now()))
-    setUbicaciones((u) => ({ ...u, [claveDe(url)]: ubicacion }))
+    setTodas((x) => ({ ...x, estado: alNavegar(x.estado, url, Date.now()) }))
+    setUbicaciones((u) => ({ ...u, [llaveDe(empresaVista, claveDe(url))]: ubicacion }))
   }
   useEffect(() => {
-    try { window.sessionStorage.setItem(CLAVE_PESTANAS, JSON.stringify(aGuardar(estado))) } catch { /* sin almacén: no se recuerdan al recargar */ }
-  }, [estado])
+    try { window.sessionStorage.setItem(CLAVE_PESTANAS, JSON.stringify(aGuardarPorEmpresa(todas))) } catch { /* sin almacén: no se recuerdan al recargar */ }
+  }, [todas])
   const [nombres, setNombres] = useState<Record<string, string>>({})
   const [cambios, setCambios] = useState<Record<string, CambiosDePestana>>({})
   const ponerNombre = useCallback((id: string, n: string | null) => setNombres((x) => {
@@ -140,28 +170,35 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
     if (c) y[id] = c; else delete y[id]
     return y
   }), [])
+  /** El nombre de una pestaña de las que se ven, por su clave. */
   const nombreDe = useCallback((id: string) => {
     const p = estado.abiertas.find((x) => x.id === id)
-    return nombres[id] ?? (p ? nombrePorDefecto(p) : 'Sumied')
-  }, [estado.abiertas, nombres])
+    return nombres[llaveDe(empresaVista, id)] ?? (p ? nombrePorDefecto(p) : 'Sumied')
+  }, [estado.abiertas, nombres, empresaVista])
 
   // El aspa: si hay algo sin guardar, pregunta antes (DialogoCerrar).
   const [preguntando, setPreguntando] = useState<string | null>(null)
-  const hacerCerrar = useCallback((id: string) => {
+  // K05 · 0b · Se cierra por su llave (empresa y clave), y solo una de las que se ven (las aparcadas no se cierran desde aquí).
+  const empresaAhora = useRef(empresaVista)
+  useEffect(() => { empresaAhora.current = empresaVista }, [empresaVista])
+  const hacerCerrar = useCallback((llave: string) => {
     setPreguntando(null)
+    const id = llave.slice(llave.indexOf('|') + 1)
+    if (llaveDe(empresaAhora.current, id) !== llave) return
     setEstado((e) => {
       const { estado: n, ir } = cerrar(e, id)
       if (ir) queueMicrotask(() => navegar(ir))
       return n
     })
-    setUbicaciones((u) => { const v = { ...u }; delete v[id]; return v })
-    setNombres((x) => { if (!(id in x)) return x; const y = { ...x }; delete y[id]; return y })
-    setCambios((x) => { if (!(id in x)) return x; const y = { ...x }; delete y[id]; return y })
-  }, [navegar])
+    setUbicaciones((u) => { const v = { ...u }; delete v[llave]; return v })
+    setNombres((x) => { if (!(llave in x)) return x; const y = { ...x }; delete y[llave]; return y })
+    setCambios((x) => { if (!(llave in x)) return x; const y = { ...x }; delete y[llave]; return y })
+  }, [navegar, setEstado])
   // K04 · Estable (la pide también la pantalla, con Esc): lee los cambios de una referencia.
   const cambiosAhora = useRef(cambios)
   useEffect(() => { cambiosAhora.current = cambios }, [cambios])
-  const pedirCerrar = useCallback((id: string) => (cambiosAhora.current[id] ? setPreguntando(id) : hacerCerrar(id)), [hacerCerrar])
+  const pedirCerrar = useCallback((llave: string) => (cambiosAhora.current[llave] ? setPreguntando(llave) : hacerCerrar(llave)), [hacerCerrar])
+  const pedirCerrarVista = useCallback((id: string) => pedirCerrar(llaveDe(empresaAhora.current, id)), [pedirCerrar])
   const irA = (id: string) => {
     const p = estado.abiertas.find((x) => x.id === id)
     if (p && p.url !== url) navegar(p.url)
@@ -260,7 +297,7 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
       const t = e.target as Element | null
       const zona = t?.closest?.('.k-zona[data-activa="si"]')
       if (!zona) return
-      const id = zona.getAttribute('data-pestana') ?? ''
+      const id = zona.getAttribute('data-llave') ?? ''
       const c = cuentaDe(t)
       setCuentaPorPestana((x) => ((x[id] ?? null) === c ? x : { ...x, [id]: c }))
     }
@@ -268,7 +305,7 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
     document.addEventListener('pointerdown', alTocar)
     return () => { document.removeEventListener('focusin', alTocar); document.removeEventListener('pointerdown', alTocar) }
   }, [])
-  const cuenta = cuentaPorPestana[estado.activa] ?? null
+  const cuenta = cuentaPorPestana[llaveDe(empresaVista, estado.activa)] ?? null
   const abrirMayor = useCallback((c: string | null) => {
     if (!c) return
     navegar(conConsulta(rutaConta(`plan/${encodeURIComponent(c)}`), consulta))
@@ -345,10 +382,20 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
     colorEmpresa: ctx.colorEmpresa ?? null,
   } satisfies Partial<ValorMarco>), [prefs.nivel, prefs.densidad, prefs.documentoOculto, cambiar, ctxListo, ctx.hosteleria, ctx.ventasPorDia, ctx.gestoria, ctx.analitica, ctx.diez, ctx.colorEmpresa, listaEjercicios, abrirBuscador])
 
+  // K05 · 0b · Una pestaña aparcada sigue con lo del marco de SU empresa (los ejercicios, la analítica…), no con lo de la de arriba.
+  const [bases, setBases] = useState<Record<string, typeof base>>({})
+  if (empresaVista && activa?.id === empresaVista && bases[empresaVista] !== base) setBases((b) => ({ ...b, [empresaVista]: base }))
+  const resumenDe = (id: string | null) => empresas.find((e) => e.id === id) ?? null
+  const vivas = [
+    ...estado.abiertas.filter((p) => p.montada).map((p) => ({ p, empresa: empresaVista, activa: p.id === estado.activa })),
+    ...Object.entries(todas.aparcadas).flatMap(([empresa, e]) => e.abiertas.filter((p) => p.montada).map((p) => ({ p, empresa, activa: false }))),
+  ]
+  const otras = abiertasEnOtras(todas)
+
   const avisoVisible = aviso ?? (errorCtx ? { texto: `${errorCtx}. Mientras, no sale lo que depende de la empresa (hostelería, Diez).`, tono: 'falta' as const } : null)
   const estadoFrases = frasesDeEstado(cuentas, { recibidas: rutaConta('documentos'), bancos: rutaConta('bancos'), asientos: rutaConta('libros/diario') })
   const actual = sitio?.tipo === 'cinta' ? sitio.boton.id : null
-  const enFila = estado.abiertas.map((p) => ({ id: p.id, nombre: nombreDe(p.id), conCambios: !!cambios[p.id], cerrable: p.id !== INICIO }))
+  const enFila = estado.abiertas.map((p) => ({ id: p.id, nombre: nombreDe(p.id), conCambios: !!cambios[llaveDe(empresaVista, p.id)], cerrable: p.id !== INICIO }))
   return (
     <div ref={raiz} className="cx cxm s-esqueleto s-marco k-nucleo" data-densidad={prefs.densidad} style={{ height: `calc(100dvh - ${encima}px)` }}>
       <Arriba marca={MARCA.nombre} ejercicios={listaEjercicios} ejercicio={ejercicio} elegirEjercicio={elegirEjercicio} abrirBuscador={abrirBuscador}
@@ -358,15 +405,18 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
       <div className="k-cuerpo">
         <Modulos modulos={modulos} elegido={modulo} elegir={elegirModulo} plegados={plegados} alternar={alternarModulos} />
         <div className="k-trabajo">
-          <PestanasTrabajo pestanas={enFila} activa={estado.activa} ir={irA} cerrar={pedirCerrar} abrirOtra={abrirBuscador}
+          <PestanasTrabajo pestanas={enFila} activa={estado.activa} ir={irA} cerrar={pedirCerrarVista} abrirOtra={abrirBuscador}
             cuenta={cuenta} abrirMayor={() => abrirMayor(cuenta)} />
           <div className="k-panel">
             <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
-            {estado.abiertas.filter((p) => p.montada).map((p) => (
-              <PestanaViva key={p.id} id={p.id} ubicacion={ubicaciones[p.id] ?? ubicacionDe(p.url, p.id)} activa={p.id === estado.activa}
-                base={base} ctx={ctx} cuentas={cuentas} abrirBuscador={abrirBuscador} ponerNombre={ponerNombre} ponerCambios={ponerCambios} cerrar={pedirCerrar}
-                nombre={nombreDe(p.id)} />
-            ))}
+            {vivas.map(({ p, empresa, activa: vista }) => {
+              const llave = llaveDe(empresa, p.id)
+              return (
+                <PestanaViva key={llave} id={p.id} llave={llave} empresa={resumenDe(empresa)} ubicacion={ubicaciones[llave] ?? ubicacionDe(p.url, p.id)} activa={vista}
+                  base={(empresa && bases[empresa]) || base} ctx={ctx} cuentas={cuentas} abrirBuscador={abrirBuscador} ponerNombre={ponerNombre} ponerCambios={ponerCambios} cerrar={pedirCerrar}
+                  nombre={nombres[llave] ?? nombrePorDefecto(p)} />
+              )
+            })}
           </div>
         </div>
       </div>
@@ -376,9 +426,14 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
             <span className="k-estado-punto" aria-hidden="true" /><strong>{f.fuerte}</strong> {f.resto}
           </button>
         ))}
+        {otras.map((o) => (
+          <button key={o.empresa} type="button" className="k-estado-frase" data-prueba="abiertas-en-otra" onClick={() => elegirEmpresa(o.empresa)}>
+            {fraseAbiertasEn(o.n, resumenDe(o.empresa)?.nombre ?? 'otra empresa')}
+          </button>
+        ))}
       </footer>
       {preguntando && cambios[preguntando] && (
-        <DialogoCerrar nombre={nombreDe(preguntando)} c={cambios[preguntando]} alCerrar={() => hacerCerrar(preguntando)} alSeguir={() => setPreguntando(null)} />
+        <DialogoCerrar nombre={nombres[preguntando] ?? nombreDe(preguntando.slice(preguntando.indexOf('|') + 1))} c={cambios[preguntando]} alCerrar={() => hacerCerrar(preguntando)} alSeguir={() => setPreguntando(null)} />
       )}
       {buscando && <Buscador cerrar={() => setBuscando(false)} solo={solo} conPregunta={BARRA_PREGUNTAR && !solo && !sinPregunta} ctx={ctxListo ? ctx : undefined} />}
     </div>
