@@ -1,0 +1,1434 @@
+# Origen
+
+X09 (19/11): un fallo provocado en local, contra la pantalla de verdad (build de la rama, el marco del núcleo con conta_nucleo, 1456 × 816) y una base simulada con datos INVENTADOS: «Salida a ERP10», paso 3, 219 cuentas con el grupo «quedan igual» abierto, justo después de «Ya la he metido a mano» (la tabla, en aria-busy mientras vuelve a comparar). El árbol, de locator('body').ariaSnapshot() de Playwright 1.63, que es lo que copia error-context.md.
+
+# Error details
+
+```
+Error: expect(locator).toBeEnabled() failed
+
+Locator: getByRole('button', { name: /Darlo por igualado/ })
+Expected: enabled
+Received: disabled
+```
+
+# Page snapshot
+
+```yaml
+- status: "BUILD LOCAL · NO ES PRODUCCIÓN — base de pruebas staging-conta: los datos son inventados"
+- banner:
+  - link "Folvy":
+    - /url: /conta/inicio
+  - button "Empresa de ejemplo, S.L., ejercicio 2026. Cambiar de empresa o de ejercicio": Empresa de ejemplo, S.L. 2026
+  - button "Buscar un proveedor, un número de factura, un importe…"
+  - button "Tú. Ajustes, Novedades, Favoritos y tus preferencias": Tú
+- tablist "La cinta":
+  - tab "Definiciones"
+  - tab "Asientos"
+  - tab "Tesorería"
+  - tab "Importaciones"
+  - tab "Listados"
+  - tab "Utilidades" [selected]
+- button "Plegar los botones" [expanded]
+- tabpanel "Utilidades":
+  - group "Buscar":
+    - button "Búsqueda"
+  - group "Cierre":
+    - button "Ejercicios"
+    - button "Cerrar el mes"
+  - group "Bancos":
+    - button "Cuentas y extractos"
+    - button "Préstamos"
+    - button "Reglas del banco"
+  - group "Diseño":
+    - button "Muestra del diseño"
+- navigation "Módulos":
+  - button "Plegar los módulos" [expanded]: « Plegar
+  - list:
+    - listitem:
+      - button "Contabilidad"
+    - listitem:
+      - button "Facturación"
+- tablist "Lo que tienes abierto":
+  - tab "Inicio"
+  - tab "Ejercicios" [selected]
+  - button "Cerrar Ejercicios"
+  - button "Abrir otra cosa"
+- button "El mayor F5"
+- main "Ejercicios":
+  - combobox "Ejercicio":
+    - option "Ejercicio 2026 · abierto" [selected]
+  - toolbar "Acciones de Ejercicios":
+    - 'button "Ver: Salida a ERP10. Cambiar"': "Ver: Salida a ERP10"
+  - region "Salida a ERP10":
+    - heading "Salida a ERP10" [level=1]
+    - combobox "Mes":
+      - option "Noviembre de 2026" [selected]
+      - option "Octubre de 2026"
+    - list "Pasos":
+      - listitem:
+        - button "Mira lo que sale": 1 Mira lo que sale
+      - listitem: 2 Impórtalo en ERP10
+      - listitem: 3 Comprueba que queda igual
+    - button "Darlo por igualado Intro" [disabled]
+    - text: Comparado con sumas_y_saldos.xlsx de ERP10, a 30/11 3 cuentas con diferencia
+    - button "Subir otro Excel"
+    - table "Cuenta a cuenta":
+      - rowgroup:
+        - row "Cuenta Nombre Saldo en Sumied Saldo en ERP10 Diferencia":
+          - columnheader "Cuenta"
+          - columnheader "Nombre"
+          - columnheader "Saldo en Sumied"
+          - columnheader "Saldo en ERP10"
+          - columnheader "Diferencia"
+      - rowgroup:
+        - row "3 cuentas no quedan igual":
+          - rowheader "3 cuentas no quedan igual"
+        - row "41000012 Suministros Ejemplo, S.A. 246,30 164,20 −82,10" [selected]:
+          - cell "41000012"
+          - cell "Suministros Ejemplo, S.A."
+          - cell "246,30"
+          - cell "164,20"
+          - cell "−82,10"
+        - row "47200000 Hacienda Pública, IVA soportado 2.310,55 2.296,30 −14,25":
+          - cell "47200000"
+          - cell "Hacienda Pública, IVA soportado"
+          - cell "2.310,55"
+          - cell "2.296,30"
+          - cell "−14,25"
+        - row "62900000 Otros servicios 1.200,00 1.132,15 −67,85":
+          - cell "62900000"
+          - cell "Otros servicios"
+          - cell "1.200,00"
+          - cell "1.132,15"
+          - cell "−67,85"
+      - rowgroup:
+        - row "2 cuentas llevan cosas que todavía no salen por aquí · 3.000,00":
+          - rowheader "2 cuentas llevan cosas que todavía no salen por aquí · 3.000,00"
+        - row "57200001 Banco principal 12.480,15 13.980,15 1.500,00":
+          - cell "57200001"
+          - cell "Banco principal"
+          - cell "12.480,15"
+          - cell "13.980,15"
+          - cell "1.500,00"
+        - row "64000000 Sueldos y salarios 1.500,00 0,00 −1.500,00":
+          - cell "64000000"
+          - cell "Sueldos y salarios"
+          - cell "1.500,00"
+          - cell "0,00"
+          - cell "−1.500,00"
+      - rowgroup:
+        - row "214 cuentas quedan igual":
+          - rowheader "214 cuentas quedan igual"
+        - row "40000007 Distribuciones Ejemplo, S.L. 1.602,54 1.602,54":
+          - cell "40000007"
+          - cell "Distribuciones Ejemplo, S.L."
+          - cell "1.602,54"
+          - cell "1.602,54"
+          - cell
+        - row "43000100 Cliente Inventado 0 100,00 100,00":
+          - cell "43000100"
+          - cell "Cliente Inventado 0"
+          - cell "100,00"
+          - cell "100,00"
+          - cell
+        - row "43000101 Cliente Inventado 1 101,00 101,00":
+          - cell "43000101"
+          - cell "Cliente Inventado 1"
+          - cell "101,00"
+          - cell "101,00"
+          - cell
+        - row "43000102 Cliente Inventado 2 102,00 102,00":
+          - cell "43000102"
+          - cell "Cliente Inventado 2"
+          - cell "102,00"
+          - cell "102,00"
+          - cell
+        - row "43000103 Cliente Inventado 3 103,00 103,00":
+          - cell "43000103"
+          - cell "Cliente Inventado 3"
+          - cell "103,00"
+          - cell "103,00"
+          - cell
+        - row "43000104 Cliente Inventado 4 104,00 104,00":
+          - cell "43000104"
+          - cell "Cliente Inventado 4"
+          - cell "104,00"
+          - cell "104,00"
+          - cell
+        - row "43000105 Cliente Inventado 5 105,00 105,00":
+          - cell "43000105"
+          - cell "Cliente Inventado 5"
+          - cell "105,00"
+          - cell "105,00"
+          - cell
+        - row "43000106 Cliente Inventado 6 106,00 106,00":
+          - cell "43000106"
+          - cell "Cliente Inventado 6"
+          - cell "106,00"
+          - cell "106,00"
+          - cell
+        - row "43000107 Cliente Inventado 7 107,00 107,00":
+          - cell "43000107"
+          - cell "Cliente Inventado 7"
+          - cell "107,00"
+          - cell "107,00"
+          - cell
+        - row "43000108 Cliente Inventado 8 108,00 108,00":
+          - cell "43000108"
+          - cell "Cliente Inventado 8"
+          - cell "108,00"
+          - cell "108,00"
+          - cell
+        - row "43000109 Cliente Inventado 9 109,00 109,00":
+          - cell "43000109"
+          - cell "Cliente Inventado 9"
+          - cell "109,00"
+          - cell "109,00"
+          - cell
+        - row "43000110 Cliente Inventado 10 110,00 110,00":
+          - cell "43000110"
+          - cell "Cliente Inventado 10"
+          - cell "110,00"
+          - cell "110,00"
+          - cell
+        - row "43000111 Cliente Inventado 11 111,00 111,00":
+          - cell "43000111"
+          - cell "Cliente Inventado 11"
+          - cell "111,00"
+          - cell "111,00"
+          - cell
+        - row "43000112 Cliente Inventado 12 112,00 112,00":
+          - cell "43000112"
+          - cell "Cliente Inventado 12"
+          - cell "112,00"
+          - cell "112,00"
+          - cell
+        - row "43000113 Cliente Inventado 13 113,00 113,00":
+          - cell "43000113"
+          - cell "Cliente Inventado 13"
+          - cell "113,00"
+          - cell "113,00"
+          - cell
+        - row "43000114 Cliente Inventado 14 114,00 114,00":
+          - cell "43000114"
+          - cell "Cliente Inventado 14"
+          - cell "114,00"
+          - cell "114,00"
+          - cell
+        - row "43000115 Cliente Inventado 15 115,00 115,00":
+          - cell "43000115"
+          - cell "Cliente Inventado 15"
+          - cell "115,00"
+          - cell "115,00"
+          - cell
+        - row "43000116 Cliente Inventado 16 116,00 116,00":
+          - cell "43000116"
+          - cell "Cliente Inventado 16"
+          - cell "116,00"
+          - cell "116,00"
+          - cell
+        - row "43000117 Cliente Inventado 17 117,00 117,00":
+          - cell "43000117"
+          - cell "Cliente Inventado 17"
+          - cell "117,00"
+          - cell "117,00"
+          - cell
+        - row "43000118 Cliente Inventado 18 118,00 118,00":
+          - cell "43000118"
+          - cell "Cliente Inventado 18"
+          - cell "118,00"
+          - cell "118,00"
+          - cell
+        - row "43000119 Cliente Inventado 19 119,00 119,00":
+          - cell "43000119"
+          - cell "Cliente Inventado 19"
+          - cell "119,00"
+          - cell "119,00"
+          - cell
+        - row "43000120 Cliente Inventado 20 120,00 120,00":
+          - cell "43000120"
+          - cell "Cliente Inventado 20"
+          - cell "120,00"
+          - cell "120,00"
+          - cell
+        - row "43000121 Cliente Inventado 21 121,00 121,00":
+          - cell "43000121"
+          - cell "Cliente Inventado 21"
+          - cell "121,00"
+          - cell "121,00"
+          - cell
+        - row "43000122 Cliente Inventado 22 122,00 122,00":
+          - cell "43000122"
+          - cell "Cliente Inventado 22"
+          - cell "122,00"
+          - cell "122,00"
+          - cell
+        - row "43000123 Cliente Inventado 23 123,00 123,00":
+          - cell "43000123"
+          - cell "Cliente Inventado 23"
+          - cell "123,00"
+          - cell "123,00"
+          - cell
+        - row "43000124 Cliente Inventado 24 124,00 124,00":
+          - cell "43000124"
+          - cell "Cliente Inventado 24"
+          - cell "124,00"
+          - cell "124,00"
+          - cell
+        - row "43000125 Cliente Inventado 25 125,00 125,00":
+          - cell "43000125"
+          - cell "Cliente Inventado 25"
+          - cell "125,00"
+          - cell "125,00"
+          - cell
+        - row "43000126 Cliente Inventado 26 126,00 126,00":
+          - cell "43000126"
+          - cell "Cliente Inventado 26"
+          - cell "126,00"
+          - cell "126,00"
+          - cell
+        - row "43000127 Cliente Inventado 27 127,00 127,00":
+          - cell "43000127"
+          - cell "Cliente Inventado 27"
+          - cell "127,00"
+          - cell "127,00"
+          - cell
+        - row "43000128 Cliente Inventado 28 128,00 128,00":
+          - cell "43000128"
+          - cell "Cliente Inventado 28"
+          - cell "128,00"
+          - cell "128,00"
+          - cell
+        - row "43000129 Cliente Inventado 29 129,00 129,00":
+          - cell "43000129"
+          - cell "Cliente Inventado 29"
+          - cell "129,00"
+          - cell "129,00"
+          - cell
+        - row "43000130 Cliente Inventado 30 130,00 130,00":
+          - cell "43000130"
+          - cell "Cliente Inventado 30"
+          - cell "130,00"
+          - cell "130,00"
+          - cell
+        - row "43000131 Cliente Inventado 31 131,00 131,00":
+          - cell "43000131"
+          - cell "Cliente Inventado 31"
+          - cell "131,00"
+          - cell "131,00"
+          - cell
+        - row "43000132 Cliente Inventado 32 132,00 132,00":
+          - cell "43000132"
+          - cell "Cliente Inventado 32"
+          - cell "132,00"
+          - cell "132,00"
+          - cell
+        - row "43000133 Cliente Inventado 33 133,00 133,00":
+          - cell "43000133"
+          - cell "Cliente Inventado 33"
+          - cell "133,00"
+          - cell "133,00"
+          - cell
+        - row "43000134 Cliente Inventado 34 134,00 134,00":
+          - cell "43000134"
+          - cell "Cliente Inventado 34"
+          - cell "134,00"
+          - cell "134,00"
+          - cell
+        - row "43000135 Cliente Inventado 35 135,00 135,00":
+          - cell "43000135"
+          - cell "Cliente Inventado 35"
+          - cell "135,00"
+          - cell "135,00"
+          - cell
+        - row "43000136 Cliente Inventado 36 136,00 136,00":
+          - cell "43000136"
+          - cell "Cliente Inventado 36"
+          - cell "136,00"
+          - cell "136,00"
+          - cell
+        - row "43000137 Cliente Inventado 37 137,00 137,00":
+          - cell "43000137"
+          - cell "Cliente Inventado 37"
+          - cell "137,00"
+          - cell "137,00"
+          - cell
+        - row "43000138 Cliente Inventado 38 138,00 138,00":
+          - cell "43000138"
+          - cell "Cliente Inventado 38"
+          - cell "138,00"
+          - cell "138,00"
+          - cell
+        - row "43000139 Cliente Inventado 39 139,00 139,00":
+          - cell "43000139"
+          - cell "Cliente Inventado 39"
+          - cell "139,00"
+          - cell "139,00"
+          - cell
+        - row "43000140 Cliente Inventado 40 140,00 140,00":
+          - cell "43000140"
+          - cell "Cliente Inventado 40"
+          - cell "140,00"
+          - cell "140,00"
+          - cell
+        - row "43000141 Cliente Inventado 41 141,00 141,00":
+          - cell "43000141"
+          - cell "Cliente Inventado 41"
+          - cell "141,00"
+          - cell "141,00"
+          - cell
+        - row "43000142 Cliente Inventado 42 142,00 142,00":
+          - cell "43000142"
+          - cell "Cliente Inventado 42"
+          - cell "142,00"
+          - cell "142,00"
+          - cell
+        - row "43000143 Cliente Inventado 43 143,00 143,00":
+          - cell "43000143"
+          - cell "Cliente Inventado 43"
+          - cell "143,00"
+          - cell "143,00"
+          - cell
+        - row "43000144 Cliente Inventado 44 144,00 144,00":
+          - cell "43000144"
+          - cell "Cliente Inventado 44"
+          - cell "144,00"
+          - cell "144,00"
+          - cell
+        - row "43000145 Cliente Inventado 45 145,00 145,00":
+          - cell "43000145"
+          - cell "Cliente Inventado 45"
+          - cell "145,00"
+          - cell "145,00"
+          - cell
+        - row "43000146 Cliente Inventado 46 146,00 146,00":
+          - cell "43000146"
+          - cell "Cliente Inventado 46"
+          - cell "146,00"
+          - cell "146,00"
+          - cell
+        - row "43000147 Cliente Inventado 47 147,00 147,00":
+          - cell "43000147"
+          - cell "Cliente Inventado 47"
+          - cell "147,00"
+          - cell "147,00"
+          - cell
+        - row "43000148 Cliente Inventado 48 148,00 148,00":
+          - cell "43000148"
+          - cell "Cliente Inventado 48"
+          - cell "148,00"
+          - cell "148,00"
+          - cell
+        - row "43000149 Cliente Inventado 49 149,00 149,00":
+          - cell "43000149"
+          - cell "Cliente Inventado 49"
+          - cell "149,00"
+          - cell "149,00"
+          - cell
+        - row "43000150 Cliente Inventado 50 150,00 150,00":
+          - cell "43000150"
+          - cell "Cliente Inventado 50"
+          - cell "150,00"
+          - cell "150,00"
+          - cell
+        - row "43000151 Cliente Inventado 51 151,00 151,00":
+          - cell "43000151"
+          - cell "Cliente Inventado 51"
+          - cell "151,00"
+          - cell "151,00"
+          - cell
+        - row "43000152 Cliente Inventado 52 152,00 152,00":
+          - cell "43000152"
+          - cell "Cliente Inventado 52"
+          - cell "152,00"
+          - cell "152,00"
+          - cell
+        - row "43000153 Cliente Inventado 53 153,00 153,00":
+          - cell "43000153"
+          - cell "Cliente Inventado 53"
+          - cell "153,00"
+          - cell "153,00"
+          - cell
+        - row "43000154 Cliente Inventado 54 154,00 154,00":
+          - cell "43000154"
+          - cell "Cliente Inventado 54"
+          - cell "154,00"
+          - cell "154,00"
+          - cell
+        - row "43000155 Cliente Inventado 55 155,00 155,00":
+          - cell "43000155"
+          - cell "Cliente Inventado 55"
+          - cell "155,00"
+          - cell "155,00"
+          - cell
+        - row "43000156 Cliente Inventado 56 156,00 156,00":
+          - cell "43000156"
+          - cell "Cliente Inventado 56"
+          - cell "156,00"
+          - cell "156,00"
+          - cell
+        - row "43000157 Cliente Inventado 57 157,00 157,00":
+          - cell "43000157"
+          - cell "Cliente Inventado 57"
+          - cell "157,00"
+          - cell "157,00"
+          - cell
+        - row "43000158 Cliente Inventado 58 158,00 158,00":
+          - cell "43000158"
+          - cell "Cliente Inventado 58"
+          - cell "158,00"
+          - cell "158,00"
+          - cell
+        - row "43000159 Cliente Inventado 59 159,00 159,00":
+          - cell "43000159"
+          - cell "Cliente Inventado 59"
+          - cell "159,00"
+          - cell "159,00"
+          - cell
+        - row "43000160 Cliente Inventado 60 160,00 160,00":
+          - cell "43000160"
+          - cell "Cliente Inventado 60"
+          - cell "160,00"
+          - cell "160,00"
+          - cell
+        - row "43000161 Cliente Inventado 61 161,00 161,00":
+          - cell "43000161"
+          - cell "Cliente Inventado 61"
+          - cell "161,00"
+          - cell "161,00"
+          - cell
+        - row "43000162 Cliente Inventado 62 162,00 162,00":
+          - cell "43000162"
+          - cell "Cliente Inventado 62"
+          - cell "162,00"
+          - cell "162,00"
+          - cell
+        - row "43000163 Cliente Inventado 63 163,00 163,00":
+          - cell "43000163"
+          - cell "Cliente Inventado 63"
+          - cell "163,00"
+          - cell "163,00"
+          - cell
+        - row "43000164 Cliente Inventado 64 164,00 164,00":
+          - cell "43000164"
+          - cell "Cliente Inventado 64"
+          - cell "164,00"
+          - cell "164,00"
+          - cell
+        - row "43000165 Cliente Inventado 65 165,00 165,00":
+          - cell "43000165"
+          - cell "Cliente Inventado 65"
+          - cell "165,00"
+          - cell "165,00"
+          - cell
+        - row "43000166 Cliente Inventado 66 166,00 166,00":
+          - cell "43000166"
+          - cell "Cliente Inventado 66"
+          - cell "166,00"
+          - cell "166,00"
+          - cell
+        - row "43000167 Cliente Inventado 67 167,00 167,00":
+          - cell "43000167"
+          - cell "Cliente Inventado 67"
+          - cell "167,00"
+          - cell "167,00"
+          - cell
+        - row "43000168 Cliente Inventado 68 168,00 168,00":
+          - cell "43000168"
+          - cell "Cliente Inventado 68"
+          - cell "168,00"
+          - cell "168,00"
+          - cell
+        - row "43000169 Cliente Inventado 69 169,00 169,00":
+          - cell "43000169"
+          - cell "Cliente Inventado 69"
+          - cell "169,00"
+          - cell "169,00"
+          - cell
+        - row "43000170 Cliente Inventado 70 170,00 170,00":
+          - cell "43000170"
+          - cell "Cliente Inventado 70"
+          - cell "170,00"
+          - cell "170,00"
+          - cell
+        - row "43000171 Cliente Inventado 71 171,00 171,00":
+          - cell "43000171"
+          - cell "Cliente Inventado 71"
+          - cell "171,00"
+          - cell "171,00"
+          - cell
+        - row "43000172 Cliente Inventado 72 172,00 172,00":
+          - cell "43000172"
+          - cell "Cliente Inventado 72"
+          - cell "172,00"
+          - cell "172,00"
+          - cell
+        - row "43000173 Cliente Inventado 73 173,00 173,00":
+          - cell "43000173"
+          - cell "Cliente Inventado 73"
+          - cell "173,00"
+          - cell "173,00"
+          - cell
+        - row "43000174 Cliente Inventado 74 174,00 174,00":
+          - cell "43000174"
+          - cell "Cliente Inventado 74"
+          - cell "174,00"
+          - cell "174,00"
+          - cell
+        - row "43000175 Cliente Inventado 75 175,00 175,00":
+          - cell "43000175"
+          - cell "Cliente Inventado 75"
+          - cell "175,00"
+          - cell "175,00"
+          - cell
+        - row "43000176 Cliente Inventado 76 176,00 176,00":
+          - cell "43000176"
+          - cell "Cliente Inventado 76"
+          - cell "176,00"
+          - cell "176,00"
+          - cell
+        - row "43000177 Cliente Inventado 77 177,00 177,00":
+          - cell "43000177"
+          - cell "Cliente Inventado 77"
+          - cell "177,00"
+          - cell "177,00"
+          - cell
+        - row "43000178 Cliente Inventado 78 178,00 178,00":
+          - cell "43000178"
+          - cell "Cliente Inventado 78"
+          - cell "178,00"
+          - cell "178,00"
+          - cell
+        - row "43000179 Cliente Inventado 79 179,00 179,00":
+          - cell "43000179"
+          - cell "Cliente Inventado 79"
+          - cell "179,00"
+          - cell "179,00"
+          - cell
+        - row "43000180 Cliente Inventado 80 180,00 180,00":
+          - cell "43000180"
+          - cell "Cliente Inventado 80"
+          - cell "180,00"
+          - cell "180,00"
+          - cell
+        - row "43000181 Cliente Inventado 81 181,00 181,00":
+          - cell "43000181"
+          - cell "Cliente Inventado 81"
+          - cell "181,00"
+          - cell "181,00"
+          - cell
+        - row "43000182 Cliente Inventado 82 182,00 182,00":
+          - cell "43000182"
+          - cell "Cliente Inventado 82"
+          - cell "182,00"
+          - cell "182,00"
+          - cell
+        - row "43000183 Cliente Inventado 83 183,00 183,00":
+          - cell "43000183"
+          - cell "Cliente Inventado 83"
+          - cell "183,00"
+          - cell "183,00"
+          - cell
+        - row "43000184 Cliente Inventado 84 184,00 184,00":
+          - cell "43000184"
+          - cell "Cliente Inventado 84"
+          - cell "184,00"
+          - cell "184,00"
+          - cell
+        - row "43000185 Cliente Inventado 85 185,00 185,00":
+          - cell "43000185"
+          - cell "Cliente Inventado 85"
+          - cell "185,00"
+          - cell "185,00"
+          - cell
+        - row "43000186 Cliente Inventado 86 186,00 186,00":
+          - cell "43000186"
+          - cell "Cliente Inventado 86"
+          - cell "186,00"
+          - cell "186,00"
+          - cell
+        - row "43000187 Cliente Inventado 87 187,00 187,00":
+          - cell "43000187"
+          - cell "Cliente Inventado 87"
+          - cell "187,00"
+          - cell "187,00"
+          - cell
+        - row "43000188 Cliente Inventado 88 188,00 188,00":
+          - cell "43000188"
+          - cell "Cliente Inventado 88"
+          - cell "188,00"
+          - cell "188,00"
+          - cell
+        - row "43000189 Cliente Inventado 89 189,00 189,00":
+          - cell "43000189"
+          - cell "Cliente Inventado 89"
+          - cell "189,00"
+          - cell "189,00"
+          - cell
+        - row "43000190 Cliente Inventado 90 190,00 190,00":
+          - cell "43000190"
+          - cell "Cliente Inventado 90"
+          - cell "190,00"
+          - cell "190,00"
+          - cell
+        - row "43000191 Cliente Inventado 91 191,00 191,00":
+          - cell "43000191"
+          - cell "Cliente Inventado 91"
+          - cell "191,00"
+          - cell "191,00"
+          - cell
+        - row "43000192 Cliente Inventado 92 192,00 192,00":
+          - cell "43000192"
+          - cell "Cliente Inventado 92"
+          - cell "192,00"
+          - cell "192,00"
+          - cell
+        - row "43000193 Cliente Inventado 93 193,00 193,00":
+          - cell "43000193"
+          - cell "Cliente Inventado 93"
+          - cell "193,00"
+          - cell "193,00"
+          - cell
+        - row "43000194 Cliente Inventado 94 194,00 194,00":
+          - cell "43000194"
+          - cell "Cliente Inventado 94"
+          - cell "194,00"
+          - cell "194,00"
+          - cell
+        - row "43000195 Cliente Inventado 95 195,00 195,00":
+          - cell "43000195"
+          - cell "Cliente Inventado 95"
+          - cell "195,00"
+          - cell "195,00"
+          - cell
+        - row "43000196 Cliente Inventado 96 196,00 196,00":
+          - cell "43000196"
+          - cell "Cliente Inventado 96"
+          - cell "196,00"
+          - cell "196,00"
+          - cell
+        - row "43000197 Cliente Inventado 97 197,00 197,00":
+          - cell "43000197"
+          - cell "Cliente Inventado 97"
+          - cell "197,00"
+          - cell "197,00"
+          - cell
+        - row "43000198 Cliente Inventado 98 198,00 198,00":
+          - cell "43000198"
+          - cell "Cliente Inventado 98"
+          - cell "198,00"
+          - cell "198,00"
+          - cell
+        - row "43000199 Cliente Inventado 99 199,00 199,00":
+          - cell "43000199"
+          - cell "Cliente Inventado 99"
+          - cell "199,00"
+          - cell "199,00"
+          - cell
+        - row "43000200 Cliente Inventado 100 200,00 200,00":
+          - cell "43000200"
+          - cell "Cliente Inventado 100"
+          - cell "200,00"
+          - cell "200,00"
+          - cell
+        - row "43000201 Cliente Inventado 101 201,00 201,00":
+          - cell "43000201"
+          - cell "Cliente Inventado 101"
+          - cell "201,00"
+          - cell "201,00"
+          - cell
+        - row "43000202 Cliente Inventado 102 202,00 202,00":
+          - cell "43000202"
+          - cell "Cliente Inventado 102"
+          - cell "202,00"
+          - cell "202,00"
+          - cell
+        - row "43000203 Cliente Inventado 103 203,00 203,00":
+          - cell "43000203"
+          - cell "Cliente Inventado 103"
+          - cell "203,00"
+          - cell "203,00"
+          - cell
+        - row "43000204 Cliente Inventado 104 204,00 204,00":
+          - cell "43000204"
+          - cell "Cliente Inventado 104"
+          - cell "204,00"
+          - cell "204,00"
+          - cell
+        - row "43000205 Cliente Inventado 105 205,00 205,00":
+          - cell "43000205"
+          - cell "Cliente Inventado 105"
+          - cell "205,00"
+          - cell "205,00"
+          - cell
+        - row "43000206 Cliente Inventado 106 206,00 206,00":
+          - cell "43000206"
+          - cell "Cliente Inventado 106"
+          - cell "206,00"
+          - cell "206,00"
+          - cell
+        - row "43000207 Cliente Inventado 107 207,00 207,00":
+          - cell "43000207"
+          - cell "Cliente Inventado 107"
+          - cell "207,00"
+          - cell "207,00"
+          - cell
+        - row "43000208 Cliente Inventado 108 208,00 208,00":
+          - cell "43000208"
+          - cell "Cliente Inventado 108"
+          - cell "208,00"
+          - cell "208,00"
+          - cell
+        - row "43000209 Cliente Inventado 109 209,00 209,00":
+          - cell "43000209"
+          - cell "Cliente Inventado 109"
+          - cell "209,00"
+          - cell "209,00"
+          - cell
+        - row "43000210 Cliente Inventado 110 210,00 210,00":
+          - cell "43000210"
+          - cell "Cliente Inventado 110"
+          - cell "210,00"
+          - cell "210,00"
+          - cell
+        - row "43000211 Cliente Inventado 111 211,00 211,00":
+          - cell "43000211"
+          - cell "Cliente Inventado 111"
+          - cell "211,00"
+          - cell "211,00"
+          - cell
+        - row "43000212 Cliente Inventado 112 212,00 212,00":
+          - cell "43000212"
+          - cell "Cliente Inventado 112"
+          - cell "212,00"
+          - cell "212,00"
+          - cell
+        - row "43000213 Cliente Inventado 113 213,00 213,00":
+          - cell "43000213"
+          - cell "Cliente Inventado 113"
+          - cell "213,00"
+          - cell "213,00"
+          - cell
+        - row "43000214 Cliente Inventado 114 214,00 214,00":
+          - cell "43000214"
+          - cell "Cliente Inventado 114"
+          - cell "214,00"
+          - cell "214,00"
+          - cell
+        - row "43000215 Cliente Inventado 115 215,00 215,00":
+          - cell "43000215"
+          - cell "Cliente Inventado 115"
+          - cell "215,00"
+          - cell "215,00"
+          - cell
+        - row "43000216 Cliente Inventado 116 216,00 216,00":
+          - cell "43000216"
+          - cell "Cliente Inventado 116"
+          - cell "216,00"
+          - cell "216,00"
+          - cell
+        - row "43000217 Cliente Inventado 117 217,00 217,00":
+          - cell "43000217"
+          - cell "Cliente Inventado 117"
+          - cell "217,00"
+          - cell "217,00"
+          - cell
+        - row "43000218 Cliente Inventado 118 218,00 218,00":
+          - cell "43000218"
+          - cell "Cliente Inventado 118"
+          - cell "218,00"
+          - cell "218,00"
+          - cell
+        - row "43000219 Cliente Inventado 119 219,00 219,00":
+          - cell "43000219"
+          - cell "Cliente Inventado 119"
+          - cell "219,00"
+          - cell "219,00"
+          - cell
+        - row "43000220 Cliente Inventado 120 220,00 220,00":
+          - cell "43000220"
+          - cell "Cliente Inventado 120"
+          - cell "220,00"
+          - cell "220,00"
+          - cell
+        - row "43000221 Cliente Inventado 121 221,00 221,00":
+          - cell "43000221"
+          - cell "Cliente Inventado 121"
+          - cell "221,00"
+          - cell "221,00"
+          - cell
+        - row "43000222 Cliente Inventado 122 222,00 222,00":
+          - cell "43000222"
+          - cell "Cliente Inventado 122"
+          - cell "222,00"
+          - cell "222,00"
+          - cell
+        - row "43000223 Cliente Inventado 123 223,00 223,00":
+          - cell "43000223"
+          - cell "Cliente Inventado 123"
+          - cell "223,00"
+          - cell "223,00"
+          - cell
+        - row "43000224 Cliente Inventado 124 224,00 224,00":
+          - cell "43000224"
+          - cell "Cliente Inventado 124"
+          - cell "224,00"
+          - cell "224,00"
+          - cell
+        - row "43000225 Cliente Inventado 125 225,00 225,00":
+          - cell "43000225"
+          - cell "Cliente Inventado 125"
+          - cell "225,00"
+          - cell "225,00"
+          - cell
+        - row "43000226 Cliente Inventado 126 226,00 226,00":
+          - cell "43000226"
+          - cell "Cliente Inventado 126"
+          - cell "226,00"
+          - cell "226,00"
+          - cell
+        - row "43000227 Cliente Inventado 127 227,00 227,00":
+          - cell "43000227"
+          - cell "Cliente Inventado 127"
+          - cell "227,00"
+          - cell "227,00"
+          - cell
+        - row "43000228 Cliente Inventado 128 228,00 228,00":
+          - cell "43000228"
+          - cell "Cliente Inventado 128"
+          - cell "228,00"
+          - cell "228,00"
+          - cell
+        - row "43000229 Cliente Inventado 129 229,00 229,00":
+          - cell "43000229"
+          - cell "Cliente Inventado 129"
+          - cell "229,00"
+          - cell "229,00"
+          - cell
+        - row "43000230 Cliente Inventado 130 230,00 230,00":
+          - cell "43000230"
+          - cell "Cliente Inventado 130"
+          - cell "230,00"
+          - cell "230,00"
+          - cell
+        - row "43000231 Cliente Inventado 131 231,00 231,00":
+          - cell "43000231"
+          - cell "Cliente Inventado 131"
+          - cell "231,00"
+          - cell "231,00"
+          - cell
+        - row "43000232 Cliente Inventado 132 232,00 232,00":
+          - cell "43000232"
+          - cell "Cliente Inventado 132"
+          - cell "232,00"
+          - cell "232,00"
+          - cell
+        - row "43000233 Cliente Inventado 133 233,00 233,00":
+          - cell "43000233"
+          - cell "Cliente Inventado 133"
+          - cell "233,00"
+          - cell "233,00"
+          - cell
+        - row "43000234 Cliente Inventado 134 234,00 234,00":
+          - cell "43000234"
+          - cell "Cliente Inventado 134"
+          - cell "234,00"
+          - cell "234,00"
+          - cell
+        - row "43000235 Cliente Inventado 135 235,00 235,00":
+          - cell "43000235"
+          - cell "Cliente Inventado 135"
+          - cell "235,00"
+          - cell "235,00"
+          - cell
+        - row "43000236 Cliente Inventado 136 236,00 236,00":
+          - cell "43000236"
+          - cell "Cliente Inventado 136"
+          - cell "236,00"
+          - cell "236,00"
+          - cell
+        - row "43000237 Cliente Inventado 137 237,00 237,00":
+          - cell "43000237"
+          - cell "Cliente Inventado 137"
+          - cell "237,00"
+          - cell "237,00"
+          - cell
+        - row "43000238 Cliente Inventado 138 238,00 238,00":
+          - cell "43000238"
+          - cell "Cliente Inventado 138"
+          - cell "238,00"
+          - cell "238,00"
+          - cell
+        - row "43000239 Cliente Inventado 139 239,00 239,00":
+          - cell "43000239"
+          - cell "Cliente Inventado 139"
+          - cell "239,00"
+          - cell "239,00"
+          - cell
+        - row "43000240 Cliente Inventado 140 240,00 240,00":
+          - cell "43000240"
+          - cell "Cliente Inventado 140"
+          - cell "240,00"
+          - cell "240,00"
+          - cell
+        - row "43000241 Cliente Inventado 141 241,00 241,00":
+          - cell "43000241"
+          - cell "Cliente Inventado 141"
+          - cell "241,00"
+          - cell "241,00"
+          - cell
+        - row "43000242 Cliente Inventado 142 242,00 242,00":
+          - cell "43000242"
+          - cell "Cliente Inventado 142"
+          - cell "242,00"
+          - cell "242,00"
+          - cell
+        - row "43000243 Cliente Inventado 143 243,00 243,00":
+          - cell "43000243"
+          - cell "Cliente Inventado 143"
+          - cell "243,00"
+          - cell "243,00"
+          - cell
+        - row "43000244 Cliente Inventado 144 244,00 244,00":
+          - cell "43000244"
+          - cell "Cliente Inventado 144"
+          - cell "244,00"
+          - cell "244,00"
+          - cell
+        - row "43000245 Cliente Inventado 145 245,00 245,00":
+          - cell "43000245"
+          - cell "Cliente Inventado 145"
+          - cell "245,00"
+          - cell "245,00"
+          - cell
+        - row "43000246 Cliente Inventado 146 246,00 246,00":
+          - cell "43000246"
+          - cell "Cliente Inventado 146"
+          - cell "246,00"
+          - cell "246,00"
+          - cell
+        - row "43000247 Cliente Inventado 147 247,00 247,00":
+          - cell "43000247"
+          - cell "Cliente Inventado 147"
+          - cell "247,00"
+          - cell "247,00"
+          - cell
+        - row "43000248 Cliente Inventado 148 248,00 248,00":
+          - cell "43000248"
+          - cell "Cliente Inventado 148"
+          - cell "248,00"
+          - cell "248,00"
+          - cell
+        - row "43000249 Cliente Inventado 149 249,00 249,00":
+          - cell "43000249"
+          - cell "Cliente Inventado 149"
+          - cell "249,00"
+          - cell "249,00"
+          - cell
+        - row "43000250 Cliente Inventado 150 250,00 250,00":
+          - cell "43000250"
+          - cell "Cliente Inventado 150"
+          - cell "250,00"
+          - cell "250,00"
+          - cell
+        - row "43000251 Cliente Inventado 151 251,00 251,00":
+          - cell "43000251"
+          - cell "Cliente Inventado 151"
+          - cell "251,00"
+          - cell "251,00"
+          - cell
+        - row "43000252 Cliente Inventado 152 252,00 252,00":
+          - cell "43000252"
+          - cell "Cliente Inventado 152"
+          - cell "252,00"
+          - cell "252,00"
+          - cell
+        - row "43000253 Cliente Inventado 153 253,00 253,00":
+          - cell "43000253"
+          - cell "Cliente Inventado 153"
+          - cell "253,00"
+          - cell "253,00"
+          - cell
+        - row "43000254 Cliente Inventado 154 254,00 254,00":
+          - cell "43000254"
+          - cell "Cliente Inventado 154"
+          - cell "254,00"
+          - cell "254,00"
+          - cell
+        - row "43000255 Cliente Inventado 155 255,00 255,00":
+          - cell "43000255"
+          - cell "Cliente Inventado 155"
+          - cell "255,00"
+          - cell "255,00"
+          - cell
+        - row "43000256 Cliente Inventado 156 256,00 256,00":
+          - cell "43000256"
+          - cell "Cliente Inventado 156"
+          - cell "256,00"
+          - cell "256,00"
+          - cell
+        - row "43000257 Cliente Inventado 157 257,00 257,00":
+          - cell "43000257"
+          - cell "Cliente Inventado 157"
+          - cell "257,00"
+          - cell "257,00"
+          - cell
+        - row "43000258 Cliente Inventado 158 258,00 258,00":
+          - cell "43000258"
+          - cell "Cliente Inventado 158"
+          - cell "258,00"
+          - cell "258,00"
+          - cell
+        - row "43000259 Cliente Inventado 159 259,00 259,00":
+          - cell "43000259"
+          - cell "Cliente Inventado 159"
+          - cell "259,00"
+          - cell "259,00"
+          - cell
+        - row "43000260 Cliente Inventado 160 260,00 260,00":
+          - cell "43000260"
+          - cell "Cliente Inventado 160"
+          - cell "260,00"
+          - cell "260,00"
+          - cell
+        - row "43000261 Cliente Inventado 161 261,00 261,00":
+          - cell "43000261"
+          - cell "Cliente Inventado 161"
+          - cell "261,00"
+          - cell "261,00"
+          - cell
+        - row "43000262 Cliente Inventado 162 262,00 262,00":
+          - cell "43000262"
+          - cell "Cliente Inventado 162"
+          - cell "262,00"
+          - cell "262,00"
+          - cell
+        - row "43000263 Cliente Inventado 163 263,00 263,00":
+          - cell "43000263"
+          - cell "Cliente Inventado 163"
+          - cell "263,00"
+          - cell "263,00"
+          - cell
+        - row "43000264 Cliente Inventado 164 264,00 264,00":
+          - cell "43000264"
+          - cell "Cliente Inventado 164"
+          - cell "264,00"
+          - cell "264,00"
+          - cell
+        - row "43000265 Cliente Inventado 165 265,00 265,00":
+          - cell "43000265"
+          - cell "Cliente Inventado 165"
+          - cell "265,00"
+          - cell "265,00"
+          - cell
+        - row "43000266 Cliente Inventado 166 266,00 266,00":
+          - cell "43000266"
+          - cell "Cliente Inventado 166"
+          - cell "266,00"
+          - cell "266,00"
+          - cell
+        - row "43000267 Cliente Inventado 167 267,00 267,00":
+          - cell "43000267"
+          - cell "Cliente Inventado 167"
+          - cell "267,00"
+          - cell "267,00"
+          - cell
+        - row "43000268 Cliente Inventado 168 268,00 268,00":
+          - cell "43000268"
+          - cell "Cliente Inventado 168"
+          - cell "268,00"
+          - cell "268,00"
+          - cell
+        - row "43000269 Cliente Inventado 169 269,00 269,00":
+          - cell "43000269"
+          - cell "Cliente Inventado 169"
+          - cell "269,00"
+          - cell "269,00"
+          - cell
+        - row "43000270 Cliente Inventado 170 270,00 270,00":
+          - cell "43000270"
+          - cell "Cliente Inventado 170"
+          - cell "270,00"
+          - cell "270,00"
+          - cell
+        - row "43000271 Cliente Inventado 171 271,00 271,00":
+          - cell "43000271"
+          - cell "Cliente Inventado 171"
+          - cell "271,00"
+          - cell "271,00"
+          - cell
+        - row "43000272 Cliente Inventado 172 272,00 272,00":
+          - cell "43000272"
+          - cell "Cliente Inventado 172"
+          - cell "272,00"
+          - cell "272,00"
+          - cell
+        - row "43000273 Cliente Inventado 173 273,00 273,00":
+          - cell "43000273"
+          - cell "Cliente Inventado 173"
+          - cell "273,00"
+          - cell "273,00"
+          - cell
+        - row "43000274 Cliente Inventado 174 274,00 274,00":
+          - cell "43000274"
+          - cell "Cliente Inventado 174"
+          - cell "274,00"
+          - cell "274,00"
+          - cell
+        - row "43000275 Cliente Inventado 175 275,00 275,00":
+          - cell "43000275"
+          - cell "Cliente Inventado 175"
+          - cell "275,00"
+          - cell "275,00"
+          - cell
+        - row "43000276 Cliente Inventado 176 276,00 276,00":
+          - cell "43000276"
+          - cell "Cliente Inventado 176"
+          - cell "276,00"
+          - cell "276,00"
+          - cell
+        - row "43000277 Cliente Inventado 177 277,00 277,00":
+          - cell "43000277"
+          - cell "Cliente Inventado 177"
+          - cell "277,00"
+          - cell "277,00"
+          - cell
+        - row "43000278 Cliente Inventado 178 278,00 278,00":
+          - cell "43000278"
+          - cell "Cliente Inventado 178"
+          - cell "278,00"
+          - cell "278,00"
+          - cell
+        - row "43000279 Cliente Inventado 179 279,00 279,00":
+          - cell "43000279"
+          - cell "Cliente Inventado 179"
+          - cell "279,00"
+          - cell "279,00"
+          - cell
+        - row "43000280 Cliente Inventado 180 280,00 280,00":
+          - cell "43000280"
+          - cell "Cliente Inventado 180"
+          - cell "280,00"
+          - cell "280,00"
+          - cell
+        - row "43000281 Cliente Inventado 181 281,00 281,00":
+          - cell "43000281"
+          - cell "Cliente Inventado 181"
+          - cell "281,00"
+          - cell "281,00"
+          - cell
+        - row "43000282 Cliente Inventado 182 282,00 282,00":
+          - cell "43000282"
+          - cell "Cliente Inventado 182"
+          - cell "282,00"
+          - cell "282,00"
+          - cell
+        - row "43000283 Cliente Inventado 183 283,00 283,00":
+          - cell "43000283"
+          - cell "Cliente Inventado 183"
+          - cell "283,00"
+          - cell "283,00"
+          - cell
+        - row "43000284 Cliente Inventado 184 284,00 284,00":
+          - cell "43000284"
+          - cell "Cliente Inventado 184"
+          - cell "284,00"
+          - cell "284,00"
+          - cell
+        - row "43000285 Cliente Inventado 185 285,00 285,00":
+          - cell "43000285"
+          - cell "Cliente Inventado 185"
+          - cell "285,00"
+          - cell "285,00"
+          - cell
+        - row "43000286 Cliente Inventado 186 286,00 286,00":
+          - cell "43000286"
+          - cell "Cliente Inventado 186"
+          - cell "286,00"
+          - cell "286,00"
+          - cell
+        - row "43000287 Cliente Inventado 187 287,00 287,00":
+          - cell "43000287"
+          - cell "Cliente Inventado 187"
+          - cell "287,00"
+          - cell "287,00"
+          - cell
+        - row "43000288 Cliente Inventado 188 288,00 288,00":
+          - cell "43000288"
+          - cell "Cliente Inventado 188"
+          - cell "288,00"
+          - cell "288,00"
+          - cell
+        - row "43000289 Cliente Inventado 189 289,00 289,00":
+          - cell "43000289"
+          - cell "Cliente Inventado 189"
+          - cell "289,00"
+          - cell "289,00"
+          - cell
+        - row "43000290 Cliente Inventado 190 290,00 290,00":
+          - cell "43000290"
+          - cell "Cliente Inventado 190"
+          - cell "290,00"
+          - cell "290,00"
+          - cell
+        - row "43000291 Cliente Inventado 191 291,00 291,00":
+          - cell "43000291"
+          - cell "Cliente Inventado 191"
+          - cell "291,00"
+          - cell "291,00"
+          - cell
+        - row "43000292 Cliente Inventado 192 292,00 292,00":
+          - cell "43000292"
+          - cell "Cliente Inventado 192"
+          - cell "292,00"
+          - cell "292,00"
+          - cell
+        - row "43000293 Cliente Inventado 193 293,00 293,00":
+          - cell "43000293"
+          - cell "Cliente Inventado 193"
+          - cell "293,00"
+          - cell "293,00"
+          - cell
+        - row "43000294 Cliente Inventado 194 294,00 294,00":
+          - cell "43000294"
+          - cell "Cliente Inventado 194"
+          - cell "294,00"
+          - cell "294,00"
+          - cell
+        - row "43000295 Cliente Inventado 195 295,00 295,00":
+          - cell "43000295"
+          - cell "Cliente Inventado 195"
+          - cell "295,00"
+          - cell "295,00"
+          - cell
+        - row "43000296 Cliente Inventado 196 296,00 296,00":
+          - cell "43000296"
+          - cell "Cliente Inventado 196"
+          - cell "296,00"
+          - cell "296,00"
+          - cell
+        - row "43000297 Cliente Inventado 197 297,00 297,00":
+          - cell "43000297"
+          - cell "Cliente Inventado 197"
+          - cell "297,00"
+          - cell "297,00"
+          - cell
+        - row "43000298 Cliente Inventado 198 298,00 298,00":
+          - cell "43000298"
+          - cell "Cliente Inventado 198"
+          - cell "298,00"
+          - cell "298,00"
+          - cell
+        - row "43000299 Cliente Inventado 199 299,00 299,00":
+          - cell "43000299"
+          - cell "Cliente Inventado 199"
+          - cell "299,00"
+          - cell "299,00"
+          - cell
+        - row "43000300 Cliente Inventado 200 300,00 300,00":
+          - cell "43000300"
+          - cell "Cliente Inventado 200"
+          - cell "300,00"
+          - cell "300,00"
+          - cell
+        - row "43000301 Cliente Inventado 201 301,00 301,00":
+          - cell "43000301"
+          - cell "Cliente Inventado 201"
+          - cell "301,00"
+          - cell "301,00"
+          - cell
+        - row "43000302 Cliente Inventado 202 302,00 302,00":
+          - cell "43000302"
+          - cell "Cliente Inventado 202"
+          - cell "302,00"
+          - cell "302,00"
+          - cell
+        - row "43000303 Cliente Inventado 203 303,00 303,00":
+          - cell "43000303"
+          - cell "Cliente Inventado 203"
+          - cell "303,00"
+          - cell "303,00"
+          - cell
+        - row "43000304 Cliente Inventado 204 304,00 304,00":
+          - cell "43000304"
+          - cell "Cliente Inventado 204"
+          - cell "304,00"
+          - cell "304,00"
+          - cell
+        - row "43000305 Cliente Inventado 205 305,00 305,00":
+          - cell "43000305"
+          - cell "Cliente Inventado 205"
+          - cell "305,00"
+          - cell "305,00"
+          - cell
+        - row "43000306 Cliente Inventado 206 306,00 306,00":
+          - cell "43000306"
+          - cell "Cliente Inventado 206"
+          - cell "306,00"
+          - cell "306,00"
+          - cell
+        - row "43000307 Cliente Inventado 207 307,00 307,00":
+          - cell "43000307"
+          - cell "Cliente Inventado 207"
+          - cell "307,00"
+          - cell "307,00"
+          - cell
+        - row "43000308 Cliente Inventado 208 308,00 308,00":
+          - cell "43000308"
+          - cell "Cliente Inventado 208"
+          - cell "308,00"
+          - cell "308,00"
+          - cell
+        - row "43000309 Cliente Inventado 209 309,00 309,00":
+          - cell "43000309"
+          - cell "Cliente Inventado 209"
+          - cell "309,00"
+          - cell "309,00"
+          - cell
+        - row "43000310 Cliente Inventado 210 310,00 310,00":
+          - cell "43000310"
+          - cell "Cliente Inventado 210"
+          - cell "310,00"
+          - cell "310,00"
+          - cell
+        - row "43000311 Cliente Inventado 211 311,00 311,00":
+          - cell "43000311"
+          - cell "Cliente Inventado 211"
+          - cell "311,00"
+          - cell "311,00"
+          - cell
+        - row "43000312 Cliente Inventado 212 312,00 312,00":
+          - cell "43000312"
+          - cell "Cliente Inventado 212"
+          - cell "312,00"
+          - cell "312,00"
+          - cell
+    - table "Total":
+      - rowgroup:
+        - row "Total de las 219 cuentas 63.217,54 63.053,34 −164,20":
+          - rowheader "Total de las 219 cuentas"
+          - cell "63.217,54"
+          - cell "63.053,34"
+          - cell "−164,20"
+    - complementary "Por qué no queda igual":
+      - heading "Por qué no queda igual" [level=2]
+      - link "Abrir su mayor":
+        - /url: /conta/plan/41000012
+      - text: 41000012 · Suministros Ejemplo, S.A.
+      - strong: −82,10
+      - note:
+        - paragraph:
+          - strong: En ERP10 falta una factura.
+          - text: La A-1402 del 03/11, de 82,10, salió de Sumied en esta tanda y no está en el saldo de ERP10.
+        - button "Volver a sacar solo esa"
+        - button "Ya la he metido a mano"
+      - paragraph:
+        - strong: "Las otras dos diferencias son de la misma factura:"
+        - text: su IVA (14,25) en la 47200000 y su base (67,85) en la 62900000.
+      - paragraph:
+        - strong: Sumied no sabe por qué ERP10 no la cogió.
+        - text: Solo ve que falta. El motivo lo dice ERP10 al importar.
+    - status: "Apuntado: la A-1402 la metió a mano en ERP10 Marta el 30/11/2026 a las 11:02. Ya no cuenta como diferencia."
+- contentinfo "Cómo va la empresa"
+```
