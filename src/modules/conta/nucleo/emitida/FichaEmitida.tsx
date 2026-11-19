@@ -318,7 +318,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   const ejercicio = b.fecha.slice(0, 4)
 
   return (
-    <div className="kf-ficha" ref={raiz} onKeyDown={(e) => { marcarTocada(); alPulsar(e) }} onPointerDown={marcarTocada} data-prueba="ficha-emitida-nucleo" data-modo={modo} aria-busy={cargando || undefined}>
+    <div className="kf-ficha kf-emitida" ref={raiz} onKeyDown={(e) => { marcarTocada(); alPulsar(e) }} onPointerDown={marcarTocada} data-prueba="ficha-emitida-nucleo" data-modo={modo} aria-busy={cargando || undefined}>
       <header className="kf-cabecera">
         <h1>Factura emitida</h1>
         <span className="kf-cola">{colaTexto}</span>
@@ -350,11 +350,14 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
               <Casilla rotulo="Nombre" origen={cliente ? 'de su ficha' : null} htmlFor="kf-nombre"><input id="kf-nombre" readOnly tabIndex={-1} value={cliente?.nombre ?? ''} title={cliente?.nombre} /></Casilla>
               <Casilla rotulo="Tipo de operación" origen={operacion ? 'de su ficha' : null} htmlFor="kf-operacion"><input id="kf-operacion" readOnly tabIndex={-1} value={operacion ?? ''} /></Casilla>
             </div>
-            <div className="kf-fila" style={{ gridTemplateColumns: '1.7fr 1.1fr 1.1fr 1.1fr 1.7fr' }}>
+            <div className="kf-fila" style={{ gridTemplateColumns: '1.7fr 1.1fr 1.1fr 1.1fr' }}>
               <Casilla rotulo="N.º de factura" htmlFor="kf-numero"><input id="kf-numero" data-casilla={soloLeer ? undefined : ''} readOnly={soloLeer} value={b.numero} onChange={(e) => ed.poner('numero', e.target.value)} /></Casilla>
               <Casilla rotulo="Fecha factura" htmlFor="kf-fecha">{soloLeer ? <input id="kf-fecha" readOnly tabIndex={-1} value={b.fecha.split('-').reverse().join('/')} /> : <CasillaFecha id="kf-fecha" etiqueta="Fecha factura" iso={b.fecha} hoy={hoy} poner={(x) => ed.poner('fecha', x)} />}</Casilla>
               <Casilla rotulo="Se declara en" htmlFor="kf-declara"><input id="kf-declara" readOnly tabIndex={-1} value={trimestreDe(b.fecha)} /></Casilla>
               <Casilla rotulo="Serie / documento" htmlFor="kf-serie"><input id="kf-serie" readOnly tabIndex={-1} value={asiento?.numero ? `1 / ${asiento.numero}` : '1 / —'} /></Casilla>
+            </div>
+            {/* El concepto, en su fila: a lo ancho cabe entero (Julio, 19/11: «a 1456 y a 1366 no se corta nada»). */}
+            <div className="kf-fila" style={{ gridTemplateColumns: '1fr' }}>
               <Casilla rotulo="Concepto del asiento" origen={concepto ? 'Sumied' : null} htmlFor="kf-concepto"><input id="kf-concepto" readOnly tabIndex={-1} value={asiento?.concepto ?? concepto} title={asiento?.concepto ?? concepto} /></Casilla>
             </div>
             <div className="kf-saldo" data-prueba="saldo-cliente">

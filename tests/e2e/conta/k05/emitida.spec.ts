@@ -18,6 +18,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, STAGING_URL, anonKey, entrarComo, type Sesion } from '../sesion'
 import { abierta, cargada, GESTORIA, NUCLEO } from '../k02/comun'
+import { loQueSeCorta } from './nadaCortado'
 
 test.use({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
 
@@ -115,6 +116,8 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     const nombreCobro = ficha(page).getByRole('textbox', { name: 'Nombre de la cuenta del cobro' })
     await expect(nombreCobro).toHaveValue('Bancos · Cuenta principal')
     expect(await nombreCobro.evaluate((el) => el.scrollWidth <= el.clientWidth), 'el nombre de la cuenta del cobro cabe entero').toBe(true)
+    // A 1456 y a 1366 no se corta nada (Julio, 19/11).
+    expect(await loQueSeCorta(page, '[data-prueba="ficha-emitida-nucleo"]'), `lo que se corta a ${ancho} (a mano)`).toEqual([])
     await expect(ficha(page).locator('[data-prueba="cuadra"]')).toHaveText('Cuadra · 121,00')
     if (grande) {
       await cargada(page, 'la emitida escrita a mano')
@@ -179,6 +182,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await contar(page, `${ancho} 2 al abrir`)
     await expect(franja(page)).toContainText('Rellenada por Sumied, con 1 duda.')
     await expect(duda.getByRole('button', { name: 'Dejar 70000000' })).toBeFocused({ timeout: 15_000 })
+    expect(await loQueSeCorta(page, '[data-prueba="ficha-emitida-nucleo"]'), `lo que se corta a ${ancho} (la rellenada, con la duda)`).toEqual([])
     await cargada(page, 'la rellenada con su duda')
     await page.screenshot({ path: `${DIR}/rellenada-duda-${ancho}.png` })
     await page.keyboard.press('Tab')

@@ -14,6 +14,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { STAGING_URL, anonKey, entrarComo, enCarril, type Sesion } from '../sesion'
 import { abierta, cargada, GESTORIA, NUCLEO } from '../k02/comun'
+import { loQueSeCorta } from './nadaCortado'
 
 test.use({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
 
@@ -111,6 +112,8 @@ test('guarda lo mismo: la misma emitida por Facturación y por la ficha nueva de
   await expect(nombreCobro).toHaveValue('')
   await expect(nombreCobro).toHaveAttribute('placeholder', 'Pendiente de cobrar')
   await cargada(page, 'la hecha sola')
+  // A 1456 no se corta nada: el concepto largo de Facturación cabe en su fila.
+  expect(await loQueSeCorta(page, '[data-prueba="ficha-emitida-nucleo"]'), 'lo que se corta en la hecha sola').toEqual([])
   await page.screenshot({ path: `${DIR}/hecha-sola-1456.png` })
 
   expect(errores, 'errores de la página').toEqual([])
