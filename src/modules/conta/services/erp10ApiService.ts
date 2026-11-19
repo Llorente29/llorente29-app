@@ -9,6 +9,7 @@
 import { supabase } from '@/lib/supabase'
 import { hayBase, tabla } from '@/modules/conta/services/bd'
 import type { FilaSumas } from '@/modules/conta/lib/traer'
+import type { RecibidaParaApi } from '@/modules/conta/erp10/ficheros'
 import { getConnectorCredentialsStatus, saveConnectorCredentials } from '@/modules/integrations/services/connectorCredentialsService'
 
 type Fila = Record<string, unknown>
@@ -97,6 +98,12 @@ export async function guardarClavesErp10(accountId: string, c: ConexionErp10, cl
 export async function guardarCodigoErp10(accountId: string, companyId: string, c: ConexionErp10, codigo: string, quien: string | null): Promise<ConexionErp10> {
   hayBase()
   const limpio = codigo.trim()
+  // La de la base, no la leída antes: entre dos «Probar» seguidos la pantalla puede no haber vuelto a leer
+  // (X10b, e2e 44544902397: el segundo intentaba crearla otra vez y chocaba con account_connector_company_uq).
+  const { data: ya, error: e0 } = await tabla('account_connector').select('id').eq('account_id', accountId).eq('connector_id', c.connectorId)
+    .eq('scope', 'company').eq('company_id', companyId).maybeSingle()
+  if (e0) throw new Error(`No se ha leído la conexión de la sociedad: ${e0.message}`)
+  if (ya) c = { ...c, sociedadId: String((ya as Fila).id) }
   if (c.sociedadId) {
     const { error } = await tabla('account_connector').update({ external_account_id: limpio || null, status: 'connected', last_error: null, updated_at: new Date().toISOString() })
       .eq('id', c.sociedadId).eq('account_id', accountId)
@@ -152,4 +159,63 @@ export async function leerSaldosErp10(companyId: string, desde: string, hasta: s
     deudor: Number(f.deudor ?? 0), acreedor: Number(f.acreedor ?? 0),
   }))
   return { filas, lineas: Number(d.lineas ?? 0), leidoEn: String(d.leidoEn ?? new Date().toISOString()) }
+}
+
+// ── X10b · Escribir en ERP10 (las recibidas) ─────────────────────────────────────────
+
+/** Cómo va la conexión de esta sociedad: si ya salió la de prueba y si se comprobó después. */
+export interface EstadoEscribir {
+  /** Cuándo entró en ERP10 la primera (la de prueba); null si nunca. */
+  primera: string | null
+  /** Un «Darlo por igualado» posterior a la primera: el mes ya se puede sacar. */
+  comprobada: boolean
+}
+export async function leerEstadoEscribir(accountId: string, companyId: string): Promise<EstadoEscribir> {
+  hayBase()
+  const { data: e, error } = await tabla('conta_erp10_envio').select('creado_en').eq('account_id', accountId).eq('company_id', companyId)
+    .eq('estado', 'en_erp10').order('creado_en', { ascending: true }).limit(1)
+  if (error) throw new Error(`No se ha podido leer lo que ha salido a ERP10: ${error.message}`)
+  const primera = ((e ?? []) as Fila[])[0]?.creado_en as string | undefined
+  if (!primera) return { primera: null, comprobada: false }
+  const { data: g, error: e2 } = await tabla('conta_erp10_igualado').select('id').eq('account_id', accountId).eq('company_id', companyId).gt('igualado_en', primera).limit(1)
+  if (e2) throw new Error(`No se ha podido leer lo igualado: ${e2.message}`)
+  return { primera, comprobada: ((g ?? []) as Fila[]).length > 0 }
+}
+
+/** Lo que dice el servidor de cada recibida. */
+export interface Salido {
+  entryId: string; numero: string
+  estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'
+  serie?: string; documento?: number; enlazada?: boolean; pdf?: 'subido' | 'fallo' | null; porque?: string
+}
+export type ParaSacar = { api: RecibidaParaApi; huella: string; pdf: { ruta: string; nombre: string } | null }
+
+/**
+ * Saca recibidas a ERP10 (conta-erp10-escribir). El servidor para a los 40 s y devuelve las
+ * que no le han dado tiempo: aquí se le vuelven a mandar hasta que no queda ninguna.
+ */
+export async function sacarRecibidasErp10(companyId: string, mes: string, xs: ParaSacar[], cuentasNuevas: { codigo: string; nombre: string; nif: string | null }[], quien: string | null,
+  avance?: (hechas: number, de: number) => void): Promise<{ salidas: Salido[]; sinApuntar: string | null }> {
+  const salidas: Salido[] = []
+  let pendientes = xs
+  let sinApuntar: string | null = null
+  for (let vuelta = 0; pendientes.length && vuelta < 50; vuelta++) {
+    avance?.(salidas.length, xs.length)
+    const d = await invocarEscribir({ company_id: companyId, mes, recibidas: pendientes, cuentas_nuevas: cuentasNuevas, quien })
+    const rs = (Array.isArray(d.resultados) ? d.resultados : []) as Salido[]
+    salidas.push(...rs)
+    if (typeof d.sinApuntar === 'string') sinApuntar = d.sinApuntar
+    const quedan = new Set((Array.isArray(d.quedan) ? d.quedan : []) as string[])
+    pendientes = pendientes.filter((x) => quedan.has(x.api.entryId))
+  }
+  return { salidas, sinApuntar }
+}
+
+async function invocarEscribir(body: Fila): Promise<Fila> {
+  if (!supabase) throw new Error('Sin conexión con la base.')
+  const { data, error } = await supabase.functions.invoke('conta-erp10-escribir', { body })
+  if (!error) return (data ?? {}) as Fila
+  const ctx = (error as { context?: Response }).context
+  const cuerpo = ctx && typeof ctx.json === 'function' ? await ctx.clone().json().catch(() => null) as Fila | null : null
+  throw new Error(str(cuerpo?.error) ?? (ctx?.status === 404 ? 'Sacar a ERP10 aún no está publicado en este entorno.' : `No se ha podido entrar en ERP10: ${error.message}`))
 }

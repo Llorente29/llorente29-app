@@ -154,3 +154,8 @@
 .cxe-erp10-falta p { margin: 0; }
 .cxe-conexion-bien { margin: 0; color: var(--cx-verde-oscuro); font-weight: 700; font-size: 13px; }
 .cxe-conexion-mal { margin: 0; color: var(--cx-rojo); font-weight: 700; font-size: 13px; }
+/* X10b · Antes de escribir en ERP10: qué va a entrar y que no se puede borrar. */
+.cxe-confirmar { margin: 8px 16px 0; padding: 10px 14px; border: 1px solid var(--cx-ambar, #d39a1c); border-radius: var(--cx-radio-caja); background: var(--cx-ambar-fondo, transparent); display: flex; flex-direction: column; gap: 6px; }
+.cxe-confirmar p { margin: 0; font-size: 13px; }
+.cxe-confirmar-botones { display: flex; justify-content: flex-end; gap: 8px; }
+.cxe-sacar-falta { margin: 8px 16px 0; }

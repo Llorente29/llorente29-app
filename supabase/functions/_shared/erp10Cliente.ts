@@ -17,7 +17,9 @@
 //      Swagger del 19/11). Si no es el de la sociedad de Sumied, para y no lee
 //      nada más; el token no se guarda. Se mira una vez por cliente, también con
 //      un token guardado.
-//   3. Solo GET (y POST /token). Esta fase no escribe nada en ERP10.
+//   3. Solo GET (y POST /token), salvo que quien lo crea pida escribir (X10b, fase 2): entonces
+//      también las tres rutas de ESCRITURAS (alta de subcuenta, alta de factura y su PDF), y
+//      ninguna más. No hay DELETE en la API: lo que entra no se puede borrar por aquí.
 //
 // Cómo se entra (medido por Julio el 19/11, no se vuelve a descubrir): POST
 // /token en formulario (en JSON contesta invalid_clientId), con grant_type
@@ -65,6 +67,8 @@ export type ConfigErp10 = {
   /** El código de la empresa en la que se entra. */
   codEmpresa: string
   almacen: AlmacenToken
+  /** X10b · Escribir (las rutas de ESCRITURAS). Sin esto, solo se lee. */
+  escribir?: boolean
   fetch?: typeof fetch
   ahora?: () => number
   pausaMs?: number
@@ -107,6 +111,9 @@ export function tokenDeLaEmpresa(guardado: string): { cod: string; token: string
   const token = guardado.slice(i + 1)
   return cod && token ? { cod, token } : null
 }
+
+/** X10b · Las únicas rutas que se escriben, y con qué método. */
+const ESCRITURAS: Record<string, 'POST'> = { '/api/subcuentas/add': 'POST', '/api/facturas/add': 'POST', '/api/facturas/upload': 'POST' }
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const esLocal = (b: string) => /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(b)
@@ -161,15 +168,19 @@ export class ClienteErp10 {
   get codEmpresa() { return this.empresa.codEmpresa }
   get companyId() { return this.empresa.companyId }
 
-  private async llamar(metodo: 'GET' | 'POST', ruta: string, form?: Record<string, string>): Promise<{ status: number; json: unknown; txt: string }> {
+  private async llamar(metodo: 'GET' | 'POST', ruta: string, form?: Record<string, string>, cuerpo?: unknown): Promise<{ status: number; json: unknown; txt: string }> {
     const camino = ruta.split('?')[0]
     const esEntrar = metodo === 'POST' && camino === '/token'
-    // 3. Fase 1: solo leer.
-    if (metodo !== 'GET' && !esEntrar) throw new FrenoErp10(`${metodo} ${camino}: en esta fase Sumied no escribe nada en ERP10`)
+    // 3. Solo leer, salvo las rutas de ESCRITURAS cuando se ha pedido escribir.
+    if (metodo !== 'GET' && !esEntrar) {
+      if (!this.cfg.escribir) throw new FrenoErp10(`${metodo} ${camino}: en esta fase Sumied no escribe nada en ERP10`)
+      if (ESCRITURAS[camino] !== metodo) throw new FrenoErp10(`${metodo} ${camino} no está en la lista de lo que Sumied escribe en ERP10`)
+    }
     if (!camino.startsWith('/api/') && !esEntrar) throw new FrenoErp10(`ruta ${camino} fuera de /api`)
     const cab: Record<string, string> = { accept: 'application/json' }
     let body: string | undefined
     if (form) { cab['content-type'] = 'application/x-www-form-urlencoded'; body = new URLSearchParams(form).toString() }
+    else if (cuerpo !== undefined) { cab['content-type'] = 'application/json'; body = JSON.stringify(cuerpo) }
     if (!esEntrar) cab.authorization = `Bearer ${await this.asegurarToken()}`
     const inicio = this.ahora()
     for (let intento = 1; ; intento++) {
@@ -342,12 +353,51 @@ export class ClienteErp10 {
     const [a, b] = limitesMes(aaaa_mm.replace('-', ''))
     return this.todas<Record<string, unknown>>(`/api/facturas?${q({ $filter: `Fecha ge ${a} and Fecha le ${b}` })}`)
   }
+  // ── X10b · Escribir (solo con `escribir`) ─────────────────────────────────────
+  /** ¿Tiene ERP10 la subcuenta? */
+  async tieneSubcuenta(codigo: string): Promise<boolean> {
+    const r = await this.get<unknown>(`/api/subcuentas/${encodeURIComponent(codigo)}`)
+    if (r.status === 404 || r.status === 204) return false
+    if (r.status !== 200) throw new ErrorErp10(`ERP10 contesta ${r.status} al mirar la subcuenta ${codigo}`, r.status)
+    const j = r.json as Record<string, unknown> | unknown[] | null
+    if (Array.isArray(j)) return j.length > 0
+    return !!j && typeof j === 'object' && Object.keys(j).length > 0
+  }
+  /** Da de alta una subcuenta (código y nombre; NIF si lo tiene). */
+  async crearSubcuenta(sc: { Codigo: string; Descripcion: string; NIF?: string | null }): Promise<void> {
+    await this.asegurarToken()
+    const cuerpo = { Codigo: sc.Codigo, Descripcion: sc.Descripcion.slice(0, 60), ...(sc.NIF ? { NIF: sc.NIF.slice(0, 14) } : {}) }
+    const r = await this.llamar('POST', '/api/subcuentas/add', undefined, cuerpo)
+    if (r.status !== 200) throw new ErrorErp10(`ERP10 no ha dado de alta la subcuenta ${sc.Codigo} (${r.status}): ${motivoDe(r.json, r.txt)}`, r.status)
+  }
+  /** Da de alta una factura (FacturaData); devuelve la que ERP10 guarda, con su Documento. */
+  async altaFactura(fd: Record<string, unknown>): Promise<Record<string, unknown>> {
+    await this.asegurarToken()
+    const r = await this.llamar('POST', '/api/facturas/add', undefined, fd)
+    if (r.status !== 200) throw new ErrorErp10(`ERP10 no ha dado de alta la factura (${r.status}): ${motivoDe(r.json, r.txt)}`, r.status)
+    const j = (Array.isArray(r.json) ? r.json[0] : r.json) as Record<string, unknown> | null
+    if (!j || !(Number(j.Documento) > 0)) throw new ErrorErp10('ERP10 ha contestado al alta sin el número de documento', r.status)
+    return j
+  }
+  /** Sube el PDF de una factura que ya está (DatosDocumento: el archivo en base64). */
+  async subirDocumento(d: { Ejercicio: string; Serie: string; Documento: number; NombreArchivo: string; Archivo: string }): Promise<{ status: number; motivo: string | null }> {
+    await this.asegurarToken()
+    const r = await this.llamar('POST', '/api/facturas/upload', undefined, d)
+    return { status: r.status, motivo: r.status === 200 ? null : motivoDe(r.json, r.txt) }
+  }
+
   /** El PDF de una factura (getfile), solo para ver si se baja: estado y tamaño. */
   async documento(ejercicio: string, serie: string, documento: number): Promise<{ status: number; bytes: number; motivo: string | null }> {
     const r = await this.get<unknown>(`/api/facturas/getfile/${encodeURIComponent(ejercicio)}/${encodeURIComponent(serie)}/${documento}`)
     const motivo = r.status === 200 ? null : String((r.json as Record<string, unknown> | null)?.Message ?? (r.json as Record<string, unknown> | null)?.message ?? r.txt ?? '').slice(0, 120)
     return { status: r.status, bytes: r.txt.length, motivo }
   }
+}
+
+/** Lo que dice ERP10 cuando no quiere, en una línea y sin datos de más. */
+function motivoDe(j: unknown, txt: string): string {
+  const o = (j && typeof j === 'object' ? j : {}) as Record<string, unknown>
+  return String(o.Message ?? o.message ?? o.error_description ?? o.error ?? txt ?? '').replace(/\s+/g, ' ').trim().slice(0, 200) || 'sin motivo'
 }
 
 // ── Lo que se hace con lo leído (puro) ───────────────────────────────────────────────

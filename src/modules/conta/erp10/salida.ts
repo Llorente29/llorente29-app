@@ -19,7 +19,7 @@ import { columnas } from '../../../../supabase/functions/_shared/diezExcel.ts'
 import { XML_EXPEDIDAS, XML_RECIBIDAS } from '@/modules/conta/erp10/configuracion'
 import {
   FICHERO_ASIENTOS, FICHERO_DIAS, FICHERO_EXPEDIDAS, FICHERO_RECIBIDAS, FICHERO_SUBCUENTAS, columnasAsientos, convertirCuentas, filaSubcuenta, huellaFila, libroErp10,
-  prepararAsientos, prepararDiasTpv, prepararExpedidas, prepararRecibidas, type Fila,
+  prepararAsientos, prepararDiasTpv, prepararExpedidas, prepararRecibidas, type Fila, type RecibidaParaApi,
 } from '@/modules/conta/erp10/ficheros'
 import { SIN_ASIENTOS, SIN_DIAS, type AsientosPorSalir, type DiasPorSalir, type CuentaDeLaBase, type Corregida, type EmitidasPorSalir, type PartidaPorSalir, type PorSalir, type RecibidasPorSalir } from '@/modules/conta/services/erp10Service'
 
@@ -56,7 +56,8 @@ export interface Salida {
   ficheros: {
     subcuentas: Fila[]
     expedidas: { entryId: string; fila: Fila }[]
-    recibidas: { entryId: string; fila: Fila }[]
+    /** X10b · Con la recibida para la conexión con ERP10 y su PDF (ruta guardada y nombre). */
+    recibidas: { entryId: string; fila: Fila; api?: RecibidaParaApi; pdf?: { ruta: string; nombre: string } | null }[]
     /** X07 · Cada asiento, con sus filas (una por apunte, numeradas en A). X08: también el cobro de cada día. */
     asientos: { entryId: string; filas: Fila[] }[]
     /** X08 · Cada día del TPV, su fila de expedidas (el resumen del día). */
@@ -232,7 +233,10 @@ export function armarSalida(ps: PorSalir, rs: RecibidasPorSalir, em: EmitidasPor
     ficheros: {
       subcuentas,
       expedidas: filasE.map((f) => ({ entryId: f.entryId, fila: f.fila })),
-      recibidas: filasR.map((f) => ({ entryId: f.entryId, fila: f.fila })),
+      recibidas: filasR.map((f) => ({
+        entryId: f.entryId, fila: f.fila, api: f.api,
+        pdf: f.pdf && porId.get(f.entryId)?.pdf ? { ruta: porId.get(f.entryId)!.pdf!.ruta, nombre: f.pdf } : null,
+      })),
       asientos: prepA.asientos.map((a) => ({ entryId: a.entryId, filas: a.filas })),
       dias: filasD.map((d) => ({ entryId: d.entryId, fila: d.fila })),
       pdfs,

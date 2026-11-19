@@ -27,6 +27,7 @@ import { CARRIL, CUENTA_A, enCarril, entrarComo, type Sesion } from '../sesion'
 import { rest } from '../api'
 import { ClienteErp10, finalDelNif, lineas, porTipo, resumenSinDatos, sumarPorCuenta, type AlmacenToken } from '../../../../supabase/functions/_shared/erp10Cliente'
 import { erp10Simulado, type EmpresaSimulada } from '../../../conta/erp10/simulado'
+import { sacarRecibida, type Envio, type PuertoEscribir, type RecibidaParaApi, type Resultado } from '../../../../supabase/functions/_shared/erp10Escribir'
 
 test.skip(CARRIL === null, 'El X10 escribe en la cuenta A (la conexión con ERP10, la salida, una recibida): necesita su carril.')
 
@@ -101,6 +102,55 @@ async function erp10DeMentira(page: Page, s: Sesion, empresas: Record<string, Em
   })
 }
 
+/**
+ * X10b · La función conta-erp10-escribir, sustituida: el mismo envío (sacarRecibida, con el cliente
+ * de verdad escribiendo en el ERP10 simulado) y la fila de cada asiento en memoria, con las reglas de
+ * conta_erp10_envio_tomar. Lo que entra se apunta en la salida DE VERDAD (conta_erp10_lote_apuntar,
+ * con la sesión de quien pulsa), como hace la función.
+ */
+async function erp10Escribe(page: Page, s: Sesion, empresas: Record<string, EmpresaSimulada>, nif: string) {
+  const filas = new Map<string, Envio>()
+  await page.route('**/functions/v1/conta-erp10-escribir', async (route: Route) => {
+    const b = route.request().postDataJSON() as { company_id: string; mes: string; recibidas: { api: RecibidaParaApi; huella: string; pdf: { ruta: string; nombre: string } | null }[]; cuentas_nuevas: { codigo: string; nombre: string; nif: string | null }[]; quien: string | null }
+    const responder = (status: number, cuerpo: unknown) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(cuerpo) })
+    try {
+      const sim = erp10Simulado({ empresas })
+      const c = new ClienteErp10({
+        base: 'https://erp10.invalid', nombreBd: 'DESPACHO_INVENTADO', claves: { client_id: 'cliente-inventado', client_secret: 'x', username: 'x', password: 'codigo-inventado' },
+        lista: [{ companyId: EMPRESA_A, codEmpresa: '101', nif }], codEmpresa: '101', almacen: sinToken, fetch: sim.fetch, escribir: true,
+      })
+      const p: PuertoEscribir = {
+        hoy: hoyEnMadrid(),
+        tomar: async (id) => {
+          const f = filas.get(id)
+          if (f && f.estado !== 'no_pudo') return { tomado: false, envio: f }
+          const n: Envio = { id: `e-${id}`, entry_id: id, estado: 'enviando', erp10_ejercicio: null, erp10_serie: null, erp10_documento: null, enlazada: false, pdf: null, motivo: null, intentos: (f?.intentos ?? 0) + 1, lote_id: null }
+          filas.set(id, n)
+          return { tomado: true, envio: n }
+        },
+        poner: async (id, cambios) => { Object.assign([...filas.values()].find((x) => x.id === id)!, cambios) },
+        pdf: async () => new Uint8Array([37, 80, 68, 70]),
+        erp10: c,
+      }
+      const resultados: Resultado[] = []
+      for (const x of b.recibidas) resultados.push(await sacarRecibida(x.api, b.cuentas_nuevas, x.pdf, p))
+      const porApuntar = resultados.filter((x) => x.estado === 'en_erp10' && x.sinApuntar)
+      if (porApuntar.length) {
+        const huellas = new Map(b.recibidas.map((x) => [x.api.entryId, x.huella]))
+        await api(s, 'POST', 'rpc/conta_erp10_lote_apuntar', {
+          p_company: b.company_id, p_mes: b.mes, p_quien_nombre: b.quien,
+          p_partidas: porApuntar.map((x) => ({ entry_id: x.entryId, clase: 'recibida', huella: huellas.get(x.entryId) })),
+          p_ficheros: [{ nombre: 'ERP10 (por la conexión)', filas: porApuntar.length, huella: 'e2e-x10b' }],
+        })
+        for (const x of porApuntar) x.sinApuntar = false
+      }
+      return responder(200, { ok: true, resultados, quedan: [], sinApuntar: null })
+    } catch (e) {
+      return responder(409, { error: e instanceof Error ? e.message : String(e) })
+    }
+  })
+}
+
 /** La salida, encendida desde hoy, y una recibida validada de hoy (como el X06). */
 async function prepararSalida(s: Sesion, hoy: string) {
   await api(s, 'POST', 'rpc/conta_erp10_salida_poner', { p_company: EMPRESA_A, p_encender: true, p_codigo: '0007', p_largo: 8, p_desde: hoy, p_quien_nombre: QUIEN })
@@ -135,7 +185,7 @@ async function erp10ConLoDeSumied(s: Sesion, fecha: string, falta: Map<string, n
     const cent = Math.round(x.saldo * 100) - (falta.get(x.codigo) ?? 0)
     return { Cuenta: x.erp ?? x.codigo, Debe: cent > 0 ? cent / 100 : 0, Haber: cent < 0 ? -cent / 100 : 0 }
   })
-  return { cif: `ES${nif}`, apuntes: [{ Serie: '1', Documento: 1, TipoAsiento: 1, Fecha: aaaammdd(c.desde), Detalles: det }] }
+  return { cif: `ES${nif}`, apuntes: [{ Serie: '1', Documento: 1, TipoAsiento: 1, Fecha: aaaammdd(c.desde), Detalles: det }], subcuentas: [...det.map((d) => d.Cuenta), '47200000'] }
 }
 
 async function conectar(s: Sesion) {
@@ -149,7 +199,7 @@ async function conectar(s: Sesion) {
 }
 
 for (const tam of TAMANOS) {
-  test(`X10b · ${tam.width} × ${tam.height}: la conexión con ERP10 en la salida (qué falta, probar: NIF distinto y bien) y el paso 3 sin Excel`, async ({ page }) => {
+  test(`X10b · ${tam.width} × ${tam.height}: la conexión con ERP10 en la salida (qué falta, probar), la factura de prueba por la conexión y el paso 3 sin Excel`, async ({ page }) => {
     test.skip((page.viewportSize()?.width ?? 1440) < 768, 'En el ordenador (encargo X10).')
     test.setTimeout(240_000)
     await page.setViewportSize(tam)
@@ -157,30 +207,30 @@ for (const tam of TAMANOS) {
     const errores = vigilar(page)
     const hoy = hoyEnMadrid()
     const fin = finDeMes(hoy)
+    const mesTexto = `${['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][Number(hoy.slice(5, 7)) - 1]} de ${hoy.slice(0, 4)}`
     const nif = await nifDeLaSociedad(s)
     const connectorId = await conectar(s)
     await sinCodigo(s, connectorId)
     const falta = await prepararSalida(s, hoy)
     const empresa101 = await erp10ConLoDeSumied(s, fin, falta, nif)
-    await erp10DeMentira(page, s, { 101: empresa101, 102: { cif: NIF_OTRA, apuntes: [] } }, nif)
+    const empresas = { 101: empresa101, 102: { cif: NIF_OTRA, apuntes: [] } }
+    await erp10DeMentira(page, s, empresas, nif)
+    await erp10Escribe(page, s, empresas, nif)
     // La función que cifra las claves, simulada: aquí no se guarda ninguna.
     await page.route('**/functions/v1/connector-credentials', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, hasCredentials: true }) }))
 
-    // 1 · Sin código: la tarjeta, plegada, lo dice; el paso 3 también, y lleva a ella.
+    // 1 · Sin código: la tarjeta, plegada, lo dice; el botón de sacar también, y lleva a ella.
     await page.goto('/conta/libros/cierre/salida-erp10', { waitUntil: 'load' })
     await expect(page.getByRole('heading', { name: 'Salida a ERP10', level: 1 })).toBeVisible({ timeout: 40_000 })
     const tarjeta = page.getByRole('region', { name: 'Conexión con ERP10' })
     await expect(tarjeta).toContainText('Falta el código de empresa de esta sociedad en ERP10', { timeout: 30_000 })
     await expect(tarjeta.getByRole('button', { name: 'Conectar' })).toHaveAttribute('aria-expanded', 'false')
-    await page.getByRole('button', { name: 'Descargar los ficheros' }).click()
-    await expect(page.locator('.cxe-hecho')).toContainText('Queda apuntado.', { timeout: 60_000 })
-    await page.getByRole('button', { name: 'Ya lo he importado' }).click()
-    await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible()
-    await expect(page.locator('.cxe-erp10-falta')).toContainText('Falta el código de empresa de esta sociedad en ERP10. Ponlo en «Conexión con ERP10», arriba, y pulsa «Probar».')
-    await expect(page.getByRole('button', { name: 'Comparar con ERP10' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'sube el Excel' })).toBeVisible()
-    await page.screenshot({ path: `${DIR}/paso3-falta-${tam.width}.png` })
-    await page.getByRole('button', { name: 'Ir a la conexión con ERP10' }).click()
+    const sacar = page.getByRole('button', { name: 'Sacar una para probar' })
+    await expect(sacar).toBeDisabled({ timeout: 30_000 })
+    await expect(page.locator('.cxe-sacar-falta')).toHaveText('Para sacar a ERP10: Falta el código de empresa de esta sociedad en ERP10. Ir a la conexión con ERP10')
+    await expect(page.getByRole('button', { name: 'Descargar los ficheros (Excel)' })).toBeEnabled()
+    await page.screenshot({ path: `${DIR}/paso1-falta-${tam.width}.png` })
+    await page.locator('.cxe-sacar-falta').getByRole('button', { name: 'Ir a la conexión con ERP10' }).click()
 
     // 2 · En la tarjeta: las claves guardadas, y probar con un código que no es y con el suyo.
     await expect(tarjeta.getByRole('button', { name: 'Plegar' })).toHaveAttribute('aria-expanded', 'true')
@@ -198,29 +248,40 @@ for (const tam of TAMANOS) {
     await expect(hay).toContainText(`${n} líneas en 1 asiento (Por factura: ${n} líneas)`)
     await expect(hay).not.toContainText('asientos')
     await expect(hay).not.toContainText('tipo 1')
-    await expect(hay).toContainText(`El último mes con apuntes en ERP10 es ${['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][Number(aaaammdd(fin).toString().slice(4, 6)) - 1]}`)
+    await expect(hay).toContainText(`El último mes con apuntes en ERP10 es ${mesTexto}`)
     await expect(tarjeta).not.toContainText(/token|API|endpoint/)
     await expect(tarjeta).toContainText('Código de empresa 101')
     await tarjeta.scrollIntoViewIfNeeded()
     await page.screenshot({ path: `${DIR}/conexion-${tam.width}.png` })
-
-    // 3 · Plegada, el paso 3 compara con ERP10 leído ahora.
     await tarjeta.getByRole('button', { name: 'Plegar' }).click()
+
+    // 3 · La primera vez, una sola, para probar: lo que va a entrar y que no se puede borrar.
+    await expect(sacar).toBeEnabled({ timeout: 30_000 })
+    await sacar.click()
+    const aviso = page.getByRole('alertdialog', { name: 'Sacar a ERP10' })
+    await expect(aviso).toContainText(new RegExp(`^Va a entrar en ERP10 una sola factura recibida de ${mesTexto}, para probar: la X10-E2E-\\d+ de .+ \\(48,40 €\\)\\. Si algo sale mal, se corrige a mano en ERP10: Sumied no puede borrarlo\\.`))
+    await page.screenshot({ path: `${DIR}/paso1-confirmar-${tam.width}.png` })
+    await aviso.getByRole('button', { name: 'Sacar solo esta para probar' }).click()
+    // Pasa sola al paso 3, con lo que ha entrado y su número de ERP10.
+    await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible({ timeout: 60_000 })
+    await expect(page.locator('.cxe-hecho')).toHaveText(new RegExp(`^Han entrado en ERP10 1 factura recibida de ${mesTexto} \\(2/\\d+\\)\\.$`))
+    expect(empresa101.facturas).toHaveLength(1)
+    expect(empresa101.subcuentas).toContain('41000002')
+
+    // 4 · El paso 3 compara con ERP10 leído ahora: la factura ya está, el proveedor y el gasto quedan igual.
     await expect(page.getByLabel('A fecha')).toHaveValue(fin)
     await page.getByRole('button', { name: 'Comparar con ERP10' }).click()
     await expect(page.getByText(new RegExp(`^Comparado con ERP10 \\(leído ahora, \\d\\d/\\d\\d \\d\\d:\\d\\d\\), a ${dm(fin).replace('/', '\\/')}$`))).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByText('3 cuentas con diferencia')).toBeVisible({ timeout: 30_000 })
     const tabla = page.getByRole('table', { name: 'Cuenta a cuenta' })
-    await expect(tabla.getByRole('row').filter({ hasText: '41000002' })).toContainText('−48,40')
+    await expect(page.locator('.cxe-marco[aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 })
+    for (const k of ['41000002', '62300000']) await expect(tabla.getByRole('row').filter({ hasText: k }).locator('.cxe-dif')).toHaveText('', { timeout: 30_000 })
     await expect(page.getByRole('button', { name: 'Subir un Excel' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Leer otra vez' })).toBeVisible()
-    await expect(page.locator('.cxe-marco[aria-busy="true"]')).toHaveCount(0)
     await page.evaluate(() => window.scrollTo(0, 0))
     const abajo = await page.evaluate(() => [document.querySelector('.cxe')?.getBoundingClientRect().bottom ?? 9999, window.innerHeight])
     expect(abajo[0], 'la pantalla acaba dentro de la ventana').toBeLessThanOrEqual(abajo[1])
     await page.screenshot({ path: `${DIR}/paso3-erp10-${tam.width}.png` })
 
-    // 4 · En Folvy no sale: ni en el Marketplace.
+    // 5 · En Folvy no sale: ni en el Marketplace.
     await page.goto('/integraciones/marketplace', { waitUntil: 'load' })
     await expect(page.getByRole('heading', { name: 'Marketplace de integraciones', level: 1 })).toBeVisible({ timeout: 40_000 })
     await expect(page.getByText('Diez (contabilidad)', { exact: true })).toBeVisible({ timeout: 30_000 })

@@ -19,6 +19,8 @@
 //      enciende y lo confirma con contenido.
 // Navegador en español (playwright.config.ts). Capturas a 1456 × 816: con las tres
 // diferencias y una elegida, y ya igualado.
+// X10b: arriba va la tarjeta «Conexión con ERP10» (plegada) y el Excel pasa a «Descargar los ficheros
+// (Excel)», enlace al lado de «Sacar a ERP10»: esta prueba sigue sacando por el Excel.
 // Datos inventados y que se ven inventados (T11).
 
 import { test, expect, type Page } from '@playwright/test'

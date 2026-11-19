@@ -290,9 +290,31 @@ export function tiposRetencionDelXml(xml = XML_RECIBIDAS): string[] {
   return [...b.matchAll(/<Valor\d+>([^<]+)<\/Valor\d+>/g)].map((m) => m[1])
 }
 
+/**
+ * X10b · La recibida para sacarla a ERP10 por la conexión (conta-erp10-escribir): lo mismo que
+ * va a su fila del Excel (la leída, en céntimos), con las cuentas YA en ERP10. La factura la
+ * arma el servidor (_shared/erp10Escribir.ts, RecibidaParaApi: la misma forma).
+ */
+export type RecibidaParaApi = Omit<RecibidaLeida, 'tienePdf' | 'gastos' | 'retencion'> & {
+  gastos: { cuenta: string; importe: number }[]
+  retencion: RecibidaLeida['retencion']
+}
+export function recibidaParaApi(x: RecibidaLeida, erp: ReadonlyMap<string, string>): RecibidaParaApi {
+  const a = (k: string) => erp.get(k) ?? k
+  return {
+    entryId: x.entryId, numero: x.numero, fechaFactura: x.fechaFactura, fechaAsiento: x.fechaAsiento, nif: x.nif, nombre: x.nombre,
+    proveedor: a(x.proveedor), tipoOperacion: x.tipoOperacion, gastos: x.gastos.map((g) => ({ cuenta: a(g.cuenta), importe: g.importe })),
+    iva: x.iva, retencion: x.retencion ? { ...x.retencion, cuenta: a(x.retencion.cuenta) } : null, total: x.total,
+  }
+}
+/** X10b · ¿Sale por la conexión? Lo medido: operación interior, sin retención, hasta tres tipos de IVA. Lo demás, con el Excel. */
+export function salePorLaConexion(x: RecibidaParaApi): boolean {
+  return x.tipoOperacion === 'OI' && !x.retencion && x.iva.length >= 1 && x.iva.length <= 3 && !!x.numero.trim()
+}
+
 export type SalidaRecibidas = {
-  /** `usa`: las cuentas de Sumied de la fila (para ver, con las emitidas, las que chocan entre las dos). */
-  filas: { entryId: string; numero: string; fila: Fila; pdf: string | null; usa: string[] }[]
+  /** `usa`: las cuentas de Sumied de la fila (para ver, con las emitidas, las que chocan entre las dos). `api`: X10b. */
+  filas: { entryId: string; numero: string; fila: Fila; pdf: string | null; usa: string[]; api: RecibidaParaApi }[]
   noSalen: NoSale[]
   /** Las cuentas de Sumied que usan las filas que salen (para el fichero de subcuentas). */
   cuentas: Set<string>
@@ -330,7 +352,7 @@ export function prepararRecibidas(lista: readonly RecibidaParaErp10[], o: {
     const malas = usadasPor(x).filter((k) => noCaben.has(k))
     if (malas.length) { noSalen.push({ entryId: x.entryId, numero: x.numero, porque: noCaben.get(malas[0])! }); continue }
     const pdf = x.tienePdf ? nombrePdf({ fechaFactura: x.fechaFactura, proveedor: x.nombre, numero: x.numero }, usados) : null
-    filas.push({ entryId: x.entryId, numero: x.numero, fila: filaRecibida(x, erp, pdf ? rutaPdf(o.carpetaPdf, pdf) : '', xml), pdf, usa: usadasPor(x) })
+    filas.push({ entryId: x.entryId, numero: x.numero, fila: filaRecibida(x, erp, pdf ? rutaPdf(o.carpetaPdf, pdf) : '', xml), pdf, usa: usadasPor(x), api: recibidaParaApi(x, erp) })
     for (const k of usadasPor(x)) cuentas.add(k)
   }
   return { filas, noSalen, cuentas }
