@@ -499,12 +499,13 @@ y en un PR solo con la etiqueta **`e2e-entera`**, cuando Julio la pide.
 - **Las unitarias, también en la CI** (N1, 23/10): `unitarias.yml` corre en
   cada PR a `main` las del producto que toca (`scripts/pruebas/unitarias.mjs`).
   En local, `antes-de-subir.sh` las sigue corriendo enteras.
-- **Y cada noche sobre `main`**, a las 03:00 de Madrid, la entera en 2 trozos.
+- **Y cada noche sobre `main`**, a las 03:00 de Madrid, la entera en 3 trozos.
   - Si falla por staging (no poder entrar, un 520, una página HTML de la base),
     la repite una vez.
   - Si no es por staging, o si vuelve a fallar, abre la incidencia «e2e de la
     noche en rojo» (`scripts/e2e/noche.mjs`).
-- **La entera lanzada a mano va siempre en 2 trozos**, también con una carpeta
+- **La entera lanzada a mano va siempre en 3 trozos** (19/11: en 2, el trozo
+  mayor pasaba de 60 min), también con una carpeta
   («tests/e2e/conta»). En un trozo solo van los ficheros sueltos.
 
 *(26/10. La entera corría en casi todos los PR, porque tocar el menú o
