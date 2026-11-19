@@ -223,3 +223,5 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 .kf-emitida .kf-cuerpo { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
 .kf-emitida .kf-dos { grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr); }
 .kf-emitida .kf-formulario { gap: 3px; padding-top: 6px; padding-bottom: 6px; }
+/* El aspa de quitar una línea de IVA (18 px) en su columna (e2e 44570080751: «td: «×», 18 en 14»). */
+.kf-emitida .kf-iva .kf-iva-quitar { width: 20px; }
