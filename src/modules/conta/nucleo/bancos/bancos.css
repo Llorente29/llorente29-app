@@ -15,7 +15,7 @@
 .kb-izquierda { gap: 8px; }
 
 .kb-rejilla { flex: 1; min-height: 120px; overflow-y: auto; border: 1px solid var(--k-borde); border-radius: 4px; }
-.kb-fila { display: grid; grid-template-columns: 78px minmax(0, 2.2fr) minmax(0, 2fr) 88px 88px 96px; gap: 8px; align-items: center; padding: 0 8px; height: 26px; border-bottom: 1px solid var(--k-gris); cursor: default; }
+.kb-fila { display: grid; grid-template-columns: 22px 46px minmax(0, 2fr) minmax(0, 2.2fr) 84px 84px 104px; gap: 8px; align-items: center; padding: 0 8px; height: 26px; border-bottom: 1px solid var(--k-gris); cursor: default; }
 .kb-fila[aria-selected='true'] { background: #e3edfb; }
 .kb-fila:focus { outline: 2px solid var(--k-azul); outline-offset: -2px; }
 .kb-cabeza { position: sticky; top: 0; z-index: 1; background: var(--k-gris); font-size: 11px; color: var(--k-apoyo); height: 24px; }
@@ -42,3 +42,36 @@
 .kb-otra-cosa .kf-titulo { width: 100%; }
 .kb-otra-cosa .kf-con-sugerencias { flex: 1 1 100%; }
 .kb-regla { display: flex; gap: 6px; align-items: center; width: 100%; }
+
+/* R08 · Conciliar en un paso (maqueta nucleo_10). */
+.kb-cuantos { white-space: nowrap; flex-shrink: 0; color: var(--k-apoyo); }
+.kb-cuantos strong { color: var(--k-tinta); }
+.kb-fila input[type='checkbox'] { margin: 0; width: 14px; height: 14px; }
+.kb-fila[data-marcado] { background: #eef4fc; box-shadow: inset 3px 0 0 var(--k-azul); }
+.kb-fila[aria-selected='true'][data-marcado] { background: #e3edfb; }
+.kb-fila s { color: var(--k-apoyo); }
+.kb-codigo strong, strong.kb-codigo { color: var(--k-tinta); font-weight: 600; }
+
+.kb-barra { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--k-borde); border-radius: 4px; background: #eef4fc; }
+.kb-barra-arriba { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.kb-barra-cuantos { white-space: nowrap; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.kb-barra-cuenta { flex: 1 1 auto; min-width: 0; }
+.kb-barra-cuenta .kf-sugerencias { bottom: 100%; top: auto; left: 0; right: 0; min-width: 0; }
+.kb-barra-abajo { display: flex; justify-content: flex-end; align-items: center; gap: 16px; }
+
+.kb-panel-marcados { display: flex; flex-direction: column; min-width: 0; overflow-y: auto; padding: 12px; gap: 10px; }
+.kb-marcados { display: flex; flex-direction: column; gap: 10px; }
+.kb-marcados p { margin: 0; }
+.kb-marcados-arriba { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--k-apoyo); }
+.kb-marcados-arriba strong { font-size: 20px; color: var(--k-tinta); }
+.kb-van { border: 1px solid var(--k-borde); border-radius: 4px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.kb-van-titulo { display: flex; align-items: center; gap: 8px; }
+.kb-van-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.kb-van-tabla td { padding: 3px 4px; border-top: 1px solid var(--k-gris); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-van-tabla td:nth-child(1) { width: 42px; }
+.kb-van-tabla td:nth-child(3) { width: 34%; }
+.kb-van-tabla td:nth-child(4) { width: 72px; text-align: right; }
+.kb-nota { border-left: 3px solid var(--k-azul); background: var(--k-blanco); padding: 8px 10px; }
+.kb-apartado { display: flex; flex-direction: column; gap: 6px; background: var(--k-gris); border-radius: 4px; padding: 10px; }
+.kb-apartado p { margin: 0; }
+.kb-apartado .kf-enlace { align-self: flex-start; }

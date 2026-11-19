@@ -211,6 +211,8 @@ export const MODULOS: Modulo[] = [
           { titulo: 'Bancos', botones: [EXTRACTO] },
           { titulo: 'Diez', botones: [DIEZ] },
           { titulo: 'ERP10', botones: [TRAER_ERP10, SALIDA_ERP10] },
+          // R08 · La quincena de Catcher, que se subía entrando por la dirección: su botón, aquí también.
+          { titulo: 'Repartidores', botones: [atajo(REPARTIDORES)] },
         ],
       },
       {

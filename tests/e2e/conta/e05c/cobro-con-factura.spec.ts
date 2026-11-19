@@ -92,8 +92,8 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(page.locator('[data-prueba="confirmar-factura"]')).toBeFocused()
       if (grande) await captura(page, 'cobro-factura-elegida', ancho)
       await page.keyboard.press('Enter')
-      await expect(aviso(page)).toHaveText(`Cobrado: Cobro de la factura ${f.numero} de ${cliente} (${cliente}). La factura queda cobrada.`, { timeout: 30_000 })
-      await expect(fila(page, p.cobro).locator('.kb-etiqueta')).toHaveText('Hecho', { timeout: 30_000 })
+      await expect(aviso(page)).toHaveText(`Cobrado: Cobro de la factura ${f.numero} de ${cliente} (${cliente}) · en el diario. La factura queda cobrada.`, { timeout: 30_000 })
+      await expect(fila(page, p.cobro).locator('.kb-etiqueta')).toHaveText('Conciliado', { timeout: 30_000 })
       await expect(fila(page, p.cobro)).toContainText(p.cuentaCliente, { timeout: 30_000 })
 
       // ── 2 · La factura, cobrada ──
@@ -106,7 +106,8 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       const deshacer = queEs.locator('[data-prueba="deshacer"]')
       await expect(deshacer).toBeVisible()
       await deshacer.click()
-      await expect(aviso(page)).toHaveText(`Deshecho: el movimiento de ${cliente} vuelve a estar sin casar, y su asiento propuesto se quita.`, { timeout: 30_000 })
+      // R08 · El cobro está en el diario: deshacerlo lo anula con su contraasiento.
+      await expect(aviso(page)).toHaveText(new RegExp(`^Deshecho: el movimiento de ${cliente} vuelve a estar por conciliar, y su asiento \\d+/\\d+ se anula con un contraasiento\\.$`), { timeout: 30_000 })
       expect(await cobroDe(s, p, f)).toEqual({ estado: 'por_cobrar', pendiente: 242, cobros: [] })
       expect(errores, 'errores de la página').toEqual([])
     } catch (e) { await contarPantalla(page, `cobro ${ancho}`); throw e }

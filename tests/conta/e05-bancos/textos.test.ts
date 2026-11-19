@@ -39,8 +39,8 @@ describe('E05 · «Escribir uno a mano» llama a la base con el importe con sign
 
 describe('E05 · «Deshacer» dice lo que ha hecho la base con el asiento', () => {
   it('con la frase de bank_deshacer', () => {
-    expect(textoDeshecho('Agua Ejemplo', 'su asiento propuesto se quita')).toBe('Deshecho: el movimiento de Agua Ejemplo vuelve a estar sin casar, y su asiento propuesto se quita.')
-    expect(textoDeshecho('Comisión', 'el asiento enlazado se queda como estaba')).toBe('Deshecho: el movimiento de Comisión vuelve a estar sin casar, y el asiento enlazado se queda como estaba.')
+    expect(textoDeshecho('Agua Ejemplo', 'su asiento propuesto se quita')).toBe('Deshecho: el movimiento de Agua Ejemplo vuelve a estar por conciliar, y su asiento propuesto se quita.')
+    expect(textoDeshecho('Comisión', 'el asiento enlazado se queda como estaba')).toBe('Deshecho: el movimiento de Comisión vuelve a estar por conciliar, y el asiento enlazado se queda como estaba.')
   })
 })
 
