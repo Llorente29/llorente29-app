@@ -117,7 +117,8 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(van.locator('.kb-etiqueta')).toHaveText('Cuadran')
       await expect(van).toContainText('46500000 al debe')
       for (const id of p.nominas) await expect(fila(page, id)).toContainText('46500000')
-      await expect(fila(page, p.nominas[0])).toContainText('Nómina · Empleada')
+      // «Lo que dice el banco», limpio (maqueta): «Nómina · Empleada A», «Nómina · Empleado B»…
+      for (const id of p.nominas) await expect(fila(page, id)).toContainText(/Nómina · Emplead[ao] [A-E]/)
       await expect(van).toContainText(`Cada uno, contra el banco (${p.cuenta572}) al haber.`)
       await expect(page.locator('#kb-conciliar-n')).toBeFocused()
       await expect(page.locator('#kb-conciliar-n')).toBeInViewport()
