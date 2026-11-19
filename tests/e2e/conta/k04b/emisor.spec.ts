@@ -28,9 +28,10 @@ const factura = (t: number, n: number) => enCarril(`c0e40000-0000-4000-8000-0000
 const deLaOtra = (t: number) => enCarril(`c0e40000-0000-4000-8000-000000000e${t}1`)
 const PROVEEDOR = (t: number) => (t === 1 ? 'Proveedor de Prueba Ficha Uno, S.L.' : 'Proveedor de Prueba Ficha Dos, S.L.')
 const NIF_NUEVO = (t: number) => (t === 1 ? 'B00000018' : 'B00000026')
-const ficha = (page: Page) => page.locator('[data-prueba="ficha-recibida-nucleo"]')
+// La de la pestaña que se ve: con las pestañas de su empresa, la de la otra sigue montada y escondida (K05 · 0b).
+const ficha = (page: Page) => page.locator('.k-zona[data-activa="si"] [data-prueba="ficha-recibida-nucleo"]')
 const franja = (page: Page) => ficha(page).locator('.kf-estado')
-const aviso = (page: Page) => page.locator('[data-prueba="aviso-ficha"]')
+const aviso = (page: Page) => page.locator('.k-zona[data-activa="si"] [data-prueba="aviso-ficha"]')
 
 async function rest<T>(s: Sesion, ruta: string, cuerpo?: unknown): Promise<T> {
   const r = await fetch(`${STAGING_URL}/rest/v1/${ruta}`, {
@@ -78,7 +79,7 @@ async function entrarEnLaGestoria(page: Page): Promise<Sesion> {
 async function contar(page: Page, donde: string) {
   const x = await ficha(page).evaluate((el) => ({
     franja: el.querySelector('.kf-estado')?.textContent, comprobaciones: [...el.querySelectorAll('[data-comprobacion]')].map((c) => c.textContent),
-    aviso: document.querySelector('[data-prueba="aviso-ficha"]')?.textContent ?? null,
+    aviso: el.querySelector('[data-prueba="aviso-ficha"]')?.textContent ?? null,
   })).catch((e) => String(e))
   console.log(`[K04b ${donde}] ${JSON.stringify(x)}`)
 }
@@ -141,7 +142,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(aviso(page)).toContainText('dado de alta y elegido', { timeout: 30_000 })
     await expect(aviso(page)).toContainText('ya se puede validar')
     await expect(franja(page)).not.toContainText('No conozco', { timeout: 30_000 })
-    await expect(page.locator('[data-prueba="cuadra"]')).toContainText('Cuadra', { timeout: 30_000 })
+    await expect(ficha(page).locator('[data-prueba="cuadra"]')).toContainText('Cuadra', { timeout: 30_000 })
     await contar(page, `${ancho} después del alta`)
     await ficha(page).locator('[data-guardar-y-siguiente]').click()
     await expect(page.getByText(/Apuntada y validada/).first()).toBeVisible({ timeout: 60_000 })
@@ -158,7 +159,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await proveedor.press('Enter')
     await expect(aviso(page)).toContainText(`Elegido ${PROVEEDOR(t)}`, { timeout: 30_000 })
     await expect(franja(page)).not.toContainText('No conozco', { timeout: 30_000 })
-    await expect(page.locator('[data-prueba="cuadra"]')).toContainText('Cuadra', { timeout: 30_000 })
+    await expect(ficha(page).locator('[data-prueba="cuadra"]')).toContainText('Cuadra', { timeout: 30_000 })
     await ficha(page).locator('[data-guardar-y-siguiente]').click()
     await expect(page.getByText(/Apuntada y validada/).first()).toBeVisible({ timeout: 60_000 })
 
