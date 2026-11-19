@@ -27,7 +27,8 @@ import { CARRIL, CUENTA_A, enCarril, entrarComo, type Sesion } from '../sesion'
 import { rest } from '../api'
 import { ClienteErp10, finalDelNif, lineas, porTipo, resumenSinDatos, sumarPorCuenta, type AlmacenToken } from '../../../../supabase/functions/_shared/erp10Cliente'
 import { erp10Simulado, type EmpresaSimulada } from '../../../conta/erp10/simulado'
-import { sacarRecibida, type Envio, type PuertoEscribir, type RecibidaParaApi, type Resultado } from '../../../../supabase/functions/_shared/erp10Escribir'
+import { sacarEmitida, sacarRecibida, type Envio, type PuertoEscribir, type Resultado } from '../../../../supabase/functions/_shared/erp10Escribir'
+import { carpetaDe, loQueSaleDesdeLaBase, pedidasDelCuerpo } from '../../../../supabase/functions/_shared/erp10DesdeLaBase'
 
 test.skip(CARRIL === null, 'El X10 escribe en la cuenta A (la conexión con ERP10, la salida, una recibida): necesita su carril.')
 
@@ -67,7 +68,7 @@ async function nifDeLaSociedad(s: Sesion): Promise<string> {
  */
 async function erp10DeMentira(page: Page, s: Sesion, empresas: Record<string, EmpresaSimulada>, nif: string) {
   await page.route('**/functions/v1/conta-erp10-leer', async (route: Route) => {
-    const b = route.request().postDataJSON() as { company_id: string; accion: string; desde?: string; hasta?: string }
+    const b = route.request().postDataJSON() as { company_id: string; accion: string; desde?: string; hasta?: string; documentos?: { serie: string; documento: number }[] }
     const filas = await api<{ company_id: string; external_account_id: string | null; connector: { code: string } }[]>(s, 'GET',
       `account_connector?select=company_id,external_account_id,connector!inner(code)&account_id=eq.${CUENTA_A.id}&scope=eq.company&connector.code=eq.erp10`)
     const esta = filas.find((f) => f.company_id === b.company_id)
@@ -95,7 +96,12 @@ async function erp10DeMentira(page: Page, s: Sesion, empresas: Record<string, Em
         })
       }
       const ap = await c.apuntesEntre(b.desde!, b.hasta!)
-      return responder(200, { filas: sumarPorCuenta(ap), lineas: lineas(ap), asientos: ap.length, desde: b.desde, hasta: b.hasta, leidoEn: new Date().toISOString() })
+      const pedidos = new Set((b.documentos ?? []).map((d) => `${d.serie}/${d.documento}`))
+      const documentos = ap.filter((a) => pedidos.has(`${a.Serie}/${a.Documento}`)).map((a) => ({
+        serie: String(a.Serie), documento: Number(a.Documento),
+        lineas: (a.Detalles ?? []).map((l) => ({ cuenta: String(l.Cuenta), importe: Math.round(Number(l.Debe ?? 0) * 100) - Math.round(Number(l.Haber ?? 0) * 100) })),
+      }))
+      return responder(200, { filas: sumarPorCuenta(ap), lineas: lineas(ap), asientos: ap.length, desde: b.desde, hasta: b.hasta, leidoEn: new Date().toISOString(), documentos })
     } catch (e) {
       return responder(409, { error: e instanceof Error ? e.message : String(e) })
     }
@@ -108,12 +114,25 @@ async function erp10DeMentira(page: Page, s: Sesion, empresas: Record<string, Em
  * conta_erp10_envio_tomar. Lo que entra se apunta en la salida DE VERDAD (conta_erp10_lote_apuntar,
  * con la sesión de quien pulsa), como hace la función.
  */
-async function erp10Escribe(page: Page, s: Sesion, empresas: Record<string, EmpresaSimulada>, nif: string) {
-  const filas = new Map<string, Envio>()
+async function erp10Escribe(page: Page, s: Sesion, empresas: Record<string, EmpresaSimulada>, nif: string, pedidas: string[] = []) {
+  const filas = new Map<string, Envio & { clase?: string; creado_en?: string }>()
+  // conta_erp10_envio la escribe solo el servidor (aquí, el sustituto): la pantalla la lee de lo que este ha apuntado.
+  await page.route((u) => u.pathname.endsWith('/rest/v1/conta_erp10_envio'), (route: Route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify([...filas.values()].filter((x) => x.estado === 'en_erp10').map((x) => ({ ...x, clase: x.clase ?? 'recibida', creado_en: x.creado_en ?? new Date().toISOString() }))),
+  }))
   await page.route('**/functions/v1/conta-erp10-escribir', async (route: Route) => {
-    const b = route.request().postDataJSON() as { company_id: string; mes: string; recibidas: { api: RecibidaParaApi; huella: string; pdf: { ruta: string; nombre: string } | null }[]; cuentas_nuevas: { codigo: string; nombre: string; nif: string | null }[]; quien: string | null }
+    const b = route.request().postDataJSON() as { company_id: string; mes: string; quien: string | null }
+    // X10c · Como el servidor: del cuerpo, solo los asientos; lo demás, DESDE LA BASE (las funciones de staging, como el usuario).
+    pedidas.push(...pedidasDelCuerpo(b))
     const responder = (status: number, cuerpo: unknown) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(cuerpo) })
     try {
+      const leer = (fn: string) => api<Record<string, unknown>>(s, 'POST', `rpc/${fn}`, { p_company: b.company_id, p_mes: b.mes })
+      const [sal] = await api<{ carpeta_pdf: string | null; codigo_erp10: string | null }[]>(s, 'GET', `conta_erp10_salida_empresa?select=carpeta_pdf,codigo_erp10&company_id=eq.${b.company_id}`)
+      const base = await loQueSaleDesdeLaBase({
+        porSalir: await leer('conta_erp10_por_salir'), recibidas: await leer('conta_erp10_recibidas_por_salir'), emitidas: await leer('conta_erp10_emitidas_por_salir'),
+        asientos: await leer('conta_erp10_asientos_por_salir'), dias: await leer('conta_erp10_dias_tpv_por_salir'), carpeta: carpetaDe(sal?.carpeta_pdf, sal?.codigo_erp10),
+      }, pedidasDelCuerpo(b))
       const sim = erp10Simulado({ empresas })
       const c = new ClienteErp10({
         base: 'https://erp10.invalid', nombreBd: 'DESPACHO_INVENTADO', claves: { client_id: 'cliente-inventado', client_secret: 'x', username: 'x', password: 'codigo-inventado' },
@@ -121,10 +140,10 @@ async function erp10Escribe(page: Page, s: Sesion, empresas: Record<string, Empr
       })
       const p: PuertoEscribir = {
         hoy: hoyEnMadrid(),
-        tomar: async (id) => {
+        tomar: async (id, clase) => {
           const f = filas.get(id)
           if (f && f.estado !== 'no_pudo') return { tomado: false, envio: f }
-          const n: Envio = { id: `e-${id}`, entry_id: id, estado: 'enviando', erp10_ejercicio: null, erp10_serie: null, erp10_documento: null, enlazada: false, pdf: null, motivo: null, intentos: (f?.intentos ?? 0) + 1, lote_id: null }
+          const n = { id: `e-${id}`, entry_id: id, estado: 'enviando' as const, erp10_ejercicio: null, erp10_serie: null, erp10_documento: null, enlazada: false, pdf: null, motivo: null, intentos: (f?.intentos ?? 0) + 1, lote_id: null, clase, creado_en: new Date().toISOString() }
           filas.set(id, n)
           return { tomado: true, envio: n }
         },
@@ -133,13 +152,13 @@ async function erp10Escribe(page: Page, s: Sesion, empresas: Record<string, Empr
         erp10: c,
       }
       const resultados: Resultado[] = []
-      for (const x of b.recibidas) resultados.push(await sacarRecibida(x.api, b.cuentas_nuevas, x.pdf, p))
+      for (const x of base.salen) resultados.push(x.clase === 'recibida' ? await sacarRecibida(x.api, base.cuentasNuevas, x.pdf, p) : await sacarEmitida(x.api, base.cuentasNuevas, x.pdf, p))
       const porApuntar = resultados.filter((x) => x.estado === 'en_erp10' && x.sinApuntar)
       if (porApuntar.length) {
-        const huellas = new Map(b.recibidas.map((x) => [x.api.entryId, x.huella]))
+        const deLaBase = new Map(base.salen.map((x) => [x.entryId, x]))
         await api(s, 'POST', 'rpc/conta_erp10_lote_apuntar', {
           p_company: b.company_id, p_mes: b.mes, p_quien_nombre: b.quien,
-          p_partidas: porApuntar.map((x) => ({ entry_id: x.entryId, clase: 'recibida', huella: huellas.get(x.entryId) })),
+          p_partidas: porApuntar.map((x) => ({ entry_id: x.entryId, clase: deLaBase.get(x.entryId)!.clase, huella: deLaBase.get(x.entryId)!.huella })),
           p_ficheros: [{ nombre: 'ERP10 (por la conexión)', filas: porApuntar.length, huella: 'e2e-x10b' }],
         })
         for (const x of porApuntar) x.sinApuntar = false
@@ -215,7 +234,8 @@ for (const tam of TAMANOS) {
     const empresa101 = await erp10ConLoDeSumied(s, fin, falta, nif)
     const empresas = { 101: empresa101, 102: { cif: NIF_OTRA, apuntes: [] } }
     await erp10DeMentira(page, s, empresas, nif)
-    await erp10Escribe(page, s, empresas, nif)
+    const pedidas: string[] = []
+    await erp10Escribe(page, s, empresas, nif, pedidas)
     // La función que cifra las claves, simulada: aquí no se guarda ninguna.
     await page.route('**/functions/v1/connector-credentials', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, hasCredentials: true }) }))
 
@@ -268,6 +288,8 @@ for (const tam of TAMANOS) {
     await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible({ timeout: 60_000 })
     await expect(page.locator('.cxe-hecho')).toHaveText(new RegExp(`^Han entrado en ERP10 1 factura recibida de ${mesTexto} \\(2/\\d+\\)\\.$`))
     expect(empresa101.facturas).toHaveLength(1)
+    // X10c · El navegador solo ha pedido el asiento (el servidor lo ha armado desde la base): uno.
+    expect(pedidas).toHaveLength(1)
     expect(empresa101.subcuentas).toContain('41000002')
 
     // 4 · El paso 3 compara con ERP10 leído ahora: la factura ya está, el proveedor y el gasto quedan igual.
@@ -277,6 +299,8 @@ for (const tam of TAMANOS) {
     const tabla = page.getByRole('table', { name: 'Cuenta a cuenta' })
     await expect(page.locator('.cxe-marco[aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 })
     for (const k of ['41000002', '62300000']) await expect(tabla.getByRole('row').filter({ hasText: k }).locator('.cxe-dif')).toHaveText('', { timeout: 30_000 })
+    // X10c · Factura a factura: la de prueba, casada con el número que le dio ERP10.
+    await expect(page.getByRole('note', { name: 'Factura a factura' })).toHaveText('Factura a factura: la que salió por la conexión está en ERP10 con su número, igual.')
     await expect(page.getByRole('button', { name: 'Subir un Excel' })).toBeVisible()
     await page.evaluate(() => window.scrollTo(0, 0))
     const abajo = await page.evaluate(() => [document.querySelector('.cxe')?.getBoundingClientRect().bottom ?? 9999, window.innerHeight])

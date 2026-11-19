@@ -163,3 +163,6 @@
 .cxe-confirmar p { margin: 0; font-size: 13px; }
 .cxe-confirmar-botones { display: flex; justify-content: flex-end; gap: 8px; }
 .cxe-sacar-falta { margin: 8px 16px 0; }
+/* X10c · El paso 3, factura a factura (lo que salió por la conexión con su número de ERP10). */
+.cxe-casadas ul { margin: 4px 0 0; padding-left: 18px; }
+.cxe-casadas-bien { color: var(--cx-verde-oscuro); }
