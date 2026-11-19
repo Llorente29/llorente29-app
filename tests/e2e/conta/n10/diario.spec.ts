@@ -33,6 +33,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(pestana(page, 'Asiento')).toHaveAttribute('aria-selected', 'true')
     await abierta(page, 'Libro diario')
     await expect(zonaActiva(page).locator('.cxa-izq')).toHaveCount(0)
+    // Por debajo de 800 de alto, los botones de la cinta nacen plegados (K02, decisión 13): se despliegan para mirar el suyo (e2e 1583).
+    const ver = page.getByRole('button', { name: 'Ver los botones' })
+    if (await ver.isVisible()) await ver.click()
     await expect(page.locator('[data-boton="asientos"]')).toHaveAttribute('aria-current', 'page')
 
     // El Diario resumido: a libros/diario/resumido, en su pestaña, con su título.
