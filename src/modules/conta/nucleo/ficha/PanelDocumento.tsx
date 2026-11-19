@@ -19,7 +19,7 @@ const ZOOM = [50, 75, 100, 125, 150, 200] as const
 
 export interface SinDocumento { marcado: boolean; motivo: string; poner: (marcado: boolean, motivo: string) => void }
 
-export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar, sinDocumento }: {
+export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar, sinDocumento, accion, sinDocumentoTexto }: {
   /** El documento: su dirección y si es una foto; null = sin documento; undefined = cargando. */
   documento: { url: string; foto: boolean; titulo: string } | null | undefined
   /** La segunda pestaña: su nombre y lo que enseña. */
@@ -30,6 +30,10 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
   textoSoltar?: string
   /** «Sin documento», con su motivo: sin él, una factura sin PDF no se valida (paraValidar.faltaDocumento). */
   sinDocumento?: SinDocumento
+  /** Q06 · Lo que va arriba a la derecha, al lado de las pestañas (el listado: «Abrir el asiento»). */
+  accion?: ReactNode
+  /** Q06 · Lo que dice sin documento y sin zona de soltar (por defecto, «Esta factura no tiene documento.»). */
+  sinDocumentoTexto?: string
 }) {
   const [ver, setVer] = useState<'documento' | 'otra'>('documento')
   const [zoom, setZoom] = useState<(typeof ZOOM)[number]>(100)
@@ -48,6 +52,7 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
           <button type="button" role="tab" aria-selected={ver === 'documento'} onClick={() => setVer('documento')}>El documento</button>
           <button type="button" role="tab" aria-selected={ver === 'otra'} onClick={() => setVer('otra')}>{otra.nombre}</button>
         </div>
+        {accion && <span className="kf-panel-accion">{accion}</span>}
       </div>
       <div className="kf-panel-lupa">
         <button type="button" aria-label="Reducir" disabled={i <= 0 || ver !== 'documento'} onClick={() => setZoom(ZOOM[i - 1])}>−</button>
@@ -72,7 +77,7 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
               <span>{textoSoltar ?? 'Sumied lo lee y rellena la ficha. También puedes guardar la factura sin documento.'}</span>
               <input ref={elegir} type="file" accept={acepta} hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) alElegir(f); e.target.value = '' }} />
             </button>
-          ) : <p className="kf-panel-nota">Esta factura no tiene documento.</p>}
+          ) : <p className="kf-panel-nota">{sinDocumentoTexto ?? 'Esta factura no tiene documento.'}</p>}
         {ver === 'documento' && documento === null && sinDocumento && (
           <div className="kf-sin-documento">
             <label><input type="checkbox" checked={sinDocumento.marcado} onChange={(e) => sinDocumento.poner(e.target.checked, sinDocumento.motivo)} /> Guardarla sin documento</label>

@@ -28,6 +28,7 @@ import AltaPage from '@/modules/conta/pages/AltaPage'
 import TercerosPage from '@/modules/conta/terceros/TercerosPage'
 import FichaTerceroPage from '@/modules/conta/terceros/FichaTerceroPage'
 import LibrosPage from '@/modules/conta/libros/LibrosPage'
+import ListadoSegun from '@/modules/conta/nucleo/listado/ListadoSegun'
 import DocumentosPage from '@/modules/conta/documentos/DocumentosPage'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import LlevarACompras from '@/modules/conta/documentos/LlevarACompras'
@@ -121,7 +122,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.planSitio, element: enMarco(<QueVaACadaSitioPage />, '¿Dónde va el alquiler?') },
     { path: CONTA.rutas.planCuenta, element: <AlMayor /> },
     // Una cuenta del plan (respuesta 5): su Mayor, o «Sumas y saldos» si tiene hijas.
-    { path: CONTA.rutas.mayor, element: enMarco(<MayorPage />, '¿Cuánto debo a mis proveedores?') },
+    // Q06 · Dentro del núcleo, el mayor de la cuenta en la ventana de listado (F5); fuera, la ficha de hoy (ListadoSegun).
+    { path: CONTA.rutas.mayor, element: enMarco(<ListadoSegun que="mayor" hoy={<MayorPage />} />, '¿Cuánto debo a mis proveedores?') },
     { path: CONTA.rutas.terceros, element: enMarco(<TercerosPage />, '¿Quién me debe dinero?') },
     // El de la ficha lo pone ella según el papel (ejemploDeFicha); éste es el de mientras carga.
     { path: CONTA.rutas.comoTeFactura, element: enMarco(<ComoTeFacturaPage />, '¿Cuándo me manda la factura?') },
@@ -133,12 +135,13 @@ export const contaModule: ModuleDefinition = {
     // solo diga «Muy pronto» (tapaba filas de los libros). Como Bancos en el B01.
     { path: CONTA.rutas.libros, element: enMarco(<LibrosPage />, '¿Qué facturas no deducen IVA?', true) },
     { path: CONTA.rutas.libroDiario, element: enMarco(<LibrosPage area="diario" accion="libro-diario" />, '¿Cuánto gané en el Local Norte este mes?', true) },
-    { path: CONTA.rutas.diarioResumido, element: enMarco(<LibrosPage area="diario" accion="diario-resumido" />, '¿Cuánto gasté en septiembre?', true) },
+    { path: CONTA.rutas.diarioResumido, element: enMarco(<ListadoSegun que="diario" hoy={<LibrosPage area="diario" accion="diario-resumido" />} />, '¿Cuánto gasté en septiembre?', true) },
     { path: CONTA.rutas.pendientesDiez, element: enMarco(<LibrosPage area="diario" accion="pendientes-diez" />, '¿Cuánto gasté en septiembre?', true) },
     // N07 · «Traer de ERP10», con su ruta propia (libros/diario/<algo> es un asiento).
     { path: CONTA.rutas.traerErp10, element: enMarco(<LibrosPage area="diario" accion="traer-erp10" />, '¿Cuánto gasté en septiembre?', true) },
     { path: CONTA.rutas.librosArea, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?', true) },
-    { path: CONTA.rutas.librosAccion, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?', true) },
+    // Q06 · Dentro del núcleo, el mayor, sumas y saldos y los libros de IVA en la ventana de listado; lo demás, como hoy.
+    { path: CONTA.rutas.librosAccion, element: enMarco(<ListadoSegun hoy={<LibrosPage />} />, '¿Por qué clientes sale en negativo?', true) },
     // B01 · Bancos en tres niveles (N17): Movimientos, Reglas, Cuentas y extractos, Cierre del mes.
     // Respuesta 4: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto».
     { path: CONTA.rutas.bancos, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },

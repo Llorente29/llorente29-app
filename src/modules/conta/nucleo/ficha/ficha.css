@@ -179,7 +179,9 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 
 /* ── El panel del documento ──────────────────────────────────────────── */
 .kf-panel { min-height: 0; display: flex; flex-direction: column; background: var(--kf-panel); border-left: 1px solid var(--k-borde); }
-.kf-panel-arriba { padding: 10px 14px 0; }
+.kf-panel-arriba { padding: 10px 14px 0; display: flex; align-items: center; gap: 12px; }
+/* Q06 · Lo de arriba a la derecha del panel (el listado: «Abrir el asiento»). */
+.kf-panel-accion { margin-left: auto; }
 .kf-segmentos { display: inline-flex; padding: 3px; background: #dfe3e7; border-radius: 7px; }
 .kf-segmentos button { height: 30px; padding: 0 14px; border: 0; border-radius: 5px; background: transparent; color: var(--k-apoyo); font-weight: 600; cursor: pointer; }
 .kf-segmentos button[aria-selected='true'] { background: var(--k-blanco); color: var(--k-tinta); box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12); }
