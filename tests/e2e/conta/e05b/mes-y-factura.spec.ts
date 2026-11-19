@@ -89,6 +89,10 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
 
       // ── 1 · El mes: octubre, Re Pág a septiembre, Av Pág de vuelta ──
       await expect(periodo).toHaveValue('2026-10')
+      // La cabecera cabe con el periodo: lo que va detrás de él se ve (las capturas de la 44476280972 lo tenían fuera).
+      await expect(revisar).toBeInViewport()
+      await expect(pantalla(page).getByRole('button', { name: 'Traer el extracto' })).toBeInViewport()
+      await expect(pantalla(page).getByRole('combobox', { name: 'Banco' })).toContainText(`57200`)
       // Octubre: 3 por confirmar, 3 por aclarar (el ingreso y los dos pagos) y 1 por validar (el agua casada sola).
       await expect(filas(page)).toHaveCount(7)
       await expect(revisar).toHaveText('7 por revisar')

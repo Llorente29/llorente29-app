@@ -3,9 +3,12 @@
  * E05 · Bancos del núcleo (maqueta nucleo_6_bancos): la rejilla de ERP10 con la
  * densidad de la ficha (K04: kf-*). Solo lo que no tiene la ficha (kb-*).
  */
-.kb-banco { flex: 0 1 300px; min-width: 180px; height: 28px; padding: 0 8px; border: 1px solid var(--kf-casilla-borde); border-radius: 4px; background: var(--k-blanco); font: inherit; font-weight: 600; }
-.kb-mes { flex: 0 0 auto; height: 28px; padding: 0 8px; border: 1px solid var(--kf-casilla-borde); border-radius: 4px; background: var(--k-blanco); font: inherit; }
+.kf-ficha .kb-banco { flex: 0 1 300px; min-width: 180px; height: 28px; padding: 0 8px; border: 1px solid var(--kf-casilla-borde); border-radius: 4px; background: var(--k-blanco); font: inherit; font-weight: 600; }
+/* Con la especificidad de «.kf-ficha select» (width: 100%), o el periodo se come la cabecera (capturas de la e2e 44476280972). */
+.kf-ficha .kb-mes { flex: 0 0 150px; width: 150px; height: 28px; padding: 0 8px; border: 1px solid var(--kf-casilla-borde); border-radius: 4px; background: var(--k-blanco); font: inherit; }
 .kb-otra-factura { display: flex; flex-direction: column; gap: 4px; }
+.kb-otra-factura .kf-sugerencias { left: 0; right: 0; min-width: 0; }
+.kb-otra-factura .kf-sugerencias li { white-space: normal; }
 .kb-confirmar-n { font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 .kb-cuadre { min-width: 0; display: flex; }
 .kb-cuadre .kf-estado { min-width: 0; }
