@@ -23,7 +23,7 @@ import { confirmable } from '@/modules/conta/lib/conciliarVista'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { rpc } from '@/modules/conta/services/bd'
 import { guardarRegla, type FacturaPendiente } from '@/modules/conta/services/bancosPantallas'
-import { casadoConFactura } from './factura'
+import { casadoConFactura, cobroConFactura, emitidasDeLosClientes, type FacturaEmitidaPendiente } from './factura'
 
 export const MOTIVO_DESHACER = 'Deshecho desde Bancos (pantallas nuevas)'
 
@@ -128,4 +128,21 @@ export async function casarConFactura(m: MovimientoBanco, f: FacturaPendiente, q
   const c = casadoConFactura(m, f)
   await nucleo.confirmar(m.id, c.porque, c.destino, 'probable', null)
   return `Casado: ${c.concepto} (${quien}). ${c.importeCent < f.pendienteCent ? `A la factura le quedan ${eurosExactos((f.pendienteCent - c.importeCent) / 100)} por pagar.` : 'La factura queda pagada.'}`
+}
+
+/** E05c · Las facturas emitidas con algo por cobrar, como las ve el motor (nucleo.cargarContexto). */
+export async function facturasEmitidasPendientes(accountId: string, companyId: string, hoy: string): Promise<FacturaEmitidaPendiente[]> {
+  const { ctx } = await nucleo.cargarContexto(accountId, companyId, hoy)
+  return emitidasDeLosClientes(ctx.clientes)
+}
+
+/**
+ * E05c · «Es otra factura» en un cobro: lo casa con la emitida elegida, con la misma llamada
+ * que los pagos (nucleo.confirmar, «probable», sin regla) y el destino del motor; y dice lo que ha hecho.
+ */
+export async function casarConEmitida(m: MovimientoBanco, f: FacturaEmitidaPendiente, quien: string): Promise<string> {
+  const c = cobroConFactura(m, f)
+  await nucleo.confirmar(m.id, c.porque, c.destino, 'probable', null)
+  const sobra = Math.abs(m.importeCent) - c.importeCent
+  return `Cobrado: ${c.concepto} (${quien}). ${c.importeCent < f.pendienteCent ? `A la factura le quedan ${eurosExactos((f.pendienteCent - c.importeCent) / 100)} por cobrar.` : 'La factura queda cobrada.'}${sobra > 0 ? ` Sobran ${eurosExactos(sobra / 100)}: quedan a favor del cliente en su cuenta.` : ''}`
 }
