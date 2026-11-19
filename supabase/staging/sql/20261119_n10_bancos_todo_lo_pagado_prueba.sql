@@ -2,8 +2,9 @@
 --
 -- SOLO STAGING. Prueba del N10 · parte 2 (20261119T1930_n10_bancos_todo_lo_pagado), que el ensayo de
 -- staging pone delante en la misma sesión. Todo en una transacción con ROLLBACK: staging no cambia. Datos
--- INVENTADOS (T11). Nombra lo que cambia: public.bank_facturas_para_casar y
--- public.bank_facturas_recibidas_pendientes.
+-- INVENTADOS (T11). Nombra lo que cambia: public.bank_facturas_para_casar,
+-- public.bank_facturas_recibidas_pendientes, public._bank_casar_nucleo y public._bank_factura_aprobada_con_pago
+-- (y la nueva, public._bank_recibida_pagado).
 --
 -- En la empresa de la siembra de la cuenta A (3b34403a…, con su banco b0100000…b3, como el PC01 y el E2),
 -- un proveedor nuevo con su 400 y tres recibidas aprobadas:
@@ -122,7 +123,9 @@ reset role;
 select set_config('n10.huella_nueva', pg_temp.huella_sin_mano(), true) is not null as huella_con_lo_nuevo;
 \i supabase/vuelta-atras/20261119T1930_n10_bancos_todo_lo_pagado.down.sql
 do $$ begin
-  if exists (select 1 from pg_proc where prosrc like '%N10 · todo lo pagado, como Pagos%') then raise exception 'PRUEBA N10 · 1: la vuelta atrás no ha dejado las dos funciones como antes.'; end if;
+  if exists (select 1 from pg_proc where prosrc like '%N10 · todo lo pagado, como Pagos%') or to_regprocedure('public._bank_recibida_pagado(uuid)') is not null then
+    raise exception 'PRUEBA N10 · 1: la vuelta atrás no ha dejado las cuatro funciones como antes.';
+  end if;
 end $$;
 set local role authenticated;
 select set_config('n10.vieja', pg_temp.medir()::text, true) is not null as con_lo_de_antes;
@@ -190,6 +193,17 @@ begin
   ver := pg_temp.medir();
   raise notice 'PRUEBA N10 · 2a: casado el cargo de 42,00 con la remesa de N10-YA → Bancos propone N10-YA %, N10-MANO %', ver->'casar'->>'N10-YA', ver->'casar'->>'N10-MANO';
   if (ver->'casar'->>'N10-YA')::numeric <> 200 or (ver->'pagos'->>'N10-YA')::numeric <> 200 then raise exception 'PRUEBA N10 · 2a: N10-YA, %.', ver; end if;
+
+  -- b0 · El freno: casarle 242,00 a N10-MANO, que ya tiene 42,00 pagados a mano, la pasaría (antes lo dejaba: solo contaba lo casado).
+  begin
+    perform public.bank_casar((select v::uuid from _p where clave = 'mov2'), jsonb_build_object('tipo', 'factura_recibida',
+      'facturas', jsonb_build_array(jsonb_build_object('id', f_mano, 'importe', 242.00)), 'cuenta_tercero', c400, 'tercero_id', null, 'concepto', 'Pago N10-MANO'),
+      'probable', 'prueba', '[]'::jsonb, 'persona', null);
+    raise exception 'PRUEBA N10 · 2b0: casar 242,00 a N10-MANO tenía que parar.';
+  exception when sqlstate '23514' then
+    raise notice 'PRUEBA N10 · 2b0: casar 242,00 a N10-MANO para: %', sqlerrm;
+    if sqlerrm not like 'La factura N10-MANO ya tiene pagados 42,00 % de 242,00 %: este pago la pasaría.' then raise exception 'PRUEBA N10 · 2b0: dijo «%».', sqlerrm; end if;
+  end;
 
   -- b · El resto de N10-MANO (200,00), casado desde Bancos: pagada, y Bancos ya no la propone.
   x := public.bank_casar((select v::uuid from _p where clave = 'mov2'), jsonb_build_object('tipo', 'factura_recibida',

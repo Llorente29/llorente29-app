@@ -22,18 +22,20 @@ const bloqueBancos = (s: string) => s.slice(s.indexOf('-- 2 y 3'))
 describe('N10 · la 1930 sobre lo que dejó la 0800', () => {
   it('el trozo que busca la 1930 es la línea de lo casado más, letra a letra, lo que escribió la 0800', () => {
     const escrito = entre(bloqueBancos(N09), 'v_nuevo')
-    const buscado = entre(N10, 'v_viejo')
+    const buscado = entre(N10, 'v_lista_viejo')
     expect(buscado.endsWith(escrito), 'la 1930 busca lo que dejó la 0800').toBe(true)
     expect(buscado.slice(0, buscado.length - escrito.length).trim())
       .toBe('coalesce((select sum(i.amount) from public.bank_match_item i join public.bank_match b on b.id = i.match_id')
   })
-  it('lo nuevo lee lo pagado de la vista de Pagos, y lleva su marca', () => {
-    const nuevo = entre(N10, 'v_nuevo')
-    expect(nuevo).toContain('select r.pagado from public.conta_recibida_pago r where r.invoice_id = si.id')
-    expect(nuevo).toContain('-- N10 · todo lo pagado, como Pagos')
+  it('una sola regla: la función nueva lee lo pagado de la vista de Pagos, y las cuatro la usan', () => {
+    expect(N10).toMatch(/create or replace function public\._bank_recibida_pagado[\s\S]*select r\.pagado from public\.conta_recibida_pago r where r\.invoice_id = p_invoice/)
+    for (const v of ['v_lista_nuevo', 'v_freno_nuevo', 'v_marca_nuevo', 'v_aprob_nuevo']) {
+      expect(entre(N10, v), v).toContain('public._bank_recibida_pagado(')
+      expect(entre(N10, v), v).toContain('-- N10 · todo lo pagado, como Pagos')
+    }
   })
   it('la cabecera declara las dos con su prueba de staging, y la prueba las nombra', () => {
-    for (const f of ['bank_facturas_para_casar', 'bank_facturas_recibidas_pendientes']) {
+    for (const f of ['bank_facturas_para_casar', 'bank_facturas_recibidas_pendientes', '_bank_casar_nucleo', '_bank_factura_aprobada_con_pago']) {
       expect(N10).toContain(`-- cambia: public.${f} · prueba: ${PRUEBA}`)
       expect(readFileSync(PRUEBA, 'utf8')).toContain(`public.${f}`)
     }
