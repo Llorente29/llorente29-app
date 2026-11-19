@@ -55,7 +55,7 @@ const FICHAS: { clave: string; casa: (rel: string) => boolean }[] = [
   { clave: 'ficha:emitida', casa: (r) => r.startsWith(`${R.facturasVenta}/`) },
   {
     clave: 'ficha:asiento',
-    casa: (r) => r.startsWith(`${R.libroDiario}/`) && ![R.diarioResumido, R.pendientesDiez, R.traerErp10].some((x) => r === x || r.startsWith(`${x}/`)),
+    casa: (r) => r.startsWith(`${R.libroDiario}/`) && ![R.diarioResumido, R.pendientesDiez, R.traerErp10, `${R.libroDiario}/libro-diario`, `${R.libroDiario}/diario-resumido`].some((x) => r === x || r.startsWith(`${x}/`)),
   },
 ]
 
