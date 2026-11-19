@@ -1601,10 +1601,9 @@ begin
         raise exception 'La factura % está %: no se casa un pago con ella. Vuelve a calcular la propuesta de este movimiento.',
           coalesce(v_inv.invoice_number, v_inv.code, ''), case when v_inv.status = 'anulada' then 'anulada' else 'descartada' end using errcode = '23514';
       end if;
-      select coalesce(sum(i.amount), 0) into v_pagado from public.bank_match_item i join public.bank_match b on b.id = i.match_id
-       where i.supplier_invoice_id = v_inv.id and b.status = 'vivo';
+      v_pagado := public._bank_recibida_pagado(v_inv.id);  -- N10 · todo lo pagado, como Pagos
       if v_pagado + (v_f->>'importe')::numeric > coalesce(v_inv.grand_total, 0) + 0.005 then
-        raise exception 'La factura % ya tiene casados % de %: este pago la pasaría.', coalesce(v_inv.invoice_number, ''),
+        raise exception 'La factura % ya tiene pagados % de %: este pago la pasaría.', coalesce(v_inv.invoice_number, ''),
           public.conta_euros_exactos(v_pagado), public.conta_euros_exactos(coalesce(v_inv.grand_total, 0)) using errcode = '23514';
       end if;
       v_suma := v_suma + (v_f->>'importe')::numeric;
@@ -1744,8 +1743,7 @@ begin
   if v_tipo = 'factura_recibida' then
     for v_f in select * from jsonb_array_elements(p_destino->'facturas') loop
       select * into v_inv from public.supplier_invoice where id = (v_f->>'id')::uuid;
-      select coalesce(sum(i.amount), 0) + (v_f->>'importe')::numeric into v_pagado from public.bank_match_item i join public.bank_match b on b.id = i.match_id
-       where i.supplier_invoice_id = v_inv.id and b.status = 'vivo';
+      v_pagado := public._bank_recibida_pagado(v_inv.id) + (v_f->>'importe')::numeric;  -- N10 · todo lo pagado, como Pagos
       -- Pagada entera: por el camino de siempre (mark_supplier_invoice_paid), con su freno del IBAN y su registro.
       -- B02: solo si está aprobada. Confirmar el pago de una factura «en revisión» no la aprueba ni la marca:
       -- el casado queda (bank_match_item) y se marcará cuando se apruebe.
@@ -1895,9 +1893,11 @@ CREATE FUNCTION public._bank_factura_aprobada_con_pago() RETURNS trigger
 declare v_pagado numeric; v_fecha date; v_metodo text; v_mov public.bank_movement;
 begin
   if new.status <> 'aprobada' or old.status = 'aprobada' or new.paid_at is not null then return null; end if;
-  select coalesce(sum(i.amount), 0) into v_pagado from public.bank_match_item i join public.bank_match b on b.id = i.match_id
-   where i.supplier_invoice_id = new.id and b.status = 'vivo';
-  if v_pagado = 0 or v_pagado < coalesce(new.grand_total, 0) - 0.005 then return null; end if;
+  -- N10 · todo lo pagado, como Pagos; y solo si hay algo casado en el banco (de ahí salen el día y la forma).
+  if not exists (select 1 from public.bank_match_item i join public.bank_match b on b.id = i.match_id
+                  where i.supplier_invoice_id = new.id and b.status = 'vivo') then return null; end if;
+  v_pagado := public._bank_recibida_pagado(new.id);
+  if v_pagado < coalesce(new.grand_total, 0) - 0.005 then return null; end if;
   select m.* into v_mov from public.bank_match_item i join public.bank_match b on b.id = i.match_id join public.bank_movement m on m.id = b.movement_id
    where i.supplier_invoice_id = new.id and b.status = 'vivo' order by m.op_date desc limit 1;
   v_fecha := v_mov.op_date;
@@ -2066,6 +2066,28 @@ CREATE FUNCTION public._bank_pasa_luhn(p text) RETURNS boolean
     select sum(case when (length(p) - i) % 2 = 1 then (case when d * 2 > 9 then d * 2 - 9 else d * 2 end) else d end) % 10 = 0
       from (select i, substr(p, i, 1)::int d from generate_series(1, length(p)) i) q)
 $_$;
+
+
+--
+-- Name: _bank_recibida_pagado(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._bank_recibida_pagado(p_invoice uuid) RETURNS numeric
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  select (coalesce((select r.pagado from public.conta_recibida_pago r where r.invoice_id = p_invoice), 0)
+        + coalesce((select sum(i.amount) from public.bank_match_item i join public.bank_match b on b.id = i.match_id
+                     where i.supplier_invoice_id = p_invoice and b.status = 'vivo'
+                       and not exists (select 1 from public.supplier_invoice_payment x where x.bank_match_id = i.match_id and x.invoice_id = p_invoice)), 0))::numeric(14,2)
+$$;
+
+
+--
+-- Name: FUNCTION _bank_recibida_pagado(p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._bank_recibida_pagado(p_invoice uuid) IS 'N10 · Lo pagado de una recibida para Bancos, la misma regla que Pagos: el «pagado» de conta_recibida_pago (todos sus pagos y lo traído) más lo casado vivo en el banco sin su pago apuntado.';
 
 
 --
@@ -26594,10 +26616,7 @@ CREATE FUNCTION public.bank_facturas_para_casar(p_company uuid) RETURNS TABLE(id
     SET search_path TO 'public'
     AS $$
   select si.id, si.invoice_number, si.invoice_date, si.grand_total,
-         coalesce((select sum(i.amount) from public.bank_match_item i join public.bank_match b on b.id = i.match_id
-                    where i.supplier_invoice_id = si.id and b.status = 'vivo'), 0)
-         + case when si.source = 'traida' and si.import_pending is not null
-                then greatest(coalesce(si.grand_total, 0) - si.import_pending, 0) else 0 end,  -- N09 · lo pagado en el programa de antes
+         public._bank_recibida_pagado(si.id),  -- N10 · todo lo pagado, como Pagos
          s.name, array_remove(array[s.name, s.legal_name], null), pr.party_id,
          (select ca.code from public.company_account_link l join public.company_account ca on ca.id = l.company_account_id
            where l.company_id = p_company and l.entity = 'supplier' and l.entity_id = s.id::text and l.role = 'principal' limit 1),
@@ -26623,10 +26642,7 @@ CREATE FUNCTION public.bank_facturas_recibidas_pendientes(p_company uuid) RETURN
     SET search_path TO 'public'
     AS $$
   select si.id, si.invoice_number, si.invoice_date, si.grand_total,
-         coalesce((select sum(i.amount) from public.bank_match_item i join public.bank_match b on b.id = i.match_id
-                    where i.supplier_invoice_id = si.id and b.status = 'vivo'), 0)
-         + case when si.source = 'traida' and si.import_pending is not null
-                then greatest(coalesce(si.grand_total, 0) - si.import_pending, 0) else 0 end,  -- N09 · lo pagado en el programa de antes
+         public._bank_recibida_pagado(si.id),  -- N10 · todo lo pagado, como Pagos
          s.name, array_remove(array[s.name, s.legal_name], null), pr.party_id,
          (select ca.code from public.company_account_link l join public.company_account ca on ca.id = l.company_account_id
            where l.company_id = p_company and l.entity = 'supplier' and l.entity_id = s.id::text and l.role = 'principal' limit 1)
@@ -27077,6 +27093,53 @@ begin
   perform public._bank_log(v_m.account_id, v_m.company_id, p_movement, null, null, case when p_es_el_mismo then 'ignorado' else 'propuesto' end, 'persona',
     case when p_es_el_mismo then 'Era el mismo movimiento traído por otro camino' else 'No era el mismo: queda para casar' end, '{}'::jsonb);
 end $$;
+
+
+--
+-- Name: bank_saldo_diario(uuid, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_saldo_diario(p_company uuid, p_hasta date, p_cuenta text) RETURNS numeric
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(sum(jl.debit - jl.credit), 0)
+    from public.company_account ca
+    join public.journal_line jl on jl.company_account_id = ca.id
+    join public.journal_entry je on je.id = jl.entry_id
+   where ca.company_id = p_company and ca.code = p_cuenta
+     and je.status in ('validado', 'anulado') and je.entry_date <= p_hasta and je.source_type <> 'closing'
+$$;
+
+
+--
+-- Name: FUNCTION bank_saldo_diario(p_company uuid, p_hasta date, p_cuenta text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.bank_saldo_diario(p_company uuid, p_hasta date, p_cuenta text) IS 'R08 · El saldo de una cuenta a una fecha con lo que está en el diario (validado; un anulado y su contraasiento suman cero). Lo propuesto no cuenta. Lee con los permisos de quien llama.';
+
+
+--
+-- Name: bank_saldo_extracto(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_saldo_extracto(p_treasury uuid, p_hasta date) RETURNS TABLE(saldo numeric, hasta date, llego timestamp with time zone, extracto uuid)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  select s.closing_balance, s.period_to, s.imported_at, s.id
+    from public.bank_statement s
+   where s.treasury_account_id = p_treasury and s.closing_balance is not null and s.period_to <= p_hasta
+   order by s.period_to desc, s.imported_at desc, s.id desc
+   limit 1
+$$;
+
+
+--
+-- Name: FUNCTION bank_saldo_extracto(p_treasury uuid, p_hasta date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.bank_saldo_extracto(p_treasury uuid, p_hasta date) IS 'R08 · El saldo del banco a una fecha: el cierre del último extracto de la cadena (fecha final y, a igual fecha, el último que llegó). Lee con los permisos de quien llama.';
 
 
 --
@@ -68452,6 +68515,82 @@ begin
   end if;
   return jsonb_build_object('cuenta', v_cuenta, 'juego', p_juego, 'marca', v_marca, 'ventas', v_n, 'borradas', v_borradas, 'sesion', v_sesion);
 end $$;
+
+
+--
+-- Name: e2e_r08_preparar(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.e2e_r08_preparar(p_lado text, p_motor text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  r jsonb; v_acc uuid; emp uuid; v_banco uuid; v_st uuid; v_m uuid; c record; x record; e record;
+  v_sello text := upper(to_hex((extract(epoch from clock_timestamp()) * 1000)::bigint % 1679616));
+  movs jsonb := '{}'::jsonb; nominas jsonb := '[]'::jsonb; v_saldo numeric := 1214.10;
+begin
+  r := public.e2e_e05_preparar(p_lado, p_motor);
+  v_acc := (r->>'cuenta')::uuid; emp := (r->>'empresa')::uuid; v_banco := (r->>'banco')::uuid;
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
+  select v_acc, emp, 'pymes', '46500000', '465', 'Remuneraciones pendientes de pago', 'template', 'serie'
+   where not exists (select 1 from public.company_account a where a.company_id = emp and a.code = '46500000');
+
+  create temp table if not exists _r08 (n int, caso text, dia date, importe numeric, banco text, limpio text) on commit drop;
+  -- Los extractos de noviembre, en la cadena.
+  for e in select * from (values
+      (1, date '2026-11-01', date '2026-11-11', timestamptz '2026-11-12 03:00:00+01'),
+      (2, date '2026-11-12', date '2026-11-16', timestamptz '2026-11-17 03:00:00+01'),
+      (3, date '2026-11-19', date '2026-11-19', timestamptz '2026-11-19 08:00:00+01'),
+      (4, date '2026-11-19', date '2026-11-19', timestamptz '2026-11-19 09:00:00+01'),
+      (5, date '2026-11-19', date '2026-11-19', timestamptz '2026-11-19 10:00:00+01')) t(n, desde, hasta, llego) loop
+    -- Lo que trae cada uno: (caso, día, importe, lo que dice el banco).
+    delete from _r08;
+    insert into _r08 select * from (values
+      (1, 'ingreso', date '2026-11-05', 6000.00::numeric, 'TRANSFERENCIA RECIBIDA CLIENTE EJEMPLO', 'Cliente Ejemplo'),
+      (2, 'telefonia', date '2026-11-12', -31.50, 'RECIBO TELEFONIA EJEMPLO', 'Recibo Telefonía Ejemplo'),
+      (2, 'gasto1', date '2026-11-13', -18.87, 'COMPRA TARJETA PAPELERIA EJEMPLO', 'Papelería Ejemplo'),
+      (2, 'gasto2', date '2026-11-14', -0.30, 'COMISION PAGO TARJETA', 'Comisión pago tarjeta'),
+      (2, 'devolucion', date '2026-11-16', 19.17, 'DEVOLUCION PAPELERIA EJEMPLO', 'Devolución Papelería Ejemplo'),
+      (3, 'nomina1', date '2026-11-19', -1012.06, 'TRANSFERENCIA NOMINA EMPLEADA A', 'Nómina · Empleada A'),
+      (3, 'nomina2', date '2026-11-19', -1231.86, 'TRANSFERENCIA NOMINA EMPLEADO B', 'Nómina · Empleado B'),
+      (4, 'nomina3', date '2026-11-19', -1126.42, 'TRANSFERENCIA NOMINA EMPLEADA C', 'Nómina · Empleada C'),
+      (4, 'nomina4', date '2026-11-19', -1434.43, 'TRANSFERENCIA NOMINA EMPLEADA D', 'Nómina · Empleada D'),
+      (5, 'nomina5', date '2026-11-19', -1314.94, 'TRANSFERENCIA NOMINA EMPLEADA E', 'Nómina · Empleada E')) v(n, caso, dia, importe, banco, limpio)
+     where v.n = e.n;
+    -- El cierre: lo que de verdad hay en el banco (el recibo de telefonía no se cobró).
+    select v_saldo + coalesce(sum(importe) filter (where caso <> 'telefonia'), 0) as cierre, coalesce(sum(importe), 0) as nuevo, count(*) as cuantos into x from _r08;
+    insert into public.bank_statement (account_id, company_id, treasury_account_id, source, format, file_name, period_from, period_to,
+      movements_count, new_count, repeated_count, continuity, continuity_gap, opening_balance, closing_balance, balanced, imported_at, imported_by_name)
+    values (v_acc, emp, v_banco, 'agregador:prueba', 'agregador:prueba', format('Banco de prueba · del %s al %s · %s', e.desde, e.hasta, e.n), e.desde, e.hasta,
+      x.cuantos, x.cuantos, 0, case when x.cierre - x.nuevo = v_saldo then 'sigue' else 'hueco' end,
+      case when x.cierre - x.nuevo = v_saldo then null else (x.cierre - x.nuevo) - v_saldo end,
+      x.cierre - x.nuevo, x.cierre, true, e.llego, 'Prueba e2e R08')
+    returning id into v_st;
+    for c in select * from _r08 order by dia, importe loop
+      insert into public.bank_movement (account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount,
+        bank_concept, clean_concept, fingerprint, soft_fingerprint, status, reason, ignored_reason)
+      values (v_acc, emp, v_banco, v_st, c.dia, c.dia, c.importe, c.banco, c.limpio,
+        format('r08-%s-%s-%s', p_lado, c.caso, v_sello), format('r08-suave-%s-%s-%s', p_lado, c.caso, v_sello),
+        -- El recibo que el banco no cobró, ya apartado como lo deja bank_apartar_no_cobrados (2120): la e2e
+        -- de la rama corre contra staging sin la 2120 (lo que cambia una función no va de verdad desde una rama).
+        case when c.caso = 'telefonia' then 'ignorado' else 'por_aclarar' end, 'No sé qué es.',
+        case when c.caso = 'telefonia' then 'Anulado por el banco: no había saldo' end)
+      returning id into v_m;
+      movs := movs || jsonb_build_object(c.caso, v_m);
+      if c.caso like 'nomina%' then nominas := nominas || to_jsonb(v_m); end if;
+    end loop;
+    v_saldo := x.cierre;
+  end loop;
+  return r || jsonb_build_object('noviembre', movs, 'nominas', nominas, 'saldoBanco', v_saldo);
+end $$;
+
+
+--
+-- Name: FUNCTION e2e_r08_preparar(p_lado text, p_motor text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.e2e_r08_preparar(p_lado text, p_motor text) IS 'SOLO STAGING (semilla R08): lo de e2e_e05_preparar y noviembre en cinco extractos: un recibo que el banco no cobró y cinco nóminas el 19/11, para su e2e y su prueba.';
 
 
 --
@@ -170696,6 +170835,15 @@ GRANT ALL ON FUNCTION public._bank_pasa_luhn(p text) TO service_role;
 
 
 --
+-- Name: FUNCTION _bank_recibida_pagado(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._bank_recibida_pagado(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._bank_recibida_pagado(p_invoice uuid) TO authenticated;
+GRANT ALL ON FUNCTION public._bank_recibida_pagado(p_invoice uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _bank_regla_corregida(p_rule uuid, p_movement uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -175704,6 +175852,24 @@ GRANT ALL ON FUNCTION public.bank_regla_guardar(p_company uuid, p_id uuid, p_pal
 GRANT ALL ON FUNCTION public.bank_repetido_resolver(p_movement uuid, p_es_el_mismo boolean) TO anon;
 GRANT ALL ON FUNCTION public.bank_repetido_resolver(p_movement uuid, p_es_el_mismo boolean) TO authenticated;
 GRANT ALL ON FUNCTION public.bank_repetido_resolver(p_movement uuid, p_es_el_mismo boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_saldo_diario(p_company uuid, p_hasta date, p_cuenta text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_saldo_diario(p_company uuid, p_hasta date, p_cuenta text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_saldo_diario(p_company uuid, p_hasta date, p_cuenta text) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_saldo_diario(p_company uuid, p_hasta date, p_cuenta text) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_saldo_extracto(p_treasury uuid, p_hasta date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_saldo_extracto(p_treasury uuid, p_hasta date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_saldo_extracto(p_treasury uuid, p_hasta date) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_saldo_extracto(p_treasury uuid, p_hasta date) TO service_role;
 
 
 --
@@ -183427,6 +183593,15 @@ GRANT ALL ON FUNCTION public.e2e_f01b_preparar() TO service_role;
 REVOKE ALL ON FUNCTION public.e2e_f01c_preparar(p_que text, p_juego text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.e2e_f01c_preparar(p_que text, p_juego text) TO authenticated;
 GRANT ALL ON FUNCTION public.e2e_f01c_preparar(p_que text, p_juego text) TO service_role;
+
+
+--
+-- Name: FUNCTION e2e_r08_preparar(p_lado text, p_motor text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.e2e_r08_preparar(p_lado text, p_motor text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.e2e_r08_preparar(p_lado text, p_motor text) TO authenticated;
+GRANT ALL ON FUNCTION public.e2e_r08_preparar(p_lado text, p_motor text) TO service_role;
 
 
 --
