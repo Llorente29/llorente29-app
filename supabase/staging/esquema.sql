@@ -26595,7 +26595,9 @@ CREATE FUNCTION public.bank_facturas_para_casar(p_company uuid) RETURNS TABLE(id
     AS $$
   select si.id, si.invoice_number, si.invoice_date, si.grand_total,
          coalesce((select sum(i.amount) from public.bank_match_item i join public.bank_match b on b.id = i.match_id
-                    where i.supplier_invoice_id = si.id and b.status = 'vivo'), 0),
+                    where i.supplier_invoice_id = si.id and b.status = 'vivo'), 0)
+         + case when si.source = 'traida' and si.import_pending is not null
+                then greatest(coalesce(si.grand_total, 0) - si.import_pending, 0) else 0 end,  -- N09 · lo pagado en el programa de antes
          s.name, array_remove(array[s.name, s.legal_name], null), pr.party_id,
          (select ca.code from public.company_account_link l join public.company_account ca on ca.id = l.company_account_id
            where l.company_id = p_company and l.entity = 'supplier' and l.entity_id = s.id::text and l.role = 'principal' limit 1),
@@ -26622,7 +26624,9 @@ CREATE FUNCTION public.bank_facturas_recibidas_pendientes(p_company uuid) RETURN
     AS $$
   select si.id, si.invoice_number, si.invoice_date, si.grand_total,
          coalesce((select sum(i.amount) from public.bank_match_item i join public.bank_match b on b.id = i.match_id
-                    where i.supplier_invoice_id = si.id and b.status = 'vivo'), 0),
+                    where i.supplier_invoice_id = si.id and b.status = 'vivo'), 0)
+         + case when si.source = 'traida' and si.import_pending is not null
+                then greatest(coalesce(si.grand_total, 0) - si.import_pending, 0) else 0 end,  -- N09 · lo pagado en el programa de antes
          s.name, array_remove(array[s.name, s.legal_name], null), pr.party_id,
          (select ca.code from public.company_account_link l join public.company_account ca on ca.id = l.company_account_id
            where l.company_id = p_company and l.entity = 'supplier' and l.entity_id = s.id::text and l.role = 'principal' limit 1)
@@ -118671,9 +118675,13 @@ CREATE VIEW public.conta_recibida_pago WITH (security_invoker='true') AS
             si.status,
             COALESCE(si.grand_total, (0)::numeric) AS total,
             si.due_date,
-            (COALESCE(( SELECT sum(x.amount) AS sum
+            ((COALESCE(( SELECT sum(x.amount) AS sum
                    FROM public.supplier_invoice_payment x
-                  WHERE (x.invoice_id = si.id)), (0)::numeric))::numeric(14,2) AS pagado
+                  WHERE (x.invoice_id = si.id)), (0)::numeric) +
+                CASE
+                    WHEN ((si.source = 'traida'::text) AND (si.import_pending IS NOT NULL)) THEN GREATEST((COALESCE(si.grand_total, (0)::numeric) - si.import_pending), (0)::numeric)
+                    ELSE (0)::numeric
+                END))::numeric(14,2) AS pagado
            FROM public.supplier_invoice si
         )
  SELECT id AS invoice_id,
