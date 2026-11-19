@@ -222,6 +222,11 @@ test('N08 · 4 · guarda lo mismo: el mismo asiento con la ficha nueva y con la 
   await page.goto(NUEVO, { waitUntil: 'load' })
   await expect(page.getByPlaceholder('Ej.: Alquiler del local de octubre')).toBeVisible({ timeout: 40_000 })
   await expect(page.locator('.cxa'), 'con el interruptor apagado, la pantalla de hoy').toHaveCount(0)
+  // Que la pantalla de hoy haya leído la analítica de la empresa antes de escribir: mientras no la
+  // sabe, pide el local (useAnalitica, «como antes del S01») y la prueba elegía «común» en una empresa
+  // con el eje apagado (e2e 1531: la de hoy guardó is_common true y la nueva, false).
+  await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => { /* lo que siga abierto no cuenta */ })
+  await page.waitForTimeout(500)
   await page.getByPlaceholder('Ej.: Alquiler del local de octubre').fill('Alquiler de octubre')
   const hoy: [string, string, string][] = [[e.gasto, '1.000,00', ''], [e.otro, '210', ''], [e.banco, '', '1.210,00']]
   for (let i = 0; i < hoy.length; i++) {
