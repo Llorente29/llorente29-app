@@ -8,7 +8,7 @@
 //      cuadre y «Qué es» del elegido;
 //   2. con el teclado: ↓ y Intro confirman lo propuesto (1456: el probable; 1366:
 //      un seguro, y el probable desde la pantalla de hoy, para medir);
-//   3. «Confirmar los N» dice cuántos y cuánto;
+//   3. «Confirmar los N» dice cuántos y cuánto, y lo casado se valida desde «Qué es»;
 //   4. «Deshacer» en «Qué es» de lo casado dice qué ha deshecho;
 //   5. «Escribir uno a mano», entero con el teclado (F4 en la cuenta): validado;
 //   6. «El documento»: «Falta el justificante»;
@@ -91,7 +91,8 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       // ── 1 · La rejilla ──
       await expect(page.getByRole('tab', { name: 'Bancos', exact: true })).toHaveAttribute('aria-selected', 'true')
       await expect(pantalla(page).getByRole('combobox', { name: 'Banco' })).toContainText(`${p.cuenta572} · Banco E05 ${lado}`)
-      await expect(pantalla(page).locator('[data-prueba="por-revisar"]')).toHaveText('4 por revisar')
+      // Por confirmar (3), por aclarar (1) y por validar (el casado solo, con su asiento propuesto): la regla de la cinta.
+      await expect(pantalla(page).locator('[data-prueba="por-revisar"]')).toHaveText('5 por revisar')
       const etiquetas: [keyof Preparado['movs'], string][] = [['seguro1', 'Seguro'], ['seguro2', 'Seguro'], ['probable', 'Mira esto'], ['aclarar', 'Sin saber'], ['casado', 'Hecho solo']]
       for (const [k, t] of etiquetas) await expect(fila(page, p.movs[k]).locator('.kb-etiqueta')).toHaveText(t)
       await expect(fila(page, p.movs.probable)).toContainText('RECIBO ELECTRICIDAD EJEMPLO')
@@ -134,6 +135,15 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(fila(page, p.movs.seguro1).locator('.kb-etiqueta')).toHaveText('Hecho', { timeout: 30_000 })
       await expect(pantalla(page).getByRole('button', { name: /^Confirmar los/ })).toHaveCount(0)
       if (grande) await captura(page, 'confirmados', ancho)
+
+      // ── 3b · Validar lo casado, desde «Qué es» (la misma llamada y la misma frase que «Por validar» de hoy) ──
+      await fila(page, p.movs.seguro1).click()
+      const validar = page.locator('[data-prueba="que-es"] [data-prueba="validar"]')
+      await expect(validar).toBeVisible()
+      if (grande) await captura(page, 'casado-validar', ancho)
+      await validar.click()
+      await expect(aviso(page)).toHaveText(/^Validado: .+ es el asiento \d+\. Ya está en el libro diario\.$/, { timeout: 30_000 })
+      await expect(validar).toHaveCount(0, { timeout: 30_000 })
 
       // ── 4 · Deshacer lo casado ──
       await fila(page, p.movs.casado).click()

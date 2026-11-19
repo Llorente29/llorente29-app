@@ -30,7 +30,8 @@ import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { leerDatosBancos, subirTicket, type BancoVista } from '@/modules/conta/services/bancosPantallas'
 import { bancoInicial, mesInicial } from '@/modules/conta/bancos/navegacion'
 import { mesesElegibles, nombreCorto, PROPUESTA_RECALCULADA, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
-import { asientoQueSeCrea, confirmable, quienEs, textoDelBanco } from '@/modules/conta/lib/conciliarVista'
+import { asientoQueSeCrea, confirmable, porValidar, quienEs, textoDelBanco } from '@/modules/conta/lib/conciliarVista'
+import { validar } from '@/modules/conta/services/diarioService'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, EstadoFicha, type LineaAsiento } from '../ficha/piezas'
 import { PanelDocumento } from '../ficha/PanelDocumento'
@@ -58,7 +59,8 @@ const euros = (cent: number | null) => (cent === null ? '' : cifra(cent / 100))
 const primeraHoja = (nombres: Readonly<Record<string, string>>, prefijo: string) => Object.keys(nombres).filter((c) => c.startsWith(prefijo) && c.length >= 8).sort()[0] ?? null
 
 export default function PantallaBancos() {
-  const accountId = useCuentaConta().accountId ?? ''
+  const cuentaConta = useCuentaConta()
+  const accountId = cuentaConta.accountId ?? ''
   const { activa } = useEmpresas()
   const pestana = usePestana()
   const seVe = useSeVe()
@@ -116,6 +118,11 @@ export default function PantallaBancos() {
   const confirmar = (x: MovimientoBanco) => hacer(async () => { await confirmarPropuesta(ctx, x); return `Confirmado: ${x.propuesta?.que ?? 'el movimiento'} (${quienEs(x)}).` })
   const confirmarLosN = () => hacer(async () => textoConfirmados(await confirmarVarios(ctx, movs.filter((x) => seguros.includes(x.id)), quienEs)))
   const deshacer = (x: MovimientoBanco) => hacer(async () => textoDeshecho(quienEs(x), await deshacerCasado(x)))
+  // Validar el asiento de lo casado, como «Por validar» de hoy (Movimientos.validarUno): la misma llamada y la misma frase.
+  const validarAsiento = (x: MovimientoBanco) => hacer(async () => {
+    const r = await validar(x.casado!.asientoId!, cuentaConta.userName ?? null)
+    return `Validado: ${x.casado?.asientoConcepto ?? quienEs(x)} (${quienEs(x)}) es el asiento ${r.numero}. Ya está en el libro diario.`
+  })
 
   // ── El teclado de la rejilla ──
   const rejilla = useRef<HTMLDivElement>(null)
@@ -142,7 +149,7 @@ export default function PantallaBancos() {
     ? { tono: 'gris' as const, fuerte: 'Sin saldo del extracto.', resto: banco?.cuenta ? `Sumied, ${euros(cuadre?.libroCent ?? null)}` : '' }
     : cuadre.faltaCent === 0
       ? { tono: 'verde' as const, fuerte: 'El saldo cuadra.', resto: `Banco y Sumied, ${euros(cuadre.bancoCent)} a ${fechaVista(lectura.datos?.extractoHasta ?? '').slice(0, 5)}` }
-      : { tono: 'ambar' as const, fuerte: 'No cuadra.', resto: `Banco ${euros(cuadre.bancoCent)} y Sumied ${euros(cuadre.libroCent)}: ${euros(Math.abs(cuadre.faltaCent ?? 0))} de diferencia` }
+      : { tono: 'ambar' as const, fuerte: 'No cuadra.', resto: `Banco ${euros(cuadre.bancoCent)} y Sumied ${euros(cuadre.libroCent)}` }
 
   if (datos && bancos.length === 0) return <div className="kf-ficha"><p className="kf-aviso" data-tono="falta">No hay ningún banco dado de alta.</p></div>
   if (lectura.error) return <div className="kf-ficha"><p className="kf-aviso" data-tono="mal">No se han podido leer los movimientos: {lectura.error}</p></div>
@@ -159,7 +166,7 @@ export default function PantallaBancos() {
         {!cargando && seguros.length > 0 && (
           <button type="button" className="kf-boton-hueco kb-confirmar-n" disabled={ocupado} onClick={() => void confirmarLosN()}>Confirmar los {seguros.length}</button>
         )}
-        {!cargando && <EstadoFicha {...estado} />}
+        {!cargando && <span className="kb-cuadre" title={`${estado.fuerte} ${estado.resto}`}><EstadoFicha {...estado} /></span>}
         <div className="kf-cabecera-botones">
           <button type="button" className="kf-boton-hueco" onClick={() => navegar(rutaBancos('subir'))}>Traer el extracto</button>
         </div>
@@ -203,7 +210,7 @@ export default function PantallaBancos() {
           alElegir={m ? (f) => void hacer(async () => { await subirTicket(accountId, m.id, f); return `Justificante guardado en el movimiento de ${quienEs(m)}.` }) : undefined}
           acepta="image/*,application/pdf" tituloSoltar="Falta el justificante" textoSoltar="Arrastra aquí la foto o el PDF del ticket, o pulsa para elegirlo."
           otra={{ nombre: 'Qué es', contenido: m ? <QueEs m={m} banco={banco} nombres={nombres} cuentas={cuentasPlan} ocupado={ocupado} companyId={companyId}
-            confirmar={() => void confirmar(m)} deshacer={() => void deshacer(m)} hacer={hacer}
+            confirmar={() => void confirmar(m)} deshacer={() => void deshacer(m)} validar={() => void validarAsiento(m)} hacer={hacer}
             abrirHoy={() => navegar(`${rutaBancos('movimientos')}?banco=${banco?.id ?? ''}&mes=${mes ?? ''}&mov=${m.id}`)} /> : <p className="kf-panel-nota">Elige un movimiento.</p> }} />
       </div>
     </div>
@@ -211,9 +218,9 @@ export default function PantallaBancos() {
 }
 
 /** «Qué es»: el movimiento, lo que propone Sumied y su porqué, y lo que se puede hacer con él. */
-function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, deshacer, hacer, abrirHoy }: {
+function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, deshacer, validar: validarIt, hacer, abrirHoy }: {
   m: MovimientoBanco; banco: BancoVista | null; nombres: Readonly<Record<string, string>>; cuentas: CuentaDelPlan[]; ocupado: boolean; companyId: string
-  confirmar: () => void; deshacer: () => void; hacer: (q: () => Promise<string>) => Promise<void>; abrirHoy: () => void
+  confirmar: () => void; deshacer: () => void; validar: () => void; hacer: (q: () => Promise<string>) => Promise<void>; abrirHoy: () => void
 }) {
   const [texto, setTexto] = useState<string | null>(null)
   const [regla, setRegla] = useState(false)
@@ -233,6 +240,7 @@ function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, desh
       {casado ? (
         <>
           <p><strong>{m.casado!.porQuien === 'folvy' ? 'Hecho solo.' : 'Hecho.'}</strong> {m.casado!.porque}</p>
+          {porValidar(m) && <button type="button" className="kf-guardar kb-si" disabled={ocupado} onClick={validarIt} data-prueba="validar">Validar el asiento</button>}
           <button type="button" className="kf-enlace" disabled={ocupado} onClick={deshacer} data-prueba="deshacer">Deshacer</button>
         </>
       ) : (
@@ -290,7 +298,7 @@ function AMano({ banco, hoy, cuentas, ocupado, hacer }: { banco: BancoVista; hoy
   return (
     <form className="kb-a-mano" ref={raiz} onKeyDown={teclas} onSubmit={(e) => { e.preventDefault(); apuntar() }} aria-label="Escribir uno a mano" data-prueba="a-mano">
       <h2 className="kf-titulo">Escribir uno a mano <span className="kb-apoyo">· si no viene en el extracto</span></h2>
-      <div className="kf-fila" style={{ gridTemplateColumns: '1fr 2.2fr 2.4fr 1fr 1fr auto' }}>
+      <div className="kf-fila" style={{ gridTemplateColumns: '104px 2fr 2.2fr 1fr 1fr auto' }}>
         <Casilla rotulo="Fecha" htmlFor="kb-fecha"><CasillaFecha id="kb-fecha" etiqueta="Fecha" iso={fecha} hoy={hoy} poner={setFecha} /></Casilla>
         <Casilla rotulo="Cuenta" origen="F4" htmlFor="kb-cuenta">
           <Buscador id="kb-cuenta" etiqueta="Cuenta" valor={texto ?? (cuenta ? `${cuenta.codigo} · ${cuenta.nombre}` : '')} cuenta={cuenta?.codigo ?? null} ponerTexto={(t) => { setTexto(t); setCuenta(null) }}

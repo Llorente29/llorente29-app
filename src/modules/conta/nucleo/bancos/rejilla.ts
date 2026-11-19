@@ -8,7 +8,7 @@
 // lib/bancosVista): no cambia ninguna regla de la conciliación. Núcleo puro: lo
 // prueba tests/conta/e05-bancos.
 
-import { asientoQueSeCrea, preseleccionado } from '@/modules/conta/lib/conciliarVista'
+import { asientoQueSeCrea, bandejaDe, porValidar, preseleccionado } from '@/modules/conta/lib/conciliarVista'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import type { MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 
@@ -39,9 +39,14 @@ export function etiquetaDe(m: MovimientoBanco): Etiqueta {
   }
 }
 
-/** Los que esperan a una persona («14 por revisar»): lo que no está casado, ni apartado, ni es de antes del corte. */
+/**
+ * Los que esperan a una persona («14 por revisar»), con la MISMA regla que la cinta y la línea de
+ * estado (conta_pendientes) y que las bandejas de hoy (cuadreDe): por confirmar, por aclarar y lo
+ * casado cuyo asiento sigue propuesto (por validar). Si no, la cabecera y la línea de abajo dirían
+ * dos números distintos en la misma pantalla.
+ */
 export const porRevisar = (movs: readonly MovimientoBanco[]): number =>
-  movs.filter((m) => m.estado === 'propuesto' || m.estado === 'por_aclarar' || m.estado === 'pendiente' || m.estado === 'posible_repetido').length
+  movs.filter((m) => bandejaDe(m) === 'confirmar' || bandejaDe(m) === 'aclarar' || porValidar(m)).length
 
 /**
  * Los seguros, ya marcados para confirmar en bloque: los mismos que preselecciona

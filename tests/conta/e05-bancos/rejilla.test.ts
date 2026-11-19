@@ -56,8 +56,13 @@ describe('porRevisar y segurosMarcados', () => {
     mov({ id: 'a', estado: 'por_aclarar' }),
     mov({ id: 'c', estado: 'casado', casado: { id: 'c', tipo: 'factura', porque: '', porQuien: 'folvy', asientoId: 'x', asientoConcepto: null } }),
     mov({ id: 'i', estado: 'ignorado' }),
+    mov({ id: 'v', estado: 'casado', casado: { id: 'v', tipo: 'cuenta', porque: '', porQuien: 'persona', asientoId: 'y', asientoConcepto: null, asientoEstado: 'propuesto' } }),
   ]
-  it('«N por revisar»: lo que espera a una persona', () => { expect(porRevisar(movs)).toBe(4) })
+  it('«N por revisar»: por confirmar, por aclarar y por validar, con la misma regla que las bandejas de hoy', () => {
+    expect(porRevisar(movs)).toBe(5)
+    const c = cuadreDe(movs, null, null, '2026-07').cuenta
+    expect(porRevisar(movs)).toBe(c.confirmar + c.aclarar + c.validar)
+  })
   it('los seguros marcados son los mismos que preselecciona la pantalla de hoy (cuadreDe)', () => {
     expect(segurosMarcados(movs)).toEqual(['s'])
     expect(segurosMarcados(movs)).toEqual(cuadreDe(movs, null, null, '2026-07').preseleccionados)

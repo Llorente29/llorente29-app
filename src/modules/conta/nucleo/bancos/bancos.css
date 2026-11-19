@@ -3,8 +3,10 @@
  * E05 · Bancos del núcleo (maqueta nucleo_6_bancos): la rejilla de ERP10 con la
  * densidad de la ficha (K04: kf-*). Solo lo que no tiene la ficha (kb-*).
  */
-.kb-banco { height: 28px; padding: 0 8px; border: 1px solid var(--kf-casilla-borde); border-radius: 4px; background: var(--k-blanco); font: inherit; font-weight: 600; }
-.kb-confirmar-n { font-weight: 600; }
+.kb-banco { flex: 0 1 300px; min-width: 180px; height: 28px; padding: 0 8px; border: 1px solid var(--kf-casilla-borde); border-radius: 4px; background: var(--k-blanco); font: inherit; font-weight: 600; }
+.kb-confirmar-n { font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.kb-cuadre { min-width: 0; display: flex; }
+.kb-cuadre .kf-estado { min-width: 0; }
 .kb-izquierda { gap: 8px; }
 
 .kb-rejilla { flex: 1; min-height: 120px; overflow-y: auto; border: 1px solid var(--k-borde); border-radius: 4px; }
