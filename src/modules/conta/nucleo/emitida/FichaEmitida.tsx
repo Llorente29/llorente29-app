@@ -435,11 +435,12 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
                   {modo !== 'hecha_sola' && origenCobro && <span className="kf-titulo-derecha kf-origen" data-prueba="origen-cobro">{origenCobro}</span>}
                 </h2>
                 <div className="kf-cobro">
-                  {modo === 'hecha_sola' ? <input readOnly tabIndex={-1} id="kf-cobro" aria-label="La cuenta del cobro" value={cobroApuntado?.cuenta ?? ''} placeholder="Pendiente de cobrar" data-cuenta={cobroApuntado?.cuenta} />
-                    : <Buscador id="kf-cobro" etiqueta="La cuenta del cobro" cargando={!emp} valor={textoCobro ?? be.cobroCuenta ?? ''} cuenta={be.cobroCuenta || null} placeholder="Pendiente de cobrar"
+                  {modo === 'hecha_sola' ? <input readOnly tabIndex={-1} id="kf-cobro" aria-label="La cuenta del cobro" value={cobroApuntado?.cuenta ?? ''} data-cuenta={cobroApuntado?.cuenta} />
+                    : <Buscador id="kf-cobro" etiqueta="La cuenta del cobro" cargando={!emp} valor={textoCobro ?? be.cobroCuenta ?? ''} cuenta={be.cobroCuenta || null}
                         ponerTexto={(t) => { setTextoCobro(t); if (!t.trim()) ed.poner('cobroCuenta', '') }} lista={(t) => cuentasQueEncajan(t, cuentasCobro, 8)}
                         texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) }} />}
-                  <input readOnly tabIndex={-1} aria-label="Nombre de la cuenta del cobro" value={nombreDelCobro} title={nombreDelCobro || undefined} />
+                  {/* Sin cuenta, «Pendiente de cobrar» en la casilla ancha (en la de la cuenta no cabía entero). */}
+                  <input readOnly tabIndex={-1} aria-label="Nombre de la cuenta del cobro" value={nombreDelCobro} title={nombreDelCobro || undefined} placeholder="Pendiente de cobrar" />
                 </div>
                 {(modo !== 'hecha_sola' || cobroApuntado) && (
                   <div className="kf-pareja">
