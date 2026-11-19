@@ -4,6 +4,8 @@
  * densidad de la ficha (K04: kf-*). Solo lo que no tiene la ficha (kb-*).
  */
 .kb-banco { flex: 0 1 300px; min-width: 180px; height: 28px; padding: 0 8px; border: 1px solid var(--kf-casilla-borde); border-radius: 4px; background: var(--k-blanco); font: inherit; font-weight: 600; }
+.kb-mes { flex: 0 0 auto; height: 28px; padding: 0 8px; border: 1px solid var(--kf-casilla-borde); border-radius: 4px; background: var(--k-blanco); font: inherit; }
+.kb-otra-factura { display: flex; flex-direction: column; gap: 4px; }
 .kb-confirmar-n { font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 .kb-cuadre { min-width: 0; display: flex; }
 .kb-cuadre .kf-estado { min-width: 0; }
