@@ -177,7 +177,7 @@ test('X07 · contra staging: una nómina y un pago salen como asientos, con su f
 
   // 4 · Paso 3: el sumas y saldos con todo importado. Las cuentas de la nómina y del pago se comparan y quedan igual.
   await page.getByRole('button', { name: 'Ya lo he importado' }).click()
-  await expect(page.getByRole('heading', { name: 'Sube el «Sumas y saldos» de ERP10' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible()
   await page.getByLabel('El sumas y saldos de ERP10').setInputFiles({ name: 'sumas_y_saldos_x07.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: await sumas(s, fin) })
   const comparada = page.getByRole('table', { name: 'Cuenta a cuenta' })
   const grupoIgual = comparada.locator('tbody').filter({ has: page.locator('tr.cxe-grupo', { hasText: /^\d+ cuentas? quedan? igual$/ }) })

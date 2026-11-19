@@ -184,6 +184,11 @@ verify_jwt = false
 [functions.conta-diez-traspaso]
 verify_jwt = true
 
+# (19/11) conta-erp10-leer · X10. Entrar en ERP10 (lista cerrada y NIF) y leer
+# sus apuntes para el paso 3. Solo lee; con la sesión de quien pulsa.
+[functions.conta-erp10-leer]
+verify_jwt = true
+
 # (13/11) conta-pdf · B01r26. El enlace permanente del PDF de una factura que
 # Diez descarga al importar el Excel del traspaso («Url documento»).
 # verify_jwt = FALSE, y es deliberado: quien llama es el servidor de Diez, sin

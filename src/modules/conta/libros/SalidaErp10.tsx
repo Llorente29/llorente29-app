@@ -33,6 +33,7 @@ import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepara
 import { comparar, fechaDelSumas } from '@/modules/conta/erp10/comparar'
 import { abrirExcel, leerSumasYSaldos, reconocer, texto as textoDe, type FilaSumas } from '@/modules/conta/lib/traer'
 import { ComprobarErp10, type Subido } from '@/modules/conta/libros/ComprobarErp10'
+import { leerSaldosErp10 } from '@/modules/conta/services/erp10ApiService'
 import {
   apuntarLote, bajarPdf, carpetaDeLaSalida, leerAsientosPorSalir, leerCambiadas, leerComprobar, leerDiasTpvPorSalir, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
   ponerAMano, ponerIgualado, volverASacar,
@@ -217,6 +218,23 @@ export function SalidaErp10() {
       setErrorSubir(e instanceof Error ? e.message : 'No se ha podido leer el fichero.')
     }
   }
+  // X10 · Sin Excel: los saldos de ERP10 leídos ahora (las líneas de sus apuntes sumadas por
+  // cuenta, desde el día de inicio de la sociedad hasta la fecha elegida). Igual que un Excel
+  // subido, con su nombre («ERP10, leído el …») y su fecha.
+  async function leerDeErp10(hasta: string) {
+    if (!mes) return
+    setErrorSubir(null); setFallo(null); setDicho(null); setHaciendo('Entrando en ERP10…')
+    try {
+      const base = await leerComprobar(L.companyId, hasta)
+      const r = await leerSaldosErp10(L.companyId, base.desde, hasta)
+      const hora = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(r.leidoEn)).replace(',', '')
+      setSubido({ nombre: `ERP10, leído el ${hora}`, fecha: hasta, avisos: [], cabecera: [`hasta ${hasta.slice(8, 10)}/${hasta.slice(5, 7)}/${hasta.slice(0, 4)}`], filas: r.filas, leidoEn: hora })
+      setElegida(null)
+      setVueltaC((v) => v + 1)
+    } catch (e) {
+      setErrorSubir(e instanceof Error ? e.message : 'No se ha podido entrar en ERP10.')
+    } finally { setHaciendo(null) }
+  }
   async function aMano(entryId: string) {
     setFallo(null); setDicho(null); setHaciendo('Apuntando…')
     try {
@@ -258,7 +276,7 @@ export function SalidaErp10() {
   // X07 · Ya igualado (este mes, este fichero, esta fecha): el botón lo dice y se apaga; la pantalla se ve acabada.
   const g = comprobar.datos?.igualado
   const yaIgualado = !!g && !!subido && g.mes === mes && g.fichero === subido.nombre && g.fechaSaldos === fecha
-  const porQueNoIgualar = !subido ? 'Primero sube el sumas y saldos de ERP10.'
+  const porQueNoIgualar = !subido ? 'Primero compara con ERP10 o sube su sumas y saldos.'
     : !comparacion ? 'Comparando…'
     : !comparacion.igualable ? 'Queda alguna diferencia sin explicar o por hacer.' : undefined
 
@@ -456,7 +474,7 @@ export function SalidaErp10() {
 
       {s && paso === 3 && (
         <ComprobarErp10 subido={subido} base={comprobar.datos} comparacion={comparacion} error={errorSubir ?? comprobar.error}
-          elegida={elegida} elegir={setElegida} subir={(f) => { void subir(f) }} aMano={(id) => { void aMano(id) }} volver={(id) => { void volverASacarla(id) }}
+          elegida={elegida} elegir={setElegida} subir={(f) => { void subir(f) }} leerErp10={(h) => { void leerDeErp10(h) }} aMano={(id) => { void aMano(id) }} volver={(id) => { void volverASacarla(id) }}
           ocupado={!!haciendo} cargando={comprobar.cargando || datos.cargando} mes={mes} />
       )}
 
