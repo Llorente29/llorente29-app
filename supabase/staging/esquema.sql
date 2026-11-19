@@ -68053,6 +68053,86 @@ COMMENT ON FUNCTION public.e2e_e05_preparar(p_lado text, p_motor text) IS 'SOLO 
 
 
 --
+-- Name: e2e_e05b_preparar(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.e2e_e05b_preparar(p_lado text, p_motor text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  r jsonb; v_acc uuid; emp uuid; v_banco uuid; v_prov uuid; v_nif text; v_ca uuid; v_st uuid; v_m uuid; v_f uuid; v_n int;
+  v_sello text := upper(to_hex((extract(epoch from clock_timestamp()) * 1000)::bigint % 1679616));
+  c record; fact jsonb := '{}'::jsonb; pagos jsonb := '{}'::jsonb; sept jsonb := '{}'::jsonb;
+begin
+  r := public.e2e_e05_preparar(p_lado, p_motor);
+  v_acc := (r->>'cuenta')::uuid; emp := (r->>'empresa')::uuid; v_banco := (r->>'banco')::uuid;
+
+  -- El proveedor, con su subcuenta de la 4000 (una por llamada) y su enlace «principal», como lo deja el alta.
+  -- Un NIF inventado por tamaño (la cuenta no deja repetirlo: ux_supplier_account_tax_id); si ya está, el mismo proveedor.
+  v_nif := case p_lado when 'ancho' then 'B00000005' when 'estrecho' then 'B00000006' else 'B00000007' end;
+  select id into v_prov from public.supplier where account_id = v_acc and tax_id = v_nif;
+  if v_prov is null then
+    insert into public.supplier (account_id, name, legal_name, tax_id, tax_id_type, country_code)
+    values (v_acc, 'Proveedor de Prueba Bancos ' || p_lado, 'Proveedor de Prueba Bancos ' || p_lado || ', S.L.', v_nif, 'nif_es', 'ES')
+    returning id into v_prov;
+  end if;
+  select 501 + count(*) into v_n from public.company_account where company_id = emp and code ~ '^40000[5-9][0-9]{2}$';
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
+  values (v_acc, emp, 'pymes', '40000' || lpad(v_n::text, 3, '0'), '4000', 'Proveedor de Prueba Bancos ' || p_lado, 'own', 'manual')
+  returning id into v_ca;
+  insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+  values (v_acc, emp, v_ca, 'supplier', v_prov::text, 'principal', 'manual');
+
+  -- Sus dos facturas, aprobadas y sin pagar, y un pago de cada una en octubre, sin propuesta.
+  select id into v_st from public.bank_statement where treasury_account_id = v_banco and period_from = date '2026-10-01';
+  for c in select * from (values
+      ('nueva', 'E05B-' || upper(left(p_lado, 3)) || '-1-' || v_sello, date '2026-10-02', 100.00::numeric, date '2026-10-16'),
+      ('hoy', 'E05B-' || upper(left(p_lado, 3)) || '-2-' || v_sello, date '2026-10-03', 50.00::numeric, date '2026-10-17')) t(caso, numero, fecha, base, pago) loop
+    insert into public.supplier_invoice (account_id, company_id, supplier_id, invoice_number, invoice_date, status, source,
+      tax_base_total, tax_total, grand_total, created_by_name)
+    values (v_acc, emp, v_prov, c.numero, c.fecha, 'aprobada', 'manual', c.base, round(c.base * 0.21, 2), round(c.base * 1.21, 2), 'Prueba e2e E05b')
+    returning id into v_f;
+    insert into public.bank_movement (account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount,
+      bank_concept, clean_concept, fingerprint, soft_fingerprint, status, reason)
+    values (v_acc, emp, v_banco, v_st, c.pago, c.pago, -round(c.base * 1.21, 2),
+      'TRANSFERENCIA PROVEEDOR DE PRUEBA BANCOS ' || upper(p_lado), 'Proveedor de Prueba Bancos ' || p_lado,
+      format('e05b-%s-%s-%s', p_lado, c.caso, v_sello), format('e05b-suave-%s-%s-%s', p_lado, c.caso, v_sello),
+      'por_aclarar', 'No sé qué factura paga: el banco no trae su número.')
+    returning id into v_m;
+    fact := fact || jsonb_build_object(c.caso, jsonb_build_object('id', v_f, 'numero', c.numero, 'total', round(c.base * 1.21, 2)));
+    pagos := pagos || jsonb_build_object(c.caso, v_m);
+  end loop;
+
+  -- Septiembre: su extracto con dos movimientos.
+  insert into public.bank_statement (account_id, company_id, treasury_account_id, source, format, file_name, period_from, period_to,
+    movements_count, new_count, repeated_count, continuity, opening_balance, closing_balance, balanced, imported_by_name)
+  values (v_acc, emp, v_banco, 'fichero', 'n43', 'extracto-e05b-sep.n43', date '2026-09-01', date '2026-09-30', 2, 2, 0, 'primero', 900, 1000, true, 'Prueba e2e E05b')
+  returning id into v_st;
+  for c in select * from (values
+      ('cargo', date '2026-09-10', -30.00::numeric, 'RECIBO TELEFONO EJEMPLO', 'Teléfono Ejemplo'),
+      ('abono', date '2026-09-25', 130.00::numeric, 'TRANSFERENCIA RECIBIDA EJEMPLO', 'Cliente Ejemplo')) t(caso, fecha, importe, banco, limpio) loop
+    insert into public.bank_movement (account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount,
+      bank_concept, clean_concept, fingerprint, soft_fingerprint, status, reason)
+    values (v_acc, emp, v_banco, v_st, c.fecha, c.fecha, c.importe, c.banco, c.limpio,
+      format('e05b-%s-%s-%s', p_lado, c.caso, v_sello), format('e05b-suave-%s-%s-%s', p_lado, c.caso, v_sello),
+      'por_aclarar', 'No sé qué es.')
+    returning id into v_m;
+    sept := sept || jsonb_build_object(c.caso, v_m);
+  end loop;
+
+  return r || jsonb_build_object('proveedor', v_prov, 'cuentaProveedor', '40000' || lpad(v_n::text, 3, '0'), 'facturas', fact, 'pagos', pagos, 'septiembre', sept);
+end $_$;
+
+
+--
+-- Name: FUNCTION e2e_e05b_preparar(p_lado text, p_motor text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.e2e_e05b_preparar(p_lado text, p_motor text) IS 'SOLO STAGING (semilla E05b): lo de e2e_e05_preparar, un proveedor con dos facturas pendientes y sus pagos en octubre, y el extracto de septiembre, para su e2e.';
+
+
+--
 -- Name: e2e_f01_preparar(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -182962,6 +183042,15 @@ GRANT ALL ON FUNCTION public.e2e_e04_preparar(p_lado text) TO service_role;
 REVOKE ALL ON FUNCTION public.e2e_e05_preparar(p_lado text, p_motor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.e2e_e05_preparar(p_lado text, p_motor text) TO authenticated;
 GRANT ALL ON FUNCTION public.e2e_e05_preparar(p_lado text, p_motor text) TO service_role;
+
+
+--
+-- Name: FUNCTION e2e_e05b_preparar(p_lado text, p_motor text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.e2e_e05b_preparar(p_lado text, p_motor text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.e2e_e05b_preparar(p_lado text, p_motor text) TO authenticated;
+GRANT ALL ON FUNCTION public.e2e_e05b_preparar(p_lado text, p_motor text) TO service_role;
 
 
 --
