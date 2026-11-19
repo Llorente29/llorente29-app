@@ -110,3 +110,6 @@
   .kl-tabla td { height: 23px; }
   .kl-ayuda { display: none; }
 }
+
+/* «Abrir el asiento» sin movimiento marcado: se ve, pero apagado. */
+.kl-listado .kf-enlace:disabled { color: var(--k-apoyo); text-decoration: none; cursor: default; }
