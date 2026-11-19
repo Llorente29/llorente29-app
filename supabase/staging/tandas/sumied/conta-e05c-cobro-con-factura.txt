@@ -1,0 +1,6 @@
+# E05c · Bancos: el cobro con su factura emitida. Sin tanda de producción: la base ya
+# lo hace. La semilla de su e2e (W07: va de verdad; llama a la del E05) y la prueba de
+# la regla 10 (ROLLBACK: casar el cobro, deshacerlo y volver a casarlo; la factura,
+# cobrada, pendiente y cobrada otra vez; y que no se cobre dos veces).
+supabase/seeds/conta/seed_e05c_cobro_con_factura_staging.sql
+supabase/staging/sql/20261119_e05c_cobro_con_factura_prueba.sql
