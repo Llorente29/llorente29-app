@@ -4,9 +4,18 @@
 #
 #   1945  Añade bank_saldo_extracto (el cierre del último extracto de la cadena) y
 #         bank_saldo_diario (el saldo con lo que está en el diario). Solo leen.
+#   2040  Conciliar valida: _bank_casar_nucleo deja el asiento validado en la misma
+#         transacción (persona, Sumied solo, remesa, pasarela); bank_deshacer no deshace
+#         en silencio lo que ya salió a ERP10 o lleva IVA de un trimestre presentado.
+#         Cambia en caliente las dos (misma firma, con respaldo y guarda de md5).
+#   2120  El recibo que el banco no cobró, por la cadena: _bank_cargos_anulados mide el
+#         hueco contra el cierre del extracto anterior; bank_apartar_no_cobrados (nueva)
+#         aparta lo que señala y no está conciliado. Cambia en caliente el detector.
 #
-# Primer paso: con este fichero, el ensayo mide en producción los asientos de Bancos
-# propuestos y la cadena de extractos de cada banco. Nada en el camino del pedido.
-# El real lo lanza Julio.
+# Medido en producción (ensayo 44600555762): 0 asientos de Bancos propuestos (820
+# validados en 3 cuentas): no hay nada que pasar a validado. Nada en el camino del
+# pedido. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/r08-bancos.sql
 supabase/migrations/20261119T1945_r08_saldo_del_banco.sql
+supabase/migrations/20261119T2040_r08_conciliar_valida.sql
+supabase/migrations/20261119T2120_r08_cargo_no_cobrado.sql

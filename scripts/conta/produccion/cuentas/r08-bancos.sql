@@ -10,6 +10,10 @@
 --      la apertura y el cierre de cada uno, lo nuevo que trae, el cierre del anterior y el
 --      hueco que sale con la cadena (cierre − (cierre anterior + lo nuevo)), frente al que
 --      guardó la lectura.
+--   4. Lo que dice el detector de cargos anulados (_bank_cargos_anulados) de cada empresa con
+--      bancos: el extracto, el día, el hueco y los importes de los cargos que señala.
+--   5. Los movimientos de cada extracto de noviembre con hueco por la cadena: día, importe,
+--      estado y si alguien dijo «No, es bueno» (sin concepto).
 --   3. De cada banco con su 572: el cierre del último extracto y el saldo de la 572 en Sumied,
 --      con lo validado y con lo propuesto.
 with b as (
@@ -58,4 +62,14 @@ select clave, valor from (
     from ult u join public.treasury_account t on t.id = u.treasury_account_id
     left join public.company_account_link k on k.entity = 'bank_account' and k.entity_id = t.id::text and k.role = 'principal' and k.company_id = t.company_id
     left join public.company_account a on a.id = k.company_account_id
+  union all
+  select 4, 'empresa ' || left(e.id::text, 8) || ' · detector · extracto ' || left(a.statement_id::text, 8) || ' · ' || to_char(a.dia, 'DD/MM'),
+         'hueco ' || a.hueco || ' · cargos ' || (select string_agg(m.amount::text, ' ' order by m.amount) from public.bank_movement m where m.id = any(a.ids))
+    from public.company e cross join lateral public._bank_cargos_anulados(e.id) a
+   where exists (select 1 from public.treasury_account t where t.company_id = e.id)
+  union all
+  select 5, 'banco ' || left(c.treasury_account_id::text, 8) || ' · extracto ' || lpad(c.orden::text, 3, '0') || ' · mov ' || to_char(m.op_date, 'DD/MM') || ' ' || m.amount || ' · ' || left(m.id::text, 4),
+         m.status || case when m.not_cancelled_at is not null then ' · dijeron «es bueno»' else '' end
+    from cad c join public.bank_movement m on m.statement_id = c.id
+   where c.period_to >= date '2026-11-01' and c.closing_balance - (c.cierre_anterior + c.nuevo) <> 0
 ) t order by o, clave;
