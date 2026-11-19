@@ -17,7 +17,7 @@ En cada push de un PR corre esto (`scripts/e2e/area.mjs`, `queCorre`):
 | Lo común (el marco, el menú, `module.tsx`, el diseño, el arranque de la app, `package.json`…: `LO_COMUN_SUMIED` y `LO_COMUN_AMBOS`) | Además, **la rápida de pantallas**: `tests/e2e/conta/humo/pantallas.spec.ts`. Abre cada pantalla de Sumied una vez, en ordenador y en móvil. Como mucho 10 min. |
 | Pedidos, cocina o reparto (`PEDIDOS`) | Además, **la corta** (`reparto/direccion-falta` y `reparto/quien-reparte`, 91 s). |
 | Una tanda | Además, su prueba de staging en ROLLBACK, el ensayo y el real (W01). |
-| La etiqueta `e2e-entera` | La entera, en 2 trozos. |
+| La etiqueta `e2e-entera` | La entera, en 3 trozos (desde el 19/11). |
 
 Todo va en un trozo, fichero a fichero (`scripts/e2e/por-fichero.sh`).
 

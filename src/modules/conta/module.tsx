@@ -42,6 +42,7 @@ import LiquidacionesPage from '@/modules/conta/compras/LiquidacionesPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
 import { AsientoSegun } from '@/modules/conta/nucleo/asiento/AsientoSegun'
+import { LibroDelDiarioSegun } from '@/modules/conta/nucleo/asiento/LibroDelDiarioSegun'
 import ComprasPage from '@/modules/conta/compras/ComprasPage'
 import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
 import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
@@ -211,6 +212,9 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.liquidacionFicha, element: enMarco(<LiquidacionFichaPage />, '¿Qué me paga esta liquidación?', true) },
     { path: CONTA.rutas.facturasEmitidas, element: <LlevarAVentas a={CONTA.rutas.facturasVenta} /> },
     { path: CONTA.rutas.nuevaEmitida, element: <LlevarAVentas a={CONTA.rutas.nuevaFacturaVenta} /> },
+    // N10 · Libros › Diario por su área y su acción: con el núcleo, a su pantalla; sin él, lo de hoy (la ruta del asiento).
+    { path: `${CONTA.rutas.libroDiario}/libro-diario`, element: enMarco(<LibroDelDiarioSegun a={CONTA.rutas.libroDiario} hoy={<AsientoSegun hoy={<AsientoPage />} />} />, '¿Por qué la comisión lleva IVA?', true) },
+    { path: `${CONTA.rutas.libroDiario}/diario-resumido`, element: enMarco(<LibroDelDiarioSegun a={CONTA.rutas.diarioResumido} hoy={<AsientoSegun hoy={<AsientoPage />} />} />, '¿Por qué la comisión lleva IVA?', true) },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoSegun hoy={<AsientoPage />} />, '¿Por qué la comisión lleva IVA?', true) },
     // S02 · La muestra del patrón único: las seis plantillas (datos inventados), solo fuera de
     // producción. Sustituye a las dos de antes (las piezas del M01 y el sistema de diseño del S01).
