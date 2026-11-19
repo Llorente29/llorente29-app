@@ -61,6 +61,8 @@ export interface LoQueNoHaSalido {
   porSacar: ReadonlySet<string>
   /** Los que no pueden salir, con su porqué. */
   noPueden: ReadonlyMap<string, string>
+  /** X08 · De los que no pueden salir, los que no salen por aquí (un día de ventas sin rango…): no son un fallo de la salida. */
+  noSaleAqui?: ReadonlySet<string>
 }
 
 // ── Lo que sale de la comparación ──────────────────────────────────────────────────
@@ -113,7 +115,7 @@ export function claseDe(a: AsientoSumied, salidos: ReadonlySet<string>, nh: LoQu
   const porque = nh.noPueden.get(a.entryId)
   // Lo que hay que meter a mano en ERP10 (una emitida rectificativa, un asiento que lleva I.V.A. y no es factura) no es un
   // fallo: todavía no sale por aquí. X07: «… métela a mano en ERP10 para que entre en su libro.» también.
-  if (porque !== undefined) return /mano en ERP10/i.test(porque) ? 'no_sale_aqui' : 'no_pudo'
+  if (porque !== undefined) return /mano en ERP10/i.test(porque) || nh.noSaleAqui?.has(a.entryId) ? 'no_sale_aqui' : 'no_pudo'
   return 'no_sale_aqui'
 }
 

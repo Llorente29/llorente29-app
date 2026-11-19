@@ -85,13 +85,13 @@ describe('Lo que sale de un mes', () => {
     expect(carpetaDeLaSalida({ carpeta: 'D:\\ERP10\\Doc', codigo: '0007' })).toBe('D:\\ERP10\\Doc')
   })
 
-  it('las filas de «Qué sale», con sus cifras de verdad; las emitidas salen como las recibidas; los asientos, sin sus apuntes (aquí no los trae), no van; los días del TPV se cuentan y no salen', () => {
+  it('las filas de «Qué sale», con sus cifras de verdad; las emitidas salen como las recibidas; los asientos, sin sus apuntes (aquí no los trae), no van; X08: un día del TPV sin sus datos se cuenta y no sale', () => {
     expect(s.filas.map((f) => [f.que, f.cuantos, f.importe, f.estado, f.texto, f.sale])).toEqual([
       ['Cuentas nuevas', 4, null, 'Listo', 'ERP10 no las tiene todavía; van las primeras', true],
       ['Facturas recibidas', 2, 242, 'Mira esto', '1 sin PDF · 2 no pueden salir', true],
       ['Facturas emitidas', 2, 231, 'Mira esto', '1 sin PDF · 1 no puede salir', true],
       ['Asientos', 0, 0, 'Nada', 'Ninguno este mes', true],
-      ['Días de ventas del TPV', 1, 500, 'Todavía no sale por aquí', 'Irán como asiento; aún no van', false],
+      ['Días de ventas del TPV', 0, 0, 'Mira esto', '1 no puede salir', true],
       ['Los PDF', 2, null, 'Listo', 'Con el nombre de su factura, para que ERP10 los pegue solo', true],
     ])
   })
@@ -106,12 +106,13 @@ describe('Lo que sale de un mes', () => {
       ['F-2026/0002', 'Cliente Inventado X05, S.L.', 110, null],
     ])
     expect(s.listas.asientos).toHaveLength(0)
-    expect(s.listas.tpv.map((p) => p.concepto)).toEqual(['Ventas del día inventado'])
+    expect(s.listas.tpv).toHaveLength(0)
   })
 
   it('«Qué mirar»: las sin PDF y las que no pueden salir, de cada clase, con su frase; y las corregidas después de salir', () => {
     expect(s.sinPdf.map((f) => [f.clase, f.numero])).toEqual([['emitida', 'F-2026/0002'], ['recibida', 'X04-2']])
-    expect(s.noPuedenSalir.map((x) => [x.clase, x.numero, x.porque])).toEqual([
+    expect(s.noPuedenSalir.filter((x) => x.clase === 'dia').map((x) => x.porque)).toEqual(['No se ha leído el día del TPV: vuelve a cargar la página.'])
+    expect(s.noPuedenSalir.filter((x) => x.clase !== 'dia').map((x) => [x.clase, x.numero, x.porque])).toEqual([
       ['recibida', 'X04-3', 'Es una compra de bienes en otro país de la UE, y ERP10 solo la admite al importar si es de servicios. Métela a mano en ERP10.'],
       ['recibida', 'X04-4', 'Esta factura reparte el gasto en 3 cuentas y ERP10 admite 2 al importar. Métela a mano en ERP10.'],
       ['emitida', 'R-2026/0001', 'Es una rectificativa, y ERP10 no la admite al importar. Métela a mano en ERP10.'],

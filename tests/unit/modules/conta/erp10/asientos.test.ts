@@ -125,10 +125,11 @@ describe('Qué sale como asiento (2.2 del encargo)', () => {
     expect(s.comprobaciones).toEqual(['Cada asiento cuadra'])
   })
   it('lo que lleva I.V.A. y no es factura no sale, con su frase y qué hacer', () => {
-    expect(s.noPuedenSalir.map((x) => [x.clase, x.porque])).toEqual([['asiento', 'Lleva I.V.A. y no es una factura: métela a mano en ERP10 para que entre en su libro.']])
+    expect(s.noPuedenSalir.filter((x) => x.clase !== 'dia').map((x) => [x.clase, x.porque])).toEqual([['asiento', 'Lleva I.V.A. y no es una factura: métela a mano en ERP10 para que entre en su libro.']])
   })
-  it('el día del TPV sigue sin salir, en su fila', () => {
-    expect(s.filas.find((f) => f.id === 'tpv')).toMatchObject({ cuantos: 1, estado: 'Todavía no sale por aquí', sale: false })
+  it('X08 · un día del TPV que no llega con los días leídos no sale y se cuenta, en su fila', () => {
+    expect(s.filas.find((f) => f.id === 'tpv')).toMatchObject({ cuantos: 0, estado: 'Mira esto', sale: true, texto: '1 no puede salir' })
+    expect(s.noPuedenSalir.filter((x) => x.clase === 'dia').map((x) => x.porque)).toEqual(['No se ha leído el día del TPV: vuelve a cargar la página.'])
   })
   it('la descarga: asientos.xlsx detrás de las subcuentas, con una fila por apunte y una huella por asiento', async () => {
     const d = await prepararDescarga(s)

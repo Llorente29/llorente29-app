@@ -1,0 +1,3 @@
+# X08 · la vuelta atrás: quita la función nueva. No la llama ninguna otra.
+cuenta: scripts/conta/produccion/cuentas/x08-dias-tpv-erp10.sql
+supabase/vuelta-atras/20261119T0551_x08_dias_tpv_por_salir.down.sql
