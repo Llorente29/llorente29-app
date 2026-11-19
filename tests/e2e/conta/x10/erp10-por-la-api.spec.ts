@@ -1,26 +1,31 @@
 /// <reference lib="dom" />
 // tests/e2e/conta/x10/erp10-por-la-api.spec.ts
 //
-// X10 · ERP10 por la API, fase 1 (leer y comparar), en el ordenador a 1456 × 816 y a
-// 1366 × 768, CONTRA STAGING con un ERP10 SIMULADO: nunca el de verdad. La función del
-// servidor (conta-erp10-leer) se sustituye en el navegador por el mismo cliente de ERP10
-// (_shared/erp10Cliente.ts: lista cerrada, NIF, suma por cuenta) hablando con el ERP10
-// simulado de las unitarias (tests/conta/erp10/simulado.ts). En el carril de la e2e, con
-// la cuenta A y su empresa de pruebas, con la sesión del administrador:
-//   1. El conector «ERP10 (despacho)»: las claves guardadas (la función que las cifra,
-//      simulada: aquí no se guarda ninguna), y debajo las sociedades. La de la prueba, con
-//      el código 101: «Probar» dice «Conectada con ERP10: empresa con NIF terminado en …,
-//      N líneas desde el 01/10/2026» y lo que hay por mes. Con el código 102 (una empresa
-//      del despacho con otro NIF): «El NIF de la empresa de ERP10 no es el de esta sociedad».
-//   2. El paso 3 sin Excel: «Comparar con ERP10» a fin de mes lee los saldos del ERP10
-//      simulado (los de Sumied menos una recibida que le falta) y arriba dice «Comparado
-//      con ERP10 (leído ahora, …), a …»; salen las tres cuentas de la factura.
+// X10 · ERP10 por la API, fase 1 (leer y comparar), y X10b: la conexión es de Sumied, en
+// la tarjeta «Conexión con ERP10» de Libros › Cierre › Salida a ERP10 (ya no en
+// Integraciones de Folvy). En el ordenador a 1456 × 816 y a 1366 × 768, CONTRA STAGING con
+// un ERP10 SIMULADO: nunca el de verdad. La función del servidor (conta-erp10-leer) se
+// sustituye en el navegador por el mismo cliente de ERP10 (_shared/erp10Cliente.ts: lista
+// cerrada, NIF, suma por cuenta, resumen sin datos) hablando con el ERP10 simulado de las
+// unitarias (tests/conta/erp10/simulado.ts). En el carril de la e2e, con la cuenta A y su
+// empresa de pruebas, con la sesión del administrador:
+//   1. Con las claves guardadas (la función que las cifra, simulada) y sin código de
+//      empresa: la tarjeta, plegada, dice qué falta, y el paso 3 también, con «Ir a la
+//      conexión con ERP10».
+//   2. En la tarjeta: con el código 102 (una empresa del despacho con otro NIF), «El NIF de
+//      la empresa de ERP10 no es el de esta sociedad»; con el 101, «Conectada con ERP10:
+//      empresa con NIF terminado en …, N líneas desde el 01/10/2026», y debajo lo que hay
+//      por mes con el nombre del tipo que da ERP10 («Por factura»), en singular si es uno.
+//   3. Plegada, el paso 3 «Comparar con ERP10» lee los saldos del ERP10 simulado (los de
+//      Sumied menos una recibida que le falta): «Comparado con ERP10 (leído ahora, …), a …»
+//      y las tres cuentas de la factura.
+//   4. «ERP10 (despacho)» no sale en el Marketplace de Folvy.
 // Datos inventados y que se ven inventados (T11).
 
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { CARRIL, CUENTA_A, enCarril, entrarComo, type Sesion } from '../sesion'
 import { rest } from '../api'
-import { ClienteErp10, finalDelNif, lineas, sumarPorCuenta, type AlmacenToken } from '../../../../supabase/functions/_shared/erp10Cliente'
+import { ClienteErp10, finalDelNif, lineas, porTipo, resumenSinDatos, sumarPorCuenta, type AlmacenToken } from '../../../../supabase/functions/_shared/erp10Cliente'
 import { erp10Simulado, type EmpresaSimulada } from '../../../conta/erp10/simulado'
 
 test.skip(CARRIL === null, 'El X10 escribe en la cuenta A (la conexión con ERP10, la salida, una recibida): necesita su carril.')
@@ -79,10 +84,13 @@ async function erp10DeMentira(page: Page, s: Sesion, empresas: Record<string, Em
         const visto = await c.probar()
         const ap = await c.apuntesEntre('2026-10-01', hoyEnMadrid())
         const n = lineas(ap)
+        const mes = hoyEnMadrid().slice(0, 7)
+        const r = await c.resumenDelMes(mes)
         return responder(200, {
           ok: true, frase: `Conectada con ERP10: empresa con NIF terminado en ${finalDelNif(visto)}, ${new Intl.NumberFormat('es-ES').format(n)} líneas desde el 01/10/2026.`,
-          enErp10: [{ mes: hoyEnMadrid().slice(0, 7), asientos: ap.length, lineas: n, facturas: 0, tipos: [{ tipo: 1, asientos: ap.length, lineas: n }] }],
+          enErp10: [{ mes, asientos: ap.length, lineas: n, facturas: 0, tipos: porTipo(ap), resumen: r.status === 200 ? resumenSinDatos(r.json) : { status: r.status, motivo: null } }],
           pdf: [], deSumied: [{ mes: hoyEnMadrid().slice(0, 7), partidas: 0, clases: {} }],
+          ultimoConApuntes: await c.ultimoMesConApuntes(mes),
         })
       }
       const ap = await c.apuntesEntre(b.desde!, b.hasta!)
@@ -115,6 +123,11 @@ async function prepararSalida(s: Sesion, hoy: string) {
   return new Map([['62300000', 4000], [iva, 840], ['41000002', -4840]])
 }
 
+/** Sin código de empresa para la sociedad de la prueba (la de otra pasada se borra). */
+async function sinCodigo(s: Sesion, connectorId: string) {
+  await rest(s, 'DELETE', `account_connector?account_id=eq.${CUENTA_A.id}&connector_id=eq.${connectorId}&scope=eq.company&company_id=eq.${EMPRESA_A}`, undefined, 'return=minimal')
+}
+
 /** El ERP10 simulado de la sociedad: un apunte por cuenta con el saldo de Sumied menos lo que le falta. */
 async function erp10ConLoDeSumied(s: Sesion, fecha: string, falta: Map<string, number>, nif: string): Promise<EmpresaSimulada> {
   const c = await api<{ desde: string; saldos: { codigo: string; saldo: number; erp: string | null }[] }>(s, 'POST', 'rpc/conta_erp10_comprobar', { p_company: EMPRESA_A, p_fecha: fecha })
@@ -136,7 +149,7 @@ async function conectar(s: Sesion) {
 }
 
 for (const tam of TAMANOS) {
-  test(`X10 · ${tam.width} × ${tam.height}: conectar con ERP10 (probar: bien y NIF distinto) y comparar el paso 3 sin Excel`, async ({ page }) => {
+  test(`X10b · ${tam.width} × ${tam.height}: la conexión con ERP10 en la salida (qué falta, probar: NIF distinto y bien) y el paso 3 sin Excel`, async ({ page }) => {
     test.skip((page.viewportSize()?.width ?? 1440) < 768, 'En el ordenador (encargo X10).')
     test.setTimeout(240_000)
     await page.setViewportSize(tam)
@@ -145,47 +158,55 @@ for (const tam of TAMANOS) {
     const hoy = hoyEnMadrid()
     const fin = finDeMes(hoy)
     const nif = await nifDeLaSociedad(s)
-    await conectar(s)
+    const connectorId = await conectar(s)
+    await sinCodigo(s, connectorId)
     const falta = await prepararSalida(s, hoy)
     const empresa101 = await erp10ConLoDeSumied(s, fin, falta, nif)
     await erp10DeMentira(page, s, { 101: empresa101, 102: { cif: NIF_OTRA, apuntes: [] } }, nif)
     // La función que cifra las claves, simulada: aquí no se guarda ninguna.
     await page.route('**/functions/v1/connector-credentials', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, hasCredentials: true }) }))
 
-    // 1 · El conector: las claves, y debajo las sociedades con «Probar».
-    await page.goto('/integraciones/marketplace', { waitUntil: 'load' })
-    await page.getByRole('button', { name: /ERP10 \(despacho\)/ }).first().click()
-    await expect(page.getByRole('heading', { name: 'ERP10 (despacho)', level: 1 })).toBeVisible({ timeout: 40_000 })
-    await expect(page.getByText('Claves guardadas')).toBeVisible({ timeout: 30_000 })
-    const sociedades = page.getByRole('region', { name: 'Las sociedades' })
-    const codigo = page.getByRole('textbox', { name: /^Código de empresa de / }).first()
-    const fila = page.locator(`[data-sociedad="${EMPRESA_A}"]`)
-    await expect(fila).toBeVisible({ timeout: 30_000 })
-    // Con el código de una empresa del despacho que no es esta sociedad: el NIF no coincide.
-    await fila.getByRole('textbox', { name: /^Código de empresa de / }).fill('102')
-    await fila.getByRole('button', { name: 'Probar' }).click()
-    await expect(fila.getByRole('alert')).toHaveText('El NIF de la empresa de ERP10 no es el de esta sociedad.', { timeout: 30_000 })
-    // Con el suyo: conectada, con contenido.
-    await fila.getByRole('textbox', { name: /^Código de empresa de / }).fill('101')
-    await fila.getByRole('button', { name: 'Probar' }).click()
-    const n = new Intl.NumberFormat('es-ES').format(empresa101.apuntes[0].Detalles.length)
-    await expect(fila.getByRole('status')).toHaveText(`Conectada con ERP10: empresa con NIF terminado en ${nif.replace(/[^0-9A-Za-z]/g, '').slice(-3).toUpperCase()}, ${n} líneas desde el 01/10/2026.`, { timeout: 30_000 })
-    await expect(fila.getByLabel('Lo que hay en ERP10')).toContainText(`${n} líneas en 1 asientos`)
-    await expect(codigo).toBeVisible()
-    await expect(sociedades).not.toContainText(/token|API|endpoint/)
-    // La captura, con la sociedad probada y lo que hay en ERP10 a la vista.
-    await fila.getByLabel('Lo que hay en ERP10').scrollIntoViewIfNeeded()
-    await page.screenshot({ path: `${DIR}/conector-${tam.width}.png` })
-
-    // 2 · El paso 3, sin Excel.
+    // 1 · Sin código: la tarjeta, plegada, lo dice; el paso 3 también, y lleva a ella.
     await page.goto('/conta/libros/cierre/salida-erp10', { waitUntil: 'load' })
     await expect(page.getByRole('heading', { name: 'Salida a ERP10', level: 1 })).toBeVisible({ timeout: 40_000 })
+    const tarjeta = page.getByRole('region', { name: 'Conexión con ERP10' })
+    await expect(tarjeta).toContainText('Falta el código de empresa de esta sociedad en ERP10', { timeout: 30_000 })
+    await expect(tarjeta.getByRole('button', { name: 'Conectar' })).toHaveAttribute('aria-expanded', 'false')
     await page.getByRole('button', { name: 'Descargar los ficheros' }).click()
     await expect(page.locator('.cxe-hecho')).toContainText('Queda apuntado.', { timeout: 60_000 })
     await page.getByRole('button', { name: 'Ya lo he importado' }).click()
     await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible()
-    await expect(page.getByLabel('A fecha')).toHaveValue(fin)
+    await expect(page.locator('.cxe-erp10-falta')).toContainText('Falta el código de empresa de esta sociedad en ERP10. Ponlo en «Conexión con ERP10», arriba, y pulsa «Probar».')
+    await expect(page.getByRole('button', { name: 'Comparar con ERP10' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'sube el Excel' })).toBeVisible()
+    await page.screenshot({ path: `${DIR}/paso3-falta-${tam.width}.png` })
+    await page.getByRole('button', { name: 'Ir a la conexión con ERP10' }).click()
+
+    // 2 · En la tarjeta: las claves guardadas, y probar con un código que no es y con el suyo.
+    await expect(tarjeta.getByRole('button', { name: 'Plegar' })).toHaveAttribute('aria-expanded', 'true')
+    await expect(tarjeta).toContainText('Claves guardadas · base del despacho DESPACHO_INVENTADO')
+    const codigo = tarjeta.getByRole('textbox', { name: 'Código de empresa en ERP10' })
+    await codigo.fill('102')
+    await tarjeta.getByRole('button', { name: 'Probar' }).click()
+    await expect(tarjeta.getByRole('alert')).toHaveText('El NIF de la empresa de ERP10 no es el de esta sociedad.', { timeout: 30_000 })
+    await codigo.fill('101')
+    await tarjeta.getByRole('button', { name: 'Probar' }).click()
+    const lineasTotal = empresa101.apuntes[0].Detalles.length
+    const n = new Intl.NumberFormat('es-ES').format(lineasTotal)
+    await expect(tarjeta.getByRole('status')).toHaveText(`Conectada con ERP10: empresa con NIF terminado en ${nif.replace(/[^0-9A-Za-z]/g, '').slice(-3).toUpperCase()}, ${n} líneas desde el 01/10/2026.`, { timeout: 30_000 })
+    const hay = tarjeta.getByRole('group', { name: 'Lo que hay en ERP10' })
+    await expect(hay).toContainText(`${n} líneas en 1 asiento (Por factura: ${n} líneas)`)
+    await expect(hay).not.toContainText('asientos')
+    await expect(hay).not.toContainText('tipo 1')
+    await expect(hay).toContainText(`El último mes con apuntes en ERP10 es ${['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][Number(aaaammdd(fin).toString().slice(4, 6)) - 1]}`)
+    await expect(tarjeta).not.toContainText(/token|API|endpoint/)
+    await expect(tarjeta).toContainText('Código de empresa 101')
+    await tarjeta.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: `${DIR}/conexion-${tam.width}.png` })
+
+    // 3 · Plegada, el paso 3 compara con ERP10 leído ahora.
+    await tarjeta.getByRole('button', { name: 'Plegar' }).click()
+    await expect(page.getByLabel('A fecha')).toHaveValue(fin)
     await page.getByRole('button', { name: 'Comparar con ERP10' }).click()
     await expect(page.getByText(new RegExp(`^Comparado con ERP10 \\(leído ahora, \\d\\d/\\d\\d \\d\\d:\\d\\d\\), a ${dm(fin).replace('/', '\\/')}$`))).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText('3 cuentas con diferencia')).toBeVisible({ timeout: 30_000 })
@@ -194,9 +215,16 @@ for (const tam of TAMANOS) {
     await expect(page.getByRole('button', { name: 'Subir un Excel' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Leer otra vez' })).toBeVisible()
     await expect(page.locator('.cxe-marco[aria-busy="true"]')).toHaveCount(0)
+    await page.evaluate(() => window.scrollTo(0, 0))
     const abajo = await page.evaluate(() => [document.querySelector('.cxe')?.getBoundingClientRect().bottom ?? 9999, window.innerHeight])
     expect(abajo[0], 'la pantalla acaba dentro de la ventana').toBeLessThanOrEqual(abajo[1])
     await page.screenshot({ path: `${DIR}/paso3-erp10-${tam.width}.png` })
+
+    // 4 · En Folvy no sale: ni en el Marketplace.
+    await page.goto('/integraciones/marketplace', { waitUntil: 'load' })
+    await expect(page.getByRole('heading', { name: 'Marketplace de integraciones', level: 1 })).toBeVisible({ timeout: 40_000 })
+    await expect(page.getByText('Diez (contabilidad)', { exact: true })).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText('ERP10 (despacho)')).toHaveCount(0)
     expect(errores).toEqual([])
   })
 }

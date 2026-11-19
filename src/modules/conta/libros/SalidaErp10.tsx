@@ -33,7 +33,8 @@ import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepara
 import { comparar, fechaDelSumas } from '@/modules/conta/erp10/comparar'
 import { abrirExcel, leerSumasYSaldos, reconocer, texto as textoDe, type FilaSumas } from '@/modules/conta/lib/traer'
 import { ComprobarErp10, type Subido } from '@/modules/conta/libros/ComprobarErp10'
-import { leerSaldosErp10 } from '@/modules/conta/services/erp10ApiService'
+import { leerConexionErp10, leerSaldosErp10, loQueFalta } from '@/modules/conta/services/erp10ApiService'
+import { ConexionErp10Tarjeta } from '@/modules/conta/libros/ConexionErp10'
 import {
   apuntarLote, bajarPdf, carpetaDeLaSalida, leerAsientosPorSalir, leerCambiadas, leerComprobar, leerDiasTpvPorSalir, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
   ponerAMano, ponerIgualado, volverASacar,
@@ -80,6 +81,13 @@ export function SalidaErp10() {
   const s: Salida | null = useMemo(() => (datos.datos ? armarSalida(datos.datos.ps, datos.datos.rs, datos.datos.es, carpeta, datos.datos.as, datos.datos.ds) : null), [datos.datos, carpeta])
 
   const [paso, setPaso] = useState<1 | 2 | 3>(1)
+  // X10b · La conexión con ERP10 (las claves de la cuenta y el código de esta sociedad), en la tarjeta de arriba.
+  const [vueltaConexion, setVueltaConexion] = useState(0)
+  const conexion = useLeerConservando(() => leerConexionErp10(L.accountId, L.companyId), `${L.companyId}:${vueltaConexion}`, L.companyId)
+  const [conexionAbierta, setConexionAbierta] = useState<boolean | null>(null)
+  const faltaErp10 = conexion.datos ? loQueFalta(conexion.datos) : null
+  // Plegada en una línea (con lo que falta, si falta) hasta que alguien la abre: así la salida sigue cabiendo en la ventana.
+  const abierta = conexionAbierta ?? false
   // Paso 3: el sumas y saldos subido (con su cabecera, para la fecha), la comparación y la cuenta elegida.
   const [subido, setSubido] = useState<(Subido & { cabecera: string[]; filas: FilaSumas[] }) | null>(null)
   const [errorSubir, setErrorSubir] = useState<string | null>(null)
@@ -130,7 +138,7 @@ export function SalidaErp10() {
     medir()
     window.addEventListener('resize', medir)
     return () => window.removeEventListener('resize', medir)
-  }, [salida.datos, paso])
+  }, [salida.datos, paso, abierta, conexion.datos])
 
   // «Darlo por igualado» con Intro, si se puede y no se está escribiendo en otro sitio: pulsa su botón (si está encendido).
   useEffect(() => {
@@ -297,7 +305,15 @@ export function SalidaErp10() {
   const nCambiadas = (datos.datos?.cambiadas.length ?? 0) + (s?.corregidas.length ?? 0)
   const nMirar = s ? CLASES.reduce((t, k) => t + (s.sinPdf.some((x) => x.clase === k) && !sinPdfAceptadas ? 1 : 0) + (s.noPuedenSalir.some((x) => x.clase === k) ? 1 : 0), 0) + (nCambiadas ? 1 : 0) : 0
 
+  const irALaConexion = () => {
+    setConexionAbierta(true)
+    requestAnimationFrame(() => document.getElementById('conexion-erp10')?.scrollIntoView({ block: 'start' }))
+  }
+
   return (
+    <>
+    <ConexionErp10Tarjeta key={L.companyId} accountId={L.accountId} companyId={L.companyId} quien={L.quien} conexion={conexion.datos ?? null} error={conexion.error ?? null}
+      abierta={abierta} abrir={setConexionAbierta} cambiada={() => setVueltaConexion((v) => v + 1)} />
     <section className="cxe" aria-labelledby="cxe-titulo" ref={caja} style={alto ? { height: alto } : undefined}>
       <div className="cxe-cabeza">
         <h1 className="cxe-titulo" id="cxe-titulo">Salida a ERP10</h1>
@@ -474,7 +490,7 @@ export function SalidaErp10() {
 
       {s && paso === 3 && (
         <ComprobarErp10 subido={subido} base={comprobar.datos} comparacion={comparacion} error={errorSubir ?? comprobar.error}
-          elegida={elegida} elegir={setElegida} subir={(f) => { void subir(f) }} leerErp10={(h) => { void leerDeErp10(h) }} aMano={(id) => { void aMano(id) }} volver={(id) => { void volverASacarla(id) }}
+          elegida={elegida} elegir={setElegida} subir={(f) => { void subir(f) }} leerErp10={(h) => { void leerDeErp10(h) }} faltaErp10={conexion.datos ? faltaErp10 : null} irALaConexion={irALaConexion} aMano={(id) => { void aMano(id) }} volver={(id) => { void volverASacarla(id) }}
           ocupado={!!haciendo} cargando={comprobar.cargando || datos.cargando} mes={mes} />
       )}
 
@@ -485,6 +501,7 @@ export function SalidaErp10() {
       </div>
       {fallo && <div className="cxe-estado cxe-mal" role="alert">{fallo}</div>}
     </section>
+    </>
   )
 }
 

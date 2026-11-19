@@ -310,6 +310,34 @@ export class ClienteErp10 {
     const r = await this.get<unknown>(`/api/apuntes/resumen?${q({ fechaInicio: a, fechaFinal: b })}`)
     return { status: r.status, json: r.json }
   }
+  /** X10b · El resumen entero, sin fechas (de todos los meses que tenga ERP10). */
+  async resumenEntero(): Promise<{ status: number; json: unknown }> {
+    const r = await this.get<unknown>('/api/apuntes/resumen')
+    return { status: r.status, json: r.json }
+  }
+  /** X10b · ¿Tiene apuntes ese mes (AAAA-MM)? Una página de uno. */
+  async hayApuntesEnMes(aaaa_mm: string): Promise<boolean> {
+    const [a, b] = limitesMes(aaaa_mm.replace('-', ''))
+    const j = await this.leer<Paginada<Apunte> | Apunte[]>(`/api/apuntes?${q({ $filter: `Fecha ge ${a} and Fecha le ${b}`, $top: 1, $skip: 0 })}`)
+    const d = Array.isArray(j) ? j : j?.Datos
+    return Array.isArray(d) && d.length > 0
+  }
+  /**
+   * X10b · El último mes con apuntes en ERP10 (antes de `hasta`, AAAA-MM incluido) y sus líneas:
+   * del resumen entero si trae año y mes; si no, mes a mes hacia atrás (como mucho `meses`).
+   */
+  async ultimoMesConApuntes(hasta: string, meses = 36): Promise<{ mes: string; lineas: number; de: 'resumen' | 'apuntes' } | null> {
+    const r = await this.resumenEntero().catch(() => null)
+    const delResumen = r && r.status === 200 ? ultimoMesDelResumen(r.json, hasta) : null
+    if (delResumen) return { ...delResumen, de: 'resumen' }
+    let [a, m] = hasta.split('-').map(Number)
+    for (let i = 0; i < meses; i++) {
+      const mes = `${a}-${String(m).padStart(2, '0')}`
+      if (await this.hayApuntesEnMes(mes)) return { mes, lineas: lineas(await this.apuntesDelMes(mes)), de: 'apuntes' }
+      m--; if (m < 1) { m = 12; a-- }
+    }
+    return null
+  }
   facturasDelMes(aaaa_mm: string): Promise<Record<string, unknown>[]> {
     const [a, b] = limitesMes(aaaa_mm.replace('-', ''))
     return this.todas<Record<string, unknown>>(`/api/facturas?${q({ $filter: `Fecha ge ${a} and Fecha le ${b}` })}`)
@@ -349,6 +377,28 @@ export function sumarPorCuenta(apuntes: readonly Apunte[]): { subcuenta: string;
   })
 }
 
+/**
+ * X10b · Del resumen entero de ERP10, el último mes (hasta AAAA-MM) con líneas: los campos
+ * de año y mes, y «Numero» (cuenta líneas). Null si el resumen no trae año y mes.
+ */
+export function ultimoMesDelResumen(j: unknown, hasta: string): { mes: string; lineas: number } | null {
+  const filas = (Array.isArray(j) ? j : (j && typeof j === 'object' && Array.isArray((j as Paginada<unknown>).Datos) ? (j as Paginada<unknown>).Datos : [])) as Record<string, unknown>[]
+  const por = new Map<string, number>()
+  for (const f of filas) {
+    const kA = Object.keys(f).find((k) => /^(ejercicio|anio|año|ano|year)$/i.test(k))
+    const kM = Object.keys(f).find((k) => /^(mes|month|periodo)$/i.test(k))
+    const a = kA ? Number(f[kA]) : NaN, m = kM ? Number(f[kM]) : NaN
+    const n = Number(f.Numero ?? 0)
+    if (!Number.isInteger(a) || !Number.isInteger(m) || m < 1 || m > 12 || !(n > 0)) continue
+    const mes = `${a}-${String(m).padStart(2, '0')}`
+    if (mes > hasta) continue
+    por.set(mes, (por.get(mes) ?? 0) + n)
+  }
+  if (!por.size) return null
+  const mes = [...por.keys()].sort().pop()!
+  return { mes, lineas: por.get(mes)! }
+}
+
 /** Cuántas líneas tiene una lista de apuntes. */
 export const lineas = (apuntes: readonly Apunte[]) => apuntes.reduce((t, a) => t + (a.Detalles?.length ?? 0), 0)
 
@@ -367,16 +417,20 @@ export function porTipo(apuntes: readonly Apunte[]): { tipo: number | null; asie
 
 /**
  * Del resumen de ERP10, solo lo que no es dato de nadie: los campos de texto que
- * nombran el tipo y los números enteros (recuentos). Ni importes, ni nombres, ni NIF.
+ * nombran el tipo (TipoX, DescripcionTipoIntroduccion: «Por factura», «DiezBank»…) y los
+ * números enteros (recuentos: «Numero» cuenta líneas, no asientos). Ni importes, ni
+ * nombres, ni NIF.
  */
 export function resumenSinDatos(j: unknown): Record<string, string | number>[] {
   const filas = Array.isArray(j) ? j : (j && typeof j === 'object' && Array.isArray((j as Paginada<unknown>).Datos) ? (j as Paginada<unknown>).Datos : [])
   return filas.map((f) => {
     const o: Record<string, string | number> = {}
     for (const [k, v] of Object.entries((f ?? {}) as Record<string, unknown>)) {
-      if (/importe|debe|haber|saldo|total|cif|nif|nombre|razon|tercero|cuenta|concepto|descripcion$/i.test(k) && !/^tipo/i.test(k)) continue
+      // X10b: DescripcionTipoIntroduccion es el nombre del tipo («Por factura», «DiezBank»…), no un dato de nadie.
+      const esTipo = /^(tipo|descripciontipo)/i.test(k)
+      if (/importe|debe|haber|saldo|total|cif|nif|nombre|razon|tercero|cuenta|concepto|descripcion$/i.test(k) && !esTipo) continue
       if (typeof v === 'number' && Number.isInteger(v)) o[k] = v
-      else if (typeof v === 'string' && /^tipo/i.test(k) && v.length <= 40) o[k] = v
+      else if (typeof v === 'string' && esTipo && v.length <= 60) o[k] = v
     }
     return o
   })

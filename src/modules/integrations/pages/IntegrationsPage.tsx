@@ -153,8 +153,6 @@ export default function IntegrationsPage() {
         <div className="space-y-2">
           {connections.map(conn => {
             const connector = connectorOf(conn.connectorId)
-            // X10: las sociedades de ERP10 se ven dentro de su conector, no como integraciones sueltas.
-            if (connector?.code === 'erp10' && conn.scope === 'company') return null
             const pres = presentacionDeEstado(conn.status)
             const Icon = ICONO[pres.icono]
             return (

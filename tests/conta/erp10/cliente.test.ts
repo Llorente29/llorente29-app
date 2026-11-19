@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  ClienteErp10, FRASES, FrenoErp10, codigoLimpio, cifDeParametros, finalDelNif, nifLimpio, porTipo, resumenSinDatos, sumarPorCuenta,
+  ClienteErp10, FRASES, FrenoErp10, codigoLimpio, ultimoMesDelResumen, cifDeParametros, finalDelNif, nifLimpio, porTipo, resumenSinDatos, sumarPorCuenta,
   tokenConLaEmpresa, tokenDeLaEmpresa, type AlmacenToken, type ConfigErp10, type TokenGuardado,
 } from '../../../supabase/functions/_shared/erp10Cliente'
 import { erp10Simulado, type EmpresaSimulada } from './simulado'
@@ -189,5 +189,38 @@ describe('la suma de líneas por cuenta (como el traspaso de Diez, no getSumasYs
   it('del resumen de ERP10 solo salen el tipo y los recuentos: ni importes ni nombres', () => {
     expect(resumenSinDatos([{ TipoAsiento: 'Por factura', NumeroApuntes: 12, TotalDebe: 1234.5, NombreEmpresa: 'X', Importe: 3 }]))
       .toEqual([{ TipoAsiento: 'Por factura', NumeroApuntes: 12 }])
+  })
+  it('X10b · el nombre del tipo (DescripcionTipoIntroduccion) pasa, con su Numero (líneas)', () => {
+    expect(resumenSinDatos([
+      { Ejercicio: 2026, Mes: 10, TipoIntroduccion: 1, DescripcionTipoIntroduccion: 'Por factura', Numero: 1648, Descripcion: 'X', TotalDebe: 9.5 },
+      { Ejercicio: 2026, Mes: 10, TipoIntroduccion: 7, DescripcionTipoIntroduccion: 'DiezBank', Numero: 245 },
+    ])).toEqual([
+      { Ejercicio: 2026, Mes: 10, TipoIntroduccion: 1, DescripcionTipoIntroduccion: 'Por factura', Numero: 1648 },
+      { Ejercicio: 2026, Mes: 10, TipoIntroduccion: 7, DescripcionTipoIntroduccion: 'DiezBank', Numero: 245 },
+    ])
+  })
+})
+
+describe('X10b · el último mes con apuntes en ERP10', () => {
+  it('del resumen entero: el último mes (hasta hoy) con líneas, sumando sus tipos', async () => {
+    const { c } = cliente()
+    expect(await c.ultimoMesConApuntes('2026-11')).toEqual({ mes: '2026-11', lineas: 2, de: 'resumen' })
+    expect(await c.ultimoMesConApuntes('2026-10')).toEqual({ mes: '2026-10', lineas: 5, de: 'resumen' })
+  })
+  it('del resumen: sin año y mes, null; uno posterior a hoy no cuenta', () => {
+    expect(ultimoMesDelResumen([{ DescripcionTipoIntroduccion: 'Por factura', Numero: 4 }], '2026-11')).toBeNull()
+    expect(ultimoMesDelResumen([{ Ejercicio: 2026, Mes: 9, Numero: 3432 }, { Ejercicio: 2026, Mes: 12, Numero: 1 }, { Ejercicio: 2026, Mes: 9, Numero: 8 }], '2026-11'))
+      .toEqual({ mes: '2026-09', lineas: 3440 })
+  })
+  it('si el resumen no trae año y mes, mes a mes hacia atrás; sin nada, null', async () => {
+    const sim = erp10Simulado({ empresas: EMPRESAS })
+    const sinFechas = (async (url: string | URL, init?: RequestInit) => {
+      if (String(url).includes('/api/apuntes/resumen')) return new Response('[{"DescripcionTipoIntroduccion":"Por factura","Numero":3}]', { status: 200 })
+      return sim.fetch(url, init)
+    }) as typeof fetch
+    const { c } = cliente({ sim: { ...sim, fetch: sinFechas } })
+    expect(await c.ultimoMesConApuntes('2027-01')).toEqual({ mes: '2026-11', lineas: 2, de: 'apuntes' })
+    const vacia = cliente({ sim: erp10Simulado({ empresas: { 101: { cif: NIF_A, apuntes: [] } } }) })
+    expect(await vacia.c.ultimoMesConApuntes('2026-11', 3)).toBeNull()
   })
 })

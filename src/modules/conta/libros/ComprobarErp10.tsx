@@ -49,6 +49,10 @@ export function ComprobarErp10(p: {
   subir: (f: File) => void
   /** X10 · Comparar con ERP10 leído ahora, a esa fecha (AAAA-MM-DD). */
   leerErp10?: (hasta: string) => void
+  /** X10b · Lo que falta para comparar con ERP10 (las claves o el código de esta sociedad); null si nada. */
+  faltaErp10?: string | null
+  /** X10b · Abre la tarjeta «Conexión con ERP10» de arriba. */
+  irALaConexion?: () => void
   aMano: (entryId: string) => void
   volver: (entryId: string) => void
   ocupado: boolean
@@ -77,10 +81,17 @@ export function ComprobarErp10(p: {
             {p.leerErp10 ? (
               <>
                 <p><strong>Después de importar</strong> los ficheros, Sumied entra en ERP10, lee sus saldos y los pone al lado de los suyos, cuenta a cuenta: qué queda igual, qué no y por qué.</p>
-                <div className="cxe-erp10-fecha">
-                  <label>A fecha <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} disabled={p.ocupado} aria-label="A fecha" /></label>
-                  <button type="button" className="cxe-grande" disabled={p.ocupado || !hasta} onClick={() => p.leerErp10!(hasta)}>Comparar con ERP10</button>
-                </div>
+                {p.faltaErp10 ? (
+                  <div className="cxe-erp10-falta" role="note">
+                    <p><strong>{p.faltaErp10}</strong> Ponlo en «Conexión con ERP10», arriba, y pulsa «Probar».</p>
+                    {p.irALaConexion && <button type="button" className="cxe-grande" onClick={p.irALaConexion}>Ir a la conexión con ERP10</button>}
+                  </div>
+                ) : (
+                  <div className="cxe-erp10-fecha">
+                    <label>A fecha <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} disabled={p.ocupado} aria-label="A fecha" /></label>
+                    <button type="button" className="cxe-grande" disabled={p.ocupado || !hasta} onClick={() => p.leerErp10!(hasta)}>Comparar con ERP10</button>
+                  </div>
+                )}
                 <p className="cx-ayuda">O, si lo prefieres, sácalo de ERP10 en Excel y {subirBoton('sube el Excel', 'cxe-enlace')}. No se guarda: se lee aquí.</p>
               </>
             ) : (
@@ -145,8 +156,8 @@ export function ComprobarErp10(p: {
               ? <span className="cxe-chip-ambar">{conDiferencia(pendientes)}</span>
               : <span className="cxe-chip-verde">{c.noIgual.length ? 'Todas las diferencias, explicadas' : 'Todo queda igual'}</span>)}
           <span className="cxe-franja-fin">
-            {p.leerErp10 && <button type="button" className="cxe-enlace" disabled={p.ocupado} onClick={() => p.leerErp10!(p.subido!.fecha)}>Leer otra vez</button>}
-            {p.leerErp10 && ' · '}
+            {p.leerErp10 && !p.faltaErp10 && <button type="button" className="cxe-enlace" disabled={p.ocupado} onClick={() => p.leerErp10!(p.subido!.fecha)}>Leer otra vez</button>}
+            {p.leerErp10 && !p.faltaErp10 && ' · '}
             {subirBoton(p.leerErp10 ? 'Subir un Excel' : 'Subir otro Excel', 'cxe-enlace')}
           </span>
         </div>

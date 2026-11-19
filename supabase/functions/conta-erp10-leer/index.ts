@@ -119,6 +119,9 @@ async function probar(srv: any, cliente: ClienteErp10, accountId: string, compan
     pdf.push(await cliente.documento(ej, se, doc).catch((e) => ({ status: 0, bytes: 0, motivo: String(e instanceof Error ? e.message : e).slice(0, 120) })));
   }
 
+  // X10b · El último mes con apuntes en ERP10 y sus líneas: que se vea que la lectura funciona aunque los meses de ahora estén vacíos.
+  const ultimo = await cliente.ultimoMesConApuntes(hoy.slice(0, 7)).catch(() => null);
+
   // Lo que salió de Sumied esos meses, para ver si en ERP10 hay cosas metidas a mano.
   const enErp = new Set(apuntes.map((a) => `${a.Serie ?? ""}/${a.Documento ?? ""}`));
   const { data: ps } = await srv.from("conta_erp10_salida_partida").select("entry_id, clase, estado, erp10_serie, erp10_documento").eq("account_id", accountId).eq("company_id", companyId);
@@ -140,6 +143,6 @@ async function probar(srv: any, cliente: ClienteErp10, accountId: string, compan
   return {
     ok: true, frase, nifFinal: finalDelNif(nif), lineas: n, desde: DESDE_PROBAR,
     enErp10: porMes.map((m) => ({ mes: m.mes, asientos: m.asientos, lineas: m.lineas, tipos: m.tipos, resumen: m.resumen, facturas: m.facturas })), pdf, deSumied,
-    asientosSinSumied: sinSumied,
+    asientosSinSumied: sinSumied, ultimoConApuntes: ultimo,
   };
 }
