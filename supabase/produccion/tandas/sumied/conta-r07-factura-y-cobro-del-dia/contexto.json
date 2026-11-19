@@ -1,0 +1,19 @@
+{
+ "_que": "R07 · el día del TPV en dos asientos · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging, 19/11), en SOLO LECTURA: esta sesión no lee producción. conta_tpv_factura_cuenta es nueva; no cambia ninguna que exista. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-19T14:03Z",
+ "tanda": {
+  "supabase/migrations/20261119T1405_r07_cuenta_factura_del_dia.sql": "ed546b15762d5b1395f4a325ca5df2f5"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

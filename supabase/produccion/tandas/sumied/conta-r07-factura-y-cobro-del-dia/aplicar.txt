@@ -1,0 +1,12 @@
+# R07 · El día del TPV en dos asientos: la factura del día y su cobro (encargo R07,
+# 19/11). Rama conta/r07-factura-y-cobro-del-dia. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   1405  Añade conta_tpv_factura_cuenta: a qué cuenta va la factura del día
+#         («Clientes de contado»), una por empresa. Tabla nueva, no la lee nadie aún.
+#
+# Primer paso: con este fichero solo, el ensayo mide en producción cuántos días
+# validados hay de cada clase (salidos y no salidos a ERP10), por cuenta y empresa.
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r07-dias-tpv.sql
+supabase/migrations/20261119T1405_r07_cuenta_factura_del_dia.sql

@@ -1,0 +1,3 @@
+# R07 · la vuelta atrás: quita la tabla nueva. No la lee ninguna función todavía.
+cuenta: scripts/conta/produccion/cuentas/r07-dias-tpv.sql
+supabase/vuelta-atras/20261119T1405_r07_cuenta_factura_del_dia.down.sql
