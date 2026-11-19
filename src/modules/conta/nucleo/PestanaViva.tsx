@@ -47,11 +47,13 @@ export interface PropsPestanaViva {
   abrirBuscador: () => void
   ponerNombre: (id: string, nombre: string | null) => void
   ponerCambios: (id: string, c: CambiosDePestana | null) => void
+  /** K04 · Cerrar esta pestaña, con la pregunta si tiene cambios (Esc en una ficha). */
+  cerrar: (id: string) => void
   /** La pestaña dice su nombre (para «Acciones de …»). */
   nombre: string
 }
 
-function PestanaVivaSinMemo({ id, ubicacion, activa, base, ctx, cuentas, abrirBuscador, ponerNombre, ponerCambios, nombre }: PropsPestanaViva) {
+function PestanaVivaSinMemo({ id, ubicacion, activa, base, ctx, cuentas, abrirBuscador, ponerNombre, ponerCambios, cerrar, nombre }: PropsPestanaViva) {
   const [huecoAcciones, setHuecoAcciones] = useState<HTMLDivElement | null>(null)
   const [huecoPeriodo, setHuecoPeriodo] = useState<HTMLDivElement | null>(null)
   const [datosCinta, setDatosCinta] = useState<DatosCinta | null>(null)
@@ -80,7 +82,8 @@ function PestanaVivaSinMemo({ id, ubicacion, activa, base, ctx, cuentas, abrirBu
     ponerNombre: (n) => ponerNombre(id, n),
     ponerCambios: (c) => ponerCambios(id, c),
     esDeEstaPestana: (destino) => claveDe(destino) === id,
-  }), [id, activa, ponerNombre, ponerCambios])
+    cerrar: () => cerrar(id),
+  }), [id, activa, ponerNombre, ponerCambios, cerrar])
 
   // Dónde estaba la rueda y el foco, para volver a encontrarlo todo como se dejó.
   const zona = useRef<HTMLElement | null>(null)

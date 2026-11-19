@@ -35,6 +35,8 @@ export interface PestanaDeTrabajo {
   ponerNombre: (nombre: string | null) => void
   ponerCambios: (c: CambiosDePestana | null) => void
   esDeEstaPestana: (destino: string) => boolean
+  /** K04 · Cerrar esta pestaña; si tiene cambios, con la pregunta del K03 (Esc en una ficha). */
+  cerrar?: () => void
 }
 
 export const PestanaContexto = createContext<PestanaDeTrabajo | null>(null)
