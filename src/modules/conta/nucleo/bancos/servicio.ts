@@ -14,8 +14,9 @@ import { supabase } from '@/lib/supabase'
 import { tabla, mensaje } from '@/modules/conta/services/bd'
 import { leerDatosBancos, leerMovimientos, saldosContables, type BancoVista, type DatosBancos } from '@/modules/conta/services/bancosPantallas'
 import { cuadreDe, puntoDePartida, type Cuadre } from '@/modules/conta/lib/conciliarVista'
-import { limitesMes, mesesElegibles, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
+import { mesesElegibles, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import { mesInicial } from '@/modules/conta/bancos/navegacion'
+import { corteDelMes, extractoDelMes } from './mes'
 
 export interface LecturaBancos {
   movs: MovimientoBanco[]
@@ -36,8 +37,7 @@ const dia = (iso: string, n: number) => new Date(Date.parse(`${iso}T12:00:00Z`) 
  */
 export async function saldosDelCuadre(companyId: string, datos: DatosBancos, banco: BancoVista, mes: string, hoy: string):
   Promise<{ bancoCent: number | null; libroCent: number | null; extractoHasta: string | null }> {
-  const { hasta } = limitesMes(mes)
-  const corte = hasta < hoy ? hasta : hoy
+  const corte = corteDelMes(mes, hoy)
   const fechaCorte = datos.corte
   const vispera = fechaCorte ? dia(fechaCorte, -1) : null
   const cuentas = banco.cuenta ? [banco.cuenta] : []
@@ -48,7 +48,7 @@ export async function saldosDelCuadre(companyId: string, datos: DatosBancos, ban
   const libroCent = banco.cuenta ? saldos[banco.cuenta] ?? 0 : null
   const libroAntesCent = banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null
   const extractos = datos.extractos.filter((e) => e.cuentaId === banco.id)
-  const extracto = extractos.find((e) => e.hasta <= hasta && e.saldoFinalCent !== null) ?? null
+  const extracto = extractoDelMes(extractos, banco.id, mes)
   const partida = puntoDePartida(fechaCorte, corte, extractos, libroAntesCent, libroCent)
   return { bancoCent: extracto?.saldoFinalCent ?? null, libroCent: partida.libroCent, extractoHasta: extracto?.hasta ?? null }
 }
