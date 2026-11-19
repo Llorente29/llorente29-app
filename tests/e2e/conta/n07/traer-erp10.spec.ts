@@ -244,7 +244,8 @@ test('N07 · 4 · el ejemplo entero: soltar, ver, traer, comparar (cuadra) y dar
   await page.getByRole('button', { name: 'Traerlo' }).click()
   await expect(page.getByText('Cuadra con el sumas y saldos', { exact: true })).toBeVisible({ timeout: 60_000 })
   await expect(page.getByRole('table', { name: 'Cuenta a cuenta' })).toContainText('15 cuentas quedan igual')
-  await expect(page.getByText(/Si alguna factura quedó pagada a medias en ERP10, aquí sale como pendiente entera\. Revísalas en Pagos\./)).toBeVisible()
+  // N09 · Lo pagado y cobrado de cada factura, casado con sus pagos, y que da igual que el sumas y saldos.
+  await expect(page.getByText('Pagadas y cobradas: 2 pagadas o cobradas y 3 pendientes. Lo que le queda a cada proveedor y cliente da igual que su saldo en ERP10.')).toBeVisible()
   await page.screenshot({ path: `${DIR}/entero-paso3.png` })
   await cabeA1366(page, 'entero · paso 3')
 

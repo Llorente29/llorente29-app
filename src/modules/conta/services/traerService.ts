@@ -9,7 +9,7 @@
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import { normalizarNif } from '@/modules/conta/lib/nif'
-import type { DatosDeLaCarga, Diferencia, YaEnSumied } from '@/modules/conta/lib/traer'
+import type { DatosDeLaCarga, Diferencia, ResumenPagado, TerceroConPagos, YaEnSumied } from '@/modules/conta/lib/traer'
 
 /** Lo traído que está en prueba en la empresa (como mucho, uno). */
 export interface EnPrueba {
@@ -24,6 +24,10 @@ export interface EnPrueba {
   texto: string | null
   sumas: { cuenta: string; nombre: string; debe: number; haber: number }[]
   mirar: { que: string; cuenta?: string; frase: string }[]
+  /** N09 · Los proveedores y clientes con pagos sin casar o cuyo pendiente no da su saldo (detail.pendientesNoExactos). */
+  pagos: TerceroConPagos[]
+  /** N09 · Las emitidas traídas, con su total, retención y lo que les queda (detail.emitidas, en euros). */
+  emitidas: { total: number; retencion: number; pendiente: number | null }[]
 }
 
 export async function leerEnPrueba(accountId: string, companyId: string): Promise<EnPrueba | null> {
@@ -41,7 +45,30 @@ export async function leerEnPrueba(accountId: string, companyId: string): Promis
     cuentas: (r.counts ?? {}) as Record<string, number>, soloCuentas: d.solo_plan === true, texto: d.texto ? String(d.texto) : null,
     sumas: Array.isArray(d.sumas) ? (d.sumas as EnPrueba['sumas']) : [],
     mirar: Array.isArray(d.mirar) ? (d.mirar as EnPrueba['mirar']) : [],
+    pagos: Array.isArray(d.pendientesNoExactos) ? (d.pendientesNoExactos as TerceroConPagos[]) : [],
+    emitidas: Array.isArray(d.emitidas) ? (d.emitidas as Record<string, unknown>[]).filter((e) => e.marca !== 'fuera')
+      .map((e) => ({ total: Number(e.total ?? 0), retencion: Number(e.retencion ?? 0), pendiente: e.pendiente == null ? null : Number(e.pendiente) })) : [],
   }
+}
+
+/**
+ * N09 · Cuántas facturas de lo traído están pagadas (o cobradas), con pago parcial y pendientes enteras, con lo que
+ * guardó la base al traer (import_pending de las recibidas; el «pendiente» de las emitidas, en la carga).
+ */
+export async function resumenPagado(accountId: string, carga: string, emitidas: EnPrueba['emitidas']): Promise<ResumenPagado> {
+  const { data, error } = await tabla('supplier_invoice').select('grand_total, withholding_amount, import_pending')
+    .eq('account_id', accountId).eq('import_run_id', carga).eq('source', 'traida').or('import_mark.is.null,import_mark.neq.fuera')
+  if (error) throw new Error(mensaje('No se ha podido leer lo pagado de lo traído', error))
+  const r: ResumenPagado = { pagadas: 0, aMedias: 0, pendientes: 0 }
+  const contar = (aPagar: number, pend: number | null) => {
+    if (pend === null) return
+    if (pend < 0.005) r.pagadas += 1
+    else if (pend >= aPagar - 0.005) r.pendientes += 1
+    else r.aMedias += 1
+  }
+  for (const f of (data ?? []) as Record<string, unknown>[]) contar(Number(f.grand_total ?? 0) - Number(f.withholding_amount ?? 0), f.import_pending == null ? null : Number(f.import_pending))
+  for (const e of emitidas) contar(e.total - e.retencion, e.pendiente)
+  return r
 }
 
 /** Lo último que se dio por bueno o se deshizo en la empresa: su confirmación, leída de la base (regla 8). */

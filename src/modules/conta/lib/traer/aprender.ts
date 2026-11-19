@@ -76,6 +76,10 @@ export interface Pendiente {
   /** El saldo cae justo en el borde de sus facturas (o no hay saldo). */
   cuadraExacto: boolean
   frase: string
+  /** N09 · Las facturas cuyos pagos no se han podido casar (con el casado; sin él, no se sabe). */
+  facturasSinCasar?: string[]
+  /** N09 · Lo pendiente de sus facturas da igual que su saldo. */
+  cuadraConSaldo?: boolean
 }
 
 /** Lo que se debe de una factura: su total menos la retención (la retención no se paga al proveedor). */

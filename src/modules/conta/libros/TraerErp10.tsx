@@ -25,12 +25,12 @@ import { rutaLibros } from '@/config/navegacion'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import {
-  AVISO_PAGOS_A_MEDIAS, MODOS, SIN_CUENTA_DE_GASTO, SIN_SALDOS, TODAVIA_NO, abrirExcel, avisosPaso1, avisosPaso2, comprobacionesPaso1, filasPaso1,
+  frasePagado, MODOS, SIN_CUENTA_DE_GASTO, SIN_SALDOS, TODAVIA_NO, abrirExcel, avisosPaso1, avisosPaso2, comprobacionesPaso1, filasPaso1,
   conLoDeLaTabla, filasPaso2, lineaDadoPorBueno, lineaDeshecho, filasPaso3, leerCarga, lineaEnPrueba, paraLaBase, puedeTraer, puedeVerLoQueEntra, queSeTrajoSoloCuentas, soloCuentas,
   soltadosQueNoSeTraen,
   type Aviso, type Modo, type Subido,
 } from '@/modules/conta/lib/traer'
-import { antesDeDarlo, asientosApuntados, darPorBueno, deshacer, diaDeInicio, leerEnPrueba, leerUltima, leerYaEnSumied, traer, type Ultima } from '@/modules/conta/services/traerService'
+import { antesDeDarlo, asientosApuntados, darPorBueno, deshacer, diaDeInicio, leerEnPrueba, leerUltima, leerYaEnSumied, resumenPagado, traer, type Ultima } from '@/modules/conta/services/traerService'
 
 // Con el punto de los miles también en las de cuatro cifras («1.650,00», como en la maqueta): el español de serie no lo pone.
 const n = (x: number | undefined) => (x ?? 0).toLocaleString('es-ES')
@@ -80,6 +80,9 @@ export function TraerErp10() {
     `${L.companyId}:${paso}:${fechas[0] ?? ''}:${fechas[fechas.length - 1] ?? ''}:${vuelta}`)
   // Paso 3: la frase de la base, si cuadra y con qué cuentas.
   const antes = useLeer(p ? () => antesDeDarlo(p.id) : null, `${p?.id ?? ''}:${vuelta}`)
+  // N09 · Cuántas de lo traído están pagadas, con pago parcial y pendientes (lo que guardó la base al traer).
+  const pagado = useLeer(p && !p.soloCuentas ? () => resumenPagado(L.accountId, p.id, p.emitidas) : null, `${p?.id ?? ''}:pagado:${vuelta}`)
+  const fPagado = p && (p.pagos.length > 0 || pagado.datos) ? frasePagado(p.pagos, pagado.datos) : null
 
   // La página no se mueve: la pantalla ocupa lo que queda debajo de su borde de arriba (como «Salida a ERP10»).
   const caja = useRef<HTMLElement | null>(null)
@@ -391,7 +394,10 @@ export function TraerErp10() {
               </>}
               {a && !a.puede && <div className="cxe-aviso" role="alert"><p><strong>{fraseAntes}</strong></p></div>}
               {a && a.puede && <div className="cxe-nota"><p>{fraseAntes}</p></div>}
-              {!p.soloCuentas && <div className="cxe-aviso" role="note"><p><strong>Pagadas a medias.</strong> {AVISO_PAGOS_A_MEDIAS}</p></div>}
+              {/* N09 · Lo pagado y cobrado de cada factura traída: lo que no se ha podido casar, y si cuadra con el sumas y saldos. */}
+              {!p.soloCuentas && fPagado && (fPagado.aviso
+                ? <div className="cxe-aviso" role="note"><p><strong>{fPagado.titulo}</strong></p>{fPagado.lista.length > 0 && <ul>{fPagado.lista.map((x, i) => <li key={i}>{x}</li>)}</ul>}</div>
+                : <div className="cxe-nota"><p>{fPagado.titulo}</p></div>)}
               {p.soloCuentas && <div className="cxe-nota"><p><strong>Sin la cuenta de gasto.</strong> {SIN_CUENTA_DE_GASTO}</p></div>}
               {p.mirar.length > 0 && (
                 <div className="cxe-aviso" role="note">
