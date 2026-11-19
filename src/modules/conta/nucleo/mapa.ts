@@ -80,7 +80,8 @@ const b = (id: string, etiqueta: string, icono: IconoNucleo, ruta: string, prefi
 
 // ── Los botones, una vez cada uno ───────────────────────────────────────
 
-const ASIENTOS = b('asientos', 'Asientos', 'asientos', R.libroDiario, [R.libroDiario], { contador: 'contabilidad.asientos', pestana: 'Asientos' })
+// N08: «Asientos», como en ERP10, abre la introducción de asientos (la ficha del asiento); se marca también en el diario y en cada asiento.
+const ASIENTOS = b('asientos', 'Asientos', 'asientos', R.nuevoAsiento, [R.nuevoAsiento, R.libroDiario], { contador: 'contabilidad.asientos', pestana: 'Asiento' })
 const EMITIDAS = b('emitidas', 'Emitidas', 'emitidas', R.facturasVenta, [R.facturasVenta], { pestana: 'Facturas emitidas' })
 // «Ventas» a secas (lo de antes) lleva aquí, como en la barra de hoy.
 // R05 (decisión 9): con hostelería o con «ventas por día» encendido, como Cierres del día en la barra de hoy.
