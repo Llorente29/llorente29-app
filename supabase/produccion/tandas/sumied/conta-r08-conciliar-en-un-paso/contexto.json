@@ -1,0 +1,19 @@
+{
+ "_que": "R08 · conciliar en un paso · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging, 19/11), en SOLO LECTURA: esta sesión no lee producción. bank_saldo_extracto y bank_saldo_diario son nuevas; no cambian ninguna que exista. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-19T19:35Z",
+ "tanda": {
+  "supabase/migrations/20261119T1945_r08_saldo_del_banco.sql": "28d68c70c89fabcdb9b387723562e758"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

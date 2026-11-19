@@ -1,0 +1,5 @@
+# R08 · Bancos: conciliar en un paso.
+# 1945 (añade el saldo del extracto bueno y el del diario) y su prueba (ROLLBACK, con la
+# semilla E05 delante, que ya está en staging).
+supabase/migrations/20261119T1945_r08_saldo_del_banco.sql
+supabase/staging/sql/20261119_r08_conciliar_en_un_paso_prueba.sql

@@ -1,0 +1,12 @@
+# R08 · Bancos: conciliar en un solo paso (encargo R08, 19/11). Rama
+# conta/r08-conciliar-en-un-paso. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   1945  Añade bank_saldo_extracto (el cierre del último extracto de la cadena) y
+#         bank_saldo_diario (el saldo con lo que está en el diario). Solo leen.
+#
+# Primer paso: con este fichero, el ensayo mide en producción los asientos de Bancos
+# propuestos y la cadena de extractos de cada banco. Nada en el camino del pedido.
+# El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r08-bancos.sql
+supabase/migrations/20261119T1945_r08_saldo_del_banco.sql
