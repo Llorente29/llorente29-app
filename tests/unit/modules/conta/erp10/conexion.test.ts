@@ -31,6 +31,15 @@ describe('después', () => {
       texto: 'Han entrado en ERP10 2 facturas recibidas de octubre de 2026 (2/100, 2/101), con sus PDF. 1 ya estaba en ERP10 (2/50): se ha enlazado, sin meter otra. 1 no ha podido: F-4, Lleva retención, y cómo la guarda ERP10 por aquí no está medido. Sácala con el Excel.',
     })
   })
+  it('X10d · con asientos', () => {
+    expect(loQueHaEntrado([
+      { numero: 'F-1', clase: 'recibida', estado: 'en_erp10', serie: '2', documento: 100, pdf: 'subido' },
+      { numero: '4/7', clase: 'asiento', estado: 'en_erp10', serie: '1', documento: 5000, pdf: null },
+    ], 'octubre de 2026').texto).toBe('Han entrado en ERP10 1 factura recibida y 1 asiento de octubre de 2026 (2/100, 1/5000), con su PDF.')
+    expect(queVaAEntrar({ recibidas: 3, emitidas: 2, asientos: 5, mes: 'octubre de 2026' })).toContain('Van a entrar en ERP10: 3 facturas recibidas, 2 emitidas y 5 asientos de octubre de 2026.')
+    expect(queVaAEntrar({ recibidas: 0, emitidas: 0, asientos: 1, mes: 'octubre de 2026', prueba: { clase: 'asiento', numero: '4/7', tercero: 'Pago inventado', total: 10000 } }))
+      .toBe('Va a entrar en ERP10 un solo asiento de octubre de 2026, para probar: el 4/7 de Sumied, Pago inventado (100,00 €). Si algo sale mal, se corrige a mano en ERP10: Sumied no puede borrarlo.')
+  })
   it('X10c · recibidas y emitidas juntas', () => {
     expect(loQueHaEntrado([
       { numero: 'F-1', clase: 'recibida', estado: 'en_erp10', serie: '2', documento: 100, pdf: null },
