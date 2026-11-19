@@ -22,9 +22,13 @@ do $$ begin
 end $$;
 set local statement_timeout = '180s';
 
-\i supabase/migrations/20261119T1945_r08_saldo_del_banco.sql
-\i supabase/migrations/20261119T2040_r08_conciliar_valida.sql
-\i supabase/migrations/20261119T2120_r08_cargo_no_cobrado.sql
+-- 1945, 2040 y 2120 los pone el manifiesto delante, en esta misma transacción (no se cargan otra
+-- vez: la guarda de la 2040 y la de la 2120 paran si la función ya no es la medida).
+do $$ begin
+  if to_regprocedure('public.bank_apartar_no_cobrados(uuid)') is null or to_regprocedure('public.bank_saldo_extracto(uuid, date)') is null then
+    raise exception 'PRUEBA R08: faltan 1945 y 2120 delante (el manifiesto de staging de la rama).';
+  end if;
+end $$;
 
 create temp table _p (k text primary key, v text) on commit drop;
 grant all on _p to authenticated;
@@ -169,6 +173,8 @@ end $$;
 do $$
 declare r jsonb; m uuid := pg_temp.n('telefonia'); v_msg text;
 begin
+  -- La semilla lo deja apartado (para la e2e); aquí se reabre para que lo aparte el detector.
+  perform public.bank_desapartar(m);
   r := public.bank_apartar_no_cobrados(pg_temp.p('e')::uuid);
   if pg_temp.mov(m) <> 'ignorado' or jsonb_array_length(r) <> 1 or (r->0->>'importe')::numeric <> -31.50 then
     raise exception 'PRUEBA R08 · 8: el recibo queda % y se ha apartado %.', pg_temp.mov(m), r;

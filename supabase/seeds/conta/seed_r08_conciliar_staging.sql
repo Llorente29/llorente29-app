@@ -8,7 +8,8 @@
 --   · 01–11/11: un ingreso de 6.000,00; cierra en 7.214,10;
 --   · 12–16/11: el recibo que el banco NO cobró, el caso del 19/11 sin datos personales: −31,50
 --     (Recibo Telefonía Ejemplo), −18,87, −0,30 y +19,17. El banco cierra donde estaba (7.214,10)
---     y la lectura se inventa la apertura (cierre − lo nuevo = 7.245,60): hueco de 31,50;
+--     y la lectura se inventa la apertura (cierre − lo nuevo = 7.245,60): hueco de 31,50. El recibo
+--     llega ya apartado («Anulado por el banco: no había saldo»), como lo deja la 2120;
 --   · 19/11, en tres extractos que llegan uno detrás de otro (08:00, 09:00 y 10:00), cinco
 --     nóminas inventadas («Nómina · Empleada A»…, 6.119,71 entre todas). El último cierra en
 --     1.094,39: ése es el saldo del banco.
@@ -77,10 +78,13 @@ begin
     returning id into v_st;
     for c in select * from _r08 order by dia, importe loop
       insert into public.bank_movement (account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount,
-        bank_concept, clean_concept, fingerprint, soft_fingerprint, status, reason)
+        bank_concept, clean_concept, fingerprint, soft_fingerprint, status, reason, ignored_reason)
       values (v_acc, emp, v_banco, v_st, c.dia, c.dia, c.importe, c.banco, c.limpio,
         format('r08-%s-%s-%s', p_lado, c.caso, v_sello), format('r08-suave-%s-%s-%s', p_lado, c.caso, v_sello),
-        'por_aclarar', 'No sé qué es.')
+        -- El recibo que el banco no cobró, ya apartado como lo deja bank_apartar_no_cobrados (2120): la e2e
+        -- de la rama corre contra staging sin la 2120 (lo que cambia una función no va de verdad desde una rama).
+        case when c.caso = 'telefonia' then 'ignorado' else 'por_aclarar' end, 'No sé qué es.',
+        case when c.caso = 'telefonia' then 'Anulado por el banco: no había saldo' end)
       returning id into v_m;
       movs := movs || jsonb_build_object(c.caso, v_m);
       if c.caso like 'nomina%' then nominas := nominas || to_jsonb(v_m); end if;
