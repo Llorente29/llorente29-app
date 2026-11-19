@@ -295,14 +295,14 @@ export function lineaDeshecho(quien: string | null, cuando: Date, quitado: Recor
 /** N09 · Lo pagado o cobrado de un tercero, como lo guardó la base al traer (detail.pendientesNoExactos). */
 export interface TerceroConPagos { codigo: string; nombre: string; frase: string; facturasSinCasar?: string[]; cuadraConSaldo?: boolean }
 
-/** N09 · Cuántas de lo traído están pagadas (o cobradas), a medias y pendientes enteras. */
+/** N09 · Cuántas de lo traído están pagadas (o cobradas), con pago parcial y pendientes enteras. */
 export interface ResumenPagado { pagadas: number; aMedias: number; pendientes: number }
 
 /**
  * N09 · La frase del paso 3 sobre lo pagado y lo cobrado de las facturas traídas:
  *   · con pagos que no se han podido casar: «N facturas con pagos que no he podido casar: míralas.»;
  *   · si no, si lo pendiente de algún tercero no da su saldo: «A N proveedores y clientes no les da…»;
- *   · si todo cuadra: cuántas pagadas, a medias y pendientes, y que da igual que el sumas y saldos.
+ *   · si todo cuadra: cuántas pagadas, con pago parcial y pendientes, y que da igual que el sumas y saldos.
  * Con la lista de cada tercero que hay que mirar (como «Al traerlo se apuntaron N cosas»).
  */
 export function frasePagado(terceros: readonly TerceroConPagos[], resumen: ResumenPagado | null): { aviso: boolean; titulo: string; lista: string[] } {
@@ -312,7 +312,7 @@ export function frasePagado(terceros: readonly TerceroConPagos[], resumen: Resum
   if (sinCasar > 0) return { aviso: true, titulo: `${sinCasar === 1 ? '1 factura con pagos' : `${sinCasar} facturas con pagos`} que no he podido casar: míralas.`, lista }
   if (noCuadran.length) return { aviso: true, titulo: `A ${noCuadran.length === 1 ? '1 proveedor o cliente' : `${noCuadran.length} proveedores y clientes`} lo que les queda por pagar o cobrar no les da igual que su saldo en el sumas y saldos: míralo.`, lista }
   const r = resumen ?? { pagadas: 0, aMedias: 0, pendientes: 0 }
-  const partes = [r.pagadas && `${r.pagadas} ${r.pagadas === 1 ? 'pagada o cobrada' : 'pagadas o cobradas'}`, r.aMedias && `${r.aMedias} a medias`,
+  const partes = [r.pagadas && `${r.pagadas} ${r.pagadas === 1 ? 'pagada o cobrada' : 'pagadas o cobradas'}`, r.aMedias && `${r.aMedias} con pago parcial`,
     r.pendientes && `${r.pendientes} ${r.pendientes === 1 ? 'pendiente' : 'pendientes'}`].filter(Boolean) as string[]
   const cuales = partes.length > 1 ? `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}` : partes[0] ?? 'ninguna factura'
   return { aviso: false, titulo: `Pagadas y cobradas: ${cuales}. Lo que le queda a cada proveedor y cliente da igual que su saldo en ERP10.`, lista: [] }

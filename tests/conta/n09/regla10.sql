@@ -4,7 +4,7 @@
 -- transacción que acaba en ROLLBACK. Para la base local del W09 (scripts/staging/base-local.sh):
 --   psql -d staging_local -v ON_ERROR_STOP=1 -f tests/conta/n09/regla10.sql
 -- La carga es la que da el código del N09 (paraLaBase de leerCarga) para el ejemplo de ERP10 del N04
--- (inventado, T11) con un «Pago B-7» de 100,00 más en el diario y en el sumas y saldos: la B-7, a medias.
+-- (inventado, T11) con un «Pago B-7» de 100,00 más en el diario y en el sumas y saldos: la B-7, con pago parcial.
 -- Medido el 19/11 (pegado en el PR): Traer guarda A-10 0, ALQ-3 1.020,00 y B-7 241,00; Deshacer no deja
 -- nada; dado por bueno, Cobros enseña la F-2 con 550,00, y Pagos y Bancos (conta_recibida_pago) enseñan
 -- todavía la B-7 con 341,00 y la ALQ-3 con 1.210,00: la vista no lee import_pending (el cambio propuesto).

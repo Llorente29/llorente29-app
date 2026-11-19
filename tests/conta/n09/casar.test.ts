@@ -3,7 +3,7 @@
 // N09 · El casado de los pagos con sus facturas (src/modules/conta/lib/traer/casarPagos.ts), contra los
 // ficheros de ejemplo de ERP10 del N04 (tests/conta/fixtures/importar/erp10, inventados: T11). El
 // ejemplo trae dos facturas pagadas enteras (A-10 y F-1) y tres pendientes (B-7, ALQ-3 y F-2); los
-// casos que no trae (a medias, dos pagos, un pago de dos facturas, uno por importe y uno que no casa)
+// casos que no trae (con pago parcial, dos pagos, un pago de dos facturas, uno por importe y uno que no casa)
 // se hacen añadiendo pagos al diario leído del mismo ejemplo.
 
 import { describe, expect, it } from 'vitest'
@@ -50,10 +50,11 @@ describe('el ejemplo de ERP10 tal cual', () => {
 })
 
 describe('los casos que el ejemplo no trae', () => {
-  it('una a medias: «Pago B-7» de 100,00 → le quedan 241,00', () => {
+  it('una con pago parcial: «Pago B-7» de 100,00 → le quedan 241,00', () => {
     const r = casarPagos(con(pago('2026-03-10', '40000002', 10000, 'Pago B-7')), terceros, facturas, null)
     expect(fac(r, '40000002', 'B-7')).toMatchObject({ pendiente: 24100, como: 'a_medias', conPagosSinCasar: false })
     expect(de(r, '40000002')).toMatchObject({ saldo: 24100, saldoDe: 'diario', cuadra: true })
+    expect(fraseDelTercero(de(r, '40000002'))).toBe('40000002 · Proveedor Ejemplo Dos, S.A.: se le deben 241,00, de la factura B-7 (con pago parcial: le quedan 241,00).')
   })
   it('una en dos pagos: 100,00 y 241,00 a la B-7 → pagada', () => {
     const r = casarPagos(con(pago('2026-03-10', '40000002', 10000, 'Pago B-7'), pago('2026-03-20', '40000002', 24100, 'Pago resto B-7')), terceros, facturas, null)
@@ -87,5 +88,13 @@ describe('el número de la factura, entero', () => {
     expect(llevaNumero('Pago A-10', 'A-10')).toBe(true)
     expect(llevaNumero('Pago A-100', 'A-10')).toBe(false)
     expect(llevaNumero('cobro f-1 y f-2', 'F-2')).toBe(true)
+  })
+})
+
+describe('la frase del paso 3 (respuesta N09 · 1: «pago parcial», no «a medias»)', () => {
+  it('cuenta las pagadas, las de pago parcial y las pendientes', async () => {
+    const { frasePagado } = await import('@/modules/conta/lib/traer/pantalla')
+    expect(frasePagado([], { pagadas: 2, aMedias: 1, pendientes: 2 }).titulo)
+      .toBe('Pagadas y cobradas: 2 pagadas o cobradas, 1 con pago parcial y 2 pendientes. Lo que le queda a cada proveedor y cliente da igual que su saldo en ERP10.')
   })
 })

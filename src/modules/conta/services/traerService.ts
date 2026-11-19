@@ -52,7 +52,7 @@ export async function leerEnPrueba(accountId: string, companyId: string): Promis
 }
 
 /**
- * N09 · Cuántas facturas de lo traído están pagadas (o cobradas), a medias y pendientes enteras, con lo que
+ * N09 · Cuántas facturas de lo traído están pagadas (o cobradas), con pago parcial y pendientes enteras, con lo que
  * guardó la base al traer (import_pending de las recibidas; el «pendiente» de las emitidas, en la carga).
  */
 export async function resumenPagado(accountId: string, carga: string, emitidas: EnPrueba['emitidas']): Promise<ResumenPagado> {

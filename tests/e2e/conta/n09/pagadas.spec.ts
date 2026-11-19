@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 // tests/e2e/conta/n09/pagadas.spec.ts
 //
-// N09 · Las facturas pagadas a medias en ERP10: al traer, cada factura entra con lo que de verdad le
+// N09 · Las facturas con pago parcial en ERP10: al traer, cada factura entra con lo que de verdad le
 // queda, casando los pagos del diario con sus facturas (src/modules/conta/lib/traer/casarPagos.ts). En
 // el ordenador, CONTRA STAGING DE VERDAD, con los Excel inventados del ejemplo de ERP10 del N04
 // (tests/conta/fixtures/importar/erp10, T11), en el carril de la e2e y con la sesión del administrador

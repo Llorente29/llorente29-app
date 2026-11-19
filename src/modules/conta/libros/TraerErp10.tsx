@@ -80,7 +80,7 @@ export function TraerErp10() {
     `${L.companyId}:${paso}:${fechas[0] ?? ''}:${fechas[fechas.length - 1] ?? ''}:${vuelta}`)
   // Paso 3: la frase de la base, si cuadra y con qué cuentas.
   const antes = useLeer(p ? () => antesDeDarlo(p.id) : null, `${p?.id ?? ''}:${vuelta}`)
-  // N09 · Cuántas de lo traído están pagadas, a medias y pendientes (lo que guardó la base al traer).
+  // N09 · Cuántas de lo traído están pagadas, con pago parcial y pendientes (lo que guardó la base al traer).
   const pagado = useLeer(p && !p.soloCuentas ? () => resumenPagado(L.accountId, p.id, p.emitidas) : null, `${p?.id ?? ''}:pagado:${vuelta}`)
   const fPagado = p && (p.pagos.length > 0 || pagado.datos) ? frasePagado(p.pagos, pagado.datos) : null
 

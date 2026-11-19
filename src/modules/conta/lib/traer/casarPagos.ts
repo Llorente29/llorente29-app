@@ -2,7 +2,7 @@
 //
 // N09 · Lo que de verdad le queda por pagar o cobrar a cada factura traída de ERP10, casando cada
 // pago o cobro del diario con su factura. Antes (N04, pendientesPorSaldo) se repartía el saldo del
-// tercero entre sus últimas facturas: una factura pagada a medias, o una vieja sin pagar con otra nueva
+// tercero entre sus últimas facturas: una factura con pago parcial, o una vieja sin pagar con otra nueva
 // pagada, salían mal.
 //
 // De dónde se sabe (medido con los ficheros de ejemplo del N04): del DIARIO. ERP10 no da cartera en lo
@@ -12,7 +12,7 @@
 // concepto el número de la factura («Pago A-10», «Cobro F-1»). Se casa así, sin adivinar nada:
 //
 //   1. por documento: el concepto del pago lleva el número de UNA factura suya con algo pendiente, y el
-//      pago no pasa de lo que le queda → se descuenta de esa (pagada entera o a medias; dos pagos a
+//      pago no pasa de lo que le queda → se descuenta de esa (pagada entera o con pago parcial; dos pagos a
 //      la misma factura se descuentan los dos);
 //   2. un pago de VARIAS facturas: su concepto lleva varios números y el importe es justo la suma de lo
 //      que les queda → todas pagadas;
@@ -134,7 +134,7 @@ export function fraseDelTercero(t: TerceroCasado): string {
   if (t.saldo < 0) return `${quien}: el saldo va al revés (${cifra(-t.saldo)} ${t.clase === 'cliente' ? 'a su favor' : 'a nuestro favor'}).`
   const pend = t.facturas.filter((f) => f.pendiente > 0).sort((a, b) => b.fecha.localeCompare(a.fecha))
   return `${quien}: ${t.clase === 'cliente' ? 'nos debe' : 'se le deben'} ${cifra(t.saldo)}`
-    + (pend.length ? `, ${pend.length === 1 ? 'de la factura' : 'de las facturas'} ${pend.map((x) => x.numero).join(', ')}.` : ', y no hay facturas suyas en el libro para repartirlo.')
+    + (pend.length ? `, ${pend.length === 1 ? 'de la factura' : 'de las facturas'} ${pend.map((x) => x.como === 'a_medias' ? `${x.numero} (con pago parcial: le quedan ${cifra(x.pendiente)})` : x.numero).join(', ')}.` : ', y no hay facturas suyas en el libro para repartirlo.')
 }
 
 /**
