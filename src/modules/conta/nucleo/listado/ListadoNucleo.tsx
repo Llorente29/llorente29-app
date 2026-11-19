@@ -201,7 +201,8 @@ export function ListadoNucleo({ que, cuentaDada }: { que: QueListado; cuentaDada
   // ── El documento del movimiento marcado.
   const marcada = sel && a ? a.filas.get(sel) ?? null : null
   const entryId = marcada?.entryId ?? null
-  const doc = useLeer(entryId && accountId ? () => documentoDelAsiento(accountId, entryId) : null, `doc:${entryId}`)
+  // Envuelto: «sin documento» (null) no es lo mismo que «aún leyendo» (useLeer da null mientras lee). E2e 44473399528.
+  const doc = useLeer(entryId && accountId ? async () => ({ doc: await documentoDelAsiento(accountId, entryId) }) : null, `doc:${entryId}`)
 
   // ── Moverse con el teclado.
   const tabla = useRef<HTMLTableSectionElement | null>(null)
@@ -412,7 +413,7 @@ export function ListadoNucleo({ que, cuentaDada }: { que: QueListado; cuentaDada
           </footer>
         </div>
         <PanelDocumento
-          documento={entryId ? (doc.error ? null : doc.datos === null ? undefined : doc.datos) : null}
+          documento={entryId ? (doc.error ? null : doc.datos === null ? undefined : doc.datos.doc) : null}
           sinDocumentoTexto={entryId ? 'Este movimiento no tiene documento.' : 'Marca un movimiento y aquí sale su documento.'}
           accion={<button type="button" className="kf-enlace" disabled={!entryId} onClick={() => abrirAsiento(entryId ?? undefined)}>Abrir el asiento</button>}
           otra={{
