@@ -9,7 +9,7 @@
 import { supabase } from '@/lib/supabase'
 import { hayBase, tabla } from '@/modules/conta/services/bd'
 import type { FilaSumas } from '@/modules/conta/lib/traer'
-import type { RecibidaParaApi } from '@/modules/conta/erp10/ficheros'
+import type { DocumentoErp10, EnvioErp10 } from '@/modules/conta/erp10/casar'
 import { getConnectorCredentialsStatus, saveConnectorCredentials } from '@/modules/integrations/services/connectorCredentialsService'
 
 type Fila = Record<string, unknown>
@@ -152,61 +152,69 @@ export async function probarErp10(companyId: string): Promise<Probado> {
 }
 
 /** Los saldos de ERP10 de una sociedad entre dos días, sumados por cuenta (céntimos). */
-export async function leerSaldosErp10(companyId: string, desde: string, hasta: string): Promise<{ filas: FilaSumas[]; lineas: number; leidoEn: string }> {
-  const d = await invocar({ company_id: companyId, accion: 'saldos', desde, hasta })
+export async function leerSaldosErp10(companyId: string, desde: string, hasta: string, pedidos: { serie: string; documento: number }[] = []): Promise<{ filas: FilaSumas[]; lineas: number; leidoEn: string; documentos: DocumentoErp10[] }> {
+  const d = await invocar({ company_id: companyId, accion: 'saldos', desde, hasta, documentos: pedidos })
   const filas = (Array.isArray(d.filas) ? d.filas : []).map((f: Fila) => ({
     subcuenta: String(f.subcuenta ?? ''), nombre: String(f.nombre ?? ''), debe: Number(f.debe ?? 0), haber: Number(f.haber ?? 0),
     deudor: Number(f.deudor ?? 0), acreedor: Number(f.acreedor ?? 0),
   }))
-  return { filas, lineas: Number(d.lineas ?? 0), leidoEn: String(d.leidoEn ?? new Date().toISOString()) }
+  const documentos = (Array.isArray(d.documentos) ? d.documentos : []) as DocumentoErp10[]
+  return { filas, lineas: Number(d.lineas ?? 0), leidoEn: String(d.leidoEn ?? new Date().toISOString()), documentos }
 }
 
 // ── X10b · Escribir en ERP10 (las recibidas) ─────────────────────────────────────────
 
-/** Cómo va la conexión de esta sociedad: si ya salió la de prueba y si se comprobó después. */
-export interface EstadoEscribir {
+/** Cómo va cada clase en esta sociedad: si ya salió su de prueba y si se comprobó después (X10c: por clase). */
+export interface EstadoClase {
   /** Cuándo entró en ERP10 la primera (la de prueba); null si nunca. */
   primera: string | null
-  /** Un «Darlo por igualado» posterior a la primera: el mes ya se puede sacar. */
+  /** Un «Darlo por igualado» posterior a la primera: ya se pueden sacar las demás. */
   comprobada: boolean
 }
+export type ClaseConexion = 'recibida' | 'emitida'
+export type EstadoEscribir = Record<ClaseConexion, EstadoClase>
 export async function leerEstadoEscribir(accountId: string, companyId: string): Promise<EstadoEscribir> {
   hayBase()
-  const { data: e, error } = await tabla('conta_erp10_envio').select('creado_en').eq('account_id', accountId).eq('company_id', companyId)
-    .eq('estado', 'en_erp10').order('creado_en', { ascending: true }).limit(1)
+  const { data: e, error } = await tabla('conta_erp10_envio').select('clase, creado_en').eq('account_id', accountId).eq('company_id', companyId)
+    .eq('estado', 'en_erp10').order('creado_en', { ascending: true })
   if (error) throw new Error(`No se ha podido leer lo que ha salido a ERP10: ${error.message}`)
-  const primera = ((e ?? []) as Fila[])[0]?.creado_en as string | undefined
-  if (!primera) return { primera: null, comprobada: false }
-  const { data: g, error: e2 } = await tabla('conta_erp10_igualado').select('id').eq('account_id', accountId).eq('company_id', companyId).gt('igualado_en', primera).limit(1)
+  const filas = (e ?? []) as Fila[]
+  const { data: g, error: e2 } = await tabla('conta_erp10_igualado').select('igualado_en').eq('account_id', accountId).eq('company_id', companyId)
+    .order('igualado_en', { ascending: false }).limit(1)
   if (e2) throw new Error(`No se ha podido leer lo igualado: ${e2.message}`)
-  return { primera, comprobada: ((g ?? []) as Fila[]).length > 0 }
+  const ultimoIgualado = ((g ?? []) as Fila[])[0]?.igualado_en as string | undefined
+  const de = (c: ClaseConexion): EstadoClase => {
+    const primera = (filas.find((x) => x.clase === c)?.creado_en as string | undefined) ?? null
+    return { primera, comprobada: !!primera && !!ultimoIgualado && ultimoIgualado > primera }
+  }
+  return { recibida: de('recibida'), emitida: de('emitida') }
 }
 
-/** Lo que dice el servidor de cada recibida. */
+/** Lo que dice el servidor de cada factura. */
 export interface Salido {
-  entryId: string; numero: string
+  entryId: string; numero: string; clase?: ClaseConexion
   estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'
   serie?: string; documento?: number; enlazada?: boolean; pdf?: 'subido' | 'fallo' | null; porque?: string
 }
-export type ParaSacar = { api: RecibidaParaApi; huella: string; pdf: { ruta: string; nombre: string } | null }
 
 /**
- * Saca recibidas a ERP10 (conta-erp10-escribir). El servidor para a los 40 s y devuelve las
- * que no le han dado tiempo: aquí se le vuelven a mandar hasta que no queda ninguna.
+ * Saca a ERP10 los asientos pedidos (conta-erp10-escribir). X10c: solo se mandan sus ids; el
+ * servidor arma cada factura desde la base. Para a los 40 s y devuelve los que no le han dado
+ * tiempo: aquí se le vuelven a pedir hasta que no queda ninguno.
  */
-export async function sacarRecibidasErp10(companyId: string, mes: string, xs: ParaSacar[], cuentasNuevas: { codigo: string; nombre: string; nif: string | null }[], quien: string | null,
+export async function sacarAErp10(companyId: string, mes: string, entradas: string[], quien: string | null,
   avance?: (hechas: number, de: number) => void): Promise<{ salidas: Salido[]; sinApuntar: string | null }> {
   const salidas: Salido[] = []
-  let pendientes = xs
+  let pendientes = entradas
   let sinApuntar: string | null = null
   for (let vuelta = 0; pendientes.length && vuelta < 50; vuelta++) {
-    avance?.(salidas.length, xs.length)
-    const d = await invocarEscribir({ company_id: companyId, mes, recibidas: pendientes, cuentas_nuevas: cuentasNuevas, quien })
+    avance?.(salidas.length, entradas.length)
+    const d = await invocarEscribir({ company_id: companyId, mes, entradas: pendientes, quien })
     const rs = (Array.isArray(d.resultados) ? d.resultados : []) as Salido[]
     salidas.push(...rs)
     if (typeof d.sinApuntar === 'string') sinApuntar = d.sinApuntar
     const quedan = new Set((Array.isArray(d.quedan) ? d.quedan : []) as string[])
-    pendientes = pendientes.filter((x) => quedan.has(x.api.entryId))
+    pendientes = pendientes.filter((x) => quedan.has(x))
   }
   return { salidas, sinApuntar }
 }
@@ -218,4 +226,14 @@ async function invocarEscribir(body: Fila): Promise<Fila> {
   const ctx = (error as { context?: Response }).context
   const cuerpo = ctx && typeof ctx.json === 'function' ? await ctx.clone().json().catch(() => null) as Fila | null : null
   throw new Error(str(cuerpo?.error) ?? (ctx?.status === 404 ? 'Sacar a ERP10 aún no está publicado en este entorno.' : `No se ha podido entrar en ERP10: ${error.message}`))
+}
+
+/** X10c · Lo que salió por la conexión (en ERP10, con su número): para casarlo en el paso 3. */
+export async function leerEnviosErp10(accountId: string, companyId: string): Promise<EnvioErp10[]> {
+  hayBase()
+  const { data, error } = await tabla('conta_erp10_envio').select('entry_id, clase, erp10_serie, erp10_documento').eq('account_id', accountId).eq('company_id', companyId)
+    .eq('estado', 'en_erp10')
+  if (error) throw new Error(`No se ha podido leer lo que salió por la conexión: ${error.message}`)
+  return ((data ?? []) as Fila[]).filter((x) => x.erp10_documento != null)
+    .map((x) => ({ entryId: String(x.entry_id), clase: String(x.clase), serie: String(x.erp10_serie ?? ''), documento: Number(x.erp10_documento) }))
 }

@@ -1,28 +1,29 @@
 // supabase/functions/conta-erp10-escribir/index.ts
 //
-// X10b (19/11) · ERP10 POR LA API, FASE 2: SACAR LAS RECIBIDAS A ERP10. Lo llama la salida a
-// ERP10 (Libros › Cierre › Salida a ERP10) con la sesión de un administrador:
+// X10b (19/11) · SACAR A ERP10 POR LA CONEXIÓN. X10c: las emitidas también, y LO QUE SE ESCRIBE
+// SE ARMA AQUÍ, DESDE LA BASE. Lo llama la salida a ERP10 (Libros › Cierre › Salida a ERP10) con
+// la sesión de un administrador, y solo dice qué:
 //
-//   { company_id, mes: 'AAAA-MM-01', recibidas: [{ api, huella, pdf }], cuentas_nuevas, quien }
+//   { company_id, mes: 'AAAA-MM-01', entradas: [entry_id, …], quien }
 //
-// `api` es la recibida tal como la lee la salida (las cuentas ya en ERP10: las mismas que el
-// Excel); `huella`, la de su fila (la misma que apunta el Excel). Por cada una, en orden,
-// _shared/erp10Escribir.ts (sacarRecibida): la coge (conta_erp10_envio_tomar), da de alta las
-// cuentas que falten, la busca en ERP10 y la enlaza si ya está o la escribe, apunta su número
-// en el acto y sube su PDF. Después, lo que ha entrado se apunta en la salida de siempre
-// (conta_erp10_lote_apuntar, con la sesión de quien pulsa) y el número de ERP10 va a su
-// partida. Así nada sale dos veces, aunque se pulse dos veces o se corte a la mitad.
+// Nada más del cuerpo se lee (pedidasDelCuerpo). Con la sesión de quien pulsa se lee lo que sale ese
+// mes con las mismas funciones de la base que la pantalla, y se arma con el mismo armarSalida
+// (_shared/erp10DesdeLaBase.ts): cada recibida o emitida con las cuentas de ERP10, la huella de
+// su fila y su PDF. Por cada una, en orden, _shared/erp10Escribir.ts: la coge
+// (conta_erp10_envio_tomar), da de alta las cuentas que falten, la busca en ERP10 y la enlaza si
+// ya está o la escribe, apunta su número en el acto y sube su PDF. Lo que ha entrado se apunta
+// en la salida de siempre (conta_erp10_lote_apuntar, con la sesión de quien pulsa) y el número de
+// ERP10 va a su partida. Así nada sale dos veces, aunque se pulse dos veces o se corte a la mitad.
 //
-// Las reglas de la respuesta X10 · 2:
+// Las reglas de la respuesta X10 · 2, POR CLASE (recibidas y emitidas, cada una lo suyo):
 //   · solo las sociedades de la lista cerrada, con su NIF comprobado (el cliente de ERP10);
-//   · la PRIMERA salida de cada sociedad es UNA factura sola; el mes entero, solo después de
-//     comprobarla en el paso 3 (un «Darlo por igualado» posterior a esa primera);
+//   · la PRIMERA de cada clase en cada sociedad, sola; el resto, solo después de comprobarla en el
+//     paso 3 (un «Darlo por igualado» posterior a esa primera);
 //   · lo que entra no se puede borrar por aquí (no hay DELETE en la API).
 // Tope de tiempo: lo que no da tiempo vuelve en «quedan» y se saca en la siguiente llamada.
 //
 // Contesta 200 con lo que ha pasado a cada una, o { error } en palabras (regla 8): 401 sin
-// sesión, 403 sin permiso, 404 sin conexión, 409 si un freno para. En el registro, solo
-// recuentos.
+// sesión, 403 sin permiso, 404 sin conexión, 409 si un freno para. En el registro, solo recuentos.
 //
 // verify_jwt = true (config.toml).
 
@@ -31,21 +32,21 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { clienteErp10 } from "../_shared/erp10Despacho.ts";
 import { FrenoErp10 } from "../_shared/erp10Cliente.ts";
-import { sacarRecibida, type CuentaNueva, type Envio, type PuertoEscribir, type RecibidaParaApi, type Resultado } from "../_shared/erp10Escribir.ts";
+import { sacarEmitida, sacarRecibida, type Envio, type PuertoEscribir, type Resultado } from "../_shared/erp10Escribir.ts";
+import { carpetaDe, loQueSaleDesdeLaBase, pedidasDelCuerpo } from "../_shared/erp10DesdeLaBase.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const TOPE_MS = 40_000;
 const EN_LA_DEMO = "En la demo no se escribe en ERP10.";
-export const PRIMERA_UNA = "La primera vez que esta sociedad saca a ERP10 sale una factura sola, para probar. Sácala, compruébala en el paso 3 y después saca el mes.";
-export const SIN_COMPROBAR = "Antes de sacar el mes, comprueba en el paso 3 la factura de prueba y dala por igualada.";
+const NOMBRE = { recibida: ["recibida", "recibidas"], emitida: ["emitida", "emitidas"] } as const;
+const primeraUna = (c: "recibida" | "emitida") => `La primera factura ${NOMBRE[c][0]} que esta sociedad saca a ERP10 sale sola, para probar. Sácala, compruébala en el paso 3 y después saca las demás.`;
+const sinComprobar = (c: "recibida" | "emitida") => `Antes de sacar más facturas ${NOMBRE[c][1]}, comprueba en el paso 3 la de prueba y dala por igualada.`;
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const hoyMadrid = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(new Date());
 const huellaDe = async (t: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))].map((b) => b.toString(16).padStart(2, "0")).join("");
-
-type Pedida = { api: RecibidaParaApi; huella: string; pdf: { ruta: string; nombre: string } | null };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -56,18 +57,13 @@ Deno.serve(async (req) => {
   const { data: u } = await sb.auth.getUser();
   if (!u?.user) return json({ error: "no autenticado" }, 401);
 
-  let b: { company_id?: unknown; mes?: unknown; recibidas?: unknown; cuentas_nuevas?: unknown; quien?: unknown } = {};
+  let b: { company_id?: unknown; mes?: unknown; quien?: unknown } = {};
   try { b = await req.json(); } catch { /* vacío */ }
   const companyId = typeof b.company_id === "string" && /^[0-9a-f-]{36}$/i.test(b.company_id) ? b.company_id : "";
   const mes = typeof b.mes === "string" && /^\d{4}-\d{2}-01$/.test(b.mes) ? b.mes : "";
-  const pedidas = (Array.isArray(b.recibidas) ? b.recibidas : []) as Pedida[];
-  const cuentasNuevas = (Array.isArray(b.cuentas_nuevas) ? b.cuentas_nuevas : []) as CuentaNueva[];
+  const pedidas = pedidasDelCuerpo(b);
   const quien = typeof b.quien === "string" ? b.quien.slice(0, 120) : null;
-  if (!companyId || !mes || !pedidas.length) return json({ error: "faltan company_id, mes (AAAA-MM-01) o las recibidas" }, 400);
-  if (pedidas.some((x) => !x?.api?.entryId || !/^[0-9a-f-]{36}$/i.test(x.api.entryId) || typeof x.huella !== "string" || !x.huella.trim())) {
-    return json({ error: "cada recibida lleva su asiento y su huella" }, 400);
-  }
-  if (new Set(pedidas.map((x) => x.api.entryId)).size !== pedidas.length) return json({ error: "una recibida viene dos veces: no se saca nada" }, 400);
+  if (!companyId || !mes || !pedidas.length) return json({ error: "faltan company_id, mes (AAAA-MM-01) o los asientos (entradas)" }, 400);
 
   // La sociedad, con los permisos de quien llama; solo un administrador.
   const { data: co, error: e0 } = await sb.from("company").select("id, account_id").eq("id", companyId).maybeSingle();
@@ -78,25 +74,46 @@ Deno.serve(async (req) => {
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
   if (!(await cuentaPuedeSalir(srv, co.account_id))) return json({ error: EN_LA_DEMO, demo: true }, 409);
 
-  // La primera, sola; el mes, después de comprobarla.
-  const { data: entradas, error: e1 } = await srv.from("conta_erp10_envio").select("creado_en").eq("company_id", companyId).eq("account_id", co.account_id)
-    .eq("estado", "en_erp10").order("creado_en", { ascending: true }).limit(1);
-  if (e1) return json({ error: `no se ha podido leer lo que ya ha salido a ERP10: ${e1.message}` }, 500);
-  const primera = (entradas ?? [])[0]?.creado_en as string | undefined;
-  if (pedidas.length > 1) {
-    if (!primera) return json({ error: PRIMERA_UNA, primera: true }, 409);
-    const { data: ig } = await srv.from("conta_erp10_igualado").select("id").eq("company_id", companyId).eq("account_id", co.account_id).gt("igualado_en", primera).limit(1);
-    if (!(ig ?? []).length) return json({ error: SIN_COMPROBAR, sinComprobar: true }, 409);
+  // Lo que sale ese mes, DESDE LA BASE, con la sesión de quien pulsa (las mismas funciones que la pantalla).
+  const leer = async (fn: string) => {
+    const { data, error } = await sb.rpc(fn, { p_company: companyId, p_mes: mes });
+    if (error) throw new Error(`no se ha podido leer lo que sale (${fn}): ${error.message}`);
+    return (data ?? {}) as Record<string, unknown>;
+  };
+  let base;
+  try {
+    const { data: sal } = await sb.from("conta_erp10_salida_empresa").select("carpeta_pdf, codigo_erp10").eq("company_id", companyId).maybeSingle();
+    const [porSalir, recibidas, emitidas, asientos, dias] = await Promise.all([
+      leer("conta_erp10_por_salir"), leer("conta_erp10_recibidas_por_salir"), leer("conta_erp10_emitidas_por_salir"),
+      leer("conta_erp10_asientos_por_salir"), leer("conta_erp10_dias_tpv_por_salir"),
+    ]);
+    base = await loQueSaleDesdeLaBase({ porSalir, recibidas, emitidas, asientos, dias, carpeta: carpetaDe(sal?.carpeta_pdf ?? null, sal?.codigo_erp10 ?? null) }, pedidas);
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+  }
+
+  // Por clase: la primera, sola; las demás, después de comprobarla.
+  for (const clase of ["recibida", "emitida"] as const) {
+    const n = base.salen.filter((x) => x.clase === clase).length;
+    if (!n) continue;
+    const { data: entradas, error: e1 } = await srv.from("conta_erp10_envio").select("creado_en").eq("company_id", companyId).eq("account_id", co.account_id)
+      .eq("clase", clase).eq("estado", "en_erp10").order("creado_en", { ascending: true }).limit(1);
+    if (e1) return json({ error: `no se ha podido leer lo que ya ha salido a ERP10: ${e1.message}` }, 500);
+    const primera = (entradas ?? [])[0]?.creado_en as string | undefined;
+    if (n > 1 && !primera) return json({ error: primeraUna(clase), primera: true, clase }, 409);
+    if (n > 1) {
+      const { data: ig } = await srv.from("conta_erp10_igualado").select("id").eq("company_id", companyId).eq("account_id", co.account_id).gt("igualado_en", primera).limit(1);
+      if (!(ig ?? []).length) return json({ error: sinComprobar(clase), sinComprobar: true, clase }, 409);
+    }
   }
 
   try {
     const c = await clienteErp10(srv, co.account_id, companyId, { escribir: true });
     if (!c) return json({ error: "Esta sociedad no está conectada con ERP10: pon su código de empresa en «Conexión con ERP10»." }, 404);
-    const hoy = hoyMadrid();
     const puerto: PuertoEscribir = {
-      hoy,
-      tomar: async (entryId) => {
-        const { data, error } = await srv.rpc("conta_erp10_envio_tomar", { p_company: companyId, p_entry: entryId, p_clase: "recibida", p_quien_nombre: quien });
+      hoy: hoyMadrid(),
+      tomar: async (entryId, clase) => {
+        const { data, error } = await srv.rpc("conta_erp10_envio_tomar", { p_company: companyId, p_entry: entryId, p_clase: clase, p_quien_nombre: quien });
         if (error) throw new Error(`no se ha podido coger el asiento: ${error.message}`);
         return data as { tomado: boolean; envio: Envio };
       },
@@ -118,19 +135,21 @@ Deno.serve(async (req) => {
       },
     };
 
-    const resultados: Resultado[] = [];
+    const resultados: Resultado[] = base.noSalen.map((x) => ({ entryId: x.entryId, numero: "", estado: "no_pudo" as const, porque: x.porque }));
     const quedan: string[] = [];
-    for (const x of pedidas) {
-      if (Date.now() - t0 > TOPE_MS) { quedan.push(x.api.entryId); continue; }
-      resultados.push(await sacarRecibida(x.api, cuentasNuevas, x.pdf, puerto));
+    for (const x of base.salen) {
+      if (Date.now() - t0 > TOPE_MS) { quedan.push(x.entryId); continue; }
+      resultados.push(x.clase === "recibida"
+        ? await sacarRecibida(x.api, base.cuentasNuevas, x.pdf, puerto)
+        : await sacarEmitida(x.api, base.cuentasNuevas, x.pdf, puerto));
     }
 
-    // Lo que ha entrado (o ya estaba) y no está apuntado en la salida de Sumied: un lote.
+    // Lo que ha entrado (o ya estaba) y no está apuntado en la salida de Sumied: un lote, con la huella de su fila (de la base).
     const porApuntar = resultados.filter((r) => (r.estado === "en_erp10" || r.estado === "ya_estaba") && r.sinApuntar);
     let apuntado: string | null = null;
     if (porApuntar.length) {
-      const huellas = new Map(pedidas.map((x) => [x.api.entryId, x.huella.trim()]));
-      const partidas = porApuntar.map((r) => ({ entry_id: r.entryId, clase: "recibida", huella: huellas.get(r.entryId)! }));
+      const deLaBase = new Map(base.salen.map((x) => [x.entryId, x]));
+      const partidas = porApuntar.map((r) => ({ entry_id: r.entryId, clase: deLaBase.get(r.entryId)!.clase, huella: deLaBase.get(r.entryId)!.huella }));
       const { data: lote, error: eL } = await sb.rpc("conta_erp10_lote_apuntar", {
         p_company: companyId, p_mes: mes, p_partidas: partidas, p_quien_nombre: quien,
         p_ficheros: [{ nombre: "ERP10 (por la conexión)", filas: partidas.length, huella: await huellaDe(partidas.map((x) => x.huella).join("|")) }],
@@ -148,7 +167,7 @@ Deno.serve(async (req) => {
       }
     }
     console.log(JSON.stringify({ pedidas: pedidas.length, en_erp10: resultados.filter((r) => r.estado === "en_erp10").length, no_pudo: resultados.filter((r) => r.estado === "no_pudo").length, quedan: quedan.length }));
-    return json({ ok: true, resultados, quedan, sinApuntar: apuntado, primera: !primera });
+    return json({ ok: true, resultados, quedan, sinApuntar: apuntado });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.log(JSON.stringify({ fallo: e instanceof FrenoErp10 ? "freno" : "erp10" }));

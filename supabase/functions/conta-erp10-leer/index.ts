@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
   const { data: u } = await sb.auth.getUser();
   if (!u?.user) return json({ error: "no autenticado" }, 401);
 
-  let b: { company_id?: unknown; accion?: unknown; desde?: unknown; hasta?: unknown } = {};
+  let b: { company_id?: unknown; accion?: unknown; desde?: unknown; hasta?: unknown; documentos?: unknown } = {};
   try { b = await req.json(); } catch { /* vacío */ }
   const companyId = typeof b.company_id === "string" && /^[0-9a-f-]{36}$/i.test(b.company_id) ? b.company_id : "";
   const accion = b.accion === "probar" || b.accion === "saldos" ? b.accion : "";
@@ -79,7 +79,15 @@ Deno.serve(async (req) => {
     const desde = dia(b.desde), hasta = dia(b.hasta);
     if (!desde || !hasta || desde > hasta) return json({ error: "faltan desde y hasta (AAAA-MM-DD)" }, 400);
     const apuntes = await c.cliente.apuntesEntre(desde, hasta);
-    return json({ filas: sumarPorCuenta(apuntes), lineas: lineas(apuntes), asientos: apuntes.length, desde, hasta, leidoEn: new Date().toISOString() });
+    // X10c · Los documentos que se piden (los números que dio ERP10 a lo que salió por la conexión), con sus líneas por cuenta:
+    // el paso 3 los casa uno a uno. Solo esos: nada más del ERP10 sale de aquí.
+    const pedidos = new Set((Array.isArray(b.documentos) ? b.documentos : []).slice(0, 5000)
+      .map((d) => `${String((d as { serie?: unknown })?.serie ?? "")}/${Number((d as { documento?: unknown })?.documento)}`));
+    const documentos = apuntes.filter((a) => pedidos.has(`${a.Serie ?? ""}/${Number(a.Documento)}`)).map((a) => ({
+      serie: String(a.Serie ?? ""), documento: Number(a.Documento),
+      lineas: (a.Detalles ?? []).map((l) => ({ cuenta: String(l.Cuenta ?? "").replace(/\D/g, ""), importe: Math.round(Number(l.Debe ?? 0) * 100) - Math.round(Number(l.Haber ?? 0) * 100) })),
+    }));
+    return json({ filas: sumarPorCuenta(apuntes), lineas: lineas(apuntes), asientos: apuntes.length, desde, hasta, leidoEn: new Date().toISOString(), documentos });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.log(JSON.stringify({ accion, fallo: e instanceof FrenoErp10 ? "freno" : "erp10" }));

@@ -23,29 +23,18 @@
 //   4. El PDF, después: si no se sube, la factura sigue en ERP10 y se dice.
 
 import { descripcionRecibida } from './diezTexto.ts'
+import type { EmitidaParaApi, RecibidaParaApi } from './erp10Ficheros.ts'
 
-/** La recibida como la lee la salida a ERP10, con las cuentas de ERP10 y los importes en céntimos. */
-export type RecibidaParaApi = {
-  entryId: string
-  numero: string
-  /** AAAA-MM-DD */
-  fechaFactura: string
-  fechaAsiento: string
-  nif: string
-  nombre: string
-  /** La cuenta del proveedor, en ERP10. */
-  proveedor: string
-  tipoOperacion: string
-  gastos: { cuenta: string; importe: number }[]
-  iva: { pct: number; base: number; cuota: number }[]
-  retencion: unknown | null
-  total: number
-}
+// X10c: la recibida y la emitida, como las lee la salida a ERP10 (erp10Ficheros.ts), con las cuentas
+// de ERP10 y los importes en céntimos. Las arma el servidor desde la base (erp10DesdeLaBase.ts).
+export type { EmitidaParaApi, RecibidaParaApi }
 
 /** Una cuenta que la salida da por nueva (ERP10 no la tiene): se da de alta si falta. */
 export type CuentaNueva = { codigo: string; nombre: string; nif: string | null }
 
 export const SERIE_RECIBIDAS = '2'
+/** X10c · Las emitidas: la serie 1 de Diez (C04b R13, medida en la C0009: TipoAsiento 1, TipoFactura 1). */
+export const SERIE_EMITIDAS = '1'
 const MESES_BUSQUEDA = 13
 const e = (cent: number) => Math.round(cent) / 100
 const aaaammdd = (iso: string) => Number(iso.slice(0, 10).replaceAll('-', ''))
@@ -90,6 +79,46 @@ export function facturaRecibidaErp10(x: RecibidaParaApi, o: { hoy: string }): { 
   return { factura }
 }
 
+/**
+ * X10c · La factura (FacturaData) de una emitida; o por qué no sale por aquí. La forma de la serie 1
+ * medida en Diez (_shared/diezFactura.ts): el cliente con su NIF y su nombre, hasta tres tipos de
+ * IVA, y los ingresos en Apuntes, que suman las bases. ERP10 hace el asiento (430 D, 7 H, 477 H).
+ */
+export function facturaEmitidaErp10(x: EmitidaParaApi, o: { hoy: string }): { factura: Record<string, unknown> } | { porque: string } {
+  const numero = x.numero.trim()
+  if (!numero) return { porque: 'No tiene número de factura, y por él se busca en ERP10 para no meterla dos veces.' }
+  if (!x.nombre.trim()) return { porque: 'Le falta el nombre del cliente.' }
+  if (!x.iva.length) return { porque: 'No lleva IVA, y ERP10 la guarda con su registro de IVA.' }
+  if (x.iva.length > 3) return { porque: `Lleva ${x.iva.length} tipos de IVA, y por aquí salen hasta tres. Sácala con el Excel.` }
+  const ingresos = x.ingresos.filter((g) => g.importe !== 0)
+  if (!ingresos.length) return { porque: 'No lleva ninguna cuenta de ingreso.' }
+  const bases = x.iva.reduce((t, i) => t + i.base, 0)
+  const cuotas = x.iva.reduce((t, i) => t + i.cuota, 0)
+  const suma = ingresos.reduce((t, g) => t + g.importe, 0)
+  if (suma !== bases) return { porque: `Los ingresos (${e(suma)}) no son la suma de las bases (${e(bases)}): ERP10 lo exige.` }
+  if (bases + cuotas !== x.total) return { porque: `No cuadra: bases ${e(bases)} + cuotas ${e(cuotas)} no son el total ${e(x.total)}.` }
+  if (x.total <= 0) return { porque: 'El total no es positivo, y por aquí no está medido. Sácala con el Excel.' }
+  const descripcion = descripcionRecibida(numero, x.nombre)
+  const fecha = aaaammdd(x.fechaAsiento)
+  const tipos: Record<string, number> = {}
+  ;[...x.iva].sort((a, b) => b.pct - a.pct).forEach((i, n) => {
+    tipos[`BaseImponible${n + 1}`] = e(i.base)
+    tipos[`PorcentajeIVA${n + 1}`] = i.pct
+    tipos[`CuotaIVA${n + 1}`] = e(i.cuota)
+  })
+  return {
+    factura: {
+      Ejercicio: x.fechaAsiento.slice(0, 4), Serie: SERIE_EMITIDAS, TipoAsiento: 1, TipoFactura: 1,
+      Fecha: fecha, FechaFactura: aaaammdd(x.fechaFactura), FechaIntroduccionFactura: aaaammdd(o.hoy),
+      CuentaCliente: x.cliente, ...(x.nif.trim() ? { CifCliente: x.nif.trim() } : {}), NombreCliente: x.nombre.trim(),
+      NumeroFactura: numero, Descripcion: descripcion,
+      ...tipos,
+      TotalFactura: e(x.total), TotalGastosIngresos: e(bases),
+      Apuntes: [...ingresos].sort((a, b) => a.cuenta.localeCompare(b.cuenta)).map((g, i) => ({ Linea: i + 1, Cuenta: g.cuenta, Concepto: descripcion, Fecha: fecha, Importe: e(g.importe) })),
+    },
+  }
+}
+
 /** Los meses (AAAAMM) desde el del asiento hasta hoy. */
 export function mesesDeBusqueda(desde: string, hoy: string): string[] {
   const r: string[] = []
@@ -109,7 +138,7 @@ export type Envio = {
 
 export interface PuertoEscribir {
   /** conta_erp10_envio_tomar: coge el asiento (una sola sentencia). */
-  tomar(entryId: string): Promise<{ tomado: boolean; envio: Envio }>
+  tomar(entryId: string, clase: 'recibida' | 'emitida'): Promise<{ tomado: boolean; envio: Envio }>
   /** Apunta lo que ha pasado en la fila del asiento. */
   poner(id: string, cambios: Partial<Envio>): Promise<void>
   /** El PDF de la factura (lo guardado en Sumied). */
@@ -126,6 +155,8 @@ export interface PuertoEscribir {
 
 export type Resultado = {
   entryId: string; numero: string
+  /** X10c */
+  clase?: 'recibida' | 'emitida'
   /** en_erp10: ha entrado ahora (o se ha enlazado); ya_estaba: entró antes; en_marcha: otro envío la tiene; no_pudo: con su porqué. */
   estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'
   ejercicio?: string; serie?: string; documento?: number; enlazada?: boolean
@@ -143,13 +174,29 @@ const base64 = (b: Uint8Array) => {
 const mensaje = (x: unknown) => (x instanceof Error ? x.message : String(x))
 
 /** Saca una recibida a ERP10, sin que pueda salir dos veces. */
-export async function sacarRecibida(x: RecibidaParaApi, cuentasNuevas: readonly CuentaNueva[], pdf: { ruta: string; nombre: string } | null, p: PuertoEscribir): Promise<Resultado> {
-  const base = { entryId: x.entryId, numero: x.numero }
-  const hecha = facturaRecibidaErp10(x, { hoy: p.hoy })
+export function sacarRecibida(x: RecibidaParaApi, cuentasNuevas: readonly CuentaNueva[], pdf: { ruta: string; nombre: string } | null, p: PuertoEscribir): Promise<Resultado> {
+  return sacarFactura({ clase: 'recibida', entryId: x.entryId, numero: x.numero, fechaAsiento: x.fechaAsiento, hecha: facturaRecibidaErp10(x, { hoy: p.hoy }), usa: [x.proveedor, ...x.gastos.map((g) => g.cuenta)] }, cuentasNuevas, pdf, p)
+}
+/** X10c · Saca una emitida a ERP10, con las mismas protecciones. */
+export function sacarEmitida(x: EmitidaParaApi, cuentasNuevas: readonly CuentaNueva[], pdf: { ruta: string; nombre: string } | null, p: PuertoEscribir): Promise<Resultado> {
+  return sacarFactura({ clase: 'emitida', entryId: x.entryId, numero: x.numero, fechaAsiento: x.fechaAsiento, hecha: facturaEmitidaErp10(x, { hoy: p.hoy }), usa: [x.cliente, ...x.ingresos.map((g) => g.cuenta)] }, cuentasNuevas, pdf, p)
+}
+
+type Pedida = {
+  clase: 'recibida' | 'emitida'; entryId: string; numero: string; fechaAsiento: string
+  hecha: { factura: Record<string, unknown> } | { porque: string }
+  /** Las cuentas (de ERP10) que usa la factura. */
+  usa: string[]
+}
+
+/** Saca una factura (recibida o emitida) a ERP10, sin que pueda salir dos veces. */
+async function sacarFactura(x: Pedida, cuentasNuevas: readonly CuentaNueva[], pdf: { ruta: string; nombre: string } | null, p: PuertoEscribir): Promise<Resultado> {
+  const base = { entryId: x.entryId, numero: x.numero, clase: x.clase }
+  const hecha = x.hecha
   if ('porque' in hecha) return { ...base, estado: 'no_pudo', porque: hecha.porque }
 
   // 1 · Coger el asiento.
-  const t = await p.tomar(x.entryId)
+  const t = await p.tomar(x.entryId, x.clase)
   const v = t.envio
   if (!t.tomado) {
     if (v.estado === 'en_erp10') {
@@ -159,10 +206,10 @@ export async function sacarRecibida(x: RecibidaParaApi, cuentasNuevas: readonly 
   }
 
   const fd = hecha.factura
-  let ejercicio = String(fd.Ejercicio), serie = SERIE_RECIBIDAS, documento: number, enlazada = false
+  let ejercicio = String(fd.Ejercicio), serie = String(fd.Serie), documento: number, enlazada = false
   try {
     // 2 · Las cuentas que ERP10 no tiene, antes de la factura que las usa.
-    const usa = new Set([String(fd.CuentaCliente), ...x.gastos.map((g) => g.cuenta)])
+    const usa = new Set(x.usa)
     for (const c of cuentasNuevas.filter((k) => usa.has(k.codigo))) {
       if (!(await p.erp10.tieneSubcuenta(c.codigo))) await p.erp10.crearSubcuenta({ Codigo: c.codigo, Descripcion: c.nombre, NIF: c.nif })
     }
@@ -172,12 +219,12 @@ export async function sacarRecibida(x: RecibidaParaApi, cuentasNuevas: readonly 
     const vistas = new Map<string, Record<string, unknown>>()
     for (const m of meses) {
       for (const f of await p.erp10.facturasDelMes(m)) {
-        if (numeroComparable(f.NumeroFactura) !== numeroComparable(fd.NumeroFactura) || String(f.CuentaCliente ?? '') !== String(fd.CuentaCliente)) continue
+        if (numeroComparable(f.NumeroFactura) !== numeroComparable(fd.NumeroFactura) || String(f.CuentaCliente ?? '') !== String(fd.CuentaCliente) || (f.Serie != null && String(f.Serie) !== String(fd.Serie))) continue
         vistas.set(`${f.Ejercicio ?? ''}|${f.Serie ?? ''}|${f.Documento ?? ''}`, f)
       }
     }
     const ya = [...vistas.values()]
-    if (ya.length > 1) throw new Error(`Hay ${ya.length} facturas ${x.numero} de este proveedor en ERP10: no se toca nada. Míralo en ERP10.`)
+    if (ya.length > 1) throw new Error(`Hay ${ya.length} facturas ${x.numero} de este ${x.clase === 'recibida' ? 'proveedor' : 'cliente'} en ERP10: no se toca nada. Míralo en ERP10.`)
     if (ya.length === 1) {
       ejercicio = String(ya[0].Ejercicio ?? ejercicio); serie = String(ya[0].Serie ?? serie); documento = Number(ya[0].Documento); enlazada = true
     } else {

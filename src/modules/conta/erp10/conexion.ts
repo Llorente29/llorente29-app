@@ -26,13 +26,20 @@ export const NO_SE_BORRA = 'Si algo sale mal, se corrige a mano en ERP10: Sumied
 const eur = (cent: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cent / 100)
 const n = (k: number, uno: string, varios: string) => `${new Intl.NumberFormat('es-ES').format(k)} ${k === 1 ? uno : varios}`
 
-/** Antes de escribir (regla 8, y lo de la respuesta X10 · 2): qué va a entrar, y que no se puede borrar. */
-export function queVaAEntrar(o: { cuantas: number; mes: string; prueba?: { numero: string; proveedor: string; total: number } | null }): string {
-  if (o.prueba) return `Va a entrar en ERP10 una sola factura recibida de ${o.mes}, para probar: la ${o.prueba.numero} de ${o.prueba.proveedor} (${eur(o.prueba.total)} €). ${NO_SE_BORRA}`
-  return `Van a entrar en ERP10: ${n(o.cuantas, 'factura recibida', 'facturas recibidas')} de ${o.mes}. ${NO_SE_BORRA}`
+const facturas = (r: number, e: number) => {
+  const p: string[] = []
+  if (r) p.push(n(r, 'factura recibida', 'facturas recibidas'))
+  if (e) p.push(r ? n(e, 'emitida', 'emitidas') : n(e, 'factura emitida', 'facturas emitidas'))
+  return p.join(' y ')
 }
 
-type Salida = { numero: string; estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'; serie?: string; documento?: number; enlazada?: boolean; pdf?: 'subido' | 'fallo' | null; porque?: string }
+/** Antes de escribir (regla 8, y lo de la respuesta X10 · 2): qué va a entrar, y que no se puede borrar. X10c: recibidas y emitidas. */
+export function queVaAEntrar(o: { recibidas: number; emitidas: number; mes: string; prueba?: { clase: 'recibida' | 'emitida'; numero: string; tercero: string; total: number } | null }): string {
+  if (o.prueba) return `Va a entrar en ERP10 una sola factura ${o.prueba.clase} de ${o.mes}, para probar: la ${o.prueba.numero} de ${o.prueba.tercero} (${eur(o.prueba.total)} €). ${NO_SE_BORRA}`
+  return `Van a entrar en ERP10: ${facturas(o.recibidas, o.emitidas)} de ${o.mes}. ${NO_SE_BORRA}`
+}
+
+type Salida = { numero: string; clase?: 'recibida' | 'emitida'; estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'; serie?: string; documento?: number; enlazada?: boolean; pdf?: 'subido' | 'fallo' | null; porque?: string }
 
 /** Después: lo que ha entrado (con sus números de ERP10), lo que ya estaba y lo que no ha podido, con su porqué. */
 export function loQueHaEntrado(xs: readonly Salida[], mes: string): { texto: string; bien: boolean } {
@@ -48,12 +55,13 @@ export function loQueHaEntrado(xs: readonly Salida[], mes: string): { texto: str
   const partes: string[] = []
   if (nuevas.length) {
     const conPdf = nuevas.every((x) => x.pdf === 'subido') ? (nuevas.length === 1 ? ', con su PDF' : ', con sus PDF') : ''
-    partes.push(`Han entrado en ERP10 ${n(nuevas.length, 'factura recibida', 'facturas recibidas')} de ${mes} (${nums(nuevas)})${conPdf}.`)
+    const r = nuevas.filter((x) => (x.clase ?? 'recibida') === 'recibida').length
+    partes.push(`Han entrado en ERP10 ${facturas(r, nuevas.length - r)} de ${mes} (${nums(nuevas)})${conPdf}.`)
   }
   if (enlazadas.length) partes.push(`${n(enlazadas.length, 'ya estaba', 'ya estaban')} en ERP10 (${nums(enlazadas)}): ${enlazadas.length === 1 ? 'se ha enlazado' : 'se han enlazado'}, sin meter otra.`)
   if (ya.length) partes.push(`${n(ya.length, 'había entrado', 'habían entrado')} antes (${nums(ya)}).`)
   for (const x of sinPdf) partes.push(`El PDF de la ${x.numero} no ha subido (${x.porque ?? 'sin motivo'}): súbelo a mano en ERP10.`)
-  if (mal.length) partes.push(`${n(mal.length, 'no ha podido', 'no han podido')}: ${mal.map((x) => `${x.numero}, ${(x.porque ?? 'sin motivo').replace(/\.$/, '')}`).join('; ')}.`)
+  if (mal.length) partes.push(`${n(mal.length, 'no ha podido', 'no han podido')}: ${mal.map((x) => `${x.numero || 'una'}, ${(x.porque ?? 'sin motivo').replace(/\.$/, '')}`).join('; ')}.`)
   if (!partes.length) partes.push('No ha entrado nada.')
-  return { texto: partes.join(' ').replace(/^(\d)/, (d) => d).replace(/^./, (c) => c.toUpperCase()), bien: mal.length === 0 && sinPdf.length === 0 }
+  return { texto: partes.join(' '), bien: mal.length === 0 && sinPdf.length === 0 }
 }
