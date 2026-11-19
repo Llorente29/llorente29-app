@@ -84,7 +84,7 @@ describe('K04 · la franja de la cabecera', () => {
 
 describe('K04 · las comprobaciones de la línea', () => {
   const base = {
-    aMano: false, duplicada: null, noRepetida: true, fecha: '2026-07-01',
+    aMano: false, duplicada: null, noRepetida: true, fecha: '2026-07-01', numero: 'A-2026/0158', hayFicha: true,
     calendario: { mesesCerrados: [], ejercicios: [{ inicio: '2026-01-01', fin: '2026-12-31', abierto: true }] },
     nifFicha: 'B00000000', nifLeido: 'B00000000', total: 357.44, totalDocumento: 357.44, lectura: [], avisos: [],
   }

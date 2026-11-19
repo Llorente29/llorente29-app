@@ -1,0 +1,9 @@
+# K04b · El emisor que no se reconoce en la ficha de la recibida del núcleo
+# (rama conta/k04b-proveedor-desconocido). Sin tanda de producción: solo una
+# semilla de staging.
+#
+# Lo que necesita la e2e (tests/e2e/conta/k04b): cuatro facturas leídas sin
+# proveedor, a nombre de la gestoría de la cuenta del núcleo, con NIF que no son
+# de ningún proveedor. Solo añade, con ids y fechas fijos: se puede aplicar dos
+# veces igual (W07), y va de verdad desde la rama (W05).
+supabase/seeds/conta/seed_k04b_emisor_desconocido_staging.sql
