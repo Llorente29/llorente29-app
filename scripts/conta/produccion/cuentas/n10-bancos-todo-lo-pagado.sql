@@ -25,9 +25,10 @@ select clave, valor from (
   select 2, 'todas las cuentas · Bancos propone · recibidas con pagos a mano · cuántas y lo que les queda', count(*) || ' · ' || coalesce(sum(b.total - b.pagado), 0)
     from bancos b where b.id in (select invoice_id from pagos_a_mano)
   union all
-  -- todo: lo casado vivo en el banco sin su pago apuntado
+  -- corte: casados creados antes del 19/11 a las 00:00, vivos, de recibidas, sin su pago apuntado (antes del corte)
   select 3, 'todas las cuentas · casados vivos de recibidas sin su pago apuntado', count(*)::text
     from public.bank_match_item i join public.bank_match bm on bm.id = i.match_id
-   where bm.status = 'vivo' and i.supplier_invoice_id is not null
-     and not exists (select 1 from public.supplier_invoice_payment x where x.bank_match_id = i.match_id and x.invoice_id = i.supplier_invoice_id)
+   where bm.status = 'vivo' and i.supplier_invoice_id is not null and bm.created_at < timestamptz '2026-11-19 00:00:00+01'
+     and not exists (select 1 from public.supplier_invoice_payment x where x.bank_match_id = i.match_id and x.invoice_id = i.supplier_invoice_id
+                       and x.created_at < timestamptz '2026-11-19 00:00:00+01')
 ) t order by o, clave;

@@ -8,7 +8,7 @@
 -- En la empresa de la siembra de la cuenta A (3b34403a…, con su banco b0100000…b3, como el PC01 y el E2),
 -- un proveedor nuevo con su 400 y tres recibidas aprobadas:
 --   · N10-SIN (121,00), sin ningún pago: REGLA 31, sale igual con las dos versiones;
---   · N10-MANO (242,00), con 42,00 pagados a mano, sin banco (un pago apuntado: como una compensación);
+--   · N10-MANO (242,00), con 42,00 pagados a mano, sin banco (una compensación en parte, con su asiento);
 --   · N10-YA (242,00), con «Ya la he pagado» de 42,00 (conta_pago_a_mano: una remesa que espera su cargo).
 --   1. Lo que propone Bancos (casar y pendientes) y Pagos (la vista), con la versión nueva, con la de antes
 --      (la vuelta atrás) y otra vez con la nueva. Se pegan las cifras.
@@ -65,10 +65,21 @@ select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-
 set local role authenticated;
 update public.supplier_invoice set status = 'aprobada' where id in (select v::uuid from _p where clave in ('f_sin', 'f_mano', 'f_ya'));
 reset role;
--- N10-MANO: 42,00 pagados a mano, sin banco (como lo apunta una compensación: un pago sin casado).
-insert into public.supplier_invoice_payment (account_id, company_id, invoice_id, paid_on, amount, method, note, created_by_name)
-select 'c01a0000-0000-4000-8000-00000000000a', (select v::uuid from _p where clave = 'empresa'), (select v::uuid from _p where clave = 'f_mano'),
-       public.conta_hoy(), 42.00, 'transfer', 'Prueba N10 · pagado a mano', 'Prueba N10';
+-- N10-MANO: 42,00 pagados a mano, sin banco: una compensación con su asiento, como la que apunta conta_abono_compensar (los
+-- pagos sin banco de verdad llevan asiento: con uno sin asiento, Bancos no la da por pagada al casar el resto, e2e 1426).
+do $$
+declare a constant uuid := 'c01a0000-0000-4000-8000-00000000000a'; e uuid := (select v::uuid from _p where clave = 'empresa'); fy uuid; ent uuid;
+begin
+  select id into fy from public.fiscal_year where company_id = e and public.conta_hoy() between starts_on and ends_on limit 1;
+  if fy is not null then
+    insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status)
+    values (a, e, fy, 1, public.conta_hoy(), 'Prueba N10 · compensación de N10-MANO', 'supplier_payment', 'borrador') returning id into ent;
+  elsif (select v from _p where clave = 'banco') <> '' then
+    raise exception 'PRUEBA N10 · siembra: la empresa de la siembra no tiene ejercicio para hoy.';
+  end if;
+  insert into public.supplier_invoice_payment (account_id, company_id, invoice_id, paid_on, amount, method, note, entry_id, created_by_name)
+  values (a, e, (select v::uuid from _p where clave = 'f_mano'), public.conta_hoy(), 42.00, 'compensation', 'Prueba N10 · compensada en parte', ent, 'Prueba N10');
+end $$;
 -- N10-YA: «Ya la he pagado» de 42,00, como la pantalla (con banco; sin él, se salta).
 set local role authenticated;
 do $$
