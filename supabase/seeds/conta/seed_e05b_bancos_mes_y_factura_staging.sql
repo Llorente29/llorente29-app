@@ -6,7 +6,7 @@
 -- llama con la sesión de la persona de la cuenta del núcleo (semilla K02, o la de
 -- su carril). Hace lo de e2e_e05_preparar (semilla E05: un banco propio con su
 -- extracto de octubre de 2026 y cinco movimientos, en la empresa general) y añade:
---   · un proveedor inventado («Proveedor de Prueba Bancos <lado>», B00000005) con
+--   · un proveedor inventado («Proveedor de Prueba Bancos <lado>», B00000005 en «ancho» y B00000006 en «estrecho») con
 --     su subcuenta (40000501 en adelante, de la 4000) y dos facturas recibidas aprobadas y sin pagar (121,00 € y
 --     60,50 €);
 --   · en octubre, dos pagos que las pagan, sin propuesta («por aclarar»): el
@@ -36,7 +36,7 @@ select x.account_id, x.id, 'pymes', '62600000', '626', 'Servicios bancarios y si
 create or replace function public.e2e_e05b_preparar(p_lado text, p_motor text)
 returns jsonb language plpgsql volatile security definer set search_path = public as $function$
 declare
-  r jsonb; v_acc uuid; emp uuid; v_banco uuid; v_prov uuid; v_ca uuid; v_st uuid; v_m uuid; v_f uuid; v_n int;
+  r jsonb; v_acc uuid; emp uuid; v_banco uuid; v_prov uuid; v_nif text; v_ca uuid; v_st uuid; v_m uuid; v_f uuid; v_n int;
   v_sello text := upper(to_hex((extract(epoch from clock_timestamp()) * 1000)::bigint % 1679616));
   c record; fact jsonb := '{}'::jsonb; pagos jsonb := '{}'::jsonb; sept jsonb := '{}'::jsonb;
 begin
@@ -44,9 +44,14 @@ begin
   v_acc := (r->>'cuenta')::uuid; emp := (r->>'empresa')::uuid; v_banco := (r->>'banco')::uuid;
 
   -- El proveedor, con su subcuenta de la 4000 (una por llamada) y su enlace «principal», como lo deja el alta.
-  insert into public.supplier (account_id, name, legal_name, tax_id, tax_id_type, country_code)
-  values (v_acc, 'Proveedor de Prueba Bancos ' || p_lado, 'Proveedor de Prueba Bancos ' || p_lado || ', S.L.', 'B00000005', 'nif_es', 'ES')
-  returning id into v_prov;
+  -- Un NIF inventado por tamaño (la cuenta no deja repetirlo: ux_supplier_account_tax_id); si ya está, el mismo proveedor.
+  v_nif := case p_lado when 'ancho' then 'B00000005' when 'estrecho' then 'B00000006' else 'B00000007' end;
+  select id into v_prov from public.supplier where account_id = v_acc and tax_id = v_nif;
+  if v_prov is null then
+    insert into public.supplier (account_id, name, legal_name, tax_id, tax_id_type, country_code)
+    values (v_acc, 'Proveedor de Prueba Bancos ' || p_lado, 'Proveedor de Prueba Bancos ' || p_lado || ', S.L.', v_nif, 'nif_es', 'ES')
+    returning id into v_prov;
+  end if;
   select 501 + count(*) into v_n from public.company_account where company_id = emp and code ~ '^40000[5-9][0-9]{2}$';
   insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
   values (v_acc, emp, 'pymes', '40000' || lpad(v_n::text, 3, '0'), '4000', 'Proveedor de Prueba Bancos ' || p_lado, 'own', 'manual')
