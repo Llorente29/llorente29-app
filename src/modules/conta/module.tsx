@@ -34,6 +34,7 @@ import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import LlevarACompras from '@/modules/conta/documentos/LlevarACompras'
 import RecibidaAMano from '@/modules/conta/documentos/RecibidaAMano'
 import RecibidaSegun from '@/modules/conta/nucleo/recibida/RecibidaSegun'
+import BancosSegun from '@/modules/conta/nucleo/bancos/BancosSegun'
 import FacturasPage from '@/modules/conta/ventas/FacturasPage'
 import FacturaVentaPage from '@/modules/conta/ventas/FacturaVentaPage'
 import LlevarAVentas from '@/modules/conta/ventas/LlevarAVentas'
@@ -41,6 +42,7 @@ import LoteCatcherPage from '@/modules/conta/documentos/LoteCatcherPage'
 import LiquidacionesPage from '@/modules/conta/compras/LiquidacionesPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
+import { AsientoSegun } from '@/modules/conta/nucleo/asiento/AsientoSegun'
 import ComprasPage from '@/modules/conta/compras/ComprasPage'
 import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
 import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
@@ -144,7 +146,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.librosAccion, element: enMarco(<ListadoSegun hoy={<LibrosPage />} />, '¿Por qué clientes sale en negativo?', true) },
     // B01 · Bancos en tres niveles (N17): Movimientos, Reglas, Cuentas y extractos, Cierre del mes.
     // Respuesta 4: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto».
-    { path: CONTA.rutas.bancos, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
+    // E05 · Bancos a secas: dentro del núcleo, la pantalla nueva; fuera, la de hoy (BancosSegun). Sus pestañas (bancos/…), las de hoy.
+    { path: CONTA.rutas.bancos, element: enMarco(<BancosSegun hoy={<BancosPage />} />, '¿Qué es la transferencia de 1.278,17?', true) },
     { path: CONTA.rutas.bancosPestana, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
     // I01b · Impuestos (tableros 8, 9 y 10): el calendario, sus pestañas y el IVA de un periodo.
     // LS1 · Laboral (28/10): las pantallas de Folvy › Personal, dentro de Sumied.
@@ -188,7 +191,7 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.cobroGestoria, element: enMarco(<SoloGestoria><CobroG05Page /></SoloGestoria>, '¿Qué se cobra este mes y por qué cambia?', true) },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
-    { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },
+    { path: CONTA.rutas.nuevoAsiento, element: enMarco(<AsientoSegun nuevo hoy={<NuevoAsientoPage />} />, '¿A qué cuenta va el alquiler?', true) },
     // S01 · La factura recibida desde Contabilidad › Asientos (maqueta 3): el mismo componente que N23.
     // S02 · PR 2: las recibidas son de Compras y gastos; las direcciones de antes llevan allí.
     { path: CONTA.rutas.recibidasEnAsientos, element: <LlevarACompras /> },
@@ -211,7 +214,7 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.liquidacionFicha, element: enMarco(<LiquidacionFichaPage />, '¿Qué me paga esta liquidación?', true) },
     { path: CONTA.rutas.facturasEmitidas, element: <LlevarAVentas a={CONTA.rutas.facturasVenta} /> },
     { path: CONTA.rutas.nuevaEmitida, element: <LlevarAVentas a={CONTA.rutas.nuevaFacturaVenta} /> },
-    { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },
+    { path: CONTA.rutas.asiento, element: enMarco(<AsientoSegun hoy={<AsientoPage />} />, '¿Por qué la comisión lleva IVA?', true) },
     // S02 · La muestra del patrón único: las seis plantillas (datos inventados), solo fuera de
     // producción. Sustituye a las dos de antes (las piezas del M01 y el sistema de diseño del S01).
     ...(baseDeDatos().tipo === 'produccion' ? [] : [

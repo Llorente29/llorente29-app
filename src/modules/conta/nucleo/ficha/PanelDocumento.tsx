@@ -11,6 +11,8 @@
 //   · Sin documento, la zona de soltar: «Arrastra aquí el PDF o una foto», que
 //     también se pulsa (y se llega con el teclado) para elegirlo.
 //   · El resaltado de lo leído no entra (decisión 14).
+//   · E05 · Bancos: «Qué es» va primero y se abre en ella (otraPrimero), y sin
+//     justificante la zona de soltar dice «Falta el justificante» (tituloSoltar).
 
 import { useRef, useState, type ReactNode } from 'react'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
@@ -19,7 +21,7 @@ const ZOOM = [50, 75, 100, 125, 150, 200] as const
 
 export interface SinDocumento { marcado: boolean; motivo: string; poner: (marcado: boolean, motivo: string) => void }
 
-export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar, sinDocumento, accion, sinDocumentoTexto }: {
+export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar, tituloSoltar, sinDocumento, otraPrimero = false, accion, sinDocumentoTexto }: {
   /** El documento: su dirección y si es una foto; null = sin documento; undefined = cargando. */
   documento: { url: string; foto: boolean; titulo: string } | null | undefined
   /** La segunda pestaña: su nombre y lo que enseña. */
@@ -28,6 +30,10 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
   alElegir?: (f: File) => void
   acepta?: string
   textoSoltar?: string
+  /** El título de la zona de soltar (por defecto, «Arrastra aquí el PDF o una foto»). */
+  tituloSoltar?: string
+  /** La otra pestaña va primero y se abre en ella (Bancos: «Qué es»). */
+  otraPrimero?: boolean
   /** «Sin documento», con su motivo: sin él, una factura sin PDF no se valida (paraValidar.faltaDocumento). */
   sinDocumento?: SinDocumento
   /** Q06 · Lo que va arriba a la derecha, al lado de las pestañas (el listado: «Abrir el asiento»). */
@@ -35,7 +41,7 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
   /** Q06 · Lo que dice sin documento y sin zona de soltar (por defecto, «Esta factura no tiene documento.»). */
   sinDocumentoTexto?: string
 }) {
-  const [ver, setVer] = useState<'documento' | 'otra'>('documento')
+  const [ver, setVer] = useState<'documento' | 'otra'>(otraPrimero ? 'otra' : 'documento')
   const [zoom, setZoom] = useState<(typeof ZOOM)[number]>(100)
   const [encima, setEncima] = useState(false)
   const caja = useRef<HTMLDivElement>(null)
@@ -49,8 +55,9 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
     <aside className="kf-panel" aria-label="El documento" ref={caja}>
       <div className="kf-panel-arriba">
         <div className="kf-segmentos" role="tablist" aria-label="Qué se ve">
+          {otraPrimero && <button type="button" role="tab" aria-selected={ver === 'otra'} onClick={() => setVer('otra')}>{otra.nombre}</button>}
           <button type="button" role="tab" aria-selected={ver === 'documento'} onClick={() => setVer('documento')}>El documento</button>
-          <button type="button" role="tab" aria-selected={ver === 'otra'} onClick={() => setVer('otra')}>{otra.nombre}</button>
+          {!otraPrimero && <button type="button" role="tab" aria-selected={ver === 'otra'} onClick={() => setVer('otra')}>{otra.nombre}</button>}
         </div>
         {accion && <span className="kf-panel-accion">{accion}</span>}
       </div>
@@ -73,7 +80,7 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
               onDragOver={(e) => { e.preventDefault(); setEncima(true) }} onDragLeave={() => setEncima(false)}
               onDrop={(e) => { e.preventDefault(); setEncima(false); const f = e.dataTransfer.files[0]; if (f) alElegir(f) }}>
               <span className="kf-soltar-flecha" aria-hidden="true">⤒</span>
-              <strong>Arrastra aquí el PDF o una foto</strong>
+              <strong>{tituloSoltar ?? 'Arrastra aquí el PDF o una foto'}</strong>
               <span>{textoSoltar ?? 'Sumied lo lee y rellena la ficha. También puedes guardar la factura sin documento.'}</span>
               <input ref={elegir} type="file" accept={acepta} hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) alElegir(f); e.target.value = '' }} />
             </button>
