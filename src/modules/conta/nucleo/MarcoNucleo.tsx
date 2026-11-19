@@ -158,7 +158,10 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
     setNombres((x) => { if (!(id in x)) return x; const y = { ...x }; delete y[id]; return y })
     setCambios((x) => { if (!(id in x)) return x; const y = { ...x }; delete y[id]; return y })
   }, [navegar])
-  const pedirCerrar = (id: string) => (cambios[id] ? setPreguntando(id) : hacerCerrar(id))
+  // K04 · Estable (la pide también la pantalla, con Esc): lee los cambios de una referencia.
+  const cambiosAhora = useRef(cambios)
+  useEffect(() => { cambiosAhora.current = cambios }, [cambios])
+  const pedirCerrar = useCallback((id: string) => (cambiosAhora.current[id] ? setPreguntando(id) : hacerCerrar(id)), [hacerCerrar])
   const irA = (id: string) => {
     const p = estado.abiertas.find((x) => x.id === id)
     if (p && p.url !== url) navegar(p.url)
@@ -361,7 +364,7 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
             <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
             {estado.abiertas.filter((p) => p.montada).map((p) => (
               <PestanaViva key={p.id} id={p.id} ubicacion={ubicaciones[p.id] ?? ubicacionDe(p.url, p.id)} activa={p.id === estado.activa}
-                base={base} ctx={ctx} cuentas={cuentas} abrirBuscador={abrirBuscador} ponerNombre={ponerNombre} ponerCambios={ponerCambios}
+                base={base} ctx={ctx} cuentas={cuentas} abrirBuscador={abrirBuscador} ponerNombre={ponerNombre} ponerCambios={ponerCambios} cerrar={pedirCerrar}
                 nombre={nombreDe(p.id)} />
             ))}
           </div>

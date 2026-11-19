@@ -32,6 +32,7 @@ import DocumentosPage from '@/modules/conta/documentos/DocumentosPage'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import LlevarACompras from '@/modules/conta/documentos/LlevarACompras'
 import RecibidaAMano from '@/modules/conta/documentos/RecibidaAMano'
+import RecibidaSegun from '@/modules/conta/nucleo/recibida/RecibidaSegun'
 import FacturasPage from '@/modules/conta/ventas/FacturasPage'
 import FacturaVentaPage from '@/modules/conta/ventas/FacturaVentaPage'
 import LlevarAVentas from '@/modules/conta/ventas/LlevarAVentas'
@@ -165,7 +166,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.ventas, element: enMarco(<VentasPage />, '¿Cuánto vendí ayer?') },
     // D01 R5 · 10: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto» (como Bancos).
     { path: CONTA.rutas.documentos, element: enMarco(<DocumentosPage />, '¿Qué facturas me faltan este mes?', true) },
-    { path: CONTA.rutas.revisarFactura, element: enMarco(<RevisarFacturaPage />, '¿A qué cuenta va esta factura?', true) },
+    // K04 · Dentro del núcleo, la ficha nueva; fuera, la de hoy (RecibidaSegun).
+    { path: CONTA.rutas.revisarFactura, element: enMarco(<RecibidaSegun hoy={<RevisarFacturaPage />} />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.loteCatcher, element: enMarco(<LoteCatcherPage />, '¿Cuadra la quincena de Catcher?', true) },
     // S02 · PR 3: Compras y gastos › Liquidaciones, todas en una lista. PC01 · E2 (Julio, 26/10): se
     // llama «Repartidores» (la quincena de los riders); la dirección de antes lleva allí, con sus filtros.
@@ -189,7 +191,7 @@ export const contaModule: ModuleDefinition = {
     // S02 · PR 2: las recibidas son de Compras y gastos; las direcciones de antes llevan allí.
     { path: CONTA.rutas.recibidasEnAsientos, element: <LlevarACompras /> },
     { path: CONTA.rutas.recibidaEnAsientos, element: <LlevarACompras /> },
-    { path: CONTA.rutas.recibidaAMano, element: enMarco(<RecibidaAMano />, '¿A qué cuenta va esta factura?', true) },
+    { path: CONTA.rutas.recibidaAMano, element: enMarco(<RecibidaSegun aMano hoy={<RecibidaAMano />} />, '¿A qué cuenta va esta factura?', true) },
     // S02 · PR 2: Facturación › Facturas emitidas, y una nueva (la hoja del asiento, tipo expedida).
     // V01 · Ventas › Facturas: la lista, una nueva y la ficha. Lo de antes (Facturación › Facturas emitidas) lleva aquí.
     { path: CONTA.rutas.facturasVenta, element: enMarco(<FacturasPage />, '¿Cuánto he facturado este mes?', true) },

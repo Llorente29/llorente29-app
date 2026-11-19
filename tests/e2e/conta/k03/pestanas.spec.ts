@@ -18,6 +18,8 @@ import { CUENTA_A, entrarComo } from '../sesion'
 import { abierta, cargada, GESTORIA, noRueda, NUCLEO, zonaActiva } from '../k02/comun'
 
 const DIR = 'docs/conta/capturas/k03'
+/** La casilla del número en la ficha de la recibida: «N.º de factura» (la del núcleo, K04) o «Nº de factura» (la de hoy). */
+const NUMERO_FACTURA = /^N\.?º de factura$/
 
 /** Los nombres de las pestañas de trabajo, en su orden (también las que van a «N más»). */
 const nombres = (page: Page) => page.locator('[data-pestana-trabajo] .k-trabajo-nombre').allTextContents()
@@ -124,7 +126,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await zonaActiva(page).locator('tbody .s-lista-abrir-boton').first().click()
     await expect(page).toHaveURL(/\/conta\/documentos\/recibidas\//)
     await abierta(page, 'la factura')
-    const numero = zonaActiva(page).getByRole('textbox', { name: 'Nº de factura' })
+    // K04: en el núcleo, la ficha nueva («N.º de factura», como la maqueta); la de hoy («Nº de factura») sigue
+    // saliendo dentro de la pestaña para una validada o un abono. La casilla, con cualquiera de las dos.
+    const numero = zonaActiva(page).getByRole('textbox', { name: NUMERO_FACTURA })
     await expect(numero).toBeVisible({ timeout: 30_000 })
     await numero.fill('F-2026/0411-B')
     const ficha = page.locator('[data-pestana-trabajo="ficha:recibida"]')
@@ -145,7 +149,7 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await dialogo.getByRole('button', { name: 'Seguir aquí' }).click()
     await expect(ficha).toHaveCount(1)
     await pestana(page, /^Factura recibida/).click()
-    await expect(zonaActiva(page).getByRole('textbox', { name: 'Nº de factura' })).toHaveValue('F-2026/0411-B')
+    await expect(zonaActiva(page).getByRole('textbox', { name: NUMERO_FACTURA })).toHaveValue('F-2026/0411-B')
     await ficha.getByRole('button', { name: /^Cerrar Factura recibida/ }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Cerrar sin guardar' }).click()
     await expect(ficha).toHaveCount(0)
