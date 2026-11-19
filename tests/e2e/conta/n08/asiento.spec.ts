@@ -6,11 +6,12 @@
 // ejercicio 2026 y el plan activado con company_chart_activate, la función de la pantalla del plan):
 // no depende del orden ni de lo que dejó otra.
 //   1. A mano con el teclado: tres líneas, la tercera cuadra sola, F5 en una cuenta abre su mayor en
-//      otra pestaña, Intro guarda y valida. Y «guarda lo mismo» (regla 31): el mismo asiento escrito
-//      con la pantalla de hoy (la de la misma ruta en el móvil, donde el núcleo no sale) deja las
-//      mismas filas.
+//      otra pestaña, Intro guarda y valida; y a 1366 × 768 cabe.
 //   2. Uno propuesto (journal_entry_proponer, como lo propone Sumied) se valida con Intro.
 //   3. Con el interruptor apagado (la cuenta A), la pantalla de hoy.
+//   4. «Guarda lo mismo» (regla 31), en su prueba y con su tiempo: el mismo asiento con la ficha nueva
+//      y con la de hoy (en el ordenador, la misma empresa, el interruptor apagado en esa página) deja
+//      las mismas filas.
 // A 1456 × 816 (las capturas) y a 1366 × 768 (que la página no ruede).
 
 import { test, expect, type Page } from '@playwright/test'
@@ -84,16 +85,13 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1456, height: 816 })
 })
 
-test('N08 · 1 · a mano con el teclado: la tercera cuadra sola, F5, Intro guarda y valida; y guarda lo mismo que la de hoy', async ({ page }) => {
-  const errores = vigilar(page)
-  const s = await entrarComo(page, NUCLEO.email)
-  const e = await crearEmpresa(s, '1')
-  await elegirEmpresa(page, NUCLEO.id, e.id)
-  await abrirAsientos(page)
+/**
+ * Escribe con la ficha nueva, con el teclado, el asiento de las pruebas: «Alquiler de octubre», la 621
+ * con 1.000,00, la de servicios con 210 y la del banco sola (la cuadra Sumied). Con varios locales,
+ * el primero en cada línea (la columna «Local»). Devuelve el local elegido (o null).
+ */
+async function escribirConLaNueva(page: Page, e: Empresa): Promise<string | null> {
   const zona = zonaActiva(page)
-  await expect(zona.getByText('Nuevo', { exact: true })).toBeVisible()
-  await page.screenshot({ path: `${DIR}/nuevo-vacio.png` })
-
   await zona.getByLabel('Concepto del asiento').fill('Alquiler de octubre')
   await page.keyboard.press('Enter')
   const escribe = async (t: string) => { await page.keyboard.type(t); await page.keyboard.press('Enter') }
@@ -103,6 +101,36 @@ test('N08 · 1 · a mano con el teclado: la tercera cuadra sola, F5, Intro guard
   // La tercera: solo la cuenta. El haber lo pone Sumied.
   await escribe(atajo(e.banco))
   await expect(zona.getByLabel('Haber de la línea 3')).toHaveValue('1.210,00')
+  let local: string | null = null
+  if (await zona.getByLabel('Local de la línea 1').count()) {
+    local = await zona.getByLabel('Local de la línea 1').locator('option').nth(1).getAttribute('value')
+    for (let n = 1; n <= 3; n++) await zona.getByLabel(`Local de la línea ${n}`).selectOption(local!)
+  }
+  return local
+}
+
+/** Intro hasta la línea nueva vacía, y otra vez: guarda y valida. Devuelve el id del asiento. */
+async function guardarConIntro(page: Page): Promise<string> {
+  await zonaActiva(page).getByLabel('Concepto de la línea 3').focus()
+  for (let k = 0; k < 3; k++) await page.keyboard.press('Enter')
+  await expect(zonaActiva(page).getByLabel('Cuenta de la línea 4')).toBeFocused()
+  await page.keyboard.press('Enter')
+  const hecho = zonaActiva(page).getByRole('status').filter({ hasText: /^Guardado y validado: 4 \/ \d{4} · Alquiler de octubre · 1\.210,00 al debe y al haber\./ })
+  await expect(hecho).toBeVisible({ timeout: 60_000 })
+  return (await hecho.getByRole('link', { name: 'Verlo' }).getAttribute('href'))!.split('/').pop()!
+}
+
+test('N08 · 1 · a mano con el teclado: la tercera cuadra sola, F5, e Intro guarda y valida', async ({ page }) => {
+  const errores = vigilar(page)
+  const s = await entrarComo(page, NUCLEO.email)
+  const e = await crearEmpresa(s, '1')
+  await elegirEmpresa(page, NUCLEO.id, e.id)
+  await abrirAsientos(page)
+  const zona = zonaActiva(page)
+  await expect(zona.getByText('Nuevo', { exact: true })).toBeVisible()
+  await page.screenshot({ path: `${DIR}/nuevo-vacio.png` })
+
+  await escribirConLaNueva(page, e)
   await expect(zona.getByLabel('Total')).toContainText('Cuadra')
   await expect(zona.getByLabel('Total')).toContainText('1.210,00')
   await expect(zona.getByLabel('Concepto de la línea 2')).toHaveValue('Alquiler de octubre')
@@ -116,16 +144,12 @@ test('N08 · 1 · a mano con el teclado: la tercera cuadra sola, F5, Intro guard
   await page.getByRole('tab', { name: 'Asiento · Alquiler de octubre' }).click()
   await expect(zonaActiva(page).getByLabel('Haber de la línea 3')).toHaveValue('1.210,00')
 
-  // Intro hasta la línea nueva vacía, y otra vez: guarda, valida y pasa al siguiente.
-  await zonaActiva(page).getByLabel('Concepto de la línea 3').focus()
-  for (let k = 0; k < 3; k++) await page.keyboard.press('Enter')
-  await expect(zonaActiva(page).getByLabel('Cuenta de la línea 4')).toBeFocused()
-  await page.keyboard.press('Enter')
-  const hecho = zonaActiva(page).getByRole('status').filter({ hasText: /^Guardado y validado: 4 \/ \d{4} · Alquiler de octubre · 1\.210,00 al debe y al haber\./ })
-  await expect(hecho).toBeVisible({ timeout: 60_000 })
+  // Intro: guarda, valida y pasa al siguiente.
+  const id = await guardarConIntro(page)
   await expect(zonaActiva(page).getByLabel('Concepto del asiento')).toHaveValue('')
   await page.screenshot({ path: `${DIR}/nuevo-guardado.png` })
-  const nuevoId = (await hecho.getByRole('link', { name: 'Verlo' }).getAttribute('href'))!.split('/').pop()!
+  const v = await rest<{ status: string }[]>(s, 'GET', `journal_entry?select=status&id=eq.${id}`)
+  expect(v.datos[0]?.status, 'el asiento queda validado en la base').toBe('validado')
 
   // A 1366 × 768, con la cinta plegada: cabe.
   await page.setViewportSize({ width: 1366, height: 768 })
@@ -133,30 +157,6 @@ test('N08 · 1 · a mano con el teclado: la tercera cuadra sola, F5, Intro guard
   if (await plegar.isVisible()) await plegar.click()
   await page.waitForTimeout(300)
   await noRueda(page, 'el asiento a 1366 × 768 con la cinta plegada')
-
-  // Guarda lo mismo: el mismo asiento con la pantalla de hoy (en el móvil, la ruta pinta la de hoy).
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto(NUEVO, { waitUntil: 'load' })
-  await expect(page.getByRole('heading', { name: 'Nuevo asiento' }).first()).toBeVisible({ timeout: 40_000 })
-  await page.getByPlaceholder('Ej.: Alquiler del local de octubre').fill('Alquiler de octubre')
-  const hoy: [string, string, string][] = [[e.gasto, '1.000,00', ''], [e.otro, '210', ''], [e.banco, '', '1.210,00']]
-  for (let i = 0; i < hoy.length; i++) {
-    const n = i + 1
-    if (i >= 2) await page.getByRole('button', { name: 'Añadir línea' }).click()
-    await page.getByLabel(`Cuenta del apunte ${n}`).fill(hoy[i][0])
-    await page.getByLabel(`Concepto del apunte ${n}`).fill('Alquiler de octubre')
-    if (hoy[i][1]) await page.getByLabel(`Debe del apunte ${n}`).fill(hoy[i][1])
-    if (hoy[i][2]) await page.getByLabel(`Haber del apunte ${n}`).fill(hoy[i][2])
-    const local = page.getByLabel(new RegExp(`del apunte ${n}$`)).locator('xpath=self::select')
-    if (await local.count()) { const v = await local.inputValue(); if (!v) await local.selectOption('comun') }
-  }
-  await page.getByRole('button', { name: 'Guardar y validar' }).first().click()
-  await expect(page).toHaveURL(/\/conta\/libros\/diario\/[0-9a-f-]{36}/, { timeout: 60_000 })
-  const deHoyId = page.url().split('/').pop()!.split('?')[0]
-  const [a, b] = [await filas(s, nuevoId), await filas(s, deHoyId)]
-  console.log(`[N08] guarda lo mismo · núcleo ${nuevoId}: ${JSON.stringify(a)}`)
-  console.log(`[N08] guarda lo mismo · hoy    ${deHoyId}: ${JSON.stringify(b)}`)
-  expect(a, 'el mismo asiento con las dos pantallas deja las mismas filas').toEqual(b)
   expect(errores).toEqual([])
 })
 
@@ -200,4 +200,46 @@ test('N08 · 3 · con el interruptor apagado (la cuenta A), la pantalla de hoy',
   await page.goto(NUEVO, { waitUntil: 'load' })
   await expect(page.getByRole('heading', { name: 'Nuevo asiento' }).first()).toBeVisible({ timeout: 40_000 })
   await expect(page.locator('.cxa')).toHaveCount(0)
+})
+
+test('N08 · 4 · guarda lo mismo: el mismo asiento con la ficha nueva y con la de hoy deja las mismas filas', async ({ page }) => {
+  // Regla 31, decisión de Julio (respuesta N08 · 1): en el ordenador, la misma empresa, la de hoy con
+  // el interruptor apagado. Apagado SOLO en esta página: se quita conta_nucleo de lo que la app lee
+  // de feature_flags al arrancar (lo mismo que ve una cuenta sin el interruptor); la cuenta no cambia.
+  const errores = vigilar(page)
+  const s = await entrarComo(page, NUCLEO.email)
+  const e = await crearEmpresa(s, '4')
+  await elegirEmpresa(page, NUCLEO.id, e.id)
+  await abrirAsientos(page)
+  const local = await escribirConLaNueva(page, e)
+  const nuevoId = await guardarConIntro(page)
+
+  await page.route(/\/rest\/v1\/feature_flags/, async (r) => {
+    const res = await r.fetch()
+    const filas = (await res.json()) as { feature_key: string }[]
+    await r.fulfill({ response: res, json: filas.filter((f) => f.feature_key !== 'conta_nucleo') })
+  })
+  await page.goto(NUEVO, { waitUntil: 'load' })
+  await expect(page.getByPlaceholder('Ej.: Alquiler del local de octubre')).toBeVisible({ timeout: 40_000 })
+  await expect(page.locator('.cxa'), 'con el interruptor apagado, la pantalla de hoy').toHaveCount(0)
+  await page.getByPlaceholder('Ej.: Alquiler del local de octubre').fill('Alquiler de octubre')
+  const hoy: [string, string, string][] = [[e.gasto, '1.000,00', ''], [e.otro, '210', ''], [e.banco, '', '1.210,00']]
+  for (let i = 0; i < hoy.length; i++) {
+    const n = i + 1
+    if (i >= 2) await page.getByRole('button', { name: 'Añadir línea' }).click()
+    await page.getByLabel(`Cuenta del apunte ${n}`).fill(hoy[i][0])
+    await page.getByLabel(`Concepto del apunte ${n}`).fill('Alquiler de octubre')
+    if (hoy[i][1]) await page.getByLabel(`Debe del apunte ${n}`).fill(hoy[i][1])
+    if (hoy[i][2]) await page.getByLabel(`Haber del apunte ${n}`).fill(hoy[i][2])
+    const sel = page.locator(`select[aria-label$="del apunte ${n}"]`)
+    if (await sel.count()) { const v = await sel.inputValue(); if (!v || local) await sel.selectOption(local ?? 'comun') }
+  }
+  await page.getByRole('button', { name: 'Guardar y validar' }).first().click()
+  await expect(page).toHaveURL(/\/conta\/libros\/diario\/[0-9a-f-]{36}/, { timeout: 60_000 })
+  const deHoyId = page.url().split('/').pop()!.split('?')[0]
+  const [a, b] = [await filas(s, nuevoId), await filas(s, deHoyId)]
+  console.log(`[N08] guarda lo mismo · la nueva ${nuevoId}: ${JSON.stringify(a)}`)
+  console.log(`[N08] guarda lo mismo · la de hoy ${deHoyId}: ${JSON.stringify(b)}`)
+  expect(a, 'el mismo asiento con las dos pantallas deja las mismas filas').toEqual(b)
+  expect(errores).toEqual([])
 })
