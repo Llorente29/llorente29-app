@@ -1,9 +1,10 @@
 # R08 · Bancos: conciliar en un paso.
-# 1945 (añade el saldo del extracto bueno y el del diario), 2040 (conciliar valida; cambia) y
-# 2120 (el recibo no cobrado, por la cadena; cambia). La semilla de su e2e (W07: va de verdad;
-# llama a la del E05) y la prueba de la regla 10 (ROLLBACK, con sus vueltas atrás).
+# 1945 (añade el saldo del extracto bueno y el del diario) y la semilla de la e2e (W07: va de
+# verdad; llama a la del E05), delante de lo que cambia funciones, para que vayan de verdad.
 supabase/migrations/20261119T1945_r08_saldo_del_banco.sql
+supabase/seeds/conta/seed_r08_conciliar_staging.sql
+# 2040 (conciliar valida; cambia) y 2120 (el recibo no cobrado, por la cadena; cambia): solo en
+# ROLLBACK desde la rama. Y la prueba de la regla 10 (ROLLBACK, con sus vueltas atrás).
 supabase/migrations/20261119T2040_r08_conciliar_valida.sql
 supabase/migrations/20261119T2120_r08_cargo_no_cobrado.sql
-supabase/seeds/conta/seed_r08_conciliar_staging.sql
 supabase/staging/sql/20261119_r08_conciliar_en_un_paso_prueba.sql
