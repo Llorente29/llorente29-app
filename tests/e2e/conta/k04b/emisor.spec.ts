@@ -188,12 +188,16 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(page.getByRole('tab', { name: /^Factura recibida/ })).toHaveCount(0, { timeout: 30_000 })
     await expect(page).toHaveURL(/\/conta\/inicio/)
     await abierta(page, 'Inicio de la otra empresa')
+    // La de la gestoría sigue montada, pero escondida: no se ve ninguna ficha.
+    const fichasQueSeVen = page.locator('[data-prueba="ficha-recibida-nucleo"]:visible')
+    await expect(fichasQueSeVen).toHaveCount(0)
     const abajo = page.locator('[data-prueba="abiertas-en-otra"]')
     await expect(abajo).toHaveText(/^\d+ pestañas? abiertas? en Gestoría/)
     // Una recibida de la otra empresa, en su pestaña.
     await irSinRecargar(page, `/conta/documentos/recibidas/${deLaOtra(t)}?ver=por-revisar`)
     await fichaLista(page)
     await expect(ficha(page).locator('#kf-numero')).toHaveValue(`K04E-${t}-1`)
+    await expect(fichasQueSeVen).toHaveCount(1)
     if (alto >= 800) {
       await cargada(page, 'la otra empresa, con las de la gestoría abajo')
       await page.screenshot({ path: `${DIR}/pestanas-de-su-empresa-${ancho}.png` })
@@ -205,6 +209,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(page).toHaveURL(new RegExp(factura(t, 3)))
     await fichaLista(page)
     await expect(ficha(page).locator('#kf-numero')).toHaveValue(escrito)
+    await expect(fichasQueSeVen).toHaveCount(1)
     await expect(pestanaFicha).toHaveAttribute('data-cambios', 'si')
     await expect(page.locator('[data-prueba="abiertas-en-otra"]')).toHaveText(/^\d+ pestañas? abiertas? en (Ejemplo Núcleo|Empresa de Ejemplo)/)
     // Se valida: su asiento queda en la gestoría.
