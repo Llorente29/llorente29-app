@@ -66,7 +66,7 @@ export interface DatosDeLaCarga {
   facturas: FacturaParaLaBase[]
   aprendido: { codigo: string; gasto: { cuenta: string; nombre: string } | null; tiposIva: number[]; retencion: number | null; porque: string }[]
   /** Los terceros cuyo saldo no cuadra exacto con sus facturas (decisión 3): solo estos se enseñan. */
-  pendientesNoExactos: { codigo: string; nombre: string; saldo: number; frase: string }[]
+  pendientesNoExactos: { codigo: string; nombre: string; saldo: number; frase: string; facturasSinCasar: string[]; cuadraConSaldo: boolean }[]
   raros: { que: string; cuentas: string[]; nif: string | null; frase: string }[]
   /** N06b · El sumas y saldos de allí, por subcuenta (céntimos): se compara al darlo por bueno. Vacío si no se trajo. */
   sumas: { cuenta: string; nombre: string; debe: number; haber: number }[]
@@ -111,7 +111,7 @@ export function paraLaBase(carga: Carga, programa = 'erp10'): DatosDeLaCarga {
     casada.set(claveAsiento(c.asiento), { f: c.factura, libro: c.libro })
     asientoDe.set(c.factura, claveAsiento(c.asiento))
   }
-  // Lo pendiente de cada factura, por el saldo de su tercero (N04, pendientesPorSaldo).
+  // Lo pendiente de cada factura: el casado de sus pagos (N09, pendientesPorPagos).
   const pendienteDe = new Map<string, number>()
   const conSaldo = new Set<string>()
   const nifDe = new Map([...(carga.proveedores?.terceros ?? []), ...(carga.clientes?.terceros ?? [])].map((t) => [t.codigo, t.nif]))
@@ -154,7 +154,9 @@ export function paraLaBase(carga: Carga, programa = 'erp10'): DatosDeLaCarga {
     asientos,
     facturas,
     aprendido: carga.aprendido.proveedores.map((a) => ({ codigo: a.codigo, gasto: a.gasto ? { cuenta: a.gasto.cuenta, nombre: a.gasto.nombre } : null, tiposIva: a.tiposIva, retencion: a.retencion, porque: a.porque })),
-    pendientesNoExactos: carga.aprendido.pendientes.filter((p) => !p.cuadraExacto).map((p) => ({ codigo: p.codigo, nombre: p.nombre, saldo: p.saldo, frase: p.frase })),
+    // N09 · Con las facturas cuyos pagos no se han podido casar y si cuadra con su saldo: los lee el paso 3 (detail.pendientesNoExactos).
+    pendientesNoExactos: carga.aprendido.pendientes.filter((p) => !p.cuadraExacto).map((p) => ({ codigo: p.codigo, nombre: p.nombre, saldo: p.saldo, frase: p.frase,
+      facturasSinCasar: p.facturasSinCasar ?? [], cuadraConSaldo: p.cuadraConSaldo ?? p.cuadraExacto })),
     raros: carga.comprobado.tercerosRaros.map((r) => ({ que: r.que, cuentas: r.cuentas, nif: r.nif, frase: r.frase })),
     sumas: (carga.sumas?.filas ?? []).map((x) => ({ cuenta: x.subcuenta, nombre: x.nombre, debe: x.debe, haber: x.haber })),
     inmovilizado: carga.inmovilizado,
