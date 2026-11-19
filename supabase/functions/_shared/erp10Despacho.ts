@@ -50,8 +50,8 @@ export async function sociedadesConectadas(srv: Srv, accountId: string): Promise
   }))
 }
 
-/** El cliente de ERP10 de una sociedad, solo para leer. Sin conexión, null. */
-export async function clienteErp10(srv: Srv, accountId: string, companyId: string, o: { fetch?: typeof fetch } = {}): Promise<{ cliente: ClienteErp10; conexion: ConexionErp10 } | null> {
+/** El cliente de ERP10 de una sociedad: solo para leer, salvo `escribir` (X10b). Sin conexión, null. */
+export async function clienteErp10(srv: Srv, accountId: string, companyId: string, o: { fetch?: typeof fetch; escribir?: boolean } = {}): Promise<{ cliente: ClienteErp10; conexion: ConexionErp10 } | null> {
   const cuenta = await conexionDeLaCuenta(srv, accountId)
   if (!cuenta) return null
   const lista = await sociedadesConectadas(srv, accountId)
@@ -76,7 +76,7 @@ export async function clienteErp10(srv: Srv, accountId: string, companyId: strin
   const cliente = new ClienteErp10({
     base: String(cfg.base_url ?? BASE_POR_DEFECTO), nombreBd: String(cfg.nombre_bd ?? ''),
     claves: { client_id: sec.client_id, client_secret: sec.client_secret, username: sec.username, password: sec.password, grant_type: sec.grant_type },
-    lista: deLaLista, codEmpresa: esta.codEmpresa, almacen, fetch: o.fetch, pausaMs: 100,
+    lista: deLaLista, codEmpresa: esta.codEmpresa, almacen, fetch: o.fetch, pausaMs: 100, escribir: o.escribir === true,
   })
   return { cliente, conexion: esta }
 }

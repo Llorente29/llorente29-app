@@ -82,9 +82,7 @@ export default function IntegrationsMarketplacePage() {
   }, [activeAccountId])
 
   function connectionFor(connectorId: string): AccountConnector | undefined {
-    // X10: la de una sociedad (scope company, p. ej. el código de empresa de ERP10) no es la del conector.
-    return connections.find(c => c.connectorId === connectorId && c.scope !== 'company')
-      ?? connections.find(c => c.connectorId === connectorId)
+    return connections.find(c => c.connectorId === connectorId)
   }
 
   async function handleRequest(connector: Connector) {

@@ -33,7 +33,10 @@ import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepara
 import { comparar, fechaDelSumas } from '@/modules/conta/erp10/comparar'
 import { abrirExcel, leerSumasYSaldos, reconocer, texto as textoDe, type FilaSumas } from '@/modules/conta/lib/traer'
 import { ComprobarErp10, type Subido } from '@/modules/conta/libros/ComprobarErp10'
-import { leerSaldosErp10 } from '@/modules/conta/services/erp10ApiService'
+import { leerConexionErp10, leerEstadoEscribir, leerSaldosErp10, loQueFalta, sacarRecibidasErp10, type ParaSacar } from '@/modules/conta/services/erp10ApiService'
+import { loQueHaEntrado, queVaAEntrar } from '@/modules/conta/erp10/conexion'
+import { huellaFila, salePorLaConexion } from '@/modules/conta/erp10/ficheros'
+import { ConexionErp10Tarjeta } from '@/modules/conta/libros/ConexionErp10'
 import {
   apuntarLote, bajarPdf, carpetaDeLaSalida, leerAsientosPorSalir, leerCambiadas, leerComprobar, leerDiasTpvPorSalir, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
   ponerAMano, ponerIgualado, volverASacar,
@@ -80,6 +83,13 @@ export function SalidaErp10() {
   const s: Salida | null = useMemo(() => (datos.datos ? armarSalida(datos.datos.ps, datos.datos.rs, datos.datos.es, carpeta, datos.datos.as, datos.datos.ds) : null), [datos.datos, carpeta])
 
   const [paso, setPaso] = useState<1 | 2 | 3>(1)
+  // X10b · La conexión con ERP10 (las claves de la cuenta y el código de esta sociedad), en la tarjeta de arriba.
+  const [vueltaConexion, setVueltaConexion] = useState(0)
+  const conexion = useLeerConservando(() => leerConexionErp10(L.accountId, L.companyId), `${L.companyId}:${vueltaConexion}`, L.companyId)
+  const [conexionAbierta, setConexionAbierta] = useState<boolean | null>(null)
+  const faltaErp10 = conexion.datos ? loQueFalta(conexion.datos) : null
+  // Plegada en una línea (con lo que falta, si falta) hasta que alguien la abre: así la salida sigue cabiendo en la ventana.
+  const abierta = conexionAbierta ?? false
   // Paso 3: el sumas y saldos subido (con su cabecera, para la fecha), la comparación y la cuenta elegida.
   const [subido, setSubido] = useState<(Subido & { cabecera: string[]; filas: FilaSumas[] }) | null>(null)
   const [errorSubir, setErrorSubir] = useState<string | null>(null)
@@ -110,6 +120,10 @@ export function SalidaErp10() {
   const [haciendo, setHaciendo] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   const [hecho, setHecho] = useState<Descargado | null>(null)
+  // X10b · Sacar a ERP10 por la conexión (las recibidas): la primera, sola; el mes, después de comprobarla.
+  const [vueltaEsc, setVueltaEsc] = useState(0)
+  const escribir = useLeer(() => leerEstadoEscribir(L.accountId, L.companyId), `${L.companyId}:${vueltaEsc}:${L.vuelta}`)
+  const [confirmar, setConfirmar] = useState(false)
   const [primeraVez, setPrimeraVez] = useState(false)
   const [marcados, setMarcados] = useState<Set<number>>(new Set())
   // La página no se mueve: la pantalla ocupa lo que queda debajo de su borde de arriba, y lo que no cabe rueda dentro.
@@ -130,7 +144,7 @@ export function SalidaErp10() {
     medir()
     window.addEventListener('resize', medir)
     return () => window.removeEventListener('resize', medir)
-  }, [salida.datos, paso])
+  }, [salida.datos, paso, abierta, conexion.datos])
 
   // «Darlo por igualado» con Intro, si se puede y no se está escribiendo en otro sitio: pulsa su botón (si está encendido).
   useEffect(() => {
@@ -280,6 +294,39 @@ export function SalidaErp10() {
     : !comparacion ? 'Comparando…'
     : !comparacion.igualable ? 'Queda alguna diferencia sin explicar o por hacer.' : undefined
 
+  // X10b · Lo que sale por la conexión: las recibidas medidas (interior, sin retención, hasta tres IVA); la primera vez, una.
+  const porLaConexion = (s?.ficheros.recibidas ?? []).filter((f) => f.api && salePorLaConexion(f.api))
+  const nPorExcel = (s?.ficheros.recibidas.length ?? 0) - porLaConexion.length
+  const pruebaPrimero = !!escribir.datos && !escribir.datos.primera
+  const pendienteComprobar = !!escribir.datos?.primera && !escribir.datos.comprobada
+  const aSacar = pruebaPrimero ? porLaConexion.slice(0, 1) : porLaConexion
+  const porQueNoSacar = faltaErp10
+    ?? (!escribir.datos ? 'Leyendo lo que ya ha salido a ERP10…'
+      : pendienteComprobar ? 'Antes de sacar el mes, comprueba en el paso 3 la factura de prueba y dala por igualada.'
+      : !porLaConexion.length ? 'Este mes no hay ninguna recibida que pueda salir por la conexión con ERP10.' : null)
+  const avisoSacar = faltaErp10 ? `Para sacar a ERP10: ${faltaErp10}` : pendienteComprobar ? 'Antes de sacar el mes, comprueba en el paso 3 la factura de prueba y dala por igualada.' : null
+
+  async function sacarPorLaConexion() {
+    if (!s || !mes || !aSacar.length) return
+    setFallo(null); setDicho(null); setHaciendo(pruebaPrimero ? 'Metiendo la factura de prueba en ERP10…' : `Metiendo en ERP10 ${aSacar.length} ${aSacar.length === 1 ? 'factura' : 'facturas'}…`)
+    try {
+      const xs: ParaSacar[] = []
+      for (const f of aSacar) xs.push({ api: f.api!, huella: await huellaFila(f.fila), pdf: f.pdf ?? null })
+      const cuentas = s.listas.cuentas.map((c) => ({ codigo: c.codigoErp10, nombre: c.nombre, nif: c.nif }))
+      const r = await sacarRecibidasErp10(L.companyId, mes, xs, cuentas, L.quien, (h, de) => setHaciendo(`Metiendo en ERP10: ${h} de ${de}…`))
+      const dicho = loQueHaEntrado(r.salidas.map((x) => ({ ...x, numero: x.numero })), mesEnPalabras(mes))
+      setConfirmar(false)
+      // Pasa sola al paso 3, para comprobar que queda igual.
+      setPaso(3); setSubido(null); setHecho(null)
+      setDicho([dicho.texto, r.sinApuntar].filter(Boolean).join(' '))
+      if (!dicho.bien || r.sinApuntar) setFallo('Mira lo que no ha podido entrar: lo demás ya está en ERP10.')
+    } catch (e) {
+      setFallo(`No ha entrado nada en ERP10: ${e instanceof Error ? e.message : 'no ha contestado'}`)
+    } finally {
+      setHaciendo(null); setVuelta((v) => v + 1); setVueltaEsc((v) => v + 1); setVueltaC((v) => v + 1)
+    }
+  }
+
   const pasos = (
     <ol className="cxe-pasos" aria-label="Pasos">
       <li className={`cxe-paso${paso > 1 ? ' cxe-paso-hecho' : ''}`} aria-current={paso === 1 ? 'step' : undefined}>
@@ -297,9 +344,17 @@ export function SalidaErp10() {
   const nCambiadas = (datos.datos?.cambiadas.length ?? 0) + (s?.corregidas.length ?? 0)
   const nMirar = s ? CLASES.reduce((t, k) => t + (s.sinPdf.some((x) => x.clase === k) && !sinPdfAceptadas ? 1 : 0) + (s.noPuedenSalir.some((x) => x.clase === k) ? 1 : 0), 0) + (nCambiadas ? 1 : 0) : 0
 
+  const irALaConexion = () => {
+    setConexionAbierta(true)
+    requestAnimationFrame(() => document.getElementById('conexion-erp10')?.scrollIntoView({ block: 'start' }))
+  }
+
   return (
+    <>
+    <ConexionErp10Tarjeta key={L.companyId} accountId={L.accountId} companyId={L.companyId} quien={L.quien} conexion={conexion.datos ?? null} error={conexion.error ?? null}
+      abierta={abierta} abrir={setConexionAbierta} cambiada={() => setVueltaConexion((v) => v + 1)} />
     <section className="cxe" aria-labelledby="cxe-titulo" ref={caja} style={alto ? { height: alto } : undefined}>
-      <div className="cxe-cabeza">
+      <div className={`cxe-cabeza${paso === 1 ? ' cxe-cabeza-dos' : ''}`}>
         <h1 className="cxe-titulo" id="cxe-titulo">Salida a ERP10</h1>
         <select className="cxe-mes" aria-label="Mes" value={mes ?? ''} disabled={paso === 2 || !!haciendo}
           onChange={(e) => { setMes(e.target.value); setFila(null) }}>
@@ -307,7 +362,12 @@ export function SalidaErp10() {
         </select>
         {pasos}
         <div className="cxe-botones">
-          {paso === 1 && <button type="button" className="cxe-grande" disabled={!s || !!haciendo || !(s.ficheros.recibidas.length + s.ficheros.expedidas.length + s.ficheros.asientos.length)} onClick={() => { void descargar() }}>Descargar los ficheros</button>}
+          {paso === 1 && <>
+            <button type="button" className="cxe-enlace" disabled={!s || !!haciendo || !(s.ficheros.recibidas.length + s.ficheros.expedidas.length + s.ficheros.asientos.length)} onClick={() => { void descargar() }}>Descargar los ficheros (Excel)</button>
+            <button type="button" className="cxe-grande" disabled={!!porQueNoSacar || !!haciendo || confirmar} title={porQueNoSacar ?? undefined} onClick={() => { setFallo(null); setHecho(null); setConfirmar(true) }}>
+              {pruebaPrimero ? 'Sacar una para probar' : 'Sacar a ERP10'}
+            </button>
+          </>}
           {paso === 2 && <>
             <button type="button" className="cxe-sec" onClick={() => setPaso(1)}>Volver</button>
             <button type="button" className="cxe-grande" onClick={() => { setPaso(3); setHecho(null); setMarcados(new Set()); setSubido(null); setVuelta((v) => v + 1) }}>Ya lo he importado</button>
@@ -322,6 +382,23 @@ export function SalidaErp10() {
         </div>
       </div>
 
+      {paso === 1 && s && avisoSacar && (
+        <div className="cxe-aviso-linea cxe-sacar-falta" role="note">
+          {avisoSacar}
+          {faltaErp10 && <> <button type="button" className="cxe-enlace" onClick={irALaConexion}>Ir a la conexión con ERP10</button></>}
+          {!faltaErp10 && pendienteComprobar && <> <button type="button" className="cxe-enlace" onClick={() => { setPaso(3); setSubido(null) }}>Ir al paso 3</button></>}
+        </div>
+      )}
+      {paso === 1 && confirmar && mes && (
+        <div className="cxe-confirmar" role="alertdialog" aria-label="Sacar a ERP10">
+          <p>{queVaAEntrar({ cuantas: aSacar.length, mes: mesEnPalabras(mes), prueba: pruebaPrimero && aSacar[0] ? { numero: aSacar[0].api!.numero, proveedor: aSacar[0].api!.nombre, total: aSacar[0].api!.total } : null })}</p>
+          {nPorExcel > 0 && <p className="cx-ayuda">{nPorExcel === 1 ? 'Una recibida sale con el Excel' : `${nPorExcel} recibidas salen con el Excel`} (retención, inversión del sujeto pasivo o intracomunitaria). Las emitidas, los asientos y los días del TPV, también con el Excel, por ahora.</p>}
+          <div className="cxe-confirmar-botones">
+            <button type="button" className="cxe-sec" onClick={() => setConfirmar(false)} disabled={!!haciendo}>No, todavía no</button>
+            <button type="button" className="cxe-grande" onClick={() => { void sacarPorLaConexion() }} disabled={!!haciendo}>{pruebaPrimero ? 'Sacar solo esta para probar' : 'Meterlas en ERP10'}</button>
+          </div>
+        </div>
+      )}
       {datos.error && <div className="cxe-estado cxe-mal" role="alert">No se ha podido leer lo que sale: {datos.error} <button type="button" className="cxe-enlace" onClick={datos.recargar}>Reintentar</button></div>}
       {!s && !datos.error && <div className="cxe-cuerpo" aria-busy="true" aria-label="Leyendo lo que sale"><div className="cxe-izq"><Hueso alto={200} /></div><div className="cxe-der" /></div>}
 
@@ -474,7 +551,7 @@ export function SalidaErp10() {
 
       {s && paso === 3 && (
         <ComprobarErp10 subido={subido} base={comprobar.datos} comparacion={comparacion} error={errorSubir ?? comprobar.error}
-          elegida={elegida} elegir={setElegida} subir={(f) => { void subir(f) }} leerErp10={(h) => { void leerDeErp10(h) }} aMano={(id) => { void aMano(id) }} volver={(id) => { void volverASacarla(id) }}
+          elegida={elegida} elegir={setElegida} subir={(f) => { void subir(f) }} leerErp10={(h) => { void leerDeErp10(h) }} faltaErp10={conexion.datos ? faltaErp10 : null} irALaConexion={irALaConexion} aMano={(id) => { void aMano(id) }} volver={(id) => { void volverASacarla(id) }}
           ocupado={!!haciendo} cargando={comprobar.cargando || datos.cargando} mes={mes} />
       )}
 
@@ -485,6 +562,7 @@ export function SalidaErp10() {
       </div>
       {fallo && <div className="cxe-estado cxe-mal" role="alert">{fallo}</div>}
     </section>
+    </>
   )
 }
 

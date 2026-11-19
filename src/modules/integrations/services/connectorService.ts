@@ -161,6 +161,13 @@ export interface ListConnectorsOptions {
 /**
  * Lista el catálogo de conectores. Ordenado por sort_order y luego nombre.
  */
+/**
+ * X10b (19/11, Julio): los conectores que son de Sumied (contabilidad) y no salen en
+ * Integraciones ni en el Marketplace de Folvy. ERP10 se conecta en Sumied, en Libros ›
+ * Cierre › Salida a ERP10 («Conexión con ERP10»). La fila del catálogo sigue en la base.
+ */
+export const CONECTORES_DE_SUMIED = ['erp10'] as const
+
 export async function listConnectors(
   opts?: ListConnectorsOptions
 ): Promise<Connector[]> {
@@ -168,6 +175,7 @@ export async function listConnectors(
   let query = supabase!
     .from('connector')
     .select('*')
+    .not('code', 'in', `(${CONECTORES_DE_SUMIED.join(',')})`)
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true })
 
@@ -221,8 +229,9 @@ export async function listAccountConnectors(
   requireSupabase()
   let query = supabase!
     .from('account_connector')
-    .select('*')
+    .select('*, connector!inner(code)')
     .eq('account_id', opts.accountId)
+    .not('connector.code', 'in', `(${CONECTORES_DE_SUMIED.join(',')})`)
     .order('created_at', { ascending: true })
 
   if (!opts.includeArchived) {

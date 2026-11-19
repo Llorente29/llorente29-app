@@ -24,6 +24,8 @@
 // Navegador en español (playwright.config.ts: locale es-ES y --lang=es-ES); la
 // fecha de la ficha es el campo de Sumied, dd/mm/aaaa, sea cual sea el idioma.
 // Capturas del paso 1 (con la fila de emitidas pulsada) y del paso 2, a 1456 × 816.
+// X10b: arriba va la tarjeta «Conexión con ERP10» (plegada) y el Excel pasa a «Descargar los ficheros
+// (Excel)», enlace al lado de «Sacar a ERP10»: esta prueba sigue sacando por el Excel.
 // Datos inventados y que se ven inventados (T11): NIF B00000000.
 
 import { test, expect, type Page, type Download } from '@playwright/test'

@@ -133,4 +133,33 @@
 @container (max-width: 1080px) {
   .cxe-paso:not([aria-current='step']) .cxe-paso-etq { display: none; }
 }
+/* X10b · En el paso 1 la cabecera lleva dos (el Excel y «Sacar a ERP10»): la misma regla, antes (a 1456 ya no cabe). */
+@container (max-width: 1300px) {
+  .cxe-cabeza-dos .cxe-paso:not([aria-current='step']) .cxe-paso-etq { display: none; }
+}
 .cxe-nota-verde { border-color: var(--cx-verde-oscuro); background: var(--cx-verde-suave); }
+
+/* X10b · «Conexión con ERP10», arriba de la salida: una línea plegada; abierta, las claves y el código. */
+.cxe-conexion { margin-bottom: 10px; border: 1px solid var(--cx-borde-control); border-radius: var(--cx-radio-caja); background: var(--cx-fondo-tarjeta, transparent); }
+.cxe-conexion-linea { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 14px; min-height: 40px; }
+.cxe-conexion-titulo { margin: 0; font-size: 0.95rem; font-weight: 600; }
+.cxe-conexion-fin { margin-left: auto; }
+.cxe-conexion-cuerpo { display: flex; flex-direction: column; gap: 12px; padding: 4px 14px 14px; border-top: 1px solid var(--cx-borde-control); }
+.cxe-conexion-bloque h3, .cxe-conexion-hay h3 { margin: 8px 0 6px; font-size: 0.85rem; font-weight: 600; }
+.cxe-conexion-bloque p, .cxe-conexion-hay p { margin: 0; font-size: 13px; }
+.cxe-conexion-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 14px; }
+.cxe-conexion-campos label, .cxe-conexion-codigo label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.cxe-conexion-campos input, .cxe-conexion-codigo input { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--cx-borde-control); border-radius: 6px; background: transparent; color: inherit; }
+.cxe-conexion-codigo { display: flex; align-items: flex-end; gap: 10px; }
+.cxe-conexion-codigo input { width: 140px; }
+.cxe-conexion-botones { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.cxe-conexion-hay ul { margin: 0 0 6px; padding-left: 18px; font-size: 13px; }
+.cxe-erp10-falta { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.cxe-erp10-falta p { margin: 0; }
+.cxe-conexion-bien { margin: 0; color: var(--cx-verde-oscuro); font-weight: 700; font-size: 13px; }
+.cxe-conexion-mal { margin: 0; color: var(--cx-rojo); font-weight: 700; font-size: 13px; }
+/* X10b · Antes de escribir en ERP10: qué va a entrar y que no se puede borrar. */
+.cxe-confirmar { margin: 8px 16px 0; padding: 10px 14px; border: 1px solid var(--cx-ambar, #d39a1c); border-radius: var(--cx-radio-caja); background: var(--cx-ambar-fondo, transparent); display: flex; flex-direction: column; gap: 6px; }
+.cxe-confirmar p { margin: 0; font-size: 13px; }
+.cxe-confirmar-botones { display: flex; justify-content: flex-end; gap: 8px; }
+.cxe-sacar-falta { margin: 8px 16px 0; }
