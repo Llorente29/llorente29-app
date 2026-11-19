@@ -40,10 +40,10 @@ import { cifra } from '../ficha/textos'
 import { useUltimo } from '../ficha/useUltimo'
 import { cuentasQueEncajan, fechaVista, type CuentaDelPlan } from '../ficha/teclas'
 import { aQueVa, etiquetaDe, ingresoPago, mover, porRevisar, segurosMarcados } from './rejilla'
-import { casarConAlternativa, casarConCuenta, casarConFactura, confirmarPropuesta, confirmarVarios, deshacerCasado, escribirAMano, textoConfirmados, textoDeshecho } from './conciliar'
+import { casarConAlternativa, casarConCuenta, casarConEmitida, casarConFactura, facturasEmitidasPendientes, confirmarPropuesta, confirmarVarios, deshacerCasado, escribirAMano, textoConfirmados, textoDeshecho } from './conciliar'
 import { leerBancos, saldoALaFecha, urlDelJustificante } from './servicio'
 import { mesDeAlLado, textoMes } from './mes'
-import { casadoConFactura, facturasQueEncajan } from './factura'
+import { casadoConFactura, cobroConFactura, emitidasQueEncajan, facturasQueEncajan, type FacturaEmitidaPendiente } from './factura'
 import './bancos.css'
 
 type Aviso = { tono: 'ok' | 'falta' | 'mal'; texto: string }
@@ -138,8 +138,8 @@ export default function PantallaBancos() {
     if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); ir(mover(sel, e.key === 'ArrowDown' ? 1 : -1, movs.length)) }
     else if (e.key === 'Enter' && m && confirmable(m)) { e.preventDefault(); void confirmar(m) }
-    // F4 en un pago sin casar: «Es otra factura», con el buscador abierto.
-    else if (e.key === 'F4' && m && m.importeCent < 0 && m.estado !== 'casado') { e.preventDefault(); setBuscarFactura(m.id) }
+    // F4 en un movimiento sin casar: «Es otra factura», con el buscador abierto (un pago, sus recibidas; un cobro, sus emitidas).
+    else if (e.key === 'F4' && m && m.importeCent !== 0 && m.estado !== 'casado') { e.preventDefault(); setBuscarFactura(m.id) }
   }
   useEffect(() => {
     const esc = (e: KeyboardEvent) => {
@@ -232,7 +232,7 @@ export default function PantallaBancos() {
           documento={!m ? null : m.ticket ? (justificante.datos === null && !justificante.error ? undefined : justificante.datos ? { url: justificante.datos, foto: !/\.pdf$/i.test(m.ticket), titulo: `El justificante de ${quienEs(m)}` } : null) : null}
           alElegir={m ? (f) => void hacer(async () => { await subirTicket(accountId, m.id, f); return `Justificante guardado en el movimiento de ${quienEs(m)}.` }) : undefined}
           acepta="image/*,application/pdf" tituloSoltar="Falta el justificante" textoSoltar="Arrastra aquí la foto o el PDF del ticket, o pulsa para elegirlo."
-          otra={{ nombre: 'Qué es', contenido: m ? <QueEs m={m} banco={banco} nombres={nombres} cuentas={cuentasPlan} ocupado={ocupado} companyId={companyId}
+          otra={{ nombre: 'Qué es', contenido: m ? <QueEs m={m} banco={banco} nombres={nombres} cuentas={cuentasPlan} ocupado={ocupado} companyId={companyId} accountId={accountId} hoy={hoy}
             confirmar={() => void confirmar(m)} deshacer={() => void deshacer(m)} validar={() => void validarAsiento(m)} hacer={hacer}
             buscando={buscarFactura === m.id} ponerBuscando={(si) => setBuscarFactura(si ? m.id : null)} /> : <p className="kf-panel-nota">Elige un movimiento.</p> }} />
       </div>
@@ -241,8 +241,8 @@ export default function PantallaBancos() {
 }
 
 /** «Qué es»: el movimiento, lo que propone Sumied y su porqué, y lo que se puede hacer con él. */
-function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, deshacer, validar: validarIt, hacer, buscando, ponerBuscando }: {
-  m: MovimientoBanco; banco: BancoVista | null; nombres: Readonly<Record<string, string>>; cuentas: CuentaDelPlan[]; ocupado: boolean; companyId: string
+function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, accountId, hoy, confirmar, deshacer, validar: validarIt, hacer, buscando, ponerBuscando }: {
+  m: MovimientoBanco; banco: BancoVista | null; nombres: Readonly<Record<string, string>>; cuentas: CuentaDelPlan[]; ocupado: boolean; companyId: string; accountId: string; hoy: string
   confirmar: () => void; deshacer: () => void; validar: () => void; hacer: (q: () => Promise<string>) => Promise<void>
   buscando: boolean; ponerBuscando: (si: boolean) => void
 }) {
@@ -258,15 +258,18 @@ function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, desh
   const comision = primeraHoja(nombres, '626')
   const aCuenta = (c: CuentaDelPlan) => hacer(() => casarConCuenta(companyId, m, { cuenta: c.codigo, nombre: c.nombre, concepto: `${quienEs(m)} · ${c.nombre}`, regla: regla ? m.conceptoLimpio.trim() || null : null }))
   const casado = m.estado === 'casado' && m.casado
-  // «Es otra factura» (E05b): las facturas recibidas sin pagar, las de hoy (bank_facturas_recibidas_pendientes).
+  // «Es otra factura» (E05b): en un pago, las facturas recibidas sin pagar, las de hoy (bank_facturas_recibidas_pendientes).
+  // E05c: en un cobro, las emitidas con algo por cobrar, como las ve el motor (cargarContexto).
   // La clave lleva «buscando»: useLeer solo vuelve a leer cuando cambia la clave (la e2e 44473982157 se quedó sin lista).
-  const facturas = useLeer(buscando ? () => facturasPendientes(companyId) : null, `${companyId}:${m.id}:${buscando ? 'buscando' : 'no'}:facturas`)
+  const facturas = useLeer(buscando && !entra ? () => facturasPendientes(companyId) : null, `${companyId}:${m.id}:${buscando ? 'buscando' : 'no'}:facturas`)
+  const emitidas = useLeer(buscando && entra ? () => facturasEmitidasPendientes(accountId, companyId, hoy) : null, `${companyId}:${m.id}:${buscando ? 'buscando' : 'no'}:emitidas`)
   const [textoFactura, setTextoFactura] = useState<string | null>(null)
   const [elegida, setElegida] = useState<FacturaPendiente | null>(null)
+  const [emitida, setEmitida] = useState<FacturaEmitidaPendiente | null>(null)
   const si = useRef<HTMLButtonElement>(null)
   useEffect(() => { if (buscando) document.getElementById(`kb-factura-${m.id}`)?.focus() }, [buscando, m.id])
-  useEffect(() => { if (elegida) si.current?.focus() }, [elegida])
-  const conFactura = elegida ? casadoConFactura(m, elegida) : null
+  useEffect(() => { if (elegida || emitida) si.current?.focus() }, [elegida, emitida])
+  const conFactura = elegida ? casadoConFactura(m, elegida) : emitida ? cobroConFactura(m, emitida) : null
   const lineasFactura = conFactura ? asientoQueSeCrea(m, conFactura.destino, banco?.cuenta ?? null) : null
   return (
     <div className="kb-que-es" data-prueba="que-es">
@@ -283,7 +286,18 @@ function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, desh
           {confirmable(m) && (
             <button type="button" className="kf-guardar kb-si" disabled={ocupado} onClick={confirmar} data-prueba="confirmar">Sí, es ese {entra ? 'ingreso' : 'pago'} <kbd>Intro</kbd></button>
           )}
-          {!entra && !buscando && <button type="button" className="kf-enlace" onClick={() => ponerBuscando(true)} data-prueba="otra-factura">Es otra factura</button>}
+          {!buscando && <button type="button" className="kf-enlace" onClick={() => ponerBuscando(true)} data-prueba="otra-factura">Es otra factura</button>}
+          {entra && buscando && (
+            <div className="kb-otra-factura" data-prueba="buscar-factura">
+              <span className="kf-titulo">Es otra factura</span>
+              <Buscador id={`kb-factura-${m.id}`} etiqueta="Factura" placeholder="Cliente o número de factura" abrir valor={textoFactura ?? ''} ponerTexto={setTextoFactura}
+                cargando={emitidas.datos === null && !emitidas.error} lista={(t) => emitidasQueEncajan(m, emitidas.datos ?? [], t)}
+                texto={(f) => `${f.cliente} · ${f.numero ?? 'sin número'} · del ${fechaVista(f.fecha)} · queda ${cifra(f.pendienteCent / 100)}`}
+                elegir={(f) => { setEmitida(f); setTextoFactura(`${f.cliente} · ${f.numero ?? 'sin número'}`) }} />
+              {emitidas.error && <p className="kf-aviso" data-tono="mal">{emitidas.error}</p>}
+              {emitidas.datos && emitidas.datos.length === 0 && <p>No hay ninguna factura emitida por cobrar.</p>}
+            </div>
+          )}
           {!entra && buscando && (
             <div className="kb-otra-factura" data-prueba="buscar-factura">
               <span className="kf-titulo">Es otra factura</span>
@@ -294,6 +308,13 @@ function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, desh
               {facturas.error && <p className="kf-aviso" data-tono="mal">{facturas.error}</p>}
               {facturas.datos && facturas.datos.length === 0 && <p>No hay ninguna factura recibida sin pagar.</p>}
             </div>
+          )}
+          {emitida && conFactura && (
+            <>
+              <p><strong>Cobra la factura {emitida.numero ?? 'sin número'} de {emitida.cliente}.</strong> Del {fechaVista(emitida.fecha)}, queda {cifra(emitida.pendienteCent / 100)}.</p>
+              <button type="button" ref={si} className="kf-guardar kb-si" disabled={ocupado} data-prueba="confirmar-factura"
+                onClick={() => void hacer(() => casarConEmitida(m, emitida, quienEs(m)))}>Sí, es esa factura <kbd>Intro</kbd></button>
+            </>
           )}
           {elegida && conFactura && (
             <>
