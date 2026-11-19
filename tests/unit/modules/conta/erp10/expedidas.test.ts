@@ -56,9 +56,10 @@ const COL = columnas(XML_EXPEDIDAS)
 const letra = (campo: string) => XLSX.utils.encode_col(COL[campo] - 1)
 
 describe('La configuración de expedidas', () => {
-  it('es la del repositorio, y de ella salen 4 contrapartidas de ingreso y 4 tipos de IVA', () => {
+  it('es la del repositorio (X08: con el resumen de facturas añadido), y de ella salen 4 contrapartidas de ingreso y 4 tipos de IVA', () => {
     const xml = readFileSync(resolve(RAIZ, 'docs/conta/erp10/configuracion/ConfiguracionExpedidas.XML'), 'utf8').replace(/\r\n/g, '\n')
-    expect(XML_EXPEDIDAS).toBe(xml)
+    expect(XML_EXPEDIDAS).toBe(xml.replace('<Campo126>24</Campo126>\n', '<Campo126>24</Campo126>\n    <Campo069>36</Campo069>\n    <Campo070>37</Campo070>\n    <Campo071>38</Campo071>\n'))
+    expect(['069', '070', '071'].map(letra)).toEqual(['AJ', 'AK', 'AL'])
     expect(contrapartidasDelXml()).toBe(4)
     expect(tiposIvaDelXml()).toBe(4)
   })

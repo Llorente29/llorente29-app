@@ -24,7 +24,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { rutaAjustes, rutaAsiento } from '@/config/navegacion'
+import { rutaAjustes, rutaAsiento, rutaCierres } from '@/config/navegacion'
 import { useLeer, useLeerConservando, useLibros } from '@/modules/conta/libros/contexto'
 import { fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
@@ -34,7 +34,7 @@ import { comparar, fechaDelSumas } from '@/modules/conta/erp10/comparar'
 import { abrirExcel, leerSumasYSaldos, reconocer, texto as textoDe, type FilaSumas } from '@/modules/conta/lib/traer'
 import { ComprobarErp10, type Subido } from '@/modules/conta/libros/ComprobarErp10'
 import {
-  apuntarLote, bajarPdf, carpetaDeLaSalida, leerAsientosPorSalir, leerCambiadas, leerComprobar, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
+  apuntarLote, bajarPdf, carpetaDeLaSalida, leerAsientosPorSalir, leerCambiadas, leerComprobar, leerDiasTpvPorSalir, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
   ponerAMano, ponerIgualado, volverASacar,
 } from '@/modules/conta/services/erp10Service'
 
@@ -49,11 +49,12 @@ const XLSX_TIPO = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 const ETIQUETA: Record<FilaQueSale['estado'], string> = { Listo: 'cxe-etq-listo', 'Mira esto': 'cxe-etq-mira', 'Todavía no sale por aquí': 'cxe-etq-gris', Nada: 'cxe-etq-gris' }
 
-type Descargado = { cuentas: number; emitidas: number; recibidas: number; asientos: number; pdfs: number; zips: string[]; texto: string }
+type Descargado = { cuentas: number; emitidas: number; recibidas: number; asientos: number; dias: number; pdfs: number; zips: string[]; texto: string }
 
-const facturas = (n: number, clase: Clase) => clase === 'asiento' ? `${n} ${n === 1 ? 'asiento' : 'asientos'}`
+const facturas = (n: number, clase: Clase | 'dia') => clase === 'asiento' ? `${n} ${n === 1 ? 'asiento' : 'asientos'}`
+  : clase === 'dia' ? `${n} ${n === 1 ? 'día' : 'días'} de ventas`
   : `${n} ${n === 1 ? 'factura' : 'facturas'} ${clase === 'emitida' ? (n === 1 ? 'emitida' : 'emitidas') : (n === 1 ? 'recibida' : 'recibidas')}`
-const CLASES: Clase[] = ['emitida', 'recibida', 'asiento']
+const CLASES: (Clase | 'dia')[] = ['emitida', 'dia', 'recibida', 'asiento']
 
 export function SalidaErp10() {
   const L = useLibros()
@@ -67,15 +68,15 @@ export function SalidaErp10() {
 
   // X07: al refrescar lo del mismo mes (después de sacar o de volver a sacar), lo de antes se queda a la vista.
   const datos = useLeerConservando(encendida && mes ? async () => {
-    const [ps, rs, es, as, cambiadas, lotes] = await Promise.all([
+    const [ps, rs, es, as, ds, cambiadas, lotes] = await Promise.all([
       leerPorSalir(L.companyId, mes), leerRecibidasPorSalir(L.companyId, mes), leerEmitidasPorSalir(L.companyId, mes), leerAsientosPorSalir(L.companyId, mes),
-      leerCambiadas(L.companyId), leerLotes(L.accountId, L.companyId),
+      leerDiasTpvPorSalir(L.companyId, mes), leerCambiadas(L.companyId), leerLotes(L.accountId, L.companyId),
     ])
-    return { ps, rs, es, as, cambiadas, lotes }
+    return { ps, rs, es, as, ds, cambiadas, lotes }
   } : null, `${L.companyId}:${mes}:${vuelta}:${L.vuelta}`, `${L.companyId}:${mes}`)
 
   const carpeta = salida.datos ? carpetaDeLaSalida(salida.datos) : ''
-  const s: Salida | null = useMemo(() => (datos.datos ? armarSalida(datos.datos.ps, datos.datos.rs, datos.datos.es, carpeta, datos.datos.as) : null), [datos.datos, carpeta])
+  const s: Salida | null = useMemo(() => (datos.datos ? armarSalida(datos.datos.ps, datos.datos.rs, datos.datos.es, carpeta, datos.datos.as, datos.datos.ds) : null), [datos.datos, carpeta])
 
   const [paso, setPaso] = useState<1 | 2 | 3>(1)
   // Paso 3: el sumas y saldos subido (con su cabecera, para la fecha), la comparación y la cuenta elegida.
@@ -91,8 +92,10 @@ export function SalidaErp10() {
     `${L.companyId}:${fecha}:${subido?.nombre ?? ''}`)
   const comparacion = useMemo(() => {
     if (!subido || !comprobar.datos || !s) return null
-    const porSacar = new Set([...s.ficheros.expedidas, ...s.ficheros.recibidas, ...s.ficheros.asientos].map((f) => f.entryId))
-    return comparar(subido.filas, comprobar.datos, { porSacar, noPueden: new Map(s.noPuedenSalir.map((x) => [x.entryId, x.porque])) })
+    const porSacar = new Set([...s.ficheros.expedidas, ...s.ficheros.recibidas, ...s.ficheros.asientos, ...s.ficheros.dias].map((f) => f.entryId))
+    // X08 · Un día de ventas que no puede salir no sale por aquí (sin rango, sin «Clientes de contado»…): no es un fallo de la salida.
+    const noSaleAqui = new Set(s.noPuedenSalir.filter((x) => x.clase === 'dia').map((x) => x.entryId))
+    return comparar(subido.filas, comprobar.datos, { porSacar, noPueden: new Map(s.noPuedenSalir.map((x) => [x.entryId, x.porque])), noSaleAqui })
   }, [subido, comprobar.datos, s])
   // X08 · Sin elegir, el detalle de abajo es la primera fila que sale con algo (o la primera con algo): no «Ninguna factura recibida» si salen asientos.
   const [filaElegida, setFila] = useState<FilaQueSale['id'] | null>(null)
@@ -181,12 +184,15 @@ export function SalidaErp10() {
       const cuentas = s.ficheros.subcuentas.length
       const nE = s.ficheros.expedidas.length
       const nR = s.ficheros.recibidas.length
-      const nA = s.ficheros.asientos.length
+      // X08 · Los asientos que se cuentan son los del X07; el cobro de cada día va con su día.
+      const nA = s.listas.asientos.length
+      const nD = s.ficheros.dias.length
       const partes = [`${cuentas} ${cuentas === 1 ? 'cuenta nueva' : 'cuentas nuevas'}`, `${facturas(nE, 'emitida')} (${importe(s.totalEmitidas)} €)`, `${facturas(nR, 'recibida')} (${importe(s.totalRecibidas)} €)`]
+      if (nD) partes.push(`${facturas(nD, 'dia')} (${importe(s.totalDias)} €)`)
       if (nA) partes.push(`${facturas(nA, 'asiento')} (${importe(s.totalAsientos)} €)`)
       const texto = `Descargado: ${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}.`
         + (zips.length ? ` Los PDF, en ${zips.length === 1 ? 'un fichero comprimido' : `${zips.length} ficheros comprimidos`}.` : '') + ' Queda apuntado.'
-      setHecho({ cuentas, emitidas: nE, recibidas: nR, asientos: nA, pdfs: pdfs.length, zips: zips.map((z) => z.nombre), texto })
+      setHecho({ cuentas, emitidas: nE, recibidas: nR, asientos: s.ficheros.asientos.length, dias: nD, pdfs: pdfs.length, zips: zips.map((z) => z.nombre), texto })
       setPaso(2)
     } catch (e) {
       setFallo(`No se ha descargado nada: ${e instanceof Error ? e.message : 'no ha contestado'}`)
@@ -225,8 +231,9 @@ export function SalidaErp10() {
     setFallo(null); setDicho(null); setHaciendo('Preparando la factura…')
     try {
       await volverASacar(L.companyId, entryId, L.quien)
-      const [ps, rs, es, as] = await Promise.all([leerPorSalir(L.companyId, mes), leerRecibidasPorSalir(L.companyId, mes), leerEmitidasPorSalir(L.companyId, mes), leerAsientosPorSalir(L.companyId, mes)])
-      const una = soloUna(armarSalida(ps, rs, es, carpeta, as), entryId)
+      const [ps, rs, es, as, ds] = await Promise.all([leerPorSalir(L.companyId, mes), leerRecibidasPorSalir(L.companyId, mes), leerEmitidasPorSalir(L.companyId, mes),
+        leerAsientosPorSalir(L.companyId, mes), leerDiasTpvPorSalir(L.companyId, mes)])
+      const una = soloUna(armarSalida(ps, rs, es, carpeta, as, ds), entryId)
       if (!una) throw new Error('ha vuelto a lo que sale, pero su fila no se puede preparar: mírala en el paso 1.')
       const { libros, pdfs } = await sacar(una, mes)
       const nombre = [...una.listas.emitidas, ...una.listas.recibidas][0]?.numero ?? 'la factura'
@@ -369,6 +376,9 @@ export function SalidaErp10() {
                   <div key={`np-${k}`} className="cxe-aviso" role="note">
                     <p><strong>{facturas(np.length, k)} no {np.length === 1 ? 'puede' : 'pueden'} salir.</strong> No van en el fichero.</p>
                     <ul>{np.map((x) => <li key={x.entryId}><Link className="cx-enlace" to={rutaAsiento(x.entryId)}>{x.numero}</Link> · {x.quien}: {x.porque}</li>)}</ul>
+                    {k === 'dia' && np.some((x) => /Clientes de contado|cuenta de /.test(x.porque)) && (
+                      <p>Se elige en <Link className="cx-enlace" to={rutaCierres()}>A qué cuenta va cada forma de pago</Link> (Ventas › Cierres del día).</p>
+                    )}
                   </div>
                 )
               })}
@@ -399,8 +409,10 @@ export function SalidaErp10() {
                     {[
                       ...(hecho.cuentas ? [{ f: 'subcuentas.xlsx', b: 'Subcuentas', q: `${hecho.cuentas} ${hecho.cuentas === 1 ? 'cuenta nueva' : 'cuentas nuevas'}` }] : []),
                       ...(hecho.emitidas ? [{ f: 'expedidas.xlsx', b: 'Facturas, eligiendo «Facturas emitidas»', q: facturas(hecho.emitidas, 'emitida') }] : []),
+                      ...(hecho.dias ? [{ f: 'dias-tpv.xlsx', b: 'Facturas, eligiendo «Facturas emitidas»',
+                        q: `${facturas(hecho.dias, 'dia')}: una factura por día, con su primera y su última factura del TPV. Antes, carga otra vez ConfiguracionExpedidas.XML (lleva el resumen del día)` }] : []),
                       ...(hecho.recibidas ? [{ f: 'recibidas.xlsx', b: 'Facturas, eligiendo «Facturas recibidas»', q: facturas(hecho.recibidas, 'recibida') }] : []),
-                      ...(hecho.asientos ? [{ f: 'asientos.xlsx', b: 'Asientos', q: `${facturas(hecho.asientos, 'asiento')}: nóminas, pagos y cobros, bancos` }] : []),
+                      ...(hecho.asientos ? [{ f: 'asientos.xlsx', b: 'Asientos', q: `${facturas(hecho.asientos, 'asiento')}: nóminas, pagos y cobros, bancos${hecho.dias ? ', y el cobro de cada día de ventas' : ''}` }] : []),
                       ...hecho.zips.map((z) => ({ f: z, b: 'Su carpeta de documentos', q: `Descomprímelos en ${carpeta} antes de importar las facturas.` })),
                     ].map((x, i) => (
                       <tr key={x.f}>
@@ -412,7 +424,7 @@ export function SalidaErp10() {
                   </tbody>
                 </table>
               </div>
-              <div className="cxe-pie"><strong>En este orden.</strong><span className="cxe-pie-gris">Primero las cuentas; después las emitidas, las recibidas y los asientos.</span></div>
+              <div className="cxe-pie"><strong>En este orden.</strong><span className="cxe-pie-gris">{hecho.dias ? 'Primero las cuentas; después las emitidas, los días de ventas, las recibidas y los asientos.' : 'Primero las cuentas; después las emitidas, las recibidas y los asientos.'}</span></div>
             </div>
           </div>
           <aside className="cxe-der" aria-labelledby="cxe-donde">
@@ -480,7 +492,17 @@ function Lista({ s, fila }: { s: Salida; fila: FilaQueSale['id'] }) {
           )) : <tr><td colSpan={4}>{fila === 'emitidas' ? 'Ninguna factura emitida sale este mes.' : 'Ninguna factura recibida sale este mes.'}</td></tr>}</tbody>
         </table>
       )}
-      {(fila === 'asientos' || fila === 'tpv') && (
+      {fila === 'tpv' && (
+        <table className="cxe-tabla cxe-sub" aria-label={titulo}>
+          <thead><tr><th>Día</th><th>Local</th><th>Facturas del TPV</th><th className="cxe-num">Importe</th></tr></thead>
+          <tbody>{s.listas.tpv.map((d) => (
+            <tr key={d.entryId}><td>{fechaLarga(d.fecha)}</td><td>{d.local ?? '—'}</td>
+              <td><Link className="cx-enlace" to={rutaAsiento(d.entryId)}>{d.rango}</Link> · {d.facturas}</td><td className="cxe-num">{importe(d.importe)}</td></tr>
+          ))}
+          {s.listas.tpv.length === 0 && <tr><td colSpan={4}>Ningún día de ventas sale este mes.</td></tr>}</tbody>
+        </table>
+      )}
+      {fila === 'asientos' && (
         <table className="cxe-tabla cxe-sub" aria-label={titulo}>
           <thead><tr><th>Fecha</th><th>Asiento</th><th>Concepto</th><th className="cxe-num">Importe</th></tr></thead>
           <tbody>{s.listas[fila].map((p) => (

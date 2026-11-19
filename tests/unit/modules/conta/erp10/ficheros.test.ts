@@ -51,7 +51,8 @@ describe('La configuración de ERP10, en el repositorio', () => {
   it('las constantes son los XML de docs/conta/erp10/configuracion, salvo los finales de línea', () => {
     const leer = (n: string) => readFileSync(resolve(RAIZ, `docs/conta/erp10/configuracion/Configuracion${n}.XML`), 'utf8').replace(/\r\n/g, '\n')
     expect(XML_RECIBIDAS).toBe(leer('Recibidas'))
-    expect(XML_EXPEDIDAS).toBe(leer('Expedidas'))
+    // X08 · La de expedidas, con el resumen de facturas del día añadido (069, 070 y 071 en AJ, AK y AL).
+    expect(XML_EXPEDIDAS).toBe(leer('Expedidas').replace('<Campo126>24</Campo126>\n', '<Campo126>24</Campo126>\n    <Campo069>36</Campo069>\n    <Campo070>37</Campo070>\n    <Campo071>38</Campo071>\n'))
     expect(XML_SUBCUENTAS).toBe(leer('Subcuentas'))
     expect(XML_ASIENTOS).toBe(leer('Asientos'))
   })

@@ -23,7 +23,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { hayBase, mensaje, rpc, tabla } from '@/modules/conta/services/bd'
-import type { AsientoParaErp10, EmitidaParaErp10, LineaRecibida, Operacion, OperacionEmitida } from '@/modules/conta/erp10/ficheros'
+import type { AsientoParaErp10, CuentaContado, DiaParaErp10, EmitidaParaErp10, LineaRecibida, Operacion, OperacionEmitida } from '@/modules/conta/erp10/ficheros'
 import type { Comprobar } from '@/modules/conta/erp10/comparar'
 
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -336,4 +336,40 @@ export function aAsientos(r: Record<string, unknown>): AsientosPorSalir {
 
 export async function leerAsientosPorSalir(companyId: string, mes: string): Promise<AsientosPorSalir> {
   return aAsientos(await rpc<Record<string, unknown>>('conta_erp10_asientos_por_salir', { p_company: companyId, p_mes: mes }))
+}
+
+// ── X08 · Los días del TPV, con su rango y los apuntes de su asiento ──────────────────────
+//
+// Nombre dentro de cadena (regla 40), de la migración 20261119T0551_x08_dias_tpv_por_salir y
+// cruzado con su prueba de staging: conta_erp10_dias_tpv_por_salir (dias: entryId, serie, numero,
+// fecha, concepto, origen, local, localId, primero, ultimo, facturas, contadores, lineas [cuenta,
+// plantilla, nombre, debe, haber, tipoIva, baseIva, libro]; contado [codigo, plantilla, nombre];
+// cuentas; yaSalidas).
+
+export interface DiasPorSalir { dias: DiaParaErp10[]; contado: CuentaContado[]; cuentas: CuentaDeLaBase[]; yaSalidas: Map<string, string> }
+export const SIN_DIAS: DiasPorSalir = { dias: [], contado: [], cuentas: [], yaSalidas: new Map() }
+
+export function aDias(r: Record<string, unknown>): DiasPorSalir {
+  const o = (x: unknown) => (x === 'revo' || x === 'folvy' ? x : null)
+  const num = (x: unknown) => (x == null ? null : Number(x))
+  return {
+    dias: ((r.dias ?? []) as Record<string, unknown>[]).map((d) => ({
+      entryId: String(d.entryId), serie: n(d.serie), numero: num(d.numero), fecha: String(d.fecha), concepto: String(d.concepto ?? ''),
+      origen: o(d.origen), local: s(d.local), localId: s(d.localId), primero: s(d.primero), ultimo: s(d.ultimo),
+      facturas: num(d.facturas), contadores: num(d.contadores),
+      lineas: ((d.lineas ?? []) as Record<string, unknown>[]).map((l) => ({
+        cuenta: String(l.cuenta), plantilla: String(l.plantilla), nombre: String(l.nombre ?? ''), debe: n(l.debe), haber: n(l.haber),
+        tipoIva: num(l.tipoIva), baseIva: num(l.baseIva), libro: s(l.libro),
+      })),
+    })),
+    contado: ((r.contado ?? []) as Record<string, unknown>[]).map((c) => ({ codigo: String(c.codigo), plantilla: String(c.plantilla), nombre: String(c.nombre ?? '') })),
+    cuentas: ((r.cuentas ?? []) as Record<string, unknown>[]).map((c) => ({
+      codigo: String(c.codigo), plantilla: String(c.plantilla), nombre: String(c.nombre ?? ''), nif: s(c.nif), gastoHabitual: null,
+    })),
+    yaSalidas: new Map(Object.entries((r.yaSalidas ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)])),
+  }
+}
+
+export async function leerDiasTpvPorSalir(companyId: string, mes: string): Promise<DiasPorSalir> {
+  return aDias(await rpc<Record<string, unknown>>('conta_erp10_dias_tpv_por_salir', { p_company: companyId, p_mes: mes }))
 }
