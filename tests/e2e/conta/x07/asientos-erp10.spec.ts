@@ -114,7 +114,8 @@ test('X07 · contra staging: una nómina y un pago salen como asientos, con su f
   await expect(fila).toContainText('Listo')
   await expect(fila).toContainText('Nóminas, pagos y cobros, bancos, traspasos')
   await expect(fila).not.toContainText('Todavía no sale por aquí')
-  await expect(tabla.getByRole('row').filter({ hasText: 'Días de ventas del TPV' })).toContainText('Todavía no sale por aquí')
+  // X08: los días del TPV ya salen (como factura del día); la fila ya no dice «Todavía no sale por aquí».
+  await expect(tabla.getByRole('row').filter({ hasText: 'Días de ventas del TPV' })).not.toContainText('Todavía no sale por aquí')
   const abajo = await page.evaluate(() => [document.querySelector('.cxe')?.getBoundingClientRect().bottom ?? 9999, window.innerHeight])
   expect(abajo[0], 'la pantalla acaba dentro de la ventana').toBeLessThanOrEqual(abajo[1])
   await page.screenshot({ path: `${DIR}/paso1-asientos.png` })

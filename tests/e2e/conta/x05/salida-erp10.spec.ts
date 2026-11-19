@@ -153,7 +153,8 @@ test('X05 · contra staging: encender, mirar las emitidas y las recibidas, desca
   await expect(tabla.getByRole('row')).toHaveCount(7, { timeout: 40_000 })
   const fila = (que: string) => tabla.getByRole('row').filter({ hasText: que })
   await expect(fila('Facturas emitidas')).not.toContainText('Todavía no sale por aquí')
-  await expect(fila('Días de ventas del TPV')).toContainText('Todavía no sale por aquí')
+  // X08: los días del TPV ya salen (como factura del día); la fila ya no dice «Todavía no sale por aquí».
+  await expect(fila('Días de ventas del TPV')).not.toContainText('Todavía no sale por aquí')
   // La de las recibidas, con la suya.
   await fila('Facturas recibidas').click()
   await expect(page.getByRole('table', { name: 'Facturas recibidas' }).getByRole('link', { name: hecho.recibida })).toBeVisible()
