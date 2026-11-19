@@ -76,6 +76,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     ventas: 'facturacion.cierres',
     // V01 · Ventas › Facturas: la lista, una nueva y la ficha.
     facturasVenta: 'facturacion.emitidas', nuevaFacturaVenta: 'facturacion.emitidas', facturaVenta: 'facturacion.emitidas',
+    // K05 · La emitida del núcleo: desde su asiento, a mano (la contable) y Asientos › «Emitidas»: cuelgan de las facturas emitidas.
+    emitidaAsiento: 'facturacion.emitidas', emitidaAMano: 'facturacion.emitidas', emitidasPorRevisar: 'facturacion.emitidas',
     cierres: 'facturacion.cierres', cierre: 'facturacion.cierres',
     // V01 · Entrega 3 · Ventas › Liquidaciones y la ficha de una fila de plataforma.
     liquidacionesVentas: 'facturacion.liquidacionesVentas', liquidacionPlataforma: 'facturacion.liquidacionesVentas',

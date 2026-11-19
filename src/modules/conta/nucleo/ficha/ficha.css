@@ -205,3 +205,9 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 /* «Guardarla sin documento», debajo de la zona de soltar. */
 .kf-sin-documento { max-width: 420px; margin: 14px auto 0; display: grid; gap: 6px; color: var(--k-tinta); }
 .kf-sin-documento label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+
+/* K05 · El mayor en el panel, como la maqueta de la emitida: en su tarjeta, con el saldo y esta factura en azul claro. */
+.kf-mayor-caja { background: var(--k-blanco); border-radius: 6px; padding: 14px 18px; box-shadow: 0 1px 2px rgb(0 0 0 / 6%); }
+.kf-mayor-titulo { margin: 0 0 10px; color: var(--k-apoyo); font-size: 13px; line-height: 1.5; }
+.kf-mayor-titulo strong { color: var(--k-tinta); }
+.kf-mayor tr[data-esta='si'] td { background: var(--k-azul-claro); font-weight: 600; }

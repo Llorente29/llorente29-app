@@ -245,6 +245,12 @@ export const CONTA = {
     facturasVenta: 'ventas/facturas',
     nuevaFacturaVenta: 'ventas/facturas/nueva',
     facturaVenta: 'ventas/facturas/:facturaId',
+    /** K05 · La emitida del núcleo desde su asiento (una de expedida por revisar, o ya validada). Fuera del núcleo lleva al asiento. */
+    emitidaAsiento: 'ventas/facturas/asiento/:entryId',
+    /** K05 · La emitida escrita a mano, contable (no la emite: eso es Facturación). Fuera del núcleo, la «Nueva factura emitida» de Asientos. */
+    emitidaAMano: 'ventas/facturas/a-mano',
+    /** K05 · Asientos › «Emitidas» en el núcleo: la primera por revisar o, si no hay, una a mano. Fuera, la lista. */
+    emitidasPorRevisar: 'ventas/facturas/revisar',
     /** V01 · Entrega 2 · Ventas › Cierres del día (solo con «Vendo en hostelería»): la lista y la ficha de uno. */
     cierres: 'ventas/cierres',
     cierre: 'ventas/cierres/:cierreId',
@@ -457,6 +463,8 @@ export const rutaRecibidaAMano = (): string => rutaConta(CONTA.rutas.recibidaAMa
 export const rutaFacturasVenta = (): string => rutaConta(CONTA.rutas.facturasVenta)
 export const rutaNuevaFacturaVenta = (): string => rutaConta(CONTA.rutas.nuevaFacturaVenta)
 export const rutaFacturaVenta = (facturaId: string): string => rutaConta(CONTA.rutas.facturaVenta, { facturaId })
+export const rutaEmitidaAsiento = (entryId: string): string => rutaConta(CONTA.rutas.emitidaAsiento, { entryId })
+export const rutaEmitidaAMano = (): string => rutaConta(CONTA.rutas.emitidaAMano)
 /** V01 · Entrega 2 · Ventas › Cierres del día y un cierre. */
 export const rutaCierres = (): string => rutaConta(CONTA.rutas.cierres)
 export const rutaCierre = (cierreId: string): string => rutaConta(CONTA.rutas.cierre, { cierreId })

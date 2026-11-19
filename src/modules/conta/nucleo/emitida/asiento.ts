@@ -27,21 +27,25 @@ import { periodoAbierto, type Calendario } from '../recibida/estado'
 
 export interface LineaVenta { cuenta: string; local: string; importe: string }
 
-export interface BorradorEmitida {
+export type BorradorEmitida = {
   clienteId: string
   numero: string
   fecha: string
   iva: LineaIva[]
   retencion: Adicional | null
   ventas: LineaVenta[]
-  /** «Cómo se cobra»: la subcuenta (57x u otra) y la fecha del cobro. Vacía: pendiente de cobrar. */
-  cobroCuenta: string
-  cobroFecha: string
+  /**
+   * «Cómo se cobra»: la subcuenta (57x u otra) y la fecha del cobro. null: la
+   * que se propone (de su ficha o de la última, y la fecha de la factura más sus
+   * días); '' (vacía): pendiente de cobrar.
+   */
+  cobroCuenta: string | null
+  cobroFecha: string | null
 }
 
 export const borradorVacio = (hoy: string): BorradorEmitida => ({
   clienteId: '', numero: '', fecha: hoy, iva: [{ base: '', tipo: '21', cuota: '' }, { base: '', tipo: '10', cuota: '' }],
-  retencion: null, ventas: [{ cuenta: '', local: '', importe: '' }], cobroCuenta: '', cobroFecha: '',
+  retencion: null, ventas: [{ cuenta: '', local: '', importe: '' }], cobroCuenta: null, cobroFecha: null,
 })
 
 /** Los nombres de los cambios sin guardar (la ventana de la pestaña), con los rótulos de la ficha. */
@@ -290,6 +294,6 @@ export function borradorDesdeAsiento(a: { terceroId: string | null; documento: s
   return {
     clienteId: a.terceroId ?? '', numero: a.documento ?? '', fecha: (a.fechaDocumento ?? a.fecha).slice(0, 10), iva: iva.length ? iva : [{ base: '', tipo: '21', cuota: '' }],
     retencion: ret ? { tipo: tipoRet !== null ? String(tipoRet) : '', importe: importe(deCent(ret)) } : null,
-    ventas: ventas.length ? ventas : [{ cuenta: '', local: '', importe: '' }], cobroCuenta: '', cobroFecha: '',
+    ventas: ventas.length ? ventas : [{ cuenta: '', local: '', importe: '' }], cobroCuenta: null, cobroFecha: null,
   }
 }

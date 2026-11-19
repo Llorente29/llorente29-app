@@ -1,21 +1,28 @@
 // src/modules/conta/nucleo/ficha/Buscador.tsx
 //
-// K04 · La casilla que busca en una lista (el proveedor, la cuenta): escribe, F4
-// o ↓ abre, ↑ ↓ eligen, Intro elige, Esc cierra. Nació en la ficha recibida
-// (K04); E05 la saca aquí, tal cual, para que Bancos («Escribir uno a mano»,
-// la cuenta con F4) use la misma y no una copia.
+// K05 · La casilla que busca en una lista (el proveedor, el cliente, la
+// cuenta), de la ficha del núcleo: escribe, F4 o ↓ abre, Intro elige. Es la
+// del K04 (FichaRecibida), con lo del K04b (abrir: el foco con la lista
+// abierta, para «Es uno que ya tengo»), sacada aquí para que la usen la
+// recibida y la emitida. Mientras el K04b (#733) no esté en main, la recibida
+// sigue con la suya: se pasa a ésta al traer main.
 
-import { useState, type KeyboardEvent as KE } from 'react'
+import { useEffect, useState, type KeyboardEvent as KE } from 'react'
 
 /** Una casilla que busca en una lista (el proveedor, la cuenta): escribe, F4 o ↓ abre, Intro elige. */
-export function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cuenta, duda, placeholder, cargando }: {
+export function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cuenta, duda, placeholder, cargando, abrir = 0 }: {
   id: string; valor: string; ponerTexto: (t: string) => void; lista: (t: string) => T[]; texto: (x: T) => string; elegir: (x: T) => void
   etiqueta: string; cuenta?: string | null; duda?: boolean; placeholder?: string
   /** La lista aún no ha llegado: Intro no se escapa a la casilla siguiente con la búsqueda sin resolver (e2e 1510). */
   cargando?: boolean
+  /** K04b · Cada vez que cambia (y no es 0), el foco a la casilla con su lista abierta, como F4. */
+  abrir?: number
 }) {
   const [abierta, setAbierta] = useState(false)
   const [sel, setSel] = useState(0)
+  const [abiertaCon, setAbiertaCon] = useState(0)
+  if (abrir !== abiertaCon) { setAbiertaCon(abrir); if (abrir) { setAbierta(true); setSel(0) } }
+  useEffect(() => { if (abrir) document.getElementById(id)?.focus() }, [abrir, id])
   const opciones = abierta ? lista(valor).slice(0, 12) : []
   const teclas = (e: KE<HTMLInputElement>) => {
     if (e.key === 'F4' || (e.key === 'ArrowDown' && !abierta)) { e.preventDefault(); setAbierta(true); setSel(0); return }

@@ -23,6 +23,8 @@ import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import { apuntesDeCuentas } from '@/modules/conta/services/libroService'
 import { crearCuentaCliente } from '@/modules/conta/services/tercerosService'
 import { validar } from '@/modules/conta/services/diarioService'
+import { leerExpedidaPdf } from '@/modules/conta/services/documentosService'
+import { urlDelPdf } from '@/modules/conta/services/ventasService'
 import type { Apunte } from '@/modules/conta/lib/cuentasProveedor'
 import { lineasParaLaBase, type BorradorEmitida, type CuentasEmitida, type QueHaceElCobro } from './asiento'
 
@@ -56,7 +58,7 @@ export interface DeLaEmpresa {
   clientes: ClienteEmitida[]
   /** Los tipos de IVA repercutido con su 477 (el enlace tax_rate → repercutido, o la 477 de su % por el nombre, como conta_venta_emitir). */
   tipos: Map<number, { tipoId: string; codigo: string | null; nombre: string }>
-  ventas: { codigo: string; nombre: string }[]
+  ventas: { id: string; codigo: string; nombre: string }[]
   /** Las cuentas a las que se puede cobrar (57x), con el id del banco si es la de una tesorería. */
   cobros: { codigo: string; nombre: string; bancoId: string | null }[]
   retencion: { codigo: string; nombre: string } | null
@@ -110,7 +112,7 @@ export async function deLaEmpresa(accountId: string, companyId: string, hoy: str
     tipos.set(pct, { tipoId: String(t.id), codigo: c ? String(c.code) : null, nombre: c ? nombreDe(c) : `IVA repercutido ${pct} %` })
   }
   const hojas = plan.filter((c) => c.kind !== 'group')
-  const ventas = hojas.filter((c) => /^70/.test(String(c.code)) && String(c.code).length >= 8).map((c) => ({ codigo: String(c.code), nombre: nombreDe(c) })).sort((a, b) => a.codigo.localeCompare(b.codigo))
+  const ventas = hojas.filter((c) => /^70/.test(String(c.code)) && String(c.code).length >= 8).map((c) => ({ id: String(c.id), codigo: String(c.code), nombre: nombreDe(c) })).sort((a, b) => a.codigo.localeCompare(b.codigo))
   const bancoDe = new Map([...deTeso.entries()].filter(([, c]) => c).map(([id, c]) => [String(c!.code), id]))
   const cobros = hojas.filter((c) => /^57/.test(String(c.code)) && String(c.code).length >= 8)
     .map((c) => ({ codigo: String(c.code), nombre: nombreDe(c), bancoId: bancoDe.get(String(c.code)) ?? null })).sort((a, b) => a.codigo.localeCompare(b.codigo))
@@ -257,4 +259,14 @@ export async function apuntarCobro(o: { companyId: string; cobro: Exclude<QueHac
   })
   const v = await validar(String(r.id), o.quien)
   return `Cobro apuntado en la ${o.cobro.cuenta}: 4 / ${v.numero}.`
+}
+
+/** El PDF de la emitida: el adjunto a su asiento (journal_entry_document, la de hoy) o, si es de Facturación, el suyo. Su dirección firmada, o null. */
+export async function documentoDeLaEmitida(accountId: string, entryId: string): Promise<{ url: string; titulo: string } | null> {
+  const doc = await leerExpedidaPdf(accountId, entryId)
+  if (doc) { const url = await urlDelPdf(doc.ruta); return url ? { url, titulo: doc.nombre } : null }
+  const [f] = await leer(tabla('customer_invoice').select('pdf_path, number_text').eq('account_id', accountId).eq('entry_id', entryId).neq('status', 'borrador').limit(1), 'el PDF de la factura')
+  if (!f?.pdf_path) return null
+  const url = await urlDelPdf(String(f.pdf_path))
+  return url ? { url, titulo: `La factura ${String(f.number_text ?? '')}` } : null
 }
