@@ -1,11 +1,11 @@
 // src/modules/conta/nucleo/ficha/Buscador.tsx
 //
-// K05 · La casilla que busca en una lista (el proveedor, el cliente, la
-// cuenta), de la ficha del núcleo: escribe, F4 o ↓ abre, Intro elige. Es la
-// del K04 (FichaRecibida), con lo del K04b (abrir: el foco con la lista
-// abierta, para «Es uno que ya tengo»), sacada aquí para que la usen la
-// recibida y la emitida. Mientras el K04b (#733) no esté en main, la recibida
-// sigue con la suya: se pasa a ésta al traer main.
+// K04 · La casilla que busca en una lista (el proveedor, la cuenta): escribe, F4
+// o ↓ abre, ↑ ↓ eligen, Intro elige, Esc cierra. Nació en la ficha recibida
+// (K04); E05 la saca aquí, tal cual, para que Bancos («Escribir uno a mano»,
+// la cuenta con F4) use la misma y no una copia. K04b le añade «abrir» (el
+// foco a la casilla con su lista abierta: «Es uno que ya tengo»), y la usa
+// también la emitida (K05).
 
 import { useEffect, useState, type KeyboardEvent as KE } from 'react'
 

@@ -95,6 +95,9 @@ export interface AsientoEmitida {
 
 const num = (x: string): number | null => leerImporteEs(x)
 
+/** Las líneas de IVA escritas: la que se deja con la base y la cuota vacías no cuenta (la a mano empieza con 21 y 10; e2e 44477335179). */
+export const ivaEscrito = (iva: readonly LineaIva[]): LineaIva[] => iva.filter((l) => l.base.trim() !== '' || l.cuota.trim() !== '')
+
 /** Las cuentas de venta con su importe: con una sola, la base entera; con varias, lo escrito (la última, lo que falte). */
 export function ventasConImporte(ventas: readonly LineaVenta[], base: number): { cuenta: string; local: string; importe: number }[] {
   if (ventas.length <= 1) return ventas.map((v) => ({ cuenta: v.cuenta.trim(), local: v.local, importe: base }))
@@ -109,7 +112,7 @@ export function ventasConImporte(ventas: readonly LineaVenta[], base: number): {
  * cliente nuevo, la 473) salen con su grupo y «se crea al guardar».
  */
 export function asientoDeLaEmitida(b: BorradorEmitida, c: CuentasEmitida, nombreCliente: string | null): AsientoEmitida {
-  const t = totalesDe({ iva: b.iva, retencion: b.retencion, recargo: null })
+  const t = totalesDe({ iva: ivaEscrito(b.iva), retencion: b.retencion, recargo: null })
   const vista: LineaAsiento[] = []
   const faltan: string[] = [...t.malEscrito]
   if (!b.clienteId) faltan.push('el cliente')
@@ -142,7 +145,7 @@ export function asientoDeLaEmitida(b: BorradorEmitida, c: CuentasEmitida, nombre
  * `cuenta430` y `cuenta473` ya existen cuando se llama (se crean antes).
  */
 export function lineasParaLaBase(b: BorradorEmitida, c: CuentasEmitida & { cuenta430: string; cuenta473: string | null }, partyId: string, local: string | null): LineaParaLaBase[] {
-  const t = totalesDe({ iva: b.iva, retencion: b.retencion, recargo: null })
+  const t = totalesDe({ iva: ivaEscrito(b.iva), retencion: b.retencion, recargo: null })
   const doc = b.numero.trim()
   const base = { documento: doc, tercero_id: partyId, ...(local ? { local_id: local } : { comun: true }) }
   const l: LineaParaLaBase[] = []

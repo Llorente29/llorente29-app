@@ -55,6 +55,13 @@ describe('K05 · el asiento que sale, el de conta_venta_emitir', () => {
     expect(l[1].iva).toBeUndefined()
     expect(l[4].concepto).toBe('Retención factura A-2026/0158')
   })
+  it('la línea de IVA que se deja vacía (la a mano empieza con 21 y 10) no cuenta: ni «falta la base», ni apunte (e2e 44477335179)', () => {
+    const b = { ...conDos, iva: [{ base: '100,00', tipo: '21', cuota: '21,00' }, { base: '', tipo: '10', cuota: '' }] }
+    const a = asientoDeLaEmitida(b, cuentas, null)
+    expect(a.faltan).toEqual([])
+    expect(a).toMatchObject({ cuadra: true, total: 121 })
+    expect(lineasParaLaBase(b, { ...cuentas, cuenta430: '43000012', cuenta473: null }, 'p1', null).map((x) => x.cuenta)).toEqual(['43000012', '70000000', '47700021'])
+  })
   it('con varias cuentas de venta, la última se lleva lo que falta hasta la base', () => {
     expect(ventasConImporte([{ cuenta: '70000000', local: '', importe: '200,00' }, { cuenta: '70500000', local: '', importe: '' }], 333))
       .toEqual([{ cuenta: '70000000', local: '', importe: 200 }, { cuenta: '70500000', local: '', importe: 133 }])
