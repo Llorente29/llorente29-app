@@ -1,0 +1,29 @@
+[
+ {
+  "id": "732-1",
+  "pr": 732,
+  "fecha": "2026-11-19T06:21:21Z",
+  "producto": "sumied",
+  "apartado": "Bancos (pantallas nuevas)",
+  "frase": "los movimientos del banco en una rejilla como ERP10, con ingreso y pago, el saldo a la fecha y lo que Sumied propone para cada uno; se confirma con Intro, o los seguros de una vez.",
+  "ruta": null
+ },
+ {
+  "id": "732-2",
+  "pr": 732,
+  "fecha": "2026-11-19T06:21:21Z",
+  "producto": "sumied",
+  "apartado": "Bancos (pantallas nuevas)",
+  "frase": "«Escribir uno a mano» apunta lo que no viene en el extracto y queda validado; cuando llega en el extracto, se enlaza con él y no sale dos veces.",
+  "ruta": null
+ },
+ {
+  "id": "732-3",
+  "pr": 732,
+  "fecha": "2026-11-19T06:21:21Z",
+  "producto": "sumied",
+  "apartado": "Bancos (pantallas nuevas)",
+  "frase": "la línea de abajo dice si los bancos cuadran con su extracto, y Bancos está en su pestaña Tesorería.",
+  "ruta": null
+ }
+]

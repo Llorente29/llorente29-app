@@ -80,7 +80,8 @@ const b = (id: string, etiqueta: string, icono: IconoNucleo, ruta: string, prefi
 
 // ── Los botones, una vez cada uno ───────────────────────────────────────
 
-const ASIENTOS = b('asientos', 'Asientos', 'asientos', R.libroDiario, [R.libroDiario], { contador: 'contabilidad.asientos', pestana: 'Asientos' })
+// N08: «Asientos», como en ERP10, abre la introducción de asientos (la ficha del asiento); se marca también en el diario y en cada asiento.
+const ASIENTOS = b('asientos', 'Asientos', 'asientos', R.nuevoAsiento, [R.nuevoAsiento, R.libroDiario], { contador: 'contabilidad.asientos', pestana: 'Asiento' })
 const EMITIDAS = b('emitidas', 'Emitidas', 'emitidas', R.facturasVenta, [R.facturasVenta], { pestana: 'Facturas emitidas' })
 // «Ventas» a secas (lo de antes) lleva aquí, como en la barra de hoy.
 // R05 (decisión 9): con hostelería o con «ventas por día» encendido, como Cierres del día en la barra de hoy.
@@ -131,6 +132,12 @@ const CERRAR_MES = b('cerrarMes', 'Cerrar el mes', 'cierre', lib('cierre', 'cerr
 const CUENTAS_BANCO = b('cuentasBanco', 'Cuentas y extractos', 'bancos', `${R.bancos}/cuentas`, undefined, { pestana: 'Cuentas y extractos' })
 const PRESTAMOS = b('prestamos', 'Préstamos', 'bancos', `${R.bancos}/prestamos`, undefined, { pestana: 'Préstamos y aplazamientos' })
 const REGLAS = b('reglas', 'Reglas del banco', 'utilidades', `${R.bancos}/reglas`, undefined, { pestana: 'Reglas del banco' })
+// E05 · La pestaña Tesorería de la maqueta nueva (respuesta E05 · 1): lo que hoy tiene Bancos y no
+// cabe en la pantalla nueva abre la pantalla de hoy, cada uno en su pestaña. «Conciliados» es la
+// lista de movimientos de hoy en «Ya casados» (bancos/movimientos: Bancos a secas es la nueva);
+// «Conexión del banco» está hoy en Cuentas y extractos.
+const CONCILIADOS = b('conciliados', 'Conciliados', 'hecho', `${R.bancos}/movimientos?ver=casados`, [`${R.bancos}/movimientos`], { pestana: 'Conciliados' })
+const CONEXION: Boton = { ...CUENTAS_BANCO, id: 'conexion', etiqueta: 'Conexión del banco', atajo: true }
 const DISENO = b('diseno', 'Muestra del diseño', 'diseno', R.sistemaDiseno, [R.sistemaDiseno], { pruebas: true, pestana: 'Muestra del diseño' })
 
 const CALENDARIO = b('calendario', 'Calendario', 'calendario', R.impuestos, [R.impuestos], { contador: 'impuestos.calendario', pestana: 'Impuestos' })
@@ -183,8 +190,14 @@ export const MODULOS: Modulo[] = [
       },
       {
         id: 'asientos', etiqueta: 'Asientos', grupos: [
-          { titulo: 'Asientos', botones: [ASIENTOS, EMITIDAS, VENTAS_DIA, RECIBIDAS, BANCOS, HECHO] },
+          { titulo: 'Asientos', botones: [ASIENTOS, EMITIDAS, VENTAS_DIA, RECIBIDAS, HECHO] },
           { titulo: 'Cierre', botones: [CIERRE, APERTURA] },
+        ],
+      },
+      {
+        // E05 · Tesorería (la maqueta nueva de Bancos): Bancos vive aquí; lo demás son atajos a su sitio de siempre.
+        id: 'tesoreria', etiqueta: 'Tesorería', grupos: [
+          { titulo: 'Bancos', botones: [BANCOS, atajo(EXTRACTO), CONCILIADOS, atajo(REGLAS), CONEXION] },
         ],
       },
       {

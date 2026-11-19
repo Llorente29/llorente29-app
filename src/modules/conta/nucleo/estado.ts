@@ -9,6 +9,11 @@
 // tampoco sale. Cero, contado, sí: en verde, «al día». Cada una se lee como
 // una frase (respuesta K02 · 1, arreglo 3): «14 movimientos del banco por
 // revisar», «Bancos al día». Núcleo puro.
+//
+// E05 (respuesta E05 · 1, punto 6): «Bancos cuadrados», ya contado: cada banco
+// con extracto, el saldo de su último extracto contra el de su 572, con la misma
+// regla que la cabecera de Bancos (nucleo/bancos/servicio: bancosCuadrados). Sin
+// contar (null), o sin ningún banco con extracto, no sale.
 
 import type { CuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 
@@ -17,13 +22,19 @@ export interface FraseEstado { id: string; tono: 'bien' | 'mira'; fuerte: string
 const n = (c: CuentasMenu, k: string): number | null => (typeof c[k] === 'number' ? (c[k] as number) : null)
 const plural = (x: number, uno: string, varios: string) => (x === 1 ? uno : varios)
 
-export function frasesDeEstado(c: CuentasMenu, rutas: { recibidas: string; bancos: string; asientos: string }): FraseEstado[] {
+export function frasesDeEstado(c: CuentasMenu, rutas: { recibidas: string; bancos: string; asientos: string }, cuadre: { cuadran: number; de: number } | null = null): FraseEstado[] {
   const fuera: FraseEstado[] = []
   const bancos = n(c, 'bancos')
   if (bancos !== null) {
     fuera.push(bancos > 0
       ? { id: 'bancos', tono: 'mira', fuerte: `${bancos} ${plural(bancos, 'movimiento', 'movimientos')}`, resto: 'del banco por revisar', ruta: rutas.bancos }
       : { id: 'bancos', tono: 'bien', fuerte: 'Bancos', resto: 'al día', ruta: rutas.bancos })
+  }
+  if (cuadre && cuadre.de > 0) {
+    const no = cuadre.de - cuadre.cuadran
+    fuera.push(no === 0
+      ? { id: 'cuadrados', tono: 'bien', fuerte: 'Bancos cuadrados', resto: 'con su extracto', ruta: rutas.bancos }
+      : { id: 'cuadrados', tono: 'mira', fuerte: cuadre.de === 1 ? 'El banco' : `${no} de ${cuadre.de} bancos`, resto: no === 1 && cuadre.de > 1 ? 'no cuadra con su extracto' : cuadre.de === 1 ? 'no cuadra con su extracto' : 'no cuadran con su extracto', ruta: rutas.bancos })
   }
   const asientos = n(c, 'libros')
   if (asientos !== null) {
