@@ -361,7 +361,10 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       if (que.que === 'siguiente') { const s = lista[que.a]; s.focus(); if (s instanceof HTMLInputElement) s.select() }
       else void guardarYSiguiente()
     } else if (e.key === 'Escape' && !t.closest('[role="dialog"]')) {
-      e.preventDefault()
+      // Sin parar la pulsación, llega a window cuando la ventana de «cambios sin guardar» ya está puesta (React la pinta
+      // dentro de este mismo Esc) y su Esc la cierra al momento: con cambios, Esc no hacía nada (e2e 44479781525 del K05;
+      // reproducido en Chromium con React 19.2.5: sin parar, 0 ventanas; parando, 1).
+      e.preventDefault(); e.stopPropagation()
       if (pestana?.cerrar) pestana.cerrar(); else salida.pedirSalir(() => navegar(rutaDocumentos('por-revisar')))
     }
   }

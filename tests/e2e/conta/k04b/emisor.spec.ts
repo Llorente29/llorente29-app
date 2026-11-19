@@ -182,6 +182,13 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await ficha(page).locator('#kf-numero').fill(escrito)
     const pestanaFicha = page.locator('[data-pestana-trabajo="ficha:recibida"]')
     await expect(pestanaFicha).toHaveAttribute('data-cambios', 'si')
+    // Esc con cambios sin guardar: pregunta (antes no hacía nada: la ventana se abría y se cerraba con la misma pulsación).
+    await ficha(page).locator('#kf-numero').press('Escape')
+    const dialogo = page.getByRole('dialog')
+    await expect(dialogo).toContainText('Tienes cambios sin guardar', { timeout: 15_000 })
+    await dialogo.getByRole('button', { name: 'Seguir aquí' }).click()
+    await expect(dialogo).toHaveCount(0)
+    await expect(ficha(page).locator('#kf-numero')).toHaveValue(escrito)
 
     // A la otra empresa: la factura no se ve; sale su Inicio, y abajo lo que queda abierto en la gestoría.
     await elegirEmpresa(page, EMPRESA)
