@@ -259,7 +259,8 @@ function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, desh
   const aCuenta = (c: CuentaDelPlan) => hacer(() => casarConCuenta(companyId, m, { cuenta: c.codigo, nombre: c.nombre, concepto: `${quienEs(m)} · ${c.nombre}`, regla: regla ? m.conceptoLimpio.trim() || null : null }))
   const casado = m.estado === 'casado' && m.casado
   // «Es otra factura» (E05b): las facturas recibidas sin pagar, las de hoy (bank_facturas_recibidas_pendientes).
-  const facturas = useLeer(buscando ? () => facturasPendientes(companyId) : null, `${companyId}:${m.id}:facturas`)
+  // La clave lleva «buscando»: useLeer solo vuelve a leer cuando cambia la clave (la e2e 44473982157 se quedó sin lista).
+  const facturas = useLeer(buscando ? () => facturasPendientes(companyId) : null, `${companyId}:${m.id}:${buscando ? 'buscando' : 'no'}:facturas`)
   const [textoFactura, setTextoFactura] = useState<string | null>(null)
   const [elegida, setElegida] = useState<FacturaPendiente | null>(null)
   const si = useRef<HTMLButtonElement>(null)
