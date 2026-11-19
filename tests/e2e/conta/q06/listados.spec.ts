@@ -19,7 +19,7 @@
 
 import { mkdirSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, STAGING_URL, anonKey, correoDePrueba, entrarComo, pedirSesion } from '../sesion'
+import { CUENTA_A, STAGING_URL, anonKey, correoDePrueba, entrarComo, pedirSesion, type Sesion } from '../sesion'
 import { cargada, noRueda, zonaActiva } from '../k02/comun'
 
 test.use({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
@@ -40,9 +40,19 @@ async function nucleo(encendido: boolean) {
 }
 
 /** Una cifra como la pinta cualquiera de las dos pantallas («1.234,56 €», «1.234,56 D») a número. */
+// La pantalla de hoy escribe el negativo con el signo tipográfico «−» (U+2212, eurosExactos) y la nueva
+// con el guion «-» (Intl): los dos son el mismo signo. Sin esto, el «−50,00 €» de hoy se leía +50 (#1555).
 const numero = (t: string | null): number => {
-  const limpio = (t ?? '').replace(/[^\d,-]/g, '').replace(',', '.')
+  const limpio = (t ?? '').replace(/\u2212/g, '-').replace(/[^\d,-]/g, '').replace(',', '.')
   return limpio ? Number(limpio) : 0
+}
+
+/** Lo que hay en la base: las anotaciones del libro de recibidas de la cuenta A en unas fechas (para el registro del run). */
+async function anotacionesRecibidas(s: Sesion, desde: string, hasta: string): Promise<string[]> {
+  const r = await fetch(`${STAGING_URL}/rest/v1/vat_book_entry?select=number,invoice_type,issue_date,tax_base,tax_amount,voided_at,source_type&account_id=eq.${CUENTA_A.id}`
+    + `&book=in.(received,investment)&issue_date=gte.${desde}&issue_date=lte.${hasta}&order=issue_date`, { headers: { apikey: anonKey(), Authorization: `Bearer ${s.access_token}` } })
+  const filas = (await r.json()) as { number: string | null; invoice_type: string; issue_date: string; tax_base: number; tax_amount: number; voided_at: string | null; source_type: string }[]
+  return filas.map((f) => `${f.issue_date} ${f.invoice_type} ${f.number ?? 'sin número'} base ${f.tax_base} cuota ${f.tax_amount}${f.voided_at ? ' (anulada)' : ''} · ${f.source_type}`)
 }
 
 async function capturar(page: Page, nombre: string) {
@@ -121,7 +131,7 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     try {
       // ── 1. Lo de hoy, con el interruptor apagado.
       await nucleo(false)
-      await entrarComo(page, CUENTA_A.email)
+      const sesion = await entrarComo(page, CUENTA_A.email)
       const hoy = await leerLosDeHoy(page)
 
       // ── 2. El núcleo encendido: los mismos listados en la ventana nueva.
@@ -201,6 +211,12 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
         await page.goto(ruta, { timeout: 30_000 })
         await expect(listado(page)).toHaveAttribute('data-listado', que, { timeout: 30_000 })
         await expect(listado(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 45_000 })
+        if (que === 'recibidas') {
+          // Qué facturas son, leído en la base (#1555: la semilla del C05 deja un abono, R1, con base y cuota en negativo).
+          const [d, h] = await listado(page).locator('.kl-datos input[aria-label="Desde"], .kl-datos input[aria-label="Hasta"]').evaluateAll((xs) => xs.map((x) => (x as HTMLInputElement).value))
+          const iso = (f: string) => f.split('/').reverse().join('-')
+          console.log(`[Q06] libro de recibidas del ${d} al ${h}, en la base:\n  ${(await anotacionesRecibidas(sesion, iso(d), iso(h))).join('\n  ') || 'ninguna'}`)
+        }
         expect.soft(numero(await total(page, 'Base').textContent()), `el libro de ${que}: la base, la de hoy`).toBe(deHoy.base)
         expect.soft(numero(await total(page, 'Cuota').textContent()), `el libro de ${que}: la cuota, la de hoy`).toBe(deHoy.cuota)
         if (que === 'emitidas') { await cargada(page, 'el libro de emitidas'); await capturar(page, `5-libro-de-emitidas-${sufijo}`) }
