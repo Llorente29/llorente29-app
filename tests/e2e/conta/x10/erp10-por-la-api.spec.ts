@@ -173,6 +173,8 @@ for (const tam of TAMANOS) {
     await expect(fila.getByLabel('Lo que hay en ERP10')).toContainText(`${n} líneas en 1 asientos`)
     await expect(codigo).toBeVisible()
     await expect(sociedades).not.toContainText(/token|API|endpoint/)
+    // La captura, con la sociedad probada y lo que hay en ERP10 a la vista.
+    await fila.getByLabel('Lo que hay en ERP10').scrollIntoViewIfNeeded()
     await page.screenshot({ path: `${DIR}/conector-${tam.width}.png` })
 
     // 2 · El paso 3, sin Excel.

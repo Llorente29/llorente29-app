@@ -1,4 +1,4 @@
 {
-  "segundos": 60,
-  "medido": "estimado (X10, 19/11): dos tamaños de ordenador, cada uno con el conector y el paso 3 como el X06 (unos 25 s); el móvil se salta. Se mide en el primer run."
+  "segundos": 26,
+  "medido": "run 44531214563, commit 9e43e028 (X10, 19/11): 12,7 s a 1456 × 816 y 12,9 s a 1366 × 768; el móvil se salta"
 }
