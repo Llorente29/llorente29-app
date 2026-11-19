@@ -1,0 +1,6 @@
+# N10 · Bancos descuenta todo lo pagado: 1930. Su prueba (ROLLBACK, la empresa de la siembra de A, datos inventados):
+# Bancos y Pagos con la versión nueva, con la de antes y otra vez con la nueva (una sin pagos, igual; una con 42,00
+# pagados a mano, 242,00 → 200,00; las de todas las cuentas sin pagos a mano, la misma huella); y la regla 10 por sus
+# caminos: «Ya la he pagado» y su cargo, casar el resto desde Bancos, deshacerlo y volver a casarlo.
+supabase/migrations/20261119T1930_n10_bancos_todo_lo_pagado.sql
+supabase/staging/sql/20261119_n10_bancos_todo_lo_pagado_prueba.sql

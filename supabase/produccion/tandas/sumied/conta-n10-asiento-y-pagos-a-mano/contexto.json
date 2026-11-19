@@ -1,0 +1,19 @@
+{
+ "_que": "N10 · Bancos descuenta todo lo pagado · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging f843d5b, 19/11, con la 0800 del N09 puesta como en staging y producción), sin la 1930 y en SOLO LECTURA: no en producción (esta sesión no lee producción). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-19T19:33Z",
+ "tanda": {
+  "supabase/migrations/20261119T1930_n10_bancos_todo_lo_pagado.sql": "09c379ddcd3c9ded01bc2fd190d81654"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,10 @@
+# N10 · Parte 2: Bancos descuenta todo lo pagado de una recibida, como Pagos.
+# Rama conta/n10-asiento-y-pagos-a-mano. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1930  Cambia en caliente (misma firma): bank_facturas_para_casar y bank_facturas_recibidas_pendientes dan como
+#         «pagado» el de la vista de Pagos (todos los pagos de la factura y lo pagado en el programa de antes), más lo
+#         casado vivo en el banco que no tenga su pago apuntado.
+#
+# No cambia ni una fila. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/n10-bancos-todo-lo-pagado.sql
+supabase/migrations/20261119T1930_n10_bancos_todo_lo_pagado.sql
