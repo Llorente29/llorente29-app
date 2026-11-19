@@ -1,0 +1,11 @@
+# X08 · Los días del TPV salen a ERP10 como facturas expedidas (encargo X08 y respuestas
+# X08 · 3 y X08 · 4, 19/11). Rama conta/x08-dias-tpv-a-erp10. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   0551  Añade conta_erp10_dias_tpv_por_salir (solo lee): de cada día de ventas que
+#         sale, su origen, su local, su rango de facturas, sus contadores, los apuntes
+#         de su asiento y la cuenta «Clientes de contado». No cambia ninguna otra.
+#
+# Nada en el camino del pedido; la función solo lee. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x08-dias-tpv-erp10.sql
+supabase/migrations/20261119T0551_x08_dias_tpv_por_salir.sql

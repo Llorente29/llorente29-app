@@ -73,7 +73,7 @@ function PestanaVivaSinMemo({ id, llave, empresa, ubicacion, activa, base, ctx, 
 
   const { pathname, search } = ubicacion
   const donde = dondeEsta(pathname, undefined, search)
-  const catalogo = donde?.producto && donde.pestana ? cintaDe(donde.producto.id, donde.pestana.id, ctx) : []
+  const catalogo = donde?.producto && donde.pestana ? cintaDe(donde.producto.id, donde.pestana.id, ctx, { pathname, search }) : []
   const grupos = resolverGrupos(catalogo, { datos: datosCinta, entradas: entradasCinta, pathname, search, abrirBuscador })
   const clave = JSON.stringify(grupos.map((g) => [g.titulo, g.acciones.map((a) => [a.id, a.numero, a.aviso, a.actual])]))
   const marco: ValorMarco = useMemo(() => ({

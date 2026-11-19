@@ -648,6 +648,194 @@ export function prepararAsientos(lista: readonly AsientoParaErp10[], o: {
   return { asientos, noSalen, cuentas }
 }
 
+// ── Los días del TPV (X08) ──────────────────────────────────────────────────────────
+//
+// La decisión de Julio (respuestas X08 · 3 y X08 · 4, 19/11): un día del TPV sale como
+// UNA factura expedida por día y local, el asiento resumen del Reglamento del IVA (art.
+// 63.4), y su cobro aparte, como un asiento más:
+//   · la expedida: el cliente es la cuenta genérica «Clientes de contado» de la sociedad
+//     (una 430 que lo dice en su nombre; no se inventa); las bases y cuotas, una línea de
+//     I.V.A. por tipo; las ventas, en sus contrapartidas de ingreso; el rango seguido del
+//     día en «Resumen de facturas» (N.º facturas, Campo069; Primer número, 070; Último
+//     número, 071; medidos por Julio en su ERP10). La I (Nº factura) va vacía: ERP10 no la
+//     pide (en «Configurar Excel» solo la fecha y el total llevan asterisco);
+//   · el cobro: cada cuenta a la que va lo cobrado (la de cada forma de pago, como la
+//     eligió «A qué cuenta va cada forma de pago») al debe, contra «Clientes de contado» al
+//     haber por el total, el mismo día.
+// Todo sale del asiento validado del día: lo que tiene Sumied en su diario.
+//
+// No sale (y se dice por qué): sin rango, con dos contadores del TPV (dos rangos), con
+// varios asientos el mismo día y local (uno por plataforma), sin «Clientes de contado» o
+// con más de una, y lo que no cabe en la configuración.
+
+/** Un apunte del asiento de un día (conta_erp10_dias_tpv_por_salir). */
+export type LineaDia = {
+  cuenta: string; plantilla: string; nombre: string; debe: number; haber: number
+  /** % y base del I.V.A., en las líneas del libro de expedidas. */
+  tipoIva: number | null; baseIva: number | null; libro: string | null
+}
+export type DiaParaErp10 = {
+  entryId: string
+  serie: number
+  numero: number | null
+  /** AAAA-MM-DD. */
+  fecha: string
+  concepto: string
+  /** revo: un TPV de fuera (conta_tpv_dia); folvy: el TPV de Folvy (sales_day_summary). */
+  origen: 'revo' | 'folvy' | null
+  local: string | null
+  localId: string | null
+  /** El rango seguido de facturas del día y cuántas (nulo si no lo guarda). */
+  primero: string | null
+  ultimo: string | null
+  facturas: number | null
+  /** Revo: cuántos contadores (series del TPV) lleva el día. */
+  contadores: number | null
+  lineas: LineaDia[]
+}
+export type CuentaContado = { codigo: string; plantilla: string; nombre: string }
+
+/** Lo que se ha leído de un día, en céntimos. */
+export type DiaLeido = {
+  entryId: string; serie: number; numero: number | null; fecha: string; local: string | null
+  primero: string; ultimo: string; facturas: number
+  contado: CuentaContado
+  ingresos: { cuenta: string; importe: number }[]
+  iva: { pct: number; base: number; cuota: number }[]
+  /** Lo cobrado a cada cuenta (con su signo: una devolución en caja resta). */
+  cobros: { cuenta: string; nombre: string; importe: number }[]
+  total: number
+}
+
+export const FRASE_SIN_RANGO = 'Falta el rango de facturas del día.'
+export const FRASE_SIN_CONTADO = 'Falta la cuenta de Clientes de contado: ponla en A qué cuenta va cada forma de pago.'
+
+/** El rango, como se enseña: «5001–5048». */
+export const rangoDe = (d: Pick<DiaParaErp10, 'primero' | 'ultimo'>) => (d.primero && d.ultimo ? (d.primero === d.ultimo ? d.primero : `${d.primero}–${d.ultimo}`) : '')
+
+/** Lee un día del TPV. Lo que no puede ir al fichero devuelve su porqué. */
+export function leerDia(d: DiaParaErp10, contado: readonly CuentaContado[], xml = XML_EXPEDIDAS): DiaLeido | NoSale {
+  const no = (porque: string): NoSale => ({ entryId: d.entryId, numero: rangoDe(d) || `${d.serie}/${d.numero ?? ''}`, porque })
+  const primero = String(d.primero ?? '').trim(), ultimo = String(d.ultimo ?? '').trim()
+  if (!primero || !ultimo) return no(FRASE_SIN_RANGO)
+  if ((d.contadores ?? 1) > 1) return no(`Lleva facturas de ${d.contadores} contadores del TPV, con un rango cada uno, y la factura del día lleva uno: no se juntan. No sale.`)
+  if (contado.length === 0) return no(FRASE_SIN_CONTADO)
+  if (contado.length > 1) return no(`Hay ${contado.length} cuentas de Clientes de contado (${contado.map((x) => x.codigo).join(', ')}): deja una. No sale.`)
+  const col = columnas(xml)
+  if (!['069', '070', '071'].every((k) => k in col)) return no('La configuración de expedidas no tiene el resumen de facturas (N.º facturas, primer y último número). No sale.')
+
+  const ingresos = new Map<string, number>()
+  const iva = new Map<number, { base: number; cuota: number }>()
+  const cobros = new Map<string, { nombre: string; importe: number }>()
+  for (const l of d.lineas) {
+    const neto = c(l.haber) - c(l.debe)
+    if (neto === 0) continue
+    if (/^7/.test(l.cuenta)) {
+      ingresos.set(l.cuenta, (ingresos.get(l.cuenta) ?? 0) + neto)
+    } else if (/^477/.test(l.cuenta)) {
+      if (l.tipoIva == null || l.baseIva == null) return no(`La línea de I.V.A. de la cuenta ${l.cuenta} no tiene su tipo y su base. No sale.`)
+      const pct = Number(l.tipoIva)
+      const x = iva.get(pct) ?? { base: 0, cuota: 0 }
+      x.base += c(Math.abs(Number(l.baseIva))) * (neto < 0 ? -1 : 1); x.cuota += neto
+      iva.set(pct, x)
+    } else {
+      // Lo cobrado: la cuenta de cada forma de pago (caja, banco, la 430 de una plataforma…).
+      const x = cobros.get(l.cuenta) ?? { nombre: (l.nombre || l.cuenta).trim(), importe: 0 }
+      x.importe -= neto
+      cobros.set(l.cuenta, x)
+    }
+  }
+  const vivos = [...ingresos].filter(([, v]) => v !== 0)
+  const maxIngresos = contrapartidasDelXml(xml)
+  const maxIva = tiposIvaDelXml(xml)
+  if (vivos.length === 0) return no('No lleva ninguna cuenta de ventas. No sale.')
+  if (vivos.length > maxIngresos) return no(`Reparte las ventas en ${vivos.length} cuentas y ERP10 admite ${maxIngresos} al importar. No sale.`)
+  if (iva.size === 0) return no('No lleva I.V.A. No sale.')
+  if (iva.size > maxIva) return no(`Lleva ${iva.size} tipos de I.V.A. y ERP10 admite ${maxIva} al importar. No sale.`)
+  const ivas = [...iva].sort(([a], [b]) => a - b).map(([pct, x]) => ({ pct, base: x.base, cuota: x.cuota }))
+  for (const x of ivas) if (!Number.isInteger(x.pct)) return no(`Lleva un I.V.A. del ${x.pct} %, que no es un tipo entero. No sale.`)
+  const cobrado = [...cobros].filter(([, x]) => x.importe !== 0).map(([cuenta, x]) => ({ cuenta, nombre: x.nombre, importe: x.importe }))
+  if (cobrado.some((x) => x.cuenta === contado[0].codigo)) return no(`Cobra en la propia cuenta de Clientes de contado (${contado[0].codigo}). No sale.`)
+  const total = cobrado.reduce((t, x) => t + x.importe, 0)
+  if (total <= 0) return no('Lo cobrado el día no es positivo. No sale.')
+  const leido: DiaLeido = {
+    entryId: d.entryId, serie: d.serie, numero: d.numero, fecha: d.fecha, local: d.local, primero, ultimo,
+    facturas: Number(d.facturas ?? 0), contado: contado[0], ingresos: vivos.map(([cuenta, importe]) => ({ cuenta, importe })), iva: ivas, cobros: cobrado, total,
+  }
+  if (!Number.isInteger(leido.facturas) || leido.facturas <= 0) return no('No dice cuántas facturas lleva el día. No sale.')
+  const mal = cuadreEmitida(leido)
+  return mal ? no(`${mal} No sale.`) : leido
+}
+
+/** La fila del día en el fichero de expedidas: como una emitida, con el resumen de facturas y sin número ni PDF. */
+export function filaDia(x: DiaLeido, cuentas: ReadonlyMap<string, string>, xml = XML_EXPEDIDAS): Fila {
+  const cta = (k: string) => cuentas.get(k) ?? k
+  const v: Record<string, Celda> = {
+    '002': fechaCelda(x.fecha), '001': fechaCelda(x.fecha), '118': fechaCelda(x.fecha),
+    '004': cta(x.contado.codigo), '045': e(x.total),
+    '069': x.facturas, '070': x.primero, '071': x.ultimo,
+  }
+  x.ingresos.forEach((g, k) => { const [s, i] = CONTRAPARTIDAS[k]; v[s] = cta(g.cuenta); v[i] = e(g.importe) })
+  x.iva.forEach((i, k) => {
+    const b = 10 + k * 3
+    v[String(b).padStart(3, '0')] = e(i.base); v[String(b + 1).padStart(3, '0')] = i.pct; v[String(b + 2).padStart(3, '0')] = e(i.cuota)
+  })
+  return colocar(v, columnas(xml)) as Fila
+}
+
+/** El asiento del cobro del día: lo cobrado a cada cuenta, contra «Clientes de contado». Va con los asientos. */
+export function cobroDia(x: DiaLeido): AsientoParaErp10 {
+  const dma = `${x.fecha.slice(8, 10)}/${x.fecha.slice(5, 7)}/${x.fecha.slice(0, 4)}`
+  const concepto = `Cobro de las ventas del ${dma}${x.local ? ` · ${x.local}` : ''}`
+  return {
+    entryId: x.entryId, serie: x.serie, numero: x.numero, fecha: x.fecha, concepto,
+    lineas: [
+      ...x.cobros.map((k) => ({ cuenta: k.cuenta, nombre: k.nombre, concepto, debe: k.importe > 0 ? e(k.importe) : 0, haber: k.importe < 0 ? e(-k.importe) : 0 })),
+      { cuenta: x.contado.codigo, nombre: x.contado.nombre, concepto, debe: 0, haber: e(x.total) },
+    ],
+  }
+}
+
+export type SalidaDias = {
+  /** En orden de fecha. Cada día, su fila de expedidas y su asiento de cobro. */
+  dias: { entryId: string; numero: string; fecha: string; local: string | null; facturas: number; total: number; fila: Fila; cobro: AsientoParaErp10; usa: string[] }[]
+  noSalen: NoSale[]
+}
+
+/**
+ * Los días del TPV de una salida: los que van al fichero de expedidas (con su cobro, que
+ * va al de asientos) y los que no, con su porqué. Un mismo día y local en varios asientos
+ * (uno por plataforma) no sale: la factura del día es una por día y local.
+ */
+export function prepararDiasTpv(lista: readonly DiaParaErp10[], contado: readonly CuentaContado[], o: {
+  plan: Plan; largo: number; yaSalidas?: ReadonlyMap<string, string>; xml?: string; noCaben?: ReadonlyMap<string, string>
+}): SalidaDias {
+  const xml = o.xml ?? XML_EXPEDIDAS
+  const noSalen: NoSale[] = []
+  const leidos: DiaLeido[] = []
+  const clave = (d: DiaParaErp10) => `${d.fecha}|${d.origen ?? ''}|${d.localId ?? d.local ?? ''}`
+  const veces = new Map<string, number>()
+  for (const d of lista) veces.set(clave(d), (veces.get(clave(d)) ?? 0) + 1)
+  const orden = [...lista].sort((a, b) => a.fecha.localeCompare(b.fecha) || a.serie - b.serie || (a.numero ?? 0) - (b.numero ?? 0) || a.entryId.localeCompare(b.entryId))
+  for (const d of orden) {
+    const n = veces.get(clave(d))!
+    if (n > 1) { noSalen.push({ entryId: d.entryId, numero: rangoDe(d) || `${d.serie}/${d.numero ?? ''}`, porque: `Ese día y ese local van en ${n} asientos (uno por plataforma), y la factura del día es una por día y local. No sale.` }); continue }
+    const x = leerDia(d, contado, xml)
+    if ('porque' in x) noSalen.push(x); else leidos.push(x)
+  }
+  const usadasPor = (x: DiaLeido) => [...new Set([x.contado.codigo, ...x.ingresos.map((g) => g.cuenta), ...x.cobros.map((k) => k.cuenta)])]
+  const conv = convertirCuentas(leidos.flatMap(usadasPor), o.plan, o.largo, o.yaSalidas)
+  const dias: SalidaDias['dias'] = []
+  for (const x of leidos) {
+    const usa = usadasPor(x)
+    const mala = usa.find((k) => conv.noCaben.has(k) || o.noCaben?.has(k))
+    const numero = rangoDe(x)
+    if (mala) { noSalen.push({ entryId: x.entryId, numero, porque: (conv.noCaben.get(mala) ?? o.noCaben!.get(mala))! }); continue }
+    dias.push({ entryId: x.entryId, numero, fecha: x.fecha, local: x.local, facturas: x.facturas, total: e(x.total), fila: filaDia(x, conv.erp, xml), cobro: cobroDia(x), usa })
+  }
+  return { dias, noSalen }
+}
+
 // ── Las subcuentas ─────────────────────────────────────────────────────────────────
 
 /** Código de la configuración → columna (1 = A). Copia mínima de columnas() de Diez para <Configuracion_Subcuentas>. */
@@ -707,3 +895,5 @@ export const FICHERO_SUBCUENTAS = 'subcuentas.xlsx'
 export const FICHERO_RECIBIDAS = 'recibidas.xlsx'
 export const FICHERO_EXPEDIDAS = 'expedidas.xlsx'
 export const FICHERO_ASIENTOS = 'asientos.xlsx'
+/** X08 · Los días del TPV: facturas expedidas (el resumen del día), en su fichero para importarlas aparte. */
+export const FICHERO_DIAS = 'dias-tpv.xlsx'
