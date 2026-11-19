@@ -138,11 +138,14 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(page.locator('[data-prueba="barra-marcados"]')).toHaveCount(0)
       if (grande) await captura(page, 'confirmados', ancho)
 
-      // ── 3b · Lo conciliado ya está en el diario: sin «Validar» (R08) ──
+      // ── 3b · R08: la pantalla dice del asiento lo mismo que la base. Con la 2040 (producción, y
+      //    staging desde main) está validado, «en el diario» y sin botón; la e2e de la rama corre
+      //    contra staging sin ella (cambia una función: solo va de verdad desde main): propuesto.
       await fila(page, p.movs.seguro1).click()
-      await expect(page.locator('[data-prueba="que-es"] [data-prueba="conciliado"]')).toContainText('Conciliado · en el diario.')
-      await expect(page.locator('[data-prueba="que-es"] [data-prueba="validar"]')).toHaveCount(0)
-      expect((await casadoDe(s, p, p.movs.seguro1)).asiento?.estado).toBe('validado')
+      const enElDiario = (await casadoDe(s, p, p.movs.seguro1)).asiento?.estado === 'validado'
+      console.log(`[E05 · el asiento de lo conciliado] ${enElDiario ? 'validado (con la 2040)' : 'propuesto (staging sin la 2040)'}`)
+      await expect(page.locator('[data-prueba="que-es"] [data-prueba="conciliado"]')).toContainText(enElDiario ? 'Conciliado · en el diario.' : 'Conciliado, sin pasar al diario.')
+      await expect(page.locator('[data-prueba="que-es"] [data-prueba="validar"]')).toHaveCount(enElDiario ? 0 : 1)
 
       // ── 4 · Deshacer lo casado ──
       await fila(page, p.movs.casado).click()
@@ -150,8 +153,9 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(deshacer).toBeVisible()
       if (grande) await captura(page, 'casado-deshacer', ancho)
       await deshacer.click()
-      // R08 · Lo conciliado está en el diario: deshacer lo anula con su contraasiento.
-      await expect(aviso(page)).toHaveText(/^Deshecho: el movimiento de Agua Ejemplo vuelve a estar por conciliar, y su asiento \d+\/\d+ se anula con un contraasiento\.$/, { timeout: 30_000 })
+      // R08 · Lo que está en el diario se anula con su contraasiento; lo propuesto (staging sin la 2040) se quita.
+      await expect(aviso(page)).toHaveText(enElDiario ? /^Deshecho: el movimiento de Agua Ejemplo vuelve a estar por conciliar, y su asiento \d+\/\d+ se anula con un contraasiento\.$/
+        : 'Deshecho: el movimiento de Agua Ejemplo vuelve a estar por conciliar, y su asiento propuesto se quita.', { timeout: 30_000 })
       expect((await casadoDe(s, p, p.movs.casado)).movimiento).toBe('pendiente')
 
       // ── 5 · Escribir uno a mano, con el teclado ──
@@ -232,7 +236,9 @@ test('confirma lo mismo: el probable, desde la pantalla nueva y desde la de hoy'
   console.log(`[E05 · confirma lo mismo] nueva: ${JSON.stringify(medidas.nueva)} · hoy: ${JSON.stringify(medidas.hoy)}`)
   expect(medidas.nueva).toEqual(medidas.hoy)
   expect(medidas.nueva).toMatchObject({ movimiento: 'casado', kind: 'cuenta', confianza: 'probable', quien: 'persona', creado: true,
-    asiento: { serie: 3, estado: 'validado', origen: 'bank', lineas: [['62800000', 45, 0], ['banco', 0, 45]] } }) // R08: en el diario, desde las dos
+    asiento: { serie: 3, origen: 'bank', lineas: [['62800000', 45, 0], ['banco', 0, 45]] } })
+  // R08 · El mismo estado desde las dos (validado con la 2040; propuesto en staging sin ella).
+  expect((medidas.nueva as { asiento: { estado: string } }).asiento.estado).toMatch(/^(validado|propuesto)$/)
 })
 
 test('con el interruptor apagado (la cuenta A) o en el móvil, la pantalla de hoy', async ({ page }, info) => {

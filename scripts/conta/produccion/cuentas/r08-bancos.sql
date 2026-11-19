@@ -14,8 +14,9 @@
 --      bancos: el extracto, el día, el hueco y los importes de los cargos que señala.
 --   5. Los movimientos de cada extracto de noviembre con hueco por la cadena: día, importe,
 --      estado y si alguien dijo «No, es bueno» (sin concepto).
---   3. De cada banco con su 572: el cierre del último extracto y el saldo de la 572 en Sumied,
---      con lo validado y con lo propuesto.
+--   3. De cada banco con su 572 (regla 31: si cuadran, con la vara de la pantalla): el cierre del
+--      último extracto de la cadena hasta hoy y el saldo de la 572 en Sumied hasta hoy, con lo
+--      validado (lo que está en el diario) y con lo propuesto.
 with b as (
   select b.account_id, b.company_id, e.id, e.status, e.entry_date,
          (select coalesce(sum(l.debit), 0) from public.journal_line l where l.entry_id = e.id) importe
@@ -55,10 +56,10 @@ select clave, valor from (
   union all
   select 3, 'banco ' || left(u.treasury_account_id::text, 8) || ' · empresa ' || left(u.company_id::text, 8) || ' · ' || coalesce(a.code, 'sin 572'),
          'último extracto ' || to_char(u.period_to, 'DD/MM') || ' cierra ' || u.closing_balance
-         || ' · Sumied validado ' || coalesce((select sum(l.debit - l.credit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
-              where l.company_account_id = a.id and e.status in ('validado', 'anulado') and e.entry_date <= u.period_to and e.source_type <> 'closing'), 0)
+         || ' · Sumied hoy, validado ' || coalesce((select sum(l.debit - l.credit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
+              where l.company_account_id = a.id and e.status in ('validado', 'anulado') and e.entry_date <= current_date and e.source_type <> 'closing'), 0)
          || ' · con lo propuesto ' || coalesce((select sum(l.debit - l.credit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
-              where l.company_account_id = a.id and e.status in ('validado', 'anulado', 'propuesto') and e.entry_date <= u.period_to and e.source_type <> 'closing'), 0)
+              where l.company_account_id = a.id and e.status in ('validado', 'anulado', 'propuesto') and e.entry_date <= current_date and e.source_type <> 'closing'), 0)
     from ult u join public.treasury_account t on t.id = u.treasury_account_id
     left join public.company_account_link k on k.entity = 'bank_account' and k.entity_id = t.id::text and k.role = 'principal' and k.company_id = t.company_id
     left join public.company_account a on a.id = k.company_account_id

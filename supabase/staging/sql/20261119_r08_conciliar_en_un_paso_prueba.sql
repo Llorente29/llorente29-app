@@ -7,7 +7,8 @@
 --          último que llegó) y el de Sumied cuenta solo lo que está en el diario;
 --   2040 · conciliar a una cuenta deja el asiento VALIDADO; cinco a la vez, cinco validados;
 --          casar con una factura recibida, validado y la factura pagada; lo que concilia Sumied
---          solo, validado; deshacer cada uno (un contraasiento) y volver a conciliarlo; un
+--          solo, validado; dos traspasos entre bancos, validados con los dos lados; deshacer cada
+--          uno (un contraasiento) y volver a conciliarlo; un
 --          asiento que ya salió a ERP10 no se deshace y lo dice;
 --   2120 · el recibo que el banco no cobró se aparta solo (por la cadena); conciliarlo apartado
 --          lo dice en palabras; volver a abrirlo y conciliarlo;
@@ -108,6 +109,47 @@ begin
   raise notice '5 OK: lo que concilia Sumied solo, validado (antes, solo con el ajuste encendido).';
 end $$;
 
+-- 5b · Dos traspasos entre bancos (el 19/11 de Julio): el otro banco, de la misma empresa
+--      (semilla E05); los movimientos los crea la propietaria, como los trae un extracto.
+reset role;
+do $$
+declare r jsonb; a uuid := pg_temp.p('banco')::uuid; b uuid; i int; m1 uuid; m2 uuid;
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', 'c0e20000-0000-4000-8000-0000000000e1', 'role', 'authenticated')::text, true);
+  r := public.e2e_e05_preparar('r08q', '2026-11-12.1');
+  b := (r->>'banco')::uuid;
+  insert into _p values ('banco2', b);
+  for i in 1..2 loop
+    insert into public.bank_movement (account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount, bank_concept, clean_concept, fingerprint, soft_fingerprint, status, reason)
+    select t.account_id, t.company_id, t.id, (select id from public.bank_statement where treasury_account_id = t.id order by period_to desc, imported_at desc limit 1),
+           date '2026-11-19', date '2026-11-19', case when i = 1 then -500 else 200 end, 'TRASPASO A OTRA CUENTA', 'Traspaso entre cuentas', 'r08-tr-a-' || i || '-' || gen_random_uuid(), 'r08-tr-a-' || i, 'por_aclarar', 'Prueba.'
+      from public.treasury_account t where t.id = a returning id into m1;
+    insert into public.bank_movement (account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount, bank_concept, clean_concept, fingerprint, soft_fingerprint, status, reason)
+    select t.account_id, t.company_id, t.id, (select id from public.bank_statement where treasury_account_id = t.id order by period_to desc, imported_at desc limit 1),
+           date '2026-11-19', date '2026-11-19', case when i = 1 then 500 else -200 end, 'TRASPASO DESDE OTRA CUENTA', 'Traspaso entre cuentas', 'r08-tr-b-' || i || '-' || gen_random_uuid(), 'r08-tr-b-' || i, 'por_aclarar', 'Prueba.'
+      from public.treasury_account t where t.id = b returning id into m2;
+    insert into _p values ('tra' || i, m1), ('trb' || i, m2);
+  end loop;
+end $$;
+set local role authenticated;
+do $$
+declare i int; a uuid; b uuid;
+begin
+  for i in 1..2 loop
+    a := pg_temp.p('tra' || i)::uuid; b := pg_temp.p('trb' || i)::uuid;
+    perform public.bank_casar(a, jsonb_build_object('tipo', 'traspaso', 'otro_movimiento_id', b, 'concepto', 'Traspaso entre cuentas'), 'probable', 'Lo dijiste tú: traspaso.', '[]'::jsonb, 'persona', null);
+    if pg_temp.asiento(a) <> 'validado' or pg_temp.asiento(b) <> 'validado' or pg_temp.mov(b) <> 'casado' then
+      raise exception 'PRUEBA R08 · 5b: traspaso %: asiento % / %, el otro lado %.', i, pg_temp.asiento(a), pg_temp.asiento(b), pg_temp.mov(b);
+    end if;
+  end loop;
+  -- Deshacer uno: los dos lados vuelven a por conciliar.
+  perform public.bank_deshacer((select id from public.bank_match where movement_id = pg_temp.p('tra1')::uuid and status = 'vivo'), 'Prueba R08: deshacer el traspaso');
+  if pg_temp.mov(pg_temp.p('tra1')::uuid) <> 'pendiente' or pg_temp.mov(pg_temp.p('trb1')::uuid) <> 'pendiente' then raise exception 'PRUEBA R08 · 5b: deshecho, los lados quedan % y %.', pg_temp.mov(pg_temp.p('tra1')::uuid), pg_temp.mov(pg_temp.p('trb1')::uuid); end if;
+  perform public.bank_casar(pg_temp.p('tra1')::uuid, jsonb_build_object('tipo', 'traspaso', 'otro_movimiento_id', pg_temp.p('trb1'), 'concepto', 'Traspaso entre cuentas'), 'probable', 'Lo dijiste tú: traspaso.', '[]'::jsonb, 'persona', null);
+  if pg_temp.asiento(pg_temp.p('tra1')::uuid) <> 'validado' then raise exception 'PRUEBA R08 · 5b: reconciliado, queda %.', pg_temp.asiento(pg_temp.p('tra1')::uuid); end if;
+  raise notice '5b OK: dos traspasos entre bancos, cada uno un asiento validado con los dos lados conciliados; deshecho uno, los dos lados por conciliar; otra vez conciliado.';
+end $$;
+
 -- 6 · Deshacer cada uno y volver a conciliarlo.
 do $$
 declare m uuid; b uuid; r jsonb; s0 numeric; e uuid; vivos int; imp numeric;
@@ -206,5 +248,5 @@ do $$ begin
   raise notice '9 OK: las vueltas atrás dejan las funciones de antes, byte a byte.';
 end $$;
 
-do $$ begin raise notice 'PRUEBA R08: 9 de 9 bien.'; end $$;
+do $$ begin raise notice 'PRUEBA R08: 10 de 10 bien.'; end $$;
 rollback;
