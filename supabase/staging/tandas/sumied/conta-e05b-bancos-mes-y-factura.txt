@@ -1,0 +1,3 @@
+# E05b · Bancos: el mes y «Es otra factura». Sin tanda de producción: solo la
+# semilla de su e2e (W07: va de verdad; no tiene nada delante), que llama a la del E05.
+supabase/seeds/conta/seed_e05b_bancos_mes_y_factura_staging.sql

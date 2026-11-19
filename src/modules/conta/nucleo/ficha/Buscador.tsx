@@ -3,26 +3,28 @@
 // K04 · La casilla que busca en una lista (el proveedor, la cuenta): escribe, F4
 // o ↓ abre, ↑ ↓ eligen, Intro elige, Esc cierra. Nació en la ficha recibida
 // (K04); E05 la saca aquí, tal cual, para que Bancos («Escribir uno a mano»,
-// la cuenta con F4) use la misma y no una copia. K04b le añade «abrir» (el
+// la cuenta con F4) use la misma y no una copia. K04b le añade «enfocar» (el
 // foco a la casilla con su lista abierta: «Es uno que ya tengo»), y la usa
 // también la emitida (K05).
 
 import { useEffect, useState, type KeyboardEvent as KE } from 'react'
 
 /** Una casilla que busca en una lista (el proveedor, la cuenta): escribe, F4 o ↓ abre, Intro elige. */
-export function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cuenta, duda, placeholder, cargando, abrir = 0 }: {
+export function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cuenta, duda, placeholder, cargando, abrir = false, enfocar = 0 }: {
   id: string; valor: string; ponerTexto: (t: string) => void; lista: (t: string) => T[]; texto: (x: T) => string; elegir: (x: T) => void
   etiqueta: string; cuenta?: string | null; duda?: boolean; placeholder?: string
   /** La lista aún no ha llegado: Intro no se escapa a la casilla siguiente con la búsqueda sin resolver (e2e 1510). */
   cargando?: boolean
-  /** K04b · Cada vez que cambia (y no es 0), el foco a la casilla con su lista abierta, como F4. */
-  abrir?: number
+  /** E05b · Nace con la lista abierta (Bancos: «Es otra factura» enseña las facturas sin escribir nada). */
+  abrir?: boolean
+  /** K04b · Cada vez que cambia (y no es 0), el foco a la casilla con su lista abierta, como F4 («Es uno que ya tengo»). */
+  enfocar?: number
 }) {
-  const [abierta, setAbierta] = useState(false)
+  const [abierta, setAbierta] = useState(abrir)
   const [sel, setSel] = useState(0)
-  const [abiertaCon, setAbiertaCon] = useState(0)
-  if (abrir !== abiertaCon) { setAbiertaCon(abrir); if (abrir) { setAbierta(true); setSel(0) } }
-  useEffect(() => { if (abrir) document.getElementById(id)?.focus() }, [abrir, id])
+  const [enfocadaCon, setEnfocadaCon] = useState(0)
+  if (enfocar !== enfocadaCon) { setEnfocadaCon(enfocar); if (enfocar) { setAbierta(true); setSel(0) } }
+  useEffect(() => { if (enfocar) document.getElementById(id)?.focus() }, [enfocar, id])
   const opciones = abierta ? lista(valor).slice(0, 12) : []
   const teclas = (e: KE<HTMLInputElement>) => {
     if (e.key === 'F4' || (e.key === 'ArrowDown' && !abierta)) { e.preventDefault(); setAbierta(true); setSel(0); return }

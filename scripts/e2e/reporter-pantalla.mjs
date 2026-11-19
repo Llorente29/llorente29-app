@@ -34,6 +34,9 @@ export default class ReporterPantalla {
       error: (ctx.error || errorDeLaPrueba).replace(/\u001b\[[0-9;]*m/g, ''),
       pantalla: ctx.pantalla,
       respuestas: traza.respuestas,
+      // X09 · La pestaña activa y lo que estaba cargando, del DOM de la traza.
+      activa: traza.activa ?? null,
+      ocupados: traza.ocupados ?? [],
       errores: [...traza.errores, ...salida.filter((x) => !x.startsWith('[consola]') || !traza.errores.length)],
     })
   }

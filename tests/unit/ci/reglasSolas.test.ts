@@ -79,7 +79,13 @@ describe('regla T9 · nunca una e2e y un ensayo a la vez en la misma rama', () =
     expect(espera).toContain('node scripts/ci/esperar-e2e.mjs 45')
     expect(espera).not.toContain('concurrency')
     // B01r26: también espera a la guarda de Diez (un job previo, sin la cola).
-    expect(job(t, 'aplicar')).toMatch(/needs: \[espera-e2e(, guarda-diez)?\]/)
+    expect(job(t, 'aplicar')).toMatch(/needs: \[(commit, )?espera-e2e(, guarda-diez)?\]/)
+    // X09 (19/11): el commit, lo primero; si no vale, ni se espera a la e2e, ni se lee Diez, ni se aplica.
+    expect(job(t, 'commit')).toContain('node scripts/ci/commit-de-la-rama.mjs validar')
+    expect(job(t, 'commit')).not.toContain('environment:')
+    expect(espera).toContain('needs: commit')
+    expect(job(t, 'guarda-diez')).toContain('needs: commit')
+    expect(job(t, 'aplicar')).toContain("needs.commit.result == 'success'")
     expect(job(t, 'aplicar')).toContain("needs.espera-e2e.result != 'failure'")
     expect(job(t, 'aplicar')).toContain('group: aplicar-produccion-conta')
     expect(t.slice(0, t.indexOf('\njobs:'))).not.toMatch(/\nconcurrency:/)

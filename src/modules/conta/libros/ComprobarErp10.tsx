@@ -154,7 +154,7 @@ export function ComprobarErp10(p: {
 
       <aside className="cxe-der" aria-labelledby="cxe-porque">
         <div className="cxe-der-cabeza">
-          <h2 className="cxe-der-titulo" id="cxe-porque">Por qué no queda igual</h2>
+          <h2 className="cxe-der-titulo" id="cxe-porque">{igualado ? 'Igualado' : 'Por qué no queda igual'}</h2>
           {elegida && <Link className="cx-enlace" to={rutaMayor(codigoSumied(elegida.cuenta))}>Abrir su mayor</Link>}
         </div>
         <div className="cxe-der-cuerpo">

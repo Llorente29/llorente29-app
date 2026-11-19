@@ -89,7 +89,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
   const pendientes = cuentasDeLaBarra(cuentas)
   const frases = frasesDeLaBarra(cuentas)
   const contadores = useContadoresPestanas(producto?.id ?? null, activa?.id ?? null, cuentas)
-  const catalogo = producto && pestana ? cintaDe(producto.id, pestana.id, ctx) : []
+  const catalogo = producto && pestana ? cintaDe(producto.id, pestana.id, ctx, { pathname, search }) : []
   const grupos = resolverGrupos(catalogo, { datos: datosCinta, entradas: entradasCinta, pathname, search, abrirBuscador })
 
   // Los ejercicios de la empresa, para el botón del periodo.

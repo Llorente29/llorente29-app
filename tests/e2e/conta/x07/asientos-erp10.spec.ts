@@ -114,7 +114,8 @@ test('X07 · contra staging: una nómina y un pago salen como asientos, con su f
   await expect(fila).toContainText('Listo')
   await expect(fila).toContainText('Nóminas, pagos y cobros, bancos, traspasos')
   await expect(fila).not.toContainText('Todavía no sale por aquí')
-  await expect(tabla.getByRole('row').filter({ hasText: 'Días de ventas del TPV' })).toContainText('Todavía no sale por aquí')
+  // X08: los días del TPV ya salen (como factura del día); la fila ya no dice «Todavía no sale por aquí».
+  await expect(tabla.getByRole('row').filter({ hasText: 'Días de ventas del TPV' })).not.toContainText('Todavía no sale por aquí')
   const abajo = await page.evaluate(() => [document.querySelector('.cxe')?.getBoundingClientRect().bottom ?? 9999, window.innerHeight])
   expect(abajo[0], 'la pantalla acaba dentro de la ventana').toBeLessThanOrEqual(abajo[1])
   await page.screenshot({ path: `${DIR}/paso1-asientos.png` })
@@ -193,7 +194,7 @@ test('X07 · contra staging: una nómina y un pago salen como asientos, con su f
   await expect(page.locator('.cxe-hecho')).toHaveText(/^Igualado: .+ queda igual en Sumied y en ERP10 \(sumas_y_saldos_x07\.xlsx, a .+\)\. Lo dio por igualado .+\.$/, { timeout: 30_000 })
   // La captura, con la pantalla acabada: la tabla con sus filas, el chip verde, el panel que lo dice y nada en ámbar.
   await expect(page.getByText(/^Igualado el \d\d\/\d\d\/\d{4}/)).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByRole('complementary', { name: 'Por qué no queda igual' })).toContainText('Igualado: no queda nada por mirar.')
+  await expect(page.getByRole('complementary', { name: 'Igualado' })).toContainText('Igualado: no queda nada por mirar.')
   await expect(grupoIgual.getByRole('row').filter({ hasText: hecho.sueldos })).toBeVisible()
   await expect(page.locator('.cxe-fila-filo')).toHaveCount(0)
   await expect(page.locator('.cxe-grupo-ambar')).toHaveCount(0)

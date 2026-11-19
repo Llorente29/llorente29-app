@@ -22,13 +22,18 @@ import { existsSync, readFileSync } from 'node:fs'
 
 /** Los topes: por prueba y por run. Lo que se corta, se dice. */
 export const TOPES = {
-  lineasPantalla: 60, // del árbol de la pantalla, por prueba, en el registro
+  // X09 (19/11): era 60, y se cortaba justo antes de lo importante (Q no vio qué se quedaba
+  // cargando; N, en qué casilla se paró). Ahora se cuenta sobre lo que importa (los avisos y
+  // la pestaña activa, entera, con las filas compactadas) y el resto va después, si cabe.
+  lineasPantalla: 400, // del árbol de la pantalla, por prueba, en el registro
   lineasResumen: 25, // del árbol, por prueba, en el resumen del run
   red: 8, // respuestas 4xx/5xx por prueba
   errores: 8, // errores de la página y de la consola por prueba
   ancho: 220, // caracteres por línea
   pruebasPorRun: 15, // pruebas con su pantalla copiada en un run; las demás, solo la cabecera
 }
+
+const unicos = (xs) => [...new Set(xs)]
 
 // ── Lo que no puede salir ────────────────────────────────────────────────────
 
@@ -65,8 +70,95 @@ export function leerContexto(md) {
   const yaml = t.match(/```yaml\s*\n([\s\S]*?)\n```/)?.[1] ?? null
   return {
     error: error ? error.trim() : null,
-    pantalla: yaml ? ordenarPantalla(yaml.split('\n').filter((l) => l.trim())) : null,
+    pantalla: yaml ? ordenarPantalla(compactarFilas(yaml.split('\n').filter((l) => l.trim()))) : null,
   }
+}
+
+const sangria = (l) => l.length - l.trimStart().length
+
+/**
+ * X09 · Las filas de una tabla, en una línea. Playwright nombra cada fila con el texto de
+ * todas sus celdas («row "41000012 Suministros… 246,30"»), y después repite cada celda debajo:
+ * en una tabla de 219 cuentas eran más de mil líneas que no decían nada nuevo. Se quitan las
+ * celdas que SOLO tienen su texto; una celda con algo dentro (una casilla, un botón, un
+ * enlace) se queda entera: es donde se para una prueba.
+ */
+export function compactarFilas(lineas) {
+  const ls = (lineas ?? []).filter((l) => !/^\s*- \/url: /.test(l))
+  const out = []
+  for (let i = 0; i < ls.length;) {
+    const l = ls[i]
+    if (!/^\s*- row\b.*:$/.test(l)) { out.push(l); i++; continue }
+    const d = sangria(l)
+    let j = i + 1
+    const hijos = []
+    while (j < ls.length && sangria(ls[j]) > d) hijos.push(ls[j++])
+    const quedan = []
+    for (let k = 0; k < hijos.length;) {
+      const h = hijos[k], hd = sangria(h)
+      let kk = k + 1
+      while (kk < hijos.length && sangria(hijos[kk]) > hd) kk++
+      const sub = hijos.slice(k + 1, kk)
+      const soloTexto = hd === d + 2 && !sub.length && /^\s*- (cell|gridcell|columnheader|rowheader)\b/.test(h)
+      if (!soloTexto) quedan.push(h, ...sub)
+      k = kk
+    }
+    out.push(quedan.length ? l : l.replace(/:$/, ''), ...quedan)
+    i = j
+  }
+  return out
+}
+
+/** De qué parte de la página es un bloque de arriba del árbol (para decir qué se ha quitado). */
+function parteDe(cabeza) {
+  if (/^- (dialog|alertdialog|alert)\b/.test(cabeza)) return 'aviso'
+  if (/^- main\b/.test(cabeza)) return 'zona'
+  if (/^- banner\b/.test(cabeza)) return 'la cabecera'
+  if (/^- navigation\b/.test(cabeza)) return 'el menú'
+  if (/^- tablist "Lo que tienes abierto"/.test(cabeza)) return 'las pestañas abiertas'
+  if (/^- (tablist|tabpanel|toolbar|button "Plegar)/.test(cabeza)) return 'la cinta'
+  if (/^- contentinfo\b/.test(cabeza)) return 'el pie'
+  if (/^- status\b/.test(cabeza)) return 'la franja de arriba'
+  return 'lo demás'
+}
+
+/**
+ * X09 · Lo que se copia, por orden: los avisos y diálogos; la pestaña activa (el «main» del
+ * marco: las pestañas que no se ven llevan «hidden» y no salen en el árbol; si hubiera más de
+ * uno, el de nombre `zona`), entera; y el resto. Devuelve las líneas y, de las que no caben en
+ * `tope`, cuántas son de cada parte.
+ */
+export function repartirPantalla(lineas, { zona = null, tope = TOPES.lineasPantalla } = {}) {
+  const bloques = []
+  for (const l of lineas ?? []) {
+    if (/^- /.test(l) || !bloques.length) bloques.push({ lineas: [l], parte: parteDe(l) })
+    else bloques.at(-1).lineas.push(l)
+  }
+  const mains = bloques.filter((b) => b.parte === 'zona')
+  const activa = (zona && mains.find((b) => b.lineas[0].startsWith(`- main "${zona}"`))) || mains[0]
+  for (const b of mains) if (b !== activa) b.parte = 'otra pestaña'
+  const orden = [...bloques.filter((b) => b.parte === 'aviso'), ...(activa ? [activa] : []), ...bloques.filter((b) => b.parte !== 'aviso' && b !== activa)]
+  const lineasFuera = new Map()
+  const dentro = []
+  for (const b of orden) {
+    const caben = Math.max(0, tope - dentro.length)
+    dentro.push(...b.lineas.slice(0, caben))
+    const fuera = b.lineas.length - Math.min(caben, b.lineas.length)
+    if (fuera) {
+      const nombre = b === activa ? `la pestaña${activa.lineas[0].match(/^- main "([^"]*)"/) ? ` «${activa.lineas[0].match(/^- main "([^"]*)"/)[1]}»` : ''}` : b.parte
+      lineasFuera.set(nombre, (lineasFuera.get(nombre) ?? 0) + fuera)
+    }
+  }
+  return { lineas: dentro, fuera: lineasFuera }
+}
+
+/** «… y 40 líneas de la cinta y el menú.» */
+export function fraseFuera(fuera) {
+  const total = [...fuera.values()].reduce((t, n) => t + n, 0)
+  if (!total) return null
+  const partes = [...fuera.keys()]
+  const lista = partes.length === 1 ? partes[0] : `${partes.slice(0, -1).join(', ')} y ${partes.at(-1)}`
+  return `… y ${total} ${total === 1 ? 'línea' : 'líneas'} de ${lista}, que no caben: la pantalla entera está en el artefacto.`
 }
 
 /**
@@ -146,17 +238,89 @@ export function deLaTraza({ red = [], eventos = [], cuerpo = () => null }) {
   return { respuestas, errores }
 }
 
+/**
+ * X09 · De la última pantalla de la traza (sus «frame-snapshot»: el DOM, en instantáneas que
+ * apuntan a nodos de las anteriores con [[cuántas atrás, nodo]], como las lee el visor de
+ * Playwright): lo que estaba cargando (aria-busy="true") y la pestaña activa del marco
+ * (.k-zona[data-activa="si"]). El árbol de accesibilidad no dice aria-busy: por eso se mira aquí.
+ * Lo que está dentro de algo con «hidden» no se ve, y no cuenta.
+ */
+export function domDeLaTraza(eventos) {
+  const snaps = []
+  for (const l of eventos ?? []) {
+    let e
+    try { e = JSON.parse(l) } catch { continue }
+    if (e?.type === 'frame-snapshot' && e.snapshot?.isMainFrame !== false && e.snapshot?.html) snaps.push(e.snapshot)
+  }
+  if (!snaps.length) return { activa: null, ocupados: [] }
+  const pagina = snaps.at(-1).pageId
+  const mias = snaps.filter((x) => x.pageId === pagina)
+  const nodos = (x) => {
+    if (!x._nodos) {
+      const n = []
+      const ver = (k) => {
+        if (typeof k === 'string') n.push(k)
+        else if (Array.isArray(k) && typeof k[0] === 'string') { for (const h of k.slice(2)) ver(h); n.push(k) }
+      }
+      ver(x.html)
+      x._nodos = n
+    }
+    return x._nodos
+  }
+  const resolver = (k, i) => {
+    if (Array.isArray(k) && Array.isArray(k[0])) {
+      const r = i - k[0][0]
+      const n = r >= 0 && r <= i ? nodos(mias[r])[k[0][1]] : undefined
+      return n === undefined ? null : resolver(n, r)
+    }
+    return { k, i }
+  }
+  const texto = (k, i, max = 90) => {
+    let t = ''
+    const ir = (n, j) => {
+      if (t.length >= max) return
+      const x = resolver(n, j)
+      if (!x) return
+      if (typeof x.k === 'string') { t += ` ${x.k}`; return }
+      if (Array.isArray(x.k)) for (const h of x.k.slice(2)) ir(h, x.i)
+    }
+    ir(k, i)
+    t = t.replace(/\s+/g, ' ').trim()
+    return t.length > max ? `${t.slice(0, max - 1)}…` : t
+  }
+  let activa = null
+  const ocupados = []
+  const andar = (k, i, oculto, enZona) => {
+    const x = resolver(k, i)
+    if (!x || typeof x.k === 'string' || !Array.isArray(x.k)) return
+    const [nombre, attrs = {}] = x.k
+    if (typeof nombre !== 'string') return
+    const escondido = oculto || 'hidden' in attrs
+    const clase = String(attrs.class ?? '')
+    let zonaAqui = enZona
+    if (/\bk-zona\b/.test(clase) && attrs['data-activa'] === 'si') { activa = attrs['aria-label'] ?? attrs['data-pestana'] ?? null; zonaAqui = activa ?? '' }
+    if (!escondido && attrs['aria-busy'] === 'true') {
+      const quien = attrs['aria-label'] ? `«${attrs['aria-label']}»` : `${nombre.toLowerCase()}${clase ? `.${clase.split(/\s+/)[0]}` : ''}`
+      const dice = texto(x.k, x.i)
+      ocupados.push(`${zonaAqui !== null && zonaAqui !== undefined ? `en la pestaña «${zonaAqui}»: ` : ''}${quien}${dice && !attrs['aria-label'] ? ` («${dice}»)` : ''}`)
+    }
+    for (const h of x.k.slice(2)) andar(h, x.i, escondido, zonaAqui)
+  }
+  andar(mias.at(-1).html, mias.length - 1, false, null)
+  return { activa, ocupados: unicos(ocupados).map(limpiar) }
+}
+
 /** Lee trace.zip con `unzip` (está en los runners de GitHub). Si no se puede, vacío. */
 export function leerTraza(ruta) {
-  if (!ruta || !existsSync(ruta)) return { respuestas: [], errores: [] }
+  if (!ruta || !existsSync(ruta)) return { respuestas: [], errores: [], activa: null, ocupados: [] }
   try {
     const nombres = execFileSync('unzip', ['-Z1', ruta], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }).split('\n')
     const leer = (n) => execFileSync('unzip', ['-p', ruta, n], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
     const red = nombres.filter((n) => /^\d+-trace\.network$/.test(n)).flatMap((n) => leer(n).split('\n'))
     const eventos = nombres.filter((n) => /^\d+-trace\.trace$/.test(n)).flatMap((n) => leer(n).split('\n'))
-    return deLaTraza({ red, eventos, cuerpo: (f) => { try { return nombres.includes(f) ? leer(f) : null } catch { return null } } })
+    return { ...deLaTraza({ red, eventos, cuerpo: (f) => { try { return nombres.includes(f) ? leer(f) : null } catch { return null } } }), ...domDeLaTraza(eventos) }
   } catch {
-    return { respuestas: [], errores: [] }
+    return { respuestas: [], errores: [], activa: null, ocupados: [] }
   }
 }
 
@@ -165,8 +329,6 @@ export function erroresDeLaSalida(lineas) {
   return (lineas ?? []).flatMap((x) => String(x).split('\n')).map((l) => l.trim())
     .filter((l) => /^\[(error de la página|consola|red sin parar)\]/.test(l)).map(limpiar)
 }
-
-const unicos = (xs) => [...new Set(xs)]
 
 // ── Lo que se escribe ────────────────────────────────────────────────────────
 
@@ -186,9 +348,13 @@ export function bloque(f, { copiar = true, topes = TOPES, tope = topes.pruebasPo
     return l
   }
   l.push('Lo que había en pantalla:')
+  // X09 · Lo que estaba cargando (de la traza), lo primero.
+  for (const x of f.ocupados ?? []) l.push(`  [cargando] ${corta(limpiar(x))}`)
   if (f.pantalla?.length) {
-    for (const x of f.pantalla.slice(0, topes.lineasPantalla)) l.push(`  ${corta(limpiar(x))}`)
-    if (f.pantalla.length > topes.lineasPantalla) l.push(`  … y ${f.pantalla.length - topes.lineasPantalla} líneas más; la pantalla entera está en el artefacto.`)
+    const r = repartirPantalla(f.pantalla, { zona: f.activa ?? null, tope: topes.lineasPantalla })
+    for (const x of r.lineas) l.push(`  ${corta(limpiar(x))}`)
+    const frase = fraseFuera(r.fuera)
+    if (frase) l.push(`  ${frase}`)
   } else {
     l.push('  (Playwright no la guardó: la prueba falló antes de abrir una página, o la página se cerró.)')
   }
@@ -217,8 +383,9 @@ export function resumenMd(f, { copiar = true, topes = TOPES } = {}) {
   l.push('```', ...err, '```')
   if (copiar) {
     if (f.pantalla?.length) {
-      l.push('', '**Lo que había en pantalla**', '', '```yaml', ...f.pantalla.slice(0, topes.lineasResumen).map((x) => corta(limpiar(x))), '```')
-      if (f.pantalla.length > topes.lineasResumen) l.push(`… y ${f.pantalla.length - topes.lineasResumen} líneas más (enteras, en el registro del job).`)
+      const r = repartirPantalla(f.pantalla, { zona: f.activa ?? null, tope: topes.lineasResumen })
+      l.push('', '**Lo que había en pantalla**', '', '```yaml', ...(f.ocupados ?? []).map((x) => `# [cargando] ${corta(limpiar(x))}`), ...r.lineas.map((x) => corta(limpiar(x))), '```')
+      if (r.fuera.size) l.push(`… y ${[...r.fuera.values()].reduce((t, n) => t + n, 0)} líneas más (en el registro del job).`)
     }
     if (f.respuestas?.length) l.push('', '**Lo que contestó la base**', '', '```', ...f.respuestas.slice(0, topes.red).map((r) => corta(`${r.estado} ${r.metodo} ${r.ruta}${r.contesto ? ` → ${r.contesto}` : ''}`)), '```')
     const e = unicos(f.errores ?? [])
