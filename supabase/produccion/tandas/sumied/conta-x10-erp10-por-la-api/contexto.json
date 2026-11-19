@@ -1,0 +1,19 @@
+{
+ "_que": "X10 · el conector ERP10 (despacho) · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción (esta sesión no lee producción). 1250 solo añade una fila al catálogo de conectores (insert … on conflict do nothing); no cambia ninguna tabla, columna ni función. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-19T12:55Z",
+ "tanda": {
+  "supabase/migrations/20261119T1250_x10_conector_erp10.sql": "b8e04ccaa87da530ecb9e10f54f8c662"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
