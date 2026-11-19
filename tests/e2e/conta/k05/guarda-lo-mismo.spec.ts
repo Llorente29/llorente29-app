@@ -105,6 +105,10 @@ test('guarda lo mismo: la misma emitida por Facturación y por la ficha nueva de
   await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
   await expect(ficha(page).locator('.kf-estado')).toContainText('Hecha por Sumied.', { timeout: 30_000 })
   await expect(ficha(page).locator('#kf-numero')).toHaveValue(em.numero)
+  // Sin ningún cobro apuntado: vacío, pendiente de cobrar (nunca el banco de su ficha).
+  await expect(ficha(page).locator('#kf-cobro')).toHaveValue('')
+  await expect(ficha(page).locator('#kf-cobro')).toHaveAttribute('placeholder', 'Pendiente de cobrar')
+  await expect(ficha(page).getByRole('textbox', { name: 'Nombre de la cuenta del cobro' })).toHaveValue('')
   await cargada(page, 'la hecha sola')
   await page.screenshot({ path: `${DIR}/hecha-sola-1456.png` })
 

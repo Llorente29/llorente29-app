@@ -270,3 +270,24 @@ export async function documentoDeLaEmitida(accountId: string, entryId: string): 
   const url = await urlDelPdf(String(f.pdf_path))
   return url ? { url, titulo: `La factura ${String(f.number_text ?? '')}` } : null
 }
+
+/**
+ * El cobro APUNTADO de una emitida (la hecha sola): el apunte al haber de su 430
+ * con el número de la factura en un asiento validado, y la cuenta de su debe
+ * (la 57x). null si no hay ninguno: está pendiente de cobrar (Julio, 19/11:
+ * «vacío quiere decir pendiente de cobrar»; nunca la propuesta de su ficha).
+ */
+export async function cobroDeLaFactura(accountId: string, companyId: string, subcuentaId: string, numero: string): Promise<{ cuenta: string; nombre: string; fecha: string; importe: number } | null> {
+  if (!numero.trim()) return null
+  const haber = await leer(tabla('journal_line').select('entry_id, credit, journal_entry!inner(entry_date, status)')
+    .eq('account_id', accountId).eq('company_id', companyId).eq('company_account_id', subcuentaId).gt('credit', 0)
+    // El número en el documento (el cobro en efectivo, el de Facturación) o en el concepto (conta_banco_a_mano no pone documento).
+    .or(`document_ref.eq."${numero.trim()}",concept.eq."Cobro factura ${numero.trim()}"`)
+    .eq('journal_entry.status', 'validado').limit(20), 'su cobro')
+  const ultimo = haber.sort((a, b) => String((b.journal_entry as Fila).entry_date).localeCompare(String((a.journal_entry as Fila).entry_date)))[0]
+  if (!ultimo) return null
+  const debe = await leer(tabla('journal_line').select('company_account(code, name, plain_name)').eq('account_id', accountId).eq('entry_id', String(ultimo.entry_id)).gt('debit', 0), 'la cuenta de su cobro')
+  const c = debe.map((x) => x.company_account as Fila | null).find((x) => x && /^57/.test(String(x.code)))
+  if (!c) return null
+  return { cuenta: String(c.code), nombre: String(c.plain_name ?? c.name ?? ''), fecha: String((ultimo.journal_entry as Fila).entry_date), importe: n(ultimo.credit) }
+}

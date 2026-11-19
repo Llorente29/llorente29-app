@@ -46,7 +46,7 @@ import {
   queHaceElCobro, textoOperacionCliente, vaciasEmitida, type BorradorEmitida, type CuentasEmitida, type ModoEmitida,
 } from './asiento'
 import {
-  apuntarCobro, asientoDeFacturacion, colaEmitidas, deLaEmpresa, documentoDeLaEmitida, emitidaRepetida, guardarEmitida, mayorDelCliente, repartoDeVentas, ultimaCuentaDeCobro,
+  apuntarCobro, asientoDeFacturacion, cobroDeLaFactura, colaEmitidas, deLaEmpresa, documentoDeLaEmitida, emitidaRepetida, guardarEmitida, mayorDelCliente, repartoDeVentas, ultimaCuentaDeCobro,
 } from './servicio'
 
 type Aviso = { tono: 'ok' | 'falta' | 'mal'; texto: string }
@@ -117,6 +117,8 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   const sub = cliente?.subcuenta ?? null
   const mayor = useUltimo(useLeer(accountId && empresa && sub ? () => mayorDelCliente(accountId, empresa, sub.id, hoy) : null, `${accountId}:${empresa}:${sub?.id}:mayor:${vuelta}`).datos, `${claveFicha}:${b.clienteId}`)
   const reparto = useUltimo(useLeer(accountId && empresa && b.clienteId && modo !== 'hecha_sola' ? () => repartoDeVentas(accountId, empresa, b.clienteId, entryId || null) : null, `${accountId}:${empresa}:${b.clienteId}:${entryId}:reparto:${vuelta}`).datos, `${claveFicha}:${b.clienteId}`)
+  // En la hecha sola, el cobro apuntado de verdad (o nada: pendiente de cobrar), nunca la propuesta de su ficha.
+  const cobroApuntado = useLeer(modo === 'hecha_sola' && accountId && empresa && sub && b.numero ? () => cobroDeLaFactura(accountId, empresa, sub.id, b.numero) : null, `${accountId}:${empresa}:${sub?.id}:${b.numero}:cobro:${vuelta}`).datos ?? null
   const ultimoCobro = useLeer(accountId && empresa && sub && !cliente?.cobro ? () => ultimaCuentaDeCobro(accountId, empresa, sub.id) : null, `${accountId}:${empresa}:${sub?.id}:ultimo-cobro`).datos ?? null
   const repetida = useLeer(accountId && empresa && b.numero.trim() ? () => emitidaRepetida(accountId, empresa, b.numero, cliente?.nif ?? null, entryId || null) : null, `${accountId}:${empresa}:${b.numero}:${cliente?.nif}:${entryId}:repetida:${vuelta}`).datos ?? null
 
@@ -312,6 +314,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   const puede = puedeGuardar({ guardando, validada: modo === 'hecha_sola' && !siguiente, descartada: false })
   const concepto = cliente ? `Factura ${b.numero || ''} · ${cliente.nombre}`.replace('Factura  ·', 'Factura ·') : ''
   const nombreCobro = be.cobroCuenta ? emp?.nombres.get(be.cobroCuenta) ?? 'Cuenta' : ''
+  const nombreDelCobro = modo === 'hecha_sola' ? cobroApuntado?.nombre ?? '' : nombreCobro
   const ejercicio = b.fecha.slice(0, 4)
 
   return (
@@ -426,19 +429,24 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
                 </div>
               </div>
               <div className="kf-bloque">
-                <h2 className="kf-titulo">Cómo se cobra</h2>
-                <div className="kf-gasto" data-una="si">
-                  {modo === 'hecha_sola' ? <input readOnly tabIndex={-1} aria-label="La cuenta del cobro" value="" placeholder="Se ve en su mayor" />
-                    : <Buscador id="kf-cobro" etiqueta="La cuenta del cobro" cargando={!emp} valor={textoCobro ?? be.cobroCuenta ?? ''} cuenta={be.cobroCuenta || null} placeholder="Vacía: pendiente"
+                {/* «Cómo se cobra» (Julio, 19/11): la cuenta del cobro. Vacía quiere decir pendiente de cobrar. En la hecha sola, el cobro
+                    APUNTADO (o nada); en la a mano y la rellenada, lo que se propone, con su origen a la derecha, como una casilla. */}
+                <h2 className="kf-titulo">Cómo se cobra
+                  {modo !== 'hecha_sola' && origenCobro && <span className="kf-titulo-derecha kf-origen" data-prueba="origen-cobro">{origenCobro}</span>}
+                </h2>
+                <div className="kf-cobro">
+                  {modo === 'hecha_sola' ? <input readOnly tabIndex={-1} id="kf-cobro" aria-label="La cuenta del cobro" value={cobroApuntado?.cuenta ?? ''} placeholder="Pendiente de cobrar" data-cuenta={cobroApuntado?.cuenta} />
+                    : <Buscador id="kf-cobro" etiqueta="La cuenta del cobro" cargando={!emp} valor={textoCobro ?? be.cobroCuenta ?? ''} cuenta={be.cobroCuenta || null} placeholder="Pendiente de cobrar"
                         ponerTexto={(t) => { setTextoCobro(t); if (!t.trim()) ed.poner('cobroCuenta', '') }} lista={(t) => cuentasQueEncajan(t, cuentasCobro, 8)}
                         texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) }} />}
-                  <input readOnly tabIndex={-1} aria-label="Nombre de la cuenta del cobro" value={nombreCobro ? `${nombreCobro}${origenCobro ? ` (${origenCobro === 'de su ficha' ? 'su ficha' : 'la última'})` : ''}` : ''} />
-                  <span />
+                  <input readOnly tabIndex={-1} aria-label="Nombre de la cuenta del cobro" value={nombreDelCobro} title={nombreDelCobro || undefined} />
                 </div>
-                {modo !== 'hecha_sola' && (
+                {(modo !== 'hecha_sola' || cobroApuntado) && (
                   <div className="kf-pareja">
-                    <CasillaFecha id="kf-cobro-fecha" etiqueta="La fecha del cobro" iso={be.cobroFecha ?? ''} hoy={hoy} poner={(x) => ed.poner('cobroFecha', x)} />
-                    <input className="kf-cifra" readOnly tabIndex={-1} aria-label="Importe del cobro" value={cifra(cobroImporte)} />
+                    {modo === 'hecha_sola'
+                      ? <input readOnly tabIndex={-1} aria-label="La fecha del cobro" value={cobroApuntado ? cobroApuntado.fecha.split('-').reverse().join('/') : ''} />
+                      : <CasillaFecha id="kf-cobro-fecha" etiqueta="La fecha del cobro" iso={be.cobroFecha ?? ''} hoy={hoy} poner={(x) => ed.poner('cobroFecha', x)} />}
+                    <input className="kf-cifra" readOnly tabIndex={-1} aria-label="Importe del cobro" value={cifra(modo === 'hecha_sola' ? cobroApuntado?.importe ?? 0 : cobroImporte)} />
                   </div>
                 )}
               </div>

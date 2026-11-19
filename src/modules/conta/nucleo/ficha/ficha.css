@@ -211,3 +211,7 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 .kf-mayor-titulo { margin: 0 0 10px; color: var(--k-apoyo); font-size: 13px; line-height: 1.5; }
 .kf-mayor-titulo strong { color: var(--k-tinta); }
 .kf-mayor tr[data-esta='si'] td { background: var(--k-azul-claro); font-weight: 600; }
+
+/* K05 · «Cómo se cobra»: la cuenta y su nombre, sin columna de importe al lado (el importe va debajo, con la fecha): el nombre entero. */
+.kf-cobro { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 6px; }
+.kf-titulo .kf-titulo-derecha.kf-origen { font-weight: 400; font-size: 11px; }
