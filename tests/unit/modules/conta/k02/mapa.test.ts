@@ -102,7 +102,8 @@ describe('K02 · el mapa del núcleo', () => {
 
   it('las palabras de la maqueta: la cinta de Contabilidad, en su orden', () => {
     const c = MODULOS.find((m) => m.id === 'contabilidad')
-    expect(c?.pestanas.map((p) => p.etiqueta)).toEqual(['Definiciones', 'Asientos', 'Importaciones', 'Listados', 'Utilidades', 'Impuestos'])
+    // E05 · La maqueta nueva de Bancos (respuesta E05 · 1) añade Tesorería detrás de Asientos.
+    expect(c?.pestanas.map((p) => p.etiqueta)).toEqual(['Definiciones', 'Asientos', 'Tesorería', 'Importaciones', 'Listados', 'Utilidades', 'Impuestos'])
     expect(MODULOS.map((m) => m.etiqueta)).toEqual(['Contabilidad', 'Facturación', 'Impuestos', 'Personal', 'Despacho'])
   })
 
@@ -127,7 +128,7 @@ describe('K02 · el mapa del núcleo', () => {
     expect(modulosVisibles(NADA).map((m) => m.id)).toEqual(['contabilidad', 'facturacion'])
     const conta = MODULOS[0]
     const sin = cintaVisible(conta, NADA, { produccion: true })
-    expect(sin.map((p) => p.id)).toEqual(['definiciones', 'asientos', 'importaciones', 'listados', 'utilidades'])
+    expect(sin.map((p) => p.id)).toEqual(['definiciones', 'asientos', 'tesoreria', 'importaciones', 'listados', 'utilidades'])
     const botones = sin.flatMap((p) => p.grupos.flatMap((g) => g.botones.map((x) => x.id)))
     expect(botones).not.toContain('ventasDia')
     expect(botones).not.toContain('diez')

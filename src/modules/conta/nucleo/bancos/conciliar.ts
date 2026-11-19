@@ -22,6 +22,7 @@ import { PROPUESTA_RECALCULADA, type MovimientoBanco } from '@/modules/conta/lib
 import { confirmable } from '@/modules/conta/lib/conciliarVista'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { rpc } from '@/modules/conta/services/bd'
+import { guardarRegla } from '@/modules/conta/services/bancosPantallas'
 
 export const MOTIVO_DESHACER = 'Deshecho desde Bancos (pantallas nuevas)'
 
@@ -80,7 +81,39 @@ export function escribirAMano(a: { bancoId: string; fecha: string; cuenta: strin
 }
 
 /** Deshacer lo casado: vuelve a estar sin casar y su asiento se quita (o se anula, si estaba validado). */
-export async function deshacerCasado(m: MovimientoBanco): Promise<void> {
+export async function deshacerCasado(m: MovimientoBanco): Promise<string> {
   if (!m.casado) throw new Error('Este movimiento no está casado: no hay nada que deshacer.')
-  await nucleo.deshacer(m.casado.id, MOTIVO_DESHACER)
+  // bank_deshacer dice qué ha hecho con el asiento: «su asiento propuesto se quita», «… se anula con un
+  // contraasiento» o «el asiento enlazado se queda como estaba» (uno escrito a mano, por ejemplo).
+  return nucleo.deshacer(m.casado.id, MOTIVO_DESHACER)
 }
+
+/**
+ * «O es otra cosa»: una de las alternativas que da el motor, como el panel de hoy
+ * (PanelMovimiento: nucleo.confirmar(id, «Lo dijiste tú: …», destino, 'probable', null)).
+ */
+export async function casarConAlternativa(m: MovimientoBanco, a: { etiqueta: string; destino: Record<string, unknown> }): Promise<string> {
+  await nucleo.confirmar(m.id, `Lo dijiste tú: ${a.etiqueta}.`, a.destino as unknown as Destino, 'probable', null)
+  return `Casado: ${a.etiqueta}.`
+}
+
+/**
+ * «O es otra cosa» a una cuenta (la comisión del banco, u otra con F4), como
+ * «Decir la cuenta» de hoy (Movimientos.elegirCuenta): el destino «cuenta» por el
+ * importe sin signo. Con «Hacerlo solo la próxima vez que pase igual», guarda la
+ * regla de hoy (bank_regla_guardar: lo que tenga ese texto, con su signo, a esa cuenta).
+ */
+export async function casarConCuenta(companyId: string, m: MovimientoBanco, c: { cuenta: string; nombre: string; concepto: string; regla: string | null }): Promise<string> {
+  const nombre = `${c.nombre} · ${c.cuenta}`
+  const destino: Destino = { tipo: 'cuenta', concepto: c.concepto, lineas: [{ cuenta: c.cuenta, importe: Math.abs(m.importeCent) / 100 }] }
+  await nucleo.confirmar(m.id, `Lo dijiste tú: ${nombre}.`, destino, 'probable', null)
+  if (c.regla) {
+    await guardarRegla(companyId, { palabras: `Cuando el concepto tenga «${c.regla}» → ${nombre}`, contiene: c.regla, cuenta: c.cuenta, signo: m.importeCent < 0 ? -1 : 1, origen: 'persona' })
+    return `Casado con ${nombre}. Y desde ahora, lo que tenga «${c.regla}» saldrá ahí: está en Reglas.`
+  }
+  return `Casado con ${nombre}.`
+}
+
+/** Lo que dice «Deshacer» al acabar (respuesta E05 · 1, punto 5): qué se ha deshecho, con lo que dice la base del asiento. */
+export const textoDeshecho = (quien: string, asiento: string): string =>
+  `Deshecho: el movimiento de ${quien} vuelve a estar sin casar${asiento ? `, y ${asiento}` : ''}.`

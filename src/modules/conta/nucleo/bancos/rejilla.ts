@@ -61,7 +61,7 @@ export function mover(actual: number, paso: 1 | -1, filas: number): number {
  * el servicio, que lee sus líneas); con propuesta, la que escribirá el motor
  * (asientoQueSeCrea, la misma que «El asiento que sale»). Sin nada, null.
  */
-export function cuentaDe(m: MovimientoBanco, cuenta572: string | null, delAsiento: string | null = null): string | null {
+export function aQueVa(m: MovimientoBanco, cuenta572: string | null, delAsiento: string | null = null): string | null {
   if (m.estado === 'casado') return delAsiento
   const d = m.propuesta?.destino as unknown as Destino | null | undefined
   if (!d) return null

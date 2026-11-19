@@ -57,6 +57,8 @@ import type { CambiosDePestana } from '@/modules/conta/diseno/plantillas/pestana
 import { cintaVisible, modulosVisibles, MODULOS, sitioDe, type Boton, type IdModulo, type Modulo } from './mapa'
 import { conEjercicio, ejercicioAEnsenar } from './ejercicio'
 import { frasesDeEstado } from './estado'
+import { useLeer } from '@/modules/conta/libros/contexto'
+import { bancosCuadrados } from './bancos/servicio'
 import { aGuardar, alNavegar, cerrar, claveDe, deAlLado, INICIO, nombrePorDefecto, pestanasGuardadas, type EstadoPestanas } from './pestanas'
 import { cuentaDe, teclaDelMarco } from './teclado'
 import { Arriba } from './Arriba'
@@ -346,7 +348,9 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
   } satisfies Partial<ValorMarco>), [prefs.nivel, prefs.densidad, prefs.documentoOculto, cambiar, ctxListo, ctx.hosteleria, ctx.ventasPorDia, ctx.gestoria, ctx.analitica, ctx.diez, ctx.colorEmpresa, listaEjercicios, abrirBuscador])
 
   const avisoVisible = aviso ?? (errorCtx ? { texto: `${errorCtx}. Mientras, no sale lo que depende de la empresa (hostelería, Diez).`, tono: 'falta' as const } : null)
-  const estadoFrases = frasesDeEstado(cuentas, { recibidas: rutaConta('documentos'), bancos: rutaConta('bancos'), asientos: rutaConta('libros/diario') })
+  // E05 · «Bancos cuadrados», con la misma regla que la cabecera de Bancos; se vuelve a contar cuando cambia lo que hay por revisar.
+  const cuadrados = useLeer(accountId && activa ? () => bancosCuadrados(accountId, activa.id, hoyEnMadrid()) : null, `${accountId}:${activa?.id}:${String(cuentas.bancos ?? '')}:cuadrados`).datos
+  const estadoFrases = frasesDeEstado(cuentas, { recibidas: rutaConta('documentos'), bancos: rutaConta('bancos'), asientos: rutaConta('libros/diario') }, cuadrados)
   const actual = sitio?.tipo === 'cinta' ? sitio.boton.id : null
   const enFila = estado.abiertas.map((p) => ({ id: p.id, nombre: nombreDe(p.id), conCambios: !!cambios[p.id], cerrable: p.id !== INICIO }))
   return (

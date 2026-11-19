@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const motor = vi.hoisted(() => ({ confirmar: vi.fn(), deshacer: vi.fn(), conciliarPendientes: vi.fn() }))
 vi.mock('@/modules/conta/services/bancosService', () => ({ bancos: motor }))
 
-import { cuentaDe, etiquetaDe, ingresoPago, mover, porRevisar, segurosMarcados } from '@/modules/conta/nucleo/bancos/rejilla'
+import { aQueVa, etiquetaDe, ingresoPago, mover, porRevisar, segurosMarcados } from '@/modules/conta/nucleo/bancos/rejilla'
 import { MOTIVO_DESHACER, confirmarPropuesta, confirmarVarios, deshacerCasado } from '@/modules/conta/nucleo/bancos/conciliar'
 import { cuadreDe } from '@/modules/conta/lib/conciliarVista'
 import { MOTOR_BANCOS } from '@/modules/conta/lib/conciliacion'
@@ -75,13 +75,13 @@ describe('mover: ↑ ↓ sin salirse', () => {
   })
 })
 
-describe('cuentaDe: «A qué va»', () => {
+describe('aQueVa: «A qué va»', () => {
   it('con propuesta, la cuenta que no es la del banco (la de «El asiento que sale»)', () => {
-    expect(cuentaDe(mov({ id: '1', propuesta: propuesta() }), '57200001')).toBe('40000007')
+    expect(aQueVa(mov({ id: '1', propuesta: propuesta() }), '57200001')).toBe('40000007')
   })
   it('casado, la de su asiento; sin nada, ninguna', () => {
-    expect(cuentaDe(mov({ id: '2', estado: 'casado', casado: { id: 'c', tipo: 'x', porque: '', porQuien: 'folvy', asientoId: 'a', asientoConcepto: null } }), '57200001', '62600000')).toBe('62600000')
-    expect(cuentaDe(mov({ id: '3', estado: 'por_aclarar' }), '57200001')).toBeNull()
+    expect(aQueVa(mov({ id: '2', estado: 'casado', casado: { id: 'c', tipo: 'x', porque: '', porQuien: 'folvy', asientoId: 'a', asientoConcepto: null } }), '57200001', '62600000')).toBe('62600000')
+    expect(aQueVa(mov({ id: '3', estado: 'por_aclarar' }), '57200001')).toBeNull()
   })
 })
 
