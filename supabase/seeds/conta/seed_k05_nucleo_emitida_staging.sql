@@ -16,9 +16,9 @@
 --     tercero para «guarda lo mismo»;
 --   · por cada tamaño, una emitida PROPUESTA (la rellenada, por revisar): la
 --     K05R-<tamaño>-1, de su cliente, a la 70000000, con su IVA al 21 % en el
---     libro de expedidas. Se propone con _journal_entry_proponer (la misma de
---     la emisión), sin validar: validar encadena la huella del libro y eso no es
---     «añadir». Las facturas anteriores de cada cliente (las que dan la duda de
+--     libro de expedidas. Con las mismas columnas que escribe
+--     _journal_entry_proponer, sin validar: validar encadena la huella del
+--     libro y eso no es «añadir». Las facturas anteriores de cada cliente (las que dan la duda de
 --     la cuenta de venta) las escribe y valida la propia e2e.
 -- ============================================================================
 
@@ -32,6 +32,7 @@ declare
   v_c uuid;
   v_n int;
   v_t21 uuid;
+  v_y uuid;
 begin
   if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
     raise exception 'Semilla K05 ABORTADA: al otro lado hay cuentas de producción. ¿Es staging-conta?';
@@ -84,20 +85,27 @@ begin
   on conflict (company_id, entity, entity_id, role) do nothing;
 
   -- 3 · Por cada tamaño, la emitida propuesta (la rellenada): K05R-<t>-1, a la 70000000, con su IVA al 21 %.
-  for v_t in select t, ('c0e50000-0000-4000-8000-0000000000c' || t)::uuid as party, '4300008' || t as c430, 'Cliente de Prueba Emitida ' || case t when 1 then 'Uno' else 'Dos' end || ', S.L.' as nombre,
-                    100 + 10 * t as base
+  -- Con las mismas columnas que escribe _journal_entry_proponer (v04), sin llamarla: así es «añadir» (el
+  -- analizador de staging no deja ir de verdad lo que llama a una función), con ids fijos.
+  select id into v_y from public.fiscal_year where company_id = k_emp2 and date '2026-10-15' between starts_on and ends_on;
+  if v_y is null then raise exception 'Semilla K05: la gestoría no tiene ejercicio para el 15/10/2026 (semilla K02).'; end if;
+  for v_t in select t, ('c0e50000-0000-4000-8000-0000000000e' || t)::uuid as entrada, ('c0e50000-0000-4000-8000-0000000000c' || t)::uuid as party,
+                    '4300008' || t as c430, 'K05R-' || t || '-1' as numero,
+                    'Cliente de Prueba Emitida ' || case t when 1 then 'Uno' else 'Dos' end || ', S.L.' as nombre, (100 + 10 * t)::numeric as base
                from generate_series(1, 2) t loop
-    if not exists (select 1 from public.journal_entry where company_id = k_emp2 and document_ref = 'K05R-' || v_t.t || '-1' and status in ('propuesto', 'borrador', 'validado')) then
-      perform public._journal_entry_proponer(k_emp2,
-        jsonb_build_object('series', 1, 'fecha', '2026-10-15', 'source_type', 'manual', 'concepto', 'Factura K05R-' || v_t.t || '-1 · ' || v_t.nombre,
-          'party_id', v_t.party, 'documento', 'K05R-' || v_t.t || '-1', 'fecha_documento', '2026-10-15', 'confianza', 'probable', 'porque', 'Propuesta de la semilla K05 (por revisar).'),
-        jsonb_build_array(
-          jsonb_build_object('cuenta', v_t.c430, 'tercero_id', v_t.party, 'documento', 'K05R-' || v_t.t || '-1', 'concepto', 'Factura K05R-' || v_t.t || '-1', 'debe', round(v_t.base * 1.21, 2), 'haber', 0, 'comun', true),
-          jsonb_build_object('cuenta', '70000000', 'tercero_id', v_t.party, 'documento', 'K05R-' || v_t.t || '-1', 'concepto', 'Factura K05R-' || v_t.t || '-1', 'debe', 0, 'haber', v_t.base, 'comun', true),
-          jsonb_build_object('cuenta', '47700021', 'tercero_id', v_t.party, 'documento', 'K05R-' || v_t.t || '-1', 'concepto', 'IVA factura K05R-' || v_t.t || '-1', 'debe', 0, 'haber', round(v_t.base * 0.21, 2), 'comun', true,
-                             'iva', jsonb_build_object('tipo_id', v_t21, 'base', v_t.base, 'libro', 'issued', 'facturas', 1))),
-        null, 'Semilla K05', null);
-    end if;
+    insert into public.journal_entry (id, account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, source_id, status,
+                                      confidence, reason, reasons, party_id, document_ref, document_date, created_by_name, created_at)
+    values (v_t.entrada, k_cuenta, k_emp2, v_y, 1, date '2026-10-15', 'Factura ' || v_t.numero || ' · ' || v_t.nombre, 'manual', null, 'propuesto',
+            'probable', 'Propuesta de la semilla K05 (por revisar).', '[]'::jsonb, v_t.party, v_t.numero, date '2026-10-15', 'Semilla K05', cuando)
+    on conflict (id) do nothing;
+    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, concept, is_common,
+                                     party_id, document_ref, tax_rate_id, tax_base, vat_book, tax_documents)
+    select k_cuenta, k_emp2, v_t.entrada, x.pos, a.id, x.debe, x.haber, x.concepto, true, v_t.party, v_t.numero, x.tipo, x.base, x.libro, 1
+      from (values (1, v_t.c430, round(v_t.base * 1.21, 2), 0::numeric, 'Factura ' || v_t.numero, null::uuid, null::numeric, null::text),
+                   (2, '70000000', 0::numeric, v_t.base, 'Factura ' || v_t.numero, null::uuid, null::numeric, null::text),
+                   (3, '47700021', 0::numeric, round(v_t.base * 0.21, 2), 'IVA factura ' || v_t.numero, v_t21, v_t.base, 'issued')) x(pos, cuenta, debe, haber, concepto, tipo, base, libro)
+      join public.company_account a on a.company_id = k_emp2 and a.code = x.cuenta
+     where not exists (select 1 from public.journal_line l where l.entry_id = v_t.entrada and l.position = x.pos);
   end loop;
 
   select count(*) into v_n from public.journal_entry where company_id = k_emp2 and document_ref like 'K05R-%' and status = 'propuesto';
