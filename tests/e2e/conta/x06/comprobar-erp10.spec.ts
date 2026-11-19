@@ -102,7 +102,7 @@ test('X06 · contra staging: sacar, subir el sumas y saldos de ERP10, ver la fac
   await page.getByRole('button', { name: 'Descargar los ficheros' }).click()
   await expect(page.locator('.cxe-hecho')).toContainText('Queda apuntado.', { timeout: 60_000 })
   await page.getByRole('button', { name: 'Ya lo he importado' }).click()
-  await expect(page.getByRole('heading', { name: 'Sube el «Sumas y saldos» de ERP10' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Darlo por igualado/ })).toBeDisabled()
 
   // 2 · El sumas y saldos de ERP10, al que le falta la factura.

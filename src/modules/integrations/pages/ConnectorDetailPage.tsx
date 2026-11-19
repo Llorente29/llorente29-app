@@ -20,10 +20,15 @@
 // config del formulario borraba la que no sale en él (base_url,
 // adjuntar_documentos de Diez). Ahora los secretos van todos o no se guarda
 // (secretosParaGuardar), y la config se manda encima de la que hay.
+//
+// X10 (19/11): el conector «ERP10 (despacho)» (code erp10) guarda sus claves una
+// vez, en una conexión de la CUENTA (no de un local), y debajo lleva las sociedades
+// con su código de empresa y «Probar» (SociedadesErp10). En pantalla dice «claves».
 
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Check, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
 import ConnectorAvatar from '@/modules/integrations/components/ConnectorAvatar'
+import SociedadesErp10 from '@/modules/conta/libros/SociedadesErp10'
 import {
   saveConnectorCredentials,
   getConnectorCredentialsStatus,
@@ -62,6 +67,8 @@ export default function ConnectorDetailPage({
   const fields = connector.configSchema?.fields ?? []
   const secretFields = fields.filter(f => f.type === 'secret')
   const plainFields = fields.filter(f => f.type !== 'secret')
+  const esErp10 = connector.code === 'erp10'
+  const credenciales = esErp10 ? 'claves' : 'credenciales'
 
   // La conexión puede crearse en este componente; la guardamos en estado local.
   const [conn, setConn] = useState<AccountConnector | null>(accountConnector)
@@ -148,8 +155,8 @@ export default function ConnectorDetailPage({
           accountId,
           connectorId: connector.id,
           status: 'connecting',
-          scope: locationId ? 'location' : 'account',
-          locationId: locationId ?? null,
+          scope: locationId && !esErp10 ? 'location' : 'account',
+          locationId: esErp10 ? null : locationId ?? null,
           config,
           createdBy: createdBy ?? null,
           createdByName: createdByName ?? null,
@@ -166,7 +173,9 @@ export default function ConnectorDetailPage({
       setHasCredentials(prev => prev || Object.keys(secrets).length > 0)
       // Regla 8: qué ha pasado, no un visto. Guardar no prueba las credenciales.
       setOkMsg(Object.keys(secrets).length > 0
-        ? `Credenciales guardadas: ${connector.name} queda «Conectada». Se prueban la próxima vez que Folvy entre; si no valen, volverá a salir «Caída» con el motivo.`
+        ? esErp10
+          ? 'Claves guardadas. Ahora pon el código de empresa de cada sociedad y pulsa «Probar».'
+          : `Credenciales guardadas: ${connector.name} queda «Conectada». Se prueban la próxima vez que Folvy entre; si no valen, volverá a salir «Caída» con el motivo.`
         : 'Configuración guardada.')
       setValues(prev => {
         const next = { ...prev }
@@ -184,7 +193,7 @@ export default function ConnectorDetailPage({
   async function handleClear() {
     if (!conn?.id) return
     const ok = window.confirm(
-      `¿Desconectar ${connector.name}? Se borrarán sus credenciales guardadas.`,
+      `¿Desconectar ${connector.name}? Se borrarán sus ${credenciales} guardadas.`,
     )
     if (!ok) return
     setClearing(true); setError(null); setOkMsg(null)
@@ -220,7 +229,7 @@ export default function ConnectorDetailPage({
           <p className="font-medium">{connector.name}: {estado.etiqueta}.</p>
           {conn?.lastError && <p className="break-words">{conn.lastError}</p>}
           {secretFields.length > 0 && (
-            <p>Para levantarla, escribe otra vez {secretFields.length === 1 ? 'la credencial' : `las ${secretFields.length} credenciales`} y pulsa «Guardar configuración».</p>
+            <p>Para levantarla, escribe otra vez {secretFields.length === 1 ? (esErp10 ? 'la clave' : 'la credencial') : `las ${secretFields.length} ${credenciales}`} y pulsa «Guardar configuración».</p>
           )}
         </div>
       )}
@@ -234,7 +243,7 @@ export default function ConnectorDetailPage({
               {DIRECTION_LABEL[connector.direction] ?? connector.direction}
               {hasCredentials && (
                 <span className="inline-flex items-center gap-1 text-success ml-2">
-                  <ShieldCheck size={13} /> Credenciales guardadas
+                  <ShieldCheck size={13} /> {esErp10 ? 'Claves guardadas' : 'Credenciales guardadas'}
                 </span>
               )}
             </p>
@@ -325,6 +334,10 @@ export default function ConnectorDetailPage({
           )}
         </div>
       </div>
+
+      {esErp10 && conn && accountId && (
+        <SociedadesErp10 accountId={accountId} connectorId={connector.id} conClaves={hasCredentials} quien={{ id: createdBy ?? null, nombre: createdByName ?? null }} />
+      )}
     </div>
   )
 }

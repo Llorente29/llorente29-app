@@ -1,0 +1,3 @@
+# X10 · la vuelta atrás: quita el conector erp10 si nadie lo ha conectado.
+cuenta: scripts/conta/produccion/cuentas/x10-conector-erp10.sql
+supabase/vuelta-atras/20261119T1250_x10_conector_erp10.down.sql

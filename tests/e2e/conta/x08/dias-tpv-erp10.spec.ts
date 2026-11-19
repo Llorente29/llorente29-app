@@ -201,7 +201,7 @@ test('X08 · contra staging: dos días del TPV validados salen como una factura 
 
   // 5 · Paso 3: con todo importado, las cuentas de los días quedan igual.
   await page.getByRole('button', { name: 'Ya lo he importado' }).click()
-  await expect(page.getByRole('heading', { name: 'Sube el «Sumas y saldos» de ERP10' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible()
   await page.getByLabel('El sumas y saldos de ERP10').setInputFiles({ name: 'sumas_y_saldos_x08.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: await sumas(s, '2026-11-30') })
   const comparada = page.getByRole('table', { name: 'Cuenta a cuenta' })
   const grupoIgual = comparada.locator('tbody').filter({ has: page.locator('tr.cxe-grupo', { hasText: /^\d+ cuentas? quedan? igual$/ }) })
