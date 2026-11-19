@@ -133,6 +133,10 @@
 @container (max-width: 1080px) {
   .cxe-paso:not([aria-current='step']) .cxe-paso-etq { display: none; }
 }
+/* X10b · En el paso 1 la cabecera lleva dos (el Excel y «Sacar a ERP10»): la misma regla, antes (a 1456 ya no cabe). */
+@container (max-width: 1300px) {
+  .cxe-cabeza-dos .cxe-paso:not([aria-current='step']) .cxe-paso-etq { display: none; }
+}
 .cxe-nota-verde { border-color: var(--cx-verde-oscuro); background: var(--cx-verde-suave); }
 
 /* X10b · «Conexión con ERP10», arriba de la salida: una línea plegada; abierta, las claves y el código. */

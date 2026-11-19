@@ -354,7 +354,7 @@ export function SalidaErp10() {
     <ConexionErp10Tarjeta key={L.companyId} accountId={L.accountId} companyId={L.companyId} quien={L.quien} conexion={conexion.datos ?? null} error={conexion.error ?? null}
       abierta={abierta} abrir={setConexionAbierta} cambiada={() => setVueltaConexion((v) => v + 1)} />
     <section className="cxe" aria-labelledby="cxe-titulo" ref={caja} style={alto ? { height: alto } : undefined}>
-      <div className="cxe-cabeza">
+      <div className={`cxe-cabeza${paso === 1 ? ' cxe-cabeza-dos' : ''}`}>
         <h1 className="cxe-titulo" id="cxe-titulo">Salida a ERP10</h1>
         <select className="cxe-mes" aria-label="Mes" value={mes ?? ''} disabled={paso === 2 || !!haciendo}
           onChange={(e) => { setMes(e.target.value); setFila(null) }}>

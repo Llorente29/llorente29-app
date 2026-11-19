@@ -229,6 +229,8 @@ for (const tam of TAMANOS) {
     await expect(sacar).toBeDisabled({ timeout: 30_000 })
     await expect(page.locator('.cxe-sacar-falta')).toHaveText('Para sacar a ERP10: Falta el código de empresa de esta sociedad en ERP10. Ir a la conexión con ERP10')
     await expect(page.getByRole('button', { name: 'Descargar los ficheros (Excel)' })).toBeEnabled()
+    // La cabecera del paso 1 lleva dos (el Excel y «Sacar»): los otros pasos se quedan en su número, sin montarse.
+    await expect(page.locator(".cxe-paso:not([aria-current='step']) .cxe-paso-etq").first()).toBeHidden()
     await page.screenshot({ path: `${DIR}/paso1-falta-${tam.width}.png` })
     await page.locator('.cxe-sacar-falta').getByRole('button', { name: 'Ir a la conexión con ERP10' }).click()
 
