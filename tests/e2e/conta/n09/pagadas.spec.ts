@@ -6,6 +6,11 @@
 // el ordenador, CONTRA STAGING DE VERDAD, con los Excel inventados del ejemplo de ERP10 del N04
 // (tests/conta/fixtures/importar/erp10, T11), en el carril de la e2e y con la sesión del administrador
 // de la cuenta A. Cada prueba crea su empresa (como el N07) y al acabar se deshace lo traído y se borra.
+// Con los números de las recibidas cambiados (A-10 → N9A-10, B-7 → N9B-7, ALQ-3 → N9ALQ-3, en el libro y
+// en los conceptos del diario), e2e 1549: el proveedor es de la cuenta, y una recibida que ya está en la
+// cuenta con el mismo proveedor, número e importe no se trae otra vez. La prueba 4 del N07 da por bueno
+// este mismo ejemplo en la cuenta A, en una empresa que se queda en el carril, y después entraban «10
+// asientos y 2 facturas». Con otro número no coinciden; las cifras y las frases son las mismas.
 // Las dos:
 //   1. El ejemplo entero: el paso 3 dice «2 pagadas o cobradas y 3 pendientes» y que cuadra con el sumas
 //      y saldos; en la base, lo que le queda a cada recibida (A-10 a 0, B-7 341,00 y ALQ-3 1.020,00, sin
@@ -52,6 +57,16 @@ function cambiado(nombre: string, cambiar: (filas: unknown[][]) => unknown[][]) 
   return { name: nombre, mimeType: XLSX_MIME, buffer: Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })) }
 }
 
+/** Los números de las recibidas del ejemplo, con «N9» delante (ver la cabecera). */
+const PROPIO = (x: unknown) => (typeof x === 'string' ? x.replace(/(^|[^A-Za-z0-9])(A-10|B-7|ALQ-3)(?=$|[^A-Za-z0-9])/g, '$1N9$2') : x)
+const conNumerosPropios = (nombre: string, cambiar: (filas: unknown[][]) => unknown[][] = (f) => f) =>
+  cambiado(nombre, (f) => cambiar(f).map((fila) => fila.map(PROPIO)))
+
+/** El ejemplo entero, con los números propios. */
+function elEjemplo(diario = conNumerosPropios('diario.xlsx'), sumas = fichero('sumas_y_saldos.xlsx')) {
+  return [...TODOS.filter((x) => !['diario.xlsx', 'sumas_y_saldos.xlsx', 'libro_recibidas.xlsx'].includes(x)).map(fichero), conNumerosPropios('libro_recibidas.xlsx'), diario, sumas]
+}
+
 /**
  * El ejemplo con un pago más a la 40000002 que no nombra ninguna factura y no es lo que le queda a
  * ninguna: «Pago a cuenta» de 50,00 el 04/03/2026 (46085 en Excel), contra el banco. En el diario, su
@@ -59,7 +74,7 @@ function cambiado(nombre: string, cambiar: (filas: unknown[][]) => unknown[][]) 
  * siga cuadrando con el diario.
  */
 function conPagoACuenta() {
-  const diario = cambiado('diario.xlsx', (f) => [...f,
+  const diario = conNumerosPropios('diario.xlsx', (f) => [...f,
     ['3.6', 46085, '0', null, '40000002', 'Proveedor Ejemplo Dos, S.A.', 'Pago a cuenta', 50, 0],
     ['3.6', 46085, '0', null, '57200001', 'Banco de ejemplo', 'Pago a cuenta', 0, 50]])
   const sumas = cambiado('sumas_y_saldos.xlsx', (f) => f.map((x) => {
@@ -69,7 +84,7 @@ function conPagoACuenta() {
     if (x[2] === 'TOTALES:') return [x[0], x[1], x[2], 11549, 11549, 8181, 8181]
     return x
   }))
-  return [...TODOS.filter((x) => x !== 'diario.xlsx' && x !== 'sumas_y_saldos.xlsx').map(fichero), diario, sumas]
+  return elEjemplo(diario, sumas)
 }
 
 function vigilar(page: Page): string[] {
@@ -143,11 +158,11 @@ test.afterEach(async () => {
 
 test('N09 · 1 · el ejemplo entero: 2 pagadas y 3 pendientes, cuadra con el sumas y saldos, y Deshacer lo quita', async ({ page }) => {
   const errores = vigilar(page)
-  await traer(page, TODOS.map(fichero))
+  await traer(page, elEjemplo())
   await expect(page.getByText('Pagadas y cobradas: 2 pagadas o cobradas y 3 pendientes. Lo que le queda a cada proveedor y cliente da igual que su saldo en ERP10.')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText(/que no he podido casar/)).toHaveCount(0)
   // En la base: lo que le queda a cada recibida, casado con sus pagos (ALQ-3, sin la retención de 190,00).
-  expect(await pendienteDeLasRecibidas(s, empresa)).toEqual({ 'A-10': 0, 'ALQ-3': 1020, 'B-7': 341 })
+  expect(await pendienteDeLasRecibidas(s, empresa)).toEqual({ 'N9A-10': 0, 'N9ALQ-3': 1020, 'N9B-7': 341 })
   // Y lo pendiente de cada proveedor da su saldo del sumas y saldos: 40000001 a 0, 40000002 341,00 y 41000001 1.020,00.
   await deshacer(page)
   expect(await pendienteDeLasRecibidas(s, empresa), 'Deshacer quita las recibidas traídas').toEqual({})
@@ -160,7 +175,7 @@ test('N09 · 2 · un pago que no casa: la B-7 entra pendiente entera, marcada, y
   const aviso = page.getByRole('note').filter({ hasText: '1 factura con pagos que no he podido casar: míralas.' })
   await expect(aviso).toBeVisible({ timeout: 30_000 })
   await expect(aviso.getByRole('listitem')).toHaveText(['40000002 · Proveedor Ejemplo Dos, S.A.: un pago que no he podido casar (50,00 del 04/03/2026: no nombra ninguna factura suya y no es lo que le queda a ninguna); y lo que le queda por pagar de sus facturas, 341,00, no da igual que su saldo en el sumas y saldos, 291,00. Míralas.'])
-  expect(await pendienteDeLasRecibidas(s, empresa)).toEqual({ 'A-10': 0, 'ALQ-3': 1020, 'B-7': 341 })
+  expect(await pendienteDeLasRecibidas(s, empresa)).toEqual({ 'N9A-10': 0, 'N9ALQ-3': 1020, 'N9B-7': 341 })
   await deshacer(page)
   expect(await pendienteDeLasRecibidas(s, empresa), 'Deshacer quita las recibidas traídas').toEqual({})
   expect(errores).toEqual([])
