@@ -23,7 +23,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { rutaAsiento, rutaLibroDiario, rutaMayor, rutaNuevoAsiento } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
-import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
+import { useAnalitica, useConPropias } from '@/modules/conta/marco/nuevo/contexto'
 import { BuscarCuentaHoja } from '@/modules/conta/diseno/plantillas'
 import { useAvisoSalir } from '@/modules/conta/diseno/plantillas/avisoSalir'
 import { useNombreDePestana, useSeVe } from '@/modules/conta/diseno/plantillas/pestana'
@@ -63,6 +63,8 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
   const navegar = useNavigate()
   const seVe = useSeVe()
   const { local: ejeLocal } = useAnalitica()
+  // La ficha trae su cabecera con sus botones (la maqueta): la pestaña no pinta la fila de acciones de la ruta.
+  useConPropias()
 
   const [base, setBase] = useState<Base | null>(null)
   const [existente, setExistente] = useState<AsientoDiario | null | 'no'>(entryId ? null : 'no')
@@ -102,7 +104,8 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
   const porCodigo = useMemo(() => new Map((base?.cuentas ?? []).map((c) => [c.code, c])), [base])
   const porId = useMemo(() => new Map((base?.cuentas ?? []).map((c) => [c.id, c])), [base])
   const digitos = base?.cuentas[0]?.code.length ?? DIGITOS_POR_DEFECTO
-  const plan = useMemo(() => (base?.cuentas ?? []).map((c) => ({ code: c.code, nombre: c.nombre })), [base])
+  // La denominación de la subcuenta (company_account.name), como ERP10 y la maqueta: «Arrendamientos», no su texto de ayuda.
+  const plan = useMemo(() => (base?.cuentas ?? []).map((c) => ({ code: c.code, nombre: c.oficial })), [base])
   const codigos = useMemo(() => new Set(plan.map((c) => c.code)), [plan])
   // El local (no está en la maqueta ni en ERP10; hoy, sin él, no se guarda con el eje «local» encendido):
   // con uno, ese; sin ninguno, «común» (lo único que ofrece hoy la pantalla); con varios, la columna «Local».
@@ -288,7 +291,7 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
   if (entryId && !asiento) return <div className="kf-ficha cxa"><p className="kf-aviso" data-tono="mal" role="alert">Ese asiento no existe o no es de esta empresa. <Link to={rutaNuevoAsiento()}>Escribir uno nuevo</Link></p></div>
 
   const filas = asiento
-    ? asiento.apuntes.map((a) => ({ cuenta: a.cuenta, nombre: a.nombreCuenta, concepto: a.concepto ?? asiento.concepto, debe: a.debe ? cifra(a.debe) : '', haber: a.haber ? cifra(a.haber) : '' }))
+    ? asiento.apuntes.map((a) => ({ cuenta: a.cuenta, nombre: porId.get(a.cuentaId)?.oficial ?? a.tituloOficial ?? a.nombreCuenta, concepto: a.concepto ?? asiento.concepto, debe: a.debe ? cifra(a.debe) : '', haber: a.haber ? cifra(a.haber) : '' }))
     : null
   const verProblemas = intentado && problemas.length > 0
   const deSumied = !!asiento && (asiento.estado === 'propuesto' || asiento.origen !== 'manual')
@@ -371,7 +374,7 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
                                 alCerrar={(volver) => { setBuscando(null); if (volver) foco.current = { fila: i, casilla: 'subcuenta' } }} />
                             )}
                           </td>
-                          <td className="cxa-c-nombre">{cta?.nombre ?? ''}</td>
+                          <td className="cxa-c-nombre">{cta?.oficial ?? ''}</td>
                           <td><input className="cxa-gris" data-fila={i} data-casilla="concepto" aria-label={`Concepto de la línea ${i + 1}`} value={l.concepto}
                             onFocus={() => setFila(i)} onChange={(e) => cambia(i, { concepto: e.target.value })} onKeyDown={(e) => teclasRejilla(e, i, 'concepto')} /></td>
                           <td className="cxa-num"><span className="cxa-celda">{rellenada === i && l.debe && <small className="kf-origen">Sumied</small>}<input inputMode="decimal" data-fila={i} data-casilla="debe" aria-label={`Debe de la línea ${i + 1}`} value={l.debe}
@@ -440,7 +443,7 @@ function Mayor({ accountId, companyId, cuentaId, cuenta, ejercicio }: { accountI
   if (fallo) return <p className="kf-panel-nota" role="alert">{fallo}</p>
   return (
     <div className="cxa-mayor">
-      <div className="cxa-mayor-cabeza"><strong>{cuenta.code}</strong> {cuenta.nombre}{ejercicio && <span className="cxa-gris"> · {ejercicio.code}</span>}<Link className="kf-enlace" to={rutaMayor(cuenta.code)}>Abrir <kbd>F5</kbd></Link></div>
+      <div className="cxa-mayor-cabeza"><strong>{cuenta.code}</strong> {cuenta.oficial}{ejercicio && <span className="cxa-gris"> · {ejercicio.code}</span>}<Link className="kf-enlace" to={rutaMayor(cuenta.code)}>Abrir <kbd>F5</kbd></Link></div>
       <div>
         <table className="kf-mayor" aria-label={`Mayor de la ${cuenta.code}`}>
           <thead><tr><th>Fecha</th><th>Documento</th><th>Concepto</th><th className="kf-cifra">Debe</th><th className="kf-cifra">Haber</th><th className="kf-cifra">Saldo</th></tr></thead>
