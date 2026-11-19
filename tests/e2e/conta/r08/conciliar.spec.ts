@@ -136,7 +136,8 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await fila(page, p.nominas[0]).click()
       await expect(page.locator('[data-prueba="conciliado"]')).toContainText(enElDiario ? 'Conciliado · en el diario.' : 'Conciliado, sin pasar al diario.')
       await page.locator('[data-prueba="que-es"] [data-prueba="deshacer"]').click()
-      await expect(aviso(page)).toHaveText(enElDiario ? /vuelve a estar por conciliar, y su asiento \d+\/\d+ se anula con un contraasiento\.$/ : /vuelve a estar por conciliar, y su asiento propuesto se quita\.$/, { timeout: 30_000 })
+      // R08 · 1, punto 3: detrás ya hay otros asientos (las otras cuatro), así que no sale del diario: contraasiento, y lo dice.
+      await expect(aviso(page)).toHaveText(enElDiario ? /vuelve a estar por conciliar, y su asiento \d+\/\d+ se anula con un contraasiento: detrás ya hay otros asientos en el diario, y quitarlo dejaría un hueco en la numeración\.$/ : /vuelve a estar por conciliar, y su asiento propuesto se quita\.$/, { timeout: 30_000 })
       await expect(fila(page, p.nominas[0]).locator('.kb-etiqueta')).toHaveText('Por conciliar', { timeout: 30_000 })
       const tras = await estados(s, p, p.nominas)
       expect(tras[p.nominas[0]]).toBe('pendiente/—')

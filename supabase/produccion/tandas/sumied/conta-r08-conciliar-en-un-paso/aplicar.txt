@@ -4,14 +4,18 @@
 #
 #   1945  Añade bank_saldo_extracto (el cierre del último extracto de la cadena) y
 #         bank_saldo_diario (el saldo con lo que está en el diario). Solo leen.
-#   2040  Conciliar valida: _bank_casar_nucleo deja el asiento validado en la misma
-#         transacción (persona, Sumied solo, remesa, pasarela); bank_deshacer no deshace
-#         en silencio lo que ya salió a ERP10 o lleva IVA de un trimestre presentado.
-#         Cambia en caliente las dos (misma firma, con respaldo y guarda de md5).
+#   2040  Conciliar valida: _bank_casar_nucleo (por trozos exactos sobre el de la N10, sin tocar su
+#         freno ni su marca de pagada) deja el asiento validado en la misma transacción. bank_deshacer
+#         QUITA del diario el validado que es el último de su serie y de la cadena (sin hueco; con
+#         respaldo); si no, contraasiento y el porqué (ERP10, IVA presentado, Diez, declaración, corte,
+#         documentos, o detrás hay otros). journal_entry_inalterable deja borrar solo ESE asiento
+#         (folvy.asiento_quitar). Cambia en caliente las tres, con respaldo y guardas.
 #   2120  El recibo que el banco no cobró, por la cadena: _bank_cargos_anulados mide el
 #         hueco contra el cierre del extracto anterior; bank_apartar_no_cobrados (nueva)
 #         aparta lo que señala y no está conciliado. Cambia en caliente el detector.
 #
+# 1945 ya está aplicada en producción (el real 44614785546, por error, 19/11 22:05): el ensayo
+# la quita de la tanda por «ya aplicada»; no se cambia (su huella para el workflow).
 # Medido en producción (ensayo 44600555762): 0 asientos de Bancos propuestos (820
 # validados en 3 cuentas): no hay nada que pasar a validado. Nada en el camino del
 # pedido. El real lo lanza Julio.

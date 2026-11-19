@@ -56,7 +56,7 @@ select clave, valor from (
   union all
   select 3, 'banco ' || left(u.treasury_account_id::text, 8) || ' · empresa ' || left(u.company_id::text, 8) || ' · ' || coalesce(a.code, 'sin 572'),
          'último extracto ' || to_char(u.period_to, 'DD/MM') || ' cierra ' || u.closing_balance
-         || ' · Sumied hoy, validado ' || coalesce((select sum(l.debit - l.credit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
+         || ' · Sumied hoy validado ' || coalesce((select sum(l.debit - l.credit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
               where l.company_account_id = a.id and e.status in ('validado', 'anulado') and e.entry_date <= current_date and e.source_type <> 'closing'), 0)
          || ' · con lo propuesto ' || coalesce((select sum(l.debit - l.credit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
               where l.company_account_id = a.id and e.status in ('validado', 'anulado', 'propuesto') and e.entry_date <= current_date and e.source_type <> 'closing'), 0)

@@ -159,9 +159,11 @@ export default function PantallaBancos() {
     const xs = movs.filter((x) => ultimos.current.includes(x.id) && x.casado)
     if (xs.length === 0) { setAviso({ tono: 'falta', texto: 'No hay nada que deshacer: lo último que has conciliado aquí ya está deshecho, o no has conciliado nada.' }); return }
     void hacer(async () => {
-      for (const x of xs) await deshacerCasado(x)
+      // De atrás adelante: así el último sale del diario sin dejar hueco, y el anterior pasa a ser el último.
+      const dicho: string[] = []
+      for (const x of [...xs].reverse()) dicho.push(await deshacerCasado(x))
       ultimos.current = []
-      return xs.length === 1 ? textoDeshecho(quienEs(xs[0]), 'su asiento se anula con un contraasiento') : `Deshechos ${xs.length} movimientos: vuelven a estar por conciliar, y sus asientos se anulan con un contraasiento.`
+      return xs.length === 1 ? textoDeshecho(quienEs(xs[0]), dicho[0]) : `Deshechos ${xs.length} movimientos: vuelven a estar por conciliar. ${[...new Set(dicho)].map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join('. ')}.`
     })
   }
   // Lo que quedó sin pasar al diario de antes del R08: la misma llamada y la misma frase que «Por validar» de hoy.

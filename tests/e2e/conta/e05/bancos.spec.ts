@@ -154,7 +154,7 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       if (grande) await captura(page, 'casado-deshacer', ancho)
       await deshacer.click()
       // R08 · Lo que está en el diario se anula con su contraasiento; lo propuesto (staging sin la 2040) se quita.
-      await expect(aviso(page)).toHaveText(enElDiario ? /^Deshecho: el movimiento de Agua Ejemplo vuelve a estar por conciliar, y su asiento \d+\/\d+ se anula con un contraasiento\.$/
+      await expect(aviso(page)).toHaveText(enElDiario ? /^Deshecho: el movimiento de Agua Ejemplo vuelve a estar por conciliar, y su asiento \d+\/\d+ (se quita del diario|se anula con un contraasiento: .+)\.$/
         : 'Deshecho: el movimiento de Agua Ejemplo vuelve a estar por conciliar, y su asiento propuesto se quita.', { timeout: 30_000 })
       expect((await casadoDe(s, p, p.movs.casado)).movimiento).toBe('pendiente')
 

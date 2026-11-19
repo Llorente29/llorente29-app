@@ -1,325 +1,178 @@
 -- supabase/migrations/20261119T2040_r08_conciliar_valida.sql
 --
--- R08 · 2 · Conciliar es el último paso (Julio, 19/11: «si he conciliado un movimiento
--- bancario no veo qué necesidad hay de confirmar luego otra vez»).
+-- R08 · 2 · Conciliar es el último paso, y Deshacer lo quita del diario (Julio, 19/11).
 --
---   1. _bank_casar_nucleo (el texto de la 1310 del B01o, md5 9b90a7d3…, medido en staging y en
---      la base local) con un cambio: el asiento que crea o enlaza, si está propuesto, queda
---      VALIDADO en la misma transacción, lo concilie una persona, Sumied solo, una remesa o
---      un abono de pasarela (todos pasan por aquí). Si no se puede validar, no se concilia:
---      el error sube y no queda nada propuesto. Antes, solo lo «seguro» de Sumied y solo con
---      el ajuste validate_safe encendido. Y el movimiento apartado lo dice en palabras.
---   2. bank_deshacer (el texto de la 0110 del B01, md5 2bd49860…) con dos guardas: un asiento
---      validado que ya salió a ERP10, o que lleva IVA de un trimestre presentado, no se
---      deshace en silencio: lo dice en palabras. Lo demás, igual (un validado se anula con su
---      contraasiento, journal_entry_anular, el camino de la ficha del asiento del núcleo).
--- Misma firma las dos (create or replace, sin sobrecargas: regla 2). Las de antes, al
--- respaldo. Guarda: si no son las medidas, PARA antes de tocar nada.
--- No está en el camino del pedido.
--- sin hueco: el fichero no retira nada al aplicarse. El «delete from journal_entry» es el de
--- bank_deshacer de siempre (quita un asiento PROPUESTO de un casado que se deshace), sin cambios.
+--   1. _bank_casar_nucleo, POR TROZOS EXACTOS sobre lo que hay (el de la N10, con su freno y su marca de
+--      pagada que leen _bank_recibida_pagado, que no se tocan; R08 · 1 de Julio): el asiento que crea o
+--      enlaza queda VALIDADO en la misma transacción, lo concilie una persona, Sumied solo, una remesa o una
+--      pasarela (todos pasan por aquí). Si no se puede validar, no se concilia: el error sube y no queda
+--      nada propuesto. Antes, solo lo «seguro» de Sumied con el ajuste validate_safe. Y el movimiento
+--      apartado lo dice en palabras. Si un trozo no está una sola vez, PARA sin tocar nada.
+--   2. bank_deshacer (el texto de la 0110 del B01, md5 2bd49860…, igual en producción): un asiento validado
+--      se QUITA del diario (Julio, respuesta R08 · 1, punto 3) cuando se puede sin dejar hueco ni nada fuera
+--      (_bank_asiento_razon_contra); si no, se anula con su contraasiento y se dice por qué en palabras:
+--      salió a ERP10, lleva IVA de un trimestre presentado, se envió a Diez, está en una declaración, es de
+--      antes del corte, tiene documentos o su libro de IVA, o detrás ya hay otros asientos (quitarlo dejaría
+--      un hueco en la numeración de su serie y rompería la cadena de huellas: eso no se arregla aquí).
+--   3. journal_entry_inalterable, por un trozo exacto: deja BORRAR un validado solo si esta transacción lo
+--      ha pedido para ESE asiento (folvy.asiento_quitar), como ya deja poner su huella (folvy.journal_huella).
+--      Sus líneas se van en cascada (el disparador de las líneas ya lo deja con el asiento borrado).
+--   4. Nuevas: _bank_asiento_razon_contra (por qué no se puede quitar, o null) y _bank_asiento_quitar (lo
+--      quita con su respaldo en conta_asiento_borrado, con el cerrojo de numerar de la empresa, y comprueba
+--      antes que sigue siendo el último de su serie y de la cadena).
+-- Las que cambian: misma firma (create or replace, sin sobrecargas: regla 2), su respaldo antes.
+-- No retira asientos al aplicarse. Nada del camino del pedido se toca salvo esa puerta, que solo se abre
+-- con el ajuste.
+-- sin hueco: el fichero no retira nada al aplicarse. El «delete from journal_entry» es el de bank_deshacer
+-- de siempre (quita un asiento sin validar) y el de _bank_asiento_quitar (el último de su serie y de la
+-- cadena, con su respaldo: no deja hueco).
 -- cambia: public._bank_casar_nucleo · prueba: supabase/staging/sql/20261119_r08_conciliar_en_un_paso_prueba.sql
 -- cambia: public.bank_deshacer · prueba: supabase/staging/sql/20261119_r08_conciliar_en_un_paso_prueba.sql
+-- cambia: public.journal_entry_inalterable · prueba: supabase/staging/sql/20261119_r08_conciliar_en_un_paso_prueba.sql
 -- Vuelta atrás: supabase/vuelta-atras/20261119T2040_r08_conciliar_valida.down.sql
 
 set local lock_timeout = '5s';
 
+-- Si ya está pasada (lleva la marca del R08), ni para ni vuelve a respaldar: la vuelta atrás restaura la de antes.
 do $$ begin
-  if md5(pg_get_functiondef('public._bank_casar_nucleo(uuid,jsonb,text,text,jsonb,text,uuid)'::regprocedure)) <> '9b90a7d302bebf86aa7ad582e41bf5e2' then
-    raise exception 'R08 · 2040: _bank_casar_nucleo no es el medido (9b90a7d3): no se toca nada.';
-  end if;
+  if strpos(pg_get_functiondef('public.bank_deshacer(uuid,text)'::regprocedure), '_bank_asiento_razon_contra') > 0 then return; end if;
   if md5(pg_get_functiondef('public.bank_deshacer(uuid,text)'::regprocedure)) <> '2bd4986001f368ade6dd483b9b23dc54' then
     raise exception 'R08 · 2040: bank_deshacer no es el medido (2bd49860): no se toca nada.';
   end if;
+  perform public._respaldar_funcion('public._bank_casar_nucleo(uuid,jsonb,text,text,jsonb,text,uuid)', '20261119T2040_r08_conciliar_valida');
+  perform public._respaldar_funcion('public.bank_deshacer(uuid,text)', '20261119T2040_r08_conciliar_valida');
+  perform public._respaldar_funcion('public.journal_entry_inalterable()', '20261119T2040_r08_conciliar_valida');
 end $$;
 
-select public._respaldar_funcion('public._bank_casar_nucleo(uuid,jsonb,text,text,jsonb,text,uuid)', '20261119T2040_r08_conciliar_valida');
-select public._respaldar_funcion('public.bank_deshacer(uuid,text)', '20261119T2040_r08_conciliar_valida');
-
--- ── 1 · Conciliar valida ────────────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION public._bank_casar_nucleo(p_movement uuid, p_destino jsonb, p_confianza text, p_porque text, p_razones jsonb, p_por text, p_regla uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+-- ── 1 y 3 · Por trozos exactos ──────────────────────────────────────────────
+do $do$
 declare
-  v_m public.bank_movement; v_t public.treasury_account; v_aj public.bank_settings; v_cuenta uuid; v_tipo text := p_destino->>'tipo';
-  v_572 text; v_entry uuid; v_creado boolean := false; v_match uuid; v_lineas jsonb := '[]'::jsonb; v_l jsonb; v_suma numeric := 0;
-  v_abs numeric; v_entra boolean; v_local uuid; v_comun boolean; v_concepto text; v_res jsonb; v_validado boolean := false;
-  v_f jsonb; v_inv public.supplier_invoice; v_pagado numeric; v_cs public.channel_settlement; v_o public.bank_movement; v_o572 text;
-  v_ot public.treasury_account; v_aviso text; v_tercero uuid := nullif(p_destino->>'tercero_id', '')::uuid; v_marcada boolean;
-  v_dif numeric := 0; v_dif_cuenta text;
-  v_contrato uuid; v_fila date;
-  -- PC01: las facturas emitidas que cobra el movimiento.
-  v_ci public.customer_invoice; v_cobrado numeric; v_sumf numeric := 0;
-begin
-  select * into v_m from public.bank_movement where id = p_movement for update;
-  if v_m.id is null then raise exception 'Ese movimiento no existe.' using errcode = 'P0002'; end if;
-  -- Sin guarda: la pone quien la llama (bank_casar, o la clave de servicio por el núcleo de casar).
-  select account_id into v_cuenta from public.company where id = v_m.company_id;
-  if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
-  if p_por not in ('folvy', 'persona') then raise exception 'Quién casa: folvy o persona.' using errcode = '23514'; end if;
-  if p_confianza not in ('seguro', 'probable', 'duda') or coalesce(trim(p_porque), '') = '' then
-    raise exception 'Todo casado lleva su confianza y su porqué.' using errcode = '23514';
+  r record; v_def text; k int;
+  a_viejo text := $v$  -- Lo seguro se valida solo si la empresa lo ha activado (apagado por defecto).
+  if v_creado and p_confianza = 'seguro' and p_por = 'folvy' and v_aj.validate_safe then
+    begin
+      perform public._journal_entry_validar(v_entry, 'Folvy');
+      v_validado := true;
+    exception when others then
+      v_aviso := 'No se ha podido validar solo: ' || sqlerrm || '. Queda propuesto.';
+    end;
   end if;
-  if exists (select 1 from public.bank_match where movement_id = p_movement and status = 'vivo') then
-    raise exception 'Este movimiento ya está casado: cada movimiento se casa una sola vez.' using errcode = '23505';
-  end if;
-  if v_m.status = 'ignorado' then raise exception '%', case when v_m.ignored_reason ilike 'Anulado por el banco%' then 'Este movimiento está apartado: el banco no lo cobró. Vuelve a abrirlo para conciliarlo.' else 'Este movimiento está apartado (' || coalesce(nullif(trim(v_m.ignored_reason), ''), 'sin motivo') || '). Vuelve a abrirlo para conciliarlo.' end using errcode = '23514'; end if;
-  if v_m.status = 'posible_repetido' then raise exception 'Primero di si es el mismo que el ya traído.' using errcode = '23514'; end if;
-  -- S01e · La cuota de un contrato: el contrato (de esta empresa) y la fila del cuadro que paga.
-  if v_tipo = 'contrato' and nullif(p_destino->>'contrato_id', '') is not null then
-    select c.id into v_contrato from public.recurring_contract c
-     where c.id = (p_destino->>'contrato_id')::uuid and c.company_id = v_m.company_id;
-    if v_contrato is null then raise exception 'Ese contrato no es de esta empresa.' using errcode = '22023'; end if;
-    v_fila := nullif(p_destino->>'fila', '')::date;
-    if v_fila is not null then
-      if not exists (select 1 from public.recurring_contract c, jsonb_array_elements(coalesce(c.schedule, '[]'::jsonb)) f
-                      where c.id = v_contrato and (f->>'fecha')::date = v_fila) then
-        raise exception 'El % no es una cuota del cuadro de ese contrato.', to_char(v_fila, 'DD/MM/YYYY') using errcode = '22023';
-      end if;
-      if exists (select 1 from public.bank_match bm where bm.contract_id = v_contrato and bm.contract_due_date = v_fila and bm.status = 'vivo') then
-        raise exception 'La cuota del % de ese contrato ya está casada con otro cargo.', to_char(v_fila, 'DD/MM/YYYY') using errcode = '23505';
-      end if;
-    end if;
-  end if;
-  -- P4: antes del corte el libro ya tiene el banco (traído): solo se enlaza.
-  if v_m.before_cutover and v_tipo <> 'asiento' then
-    raise exception 'Este movimiento es de antes de la fecha de corte: solo se enlaza con un asiento que ya esté en el libro.' using errcode = '23514';
-  end if;
-  select * into v_t from public.treasury_account where id = v_m.treasury_account_id;
-  v_572 := public._bank_cuenta_572(v_t.id);
-  v_aj := public._bank_ajustes(v_m.company_id);
-  v_abs := abs(v_m.amount); v_entra := v_m.amount > 0;
-  -- El local: el de la tarjeta que pagó, si el destino lo trae; si no, el de la cuenta.
-  v_local := coalesce(nullif(p_destino->>'local_id', '')::uuid, v_t.location_id); v_comun := v_local is null;
-  v_concepto := coalesce(nullif(trim(p_destino->>'concepto'), ''), nullif(v_m.clean_concept, ''), 'Movimiento del banco');
-
-  if v_tipo = 'asiento' then
-    v_entry := (p_destino->>'entry_id')::uuid;
-  elsif v_tipo = 'factura_recibida' then
-    for v_f in select * from jsonb_array_elements(p_destino->'facturas') loop
-      select * into v_inv from public.supplier_invoice where id = (v_f->>'id')::uuid and account_id = v_cuenta for update;
-      if v_inv.id is null then raise exception 'Esa factura no es de la cuenta.' using errcode = '23514'; end if;
-      -- Cola 2 (02/11): nunca con una factura anulada o descartada (Olimpo, 30/10: una propuesta vieja casó un pago con el albarán anulado).
-      if v_inv.status = 'anulada' or v_inv.discarded_at is not null then
-        raise exception 'La factura % está %: no se casa un pago con ella. Vuelve a calcular la propuesta de este movimiento.',
-          coalesce(v_inv.invoice_number, v_inv.code, ''), case when v_inv.status = 'anulada' then 'anulada' else 'descartada' end using errcode = '23514';
-      end if;
-      select coalesce(sum(i.amount), 0) into v_pagado from public.bank_match_item i join public.bank_match b on b.id = i.match_id
-       where i.supplier_invoice_id = v_inv.id and b.status = 'vivo';
-      if v_pagado + (v_f->>'importe')::numeric > coalesce(v_inv.grand_total, 0) + 0.005 then
-        raise exception 'La factura % ya tiene casados % de %: este pago la pasaría.', coalesce(v_inv.invoice_number, ''),
-          public.conta_euros_exactos(v_pagado), public.conta_euros_exactos(coalesce(v_inv.grand_total, 0)) using errcode = '23514';
-      end if;
-      v_suma := v_suma + (v_f->>'importe')::numeric;
-      -- P2: si su pago ya está apuntado (propuesto o validado), se enlaza ese asiento y no se crea otro.
-      -- (B02: no si lleva diferencia: ese asiento no la tiene.)
-      if jsonb_array_length(p_destino->'facturas') = 1 and v_entry is null and not (p_destino ? 'diferencia') then
-        select e.id into v_entry from public.journal_entry e
-         where e.company_id = v_m.company_id and e.status in ('propuesto', 'borrador', 'validado')
-           and (e.id = v_inv.payment_entry_id or (e.source_type = 'supplier_payment' and e.source_id = v_inv.id))
-           and not exists (select 1 from public.bank_match b where b.journal_entry_id = e.id and b.status = 'vivo')
-         limit 1;
-      end if;
-    end loop;
-    -- B02 · La diferencia pequeña (comisión o redondeo), con su cuenta: + pagado de más (gasto, al debe),
-    -- − pagado de menos (ingreso, al haber). Hasta 3 € y el 3 % del pago; la propone el motor y la confirma la persona.
-    if p_destino ? 'diferencia' then
-      v_dif := (p_destino->'diferencia'->>'importe')::numeric;
-      v_dif_cuenta := nullif(trim(p_destino->'diferencia'->>'cuenta'), '');
-      if v_dif_cuenta is null or v_dif = 0 then raise exception 'La diferencia lleva su cuenta y su importe.' using errcode = '23514'; end if;
-      if abs(v_dif) > least(3, round(v_abs * 0.03, 2)) + 0.005 then
-        raise exception 'Una diferencia de % no es pequeña (hasta 3 € y el 3 %% del pago): casa la factura en parte o apunta la diferencia aparte.', public.conta_euros_exactos(abs(v_dif)) using errcode = '23514';
-      end if;
-      if p_por <> 'persona' then raise exception 'Una diferencia no se apunta sola: la confirma la persona.' using errcode = '23514'; end if;
-    end if;
-    if v_suma + v_dif <> v_abs then raise exception 'Las facturas suman % y el movimiento es de %.', public.conta_euros_exactos(v_suma + v_dif), public.conta_euros_exactos(v_abs) using errcode = '23514'; end if;
-    if v_entry is null then
-      v_lineas := jsonb_build_array(jsonb_build_object('cuenta', p_destino->>'cuenta_tercero', 'debe', v_suma, 'haber', 0, 'tercero_id', v_tercero,
-                                                       'concepto', v_concepto, 'local_id', v_local, 'comun', v_comun));
-      if v_dif <> 0 then
-        v_lineas := v_lineas || jsonb_build_array(jsonb_build_object('cuenta', v_dif_cuenta, 'debe', greatest(v_dif, 0), 'haber', greatest(-v_dif, 0),
-          'concepto', coalesce(nullif(trim(p_destino->'diferencia'->>'concepto'), ''), v_concepto), 'local_id', v_local, 'comun', v_comun));
-      end if;
-    end if;
-  elsif v_tipo = 'liquidacion' then
-    select * into v_cs from public.channel_settlement where id = (p_destino->>'liquidacion_id')::uuid and account_id = v_cuenta for update;
-    if v_cs.id is null then raise exception 'Esa liquidación no es de la cuenta.' using errcode = '23514'; end if;
-    if exists (select 1 from public.bank_match_item i join public.bank_match b on b.id = i.match_id where i.channel_settlement_id = v_cs.id and b.status = 'vivo') then
-      raise exception 'Esa liquidación ya está casada con otro movimiento.' using errcode = '23505';
-    end if;
-    -- P2: «cobrada» a mano y su asiento con el cobro dentro → se enlaza.
-    if v_cs.collected_on is not null and v_cs.journal_entry_id is not null then v_entry := v_cs.journal_entry_id; end if;
-    if v_entry is null then
-      v_lineas := jsonb_build_array(jsonb_build_object('cuenta', p_destino->>'cuenta_cliente', 'debe', 0, 'haber', v_abs, 'tercero_id', v_tercero,
-                                                       'concepto', v_concepto, 'local_id', v_local, 'comun', v_comun));
-    end if;
-  elsif v_tipo = 'traspaso' then
-    select * into v_o from public.bank_movement where id = (p_destino->>'otro_movimiento_id')::uuid for update;
-    if v_o.id is null or v_o.company_id <> v_m.company_id or v_o.treasury_account_id = v_m.treasury_account_id then
-      raise exception 'El otro lado del traspaso tiene que ser un movimiento de otra cuenta de la misma empresa.' using errcode = '23514';
-    end if;
-    if v_o.amount <> -v_m.amount then raise exception 'Un traspaso sale de una cuenta y entra en otra por el mismo importe.' using errcode = '23514'; end if;
-    if exists (select 1 from public.bank_match where movement_id = v_o.id and status = 'vivo') then
-      raise exception 'El otro lado del traspaso ya está casado.' using errcode = '23505';
-    end if;
-    select * into v_ot from public.treasury_account where id = v_o.treasury_account_id;
-    v_o572 := public._bank_cuenta_572(v_ot.id);
-    if v_o572 is null then raise exception 'La cuenta «%» no tiene su cuenta contable (572).', v_ot.name using errcode = '23514'; end if;
-    v_lineas := jsonb_build_array(jsonb_build_object('cuenta', v_o572, 'debe', case when v_entra then 0 else v_abs end,
-                                                     'haber', case when v_entra then v_abs else 0 end, 'concepto', v_concepto,
-                                                     'local_id', v_ot.location_id, 'comun', v_ot.location_id is null));
-  elsif v_tipo in ('cuenta', 'anticipo', 'contrato', 'factura_emitida') then
-    for v_l in select * from jsonb_array_elements(p_destino->'lineas') loop
-      v_suma := v_suma + (v_l->>'importe')::numeric;
-      v_lineas := v_lineas || jsonb_build_array(jsonb_build_object('cuenta', v_l->>'cuenta',
-        'debe', case when v_entra then 0 else (v_l->>'importe')::numeric end, 'haber', case when v_entra then (v_l->>'importe')::numeric else 0 end,
-        'tercero_id', coalesce(nullif(v_l->>'tercero_id', '')::uuid, v_tercero), 'concepto', coalesce(v_l->>'concepto', v_concepto),
-        'local_id', v_local, 'comun', v_comun,
-        -- S01d: el pago de un modelo lleva su modelo y su periodo («111 · 3T 2026»).
-        'retencion', case when nullif(v_l->>'periodo', '') is not null
-                          then jsonb_build_object('modelo', v_l->>'modelo', 'periodo', v_l->>'periodo') end));
-    end loop;
-    if v_suma <> v_abs then raise exception 'Las líneas suman % y el movimiento es de %.', public.conta_euros_exactos(v_suma), public.conta_euros_exactos(v_abs) using errcode = '23514'; end if;
-    -- PC01 · Cobrar facturas emitidas: cada una, de la empresa, emitida y sin pasarse.
-    if v_tipo = 'factura_emitida' and jsonb_typeof(p_destino->'facturas') = 'array' and jsonb_array_length(p_destino->'facturas') > 0 then
-      if not v_entra then raise exception 'Un cobro de facturas entra en el banco, y este movimiento sale.' using errcode = '23514'; end if;
-      for v_f in select * from jsonb_array_elements(p_destino->'facturas') loop
-        select * into v_ci from public.customer_invoice where id = (v_f->>'id')::uuid and account_id = v_cuenta and company_id = v_m.company_id for update;
-        if v_ci.id is null then raise exception 'Esa factura emitida no es de la empresa.' using errcode = '23514'; end if;
-        if v_ci.status <> 'emitida' then raise exception 'La factura % no está emitida (está %).', coalesce(v_ci.number_text, ''), v_ci.status using errcode = '23514'; end if;
-        if coalesce((v_f->>'importe')::numeric, 0) <= 0 then raise exception 'Cada factura cobra un importe mayor que cero.' using errcode = '23514'; end if;
-        select coalesce(sum(amount), 0) into v_cobrado from public.customer_invoice_payment where invoice_id = v_ci.id;
-        if v_cobrado + (v_f->>'importe')::numeric > v_ci.total + 0.005 then
-          raise exception 'La factura % ya tiene cobrados % de %: este cobro la pasaría.', coalesce(v_ci.number_text, ''),
-            public.conta_euros_exactos(v_cobrado), public.conta_euros_exactos(v_ci.total) using errcode = '23514';
-        end if;
-        v_sumf := v_sumf + (v_f->>'importe')::numeric;
-      end loop;
-      if v_sumf > v_abs + 0.005 then
-        raise exception 'Las facturas suman % y el movimiento es de %.', public.conta_euros_exactos(v_sumf), public.conta_euros_exactos(v_abs) using errcode = '23514';
-      end if;
-    end if;
-  else
-    raise exception 'Tipo de casado no válido: %.', v_tipo using errcode = '23514';
-  end if;
-
-  if v_entry is not null then
-    -- Enlazar: el asiento es de la empresa, está vivo y lleva este banco por este importe en su lado.
-    if not exists (select 1 from public.journal_entry e where e.id = v_entry and e.company_id = v_m.company_id and e.status in ('propuesto', 'borrador', 'validado')) then
-      raise exception 'Ese asiento no es de la empresa o no está vivo.' using errcode = '23514';
-    end if;
-    if v_572 is not null and not exists (select 1 from public.journal_line jl join public.company_account ca on ca.id = jl.company_account_id
-                       where jl.entry_id = v_entry and ca.code = v_572 and (case when v_entra then jl.debit else jl.credit end) = v_abs) then
-      raise exception 'Ese asiento no lleva % en %, en su lado.', public.conta_euros_exactos(v_abs), v_572 using errcode = '23514';
-    end if;
-    if exists (select 1 from public.bank_match where journal_entry_id = v_entry and status = 'vivo' and kind <> 'traspaso') then
-      raise exception 'Ese asiento ya está casado con otro movimiento.' using errcode = '23505';
-    end if;
-  else
-    if v_572 is null then raise exception 'La cuenta «%» no tiene su cuenta contable (572): dila en Cuentas y extractos.', v_t.name using errcode = '23514'; end if;
-    v_lineas := jsonb_build_array(jsonb_build_object('cuenta', v_572, 'debe', case when v_entra then v_abs else 0 end,
-                                                     'haber', case when v_entra then 0 else v_abs end, 'concepto', v_concepto,
-                                                     'local_id', v_local, 'comun', v_comun)) || v_lineas;
-    v_res := public._journal_entry_proponer(v_m.company_id,
-      jsonb_build_object('fecha', v_m.op_date, 'series', v_aj.treasury_series, 'concepto', v_concepto, 'source_type', 'bank', 'source_id', v_m.id,
-                         'confianza', p_confianza, 'porque', p_porque, 'razones', coalesce(p_razones, '[]'::jsonb), 'party_id', v_tercero,
-                         'documento', coalesce(v_m.document_no, v_m.reference_1)),
-      v_lineas, '{}'::jsonb, case when p_por = 'folvy' then 'Folvy' else public.conta_nombre_actor() end, auth.uid());
-    if coalesce((v_res->>'descartada')::boolean, false) then raise exception 'Ese movimiento tenía la propuesta descartada.' using errcode = '23514'; end if;
-    v_entry := (v_res->>'id')::uuid;
-    v_creado := not coalesce((v_res->>'existente')::boolean, false);
-  end if;
-
-  insert into public.bank_match (account_id, company_id, movement_id, kind, journal_entry_id, entry_created, amount, confidence, reason, by_who, rule_id,
-                                 created_by, created_by_name, contract_id, contract_due_date)
-  values (v_cuenta, v_m.company_id, v_m.id, v_tipo, v_entry, v_creado, v_m.amount, p_confianza, p_porque, p_por, p_regla, auth.uid(),
-          case when p_por = 'folvy' then 'Folvy' else public.conta_nombre_actor() end, v_contrato, v_fila)
-  returning id into v_match;
-
-  -- Respuesta 4: la persona casa con otra cosa lo que proponía una regla → una
-  -- corrección para esa regla; a la segunda se apaga sola y lo dice (0150).
-  if p_por = 'persona' and nullif(v_m.proposal->>'reglaId', '') is not null
-     and (p_regla is null or p_regla::text <> v_m.proposal->>'reglaId') then
-    perform public._bank_regla_corregida((v_m.proposal->>'reglaId')::uuid, v_m.id);
-  end if;
-
-  -- A qué y por cuánto, y lo que cambia fuera del banco.
-  if v_tipo = 'factura_recibida' then
-    for v_f in select * from jsonb_array_elements(p_destino->'facturas') loop
-      select * into v_inv from public.supplier_invoice where id = (v_f->>'id')::uuid;
-      select coalesce(sum(i.amount), 0) + (v_f->>'importe')::numeric into v_pagado from public.bank_match_item i join public.bank_match b on b.id = i.match_id
-       where i.supplier_invoice_id = v_inv.id and b.status = 'vivo';
-      -- Pagada entera: por el camino de siempre (mark_supplier_invoice_paid), con su freno del IBAN y su registro.
-      -- B02: solo si está aprobada. Confirmar el pago de una factura «en revisión» no la aprueba ni la marca:
-      -- el casado queda (bank_match_item) y se marcará cuando se apruebe.
-      v_marcada := v_pagado >= coalesce(v_inv.grand_total, 0) - 0.005 and v_inv.paid_at is null and v_inv.status = 'aprobada';
-      insert into public.bank_match_item (account_id, match_id, supplier_invoice_id, amount, marked_by_bank)
-      values (v_cuenta, v_match, v_inv.id, (v_f->>'importe')::numeric, v_marcada);
-      if v_marcada then
-        perform public._mark_supplier_invoice_paid_nucleo(v_inv.id, v_m.op_date, coalesce(p_destino->>'metodo', 'transfer'), case when auth.uid() is null then 'Sumied' end);
-      end if;
-      update public.supplier_invoice set payment_entry_id = coalesce(payment_entry_id, v_entry) where id = v_inv.id;
-    end loop;
-  elsif v_tipo = 'liquidacion' then
-    -- Cobrada por el camino de siempre (channel_settlement_collect), si no lo estaba.
-    insert into public.bank_match_item (account_id, match_id, channel_settlement_id, amount, marked_by_bank)
-    values (v_cuenta, v_match, v_cs.id, v_m.amount, v_cs.collected_on is null);
-    if v_cs.collected_on is null then
-      perform public.channel_settlement_collect(v_cs.id, v_m.op_date, v_m.amount,
-        'Casado con el movimiento del banco del ' || to_char(v_m.op_date, 'DD/MM/YYYY'), 'Folvy · banco');
-    end if;
-  elsif v_tipo = 'traspaso' then
-    insert into public.bank_match_item (account_id, match_id, other_movement_id, amount) values (v_cuenta, v_match, v_o.id, v_m.amount);
-    insert into public.bank_match (account_id, company_id, movement_id, kind, journal_entry_id, entry_created, amount, confidence, reason, by_who, rule_id,
-                                   created_by, created_by_name)
-    values (v_cuenta, v_m.company_id, v_o.id, 'traspaso', v_entry, false, v_o.amount, p_confianza, p_porque, p_por, p_regla, auth.uid(),
-            case when p_por = 'folvy' then 'Folvy' else public.conta_nombre_actor() end);
-    update public.bank_movement set status = 'casado', confidence = p_confianza, reason = p_porque, updated_at = now() where id = v_o.id;
-  elsif v_tipo = 'factura_emitida' and v_sumf > 0 then
-    -- PC01: cada factura emitida con lo que cobra (el disparador de bank_match_item escribe su cobro con este asiento).
-    for v_f in select * from jsonb_array_elements(p_destino->'facturas') loop
-      insert into public.bank_match_item (account_id, match_id, customer_invoice_id, party_id, amount)
-      values (v_cuenta, v_match, (v_f->>'id')::uuid, v_tercero, (v_f->>'importe')::numeric);
-    end loop;
-  elsif v_tercero is not null then
-    insert into public.bank_match_item (account_id, match_id, party_id, amount) values (v_cuenta, v_match, v_tercero, v_m.amount);
-  end if;
-
-  update public.bank_movement set status = 'casado', confidence = p_confianza, reason = p_porque, updated_at = now() where id = v_m.id;
-
-  -- R08 (Julio, 19/11): conciliar es el último paso. El asiento queda validado, en el diario,
-  -- en esta misma transacción, lo case una persona o Sumied solo. Si no se puede validar (un
-  -- periodo cerrado, por ejemplo), no se concilia: el error sube, en palabras, y no queda nada
-  -- propuesto esperando otro botón.
+$v$;
+  a_nuevo text := $n$  -- R08 · conciliar es el último paso (Julio, 19/11): el asiento que crea o enlaza queda VALIDADO, en el
+  -- diario, en esta misma transacción, lo concilie una persona, Sumied solo, una remesa o una pasarela.
+  -- Si no se puede validar (un periodo cerrado, por ejemplo), no se concilia: el error sube, en palabras.
   if exists (select 1 from public.journal_entry e where e.id = v_entry and e.status in ('propuesto', 'borrador')) then
     perform public._journal_entry_validar(v_entry, case when p_por = 'folvy' then 'Folvy' else public.conta_nombre_actor() end);
     v_validado := true;
   end if;
-
-  perform public._bank_log(v_cuenta, v_m.company_id, v_m.id, v_match, null, case when v_creado then 'casado' else 'enlazado' end, p_por,
-    p_porque, jsonb_build_object('tipo', v_tipo, 'asiento', v_entry, 'creado', v_creado, 'validado', v_validado, 'aviso', v_aviso));
-  if v_validado then
-    perform public._bank_log(v_cuenta, v_m.company_id, v_m.id, v_match, null, 'validado', p_por, 'Conciliado: el asiento está en el diario', '{}'::jsonb);
-  end if;
-  if p_regla is not null then
-    update public.bank_rule set last_used_at = now() where id = p_regla and company_id = v_m.company_id;
-  end if;
-  return jsonb_build_object('match', v_match, 'asiento', v_entry, 'creado', v_creado, 'validado', v_validado, 'aviso', v_aviso);
-end $function$;
-
+$n$;
+  b_viejo text := $v$    perform public._bank_log(v_cuenta, v_m.company_id, v_m.id, v_match, null, 'validado', 'folvy', 'Validado solo: es seguro y la empresa lo tiene activado', '{}'::jsonb);$v$;
+  b_nuevo text := $n$    perform public._bank_log(v_cuenta, v_m.company_id, v_m.id, v_match, null, 'validado', p_por, 'Conciliado: el asiento está en el diario', '{}'::jsonb);$n$;
+  c_viejo text := $v$  if v_m.status = 'ignorado' then raise exception 'Ese movimiento está ignorado.' using errcode = '23514'; end if;$v$;
+  c_nuevo text := $n$  if v_m.status = 'ignorado' then
+    raise exception '%', case when v_m.ignored_reason ilike 'Anulado por el banco%' then 'Este movimiento está apartado: el banco no lo cobró. Vuelve a abrirlo para conciliarlo.'
+                              else 'Este movimiento está apartado (' || coalesce(nullif(trim(v_m.ignored_reason), ''), 'sin motivo') || '). Vuelve a abrirlo para conciliarlo.' end using errcode = '23514';
+  end if;$n$;
+  i_viejo text := $v$  if tg_op = 'DELETE' then
+    if old.number is not null or old.status in ('validado', 'anulado') then$v$;
+  i_nuevo text := $n$  if tg_op = 'DELETE' then
+    -- R08 · Bancos quita del diario el último asiento validado de su serie y de la cadena (_bank_asiento_quitar),
+    -- y solo ese: lo pide esta transacción para ESE asiento.
+    if old.status = 'validado' and current_setting('folvy.asiento_quitar', true) = old.id::text then
+      return old;
+    end if;
+    if old.number is not null or old.status in ('validado', 'anulado') then$n$;
+begin
+  for r in select * from (values
+      ('public._bank_casar_nucleo(uuid,jsonb,text,text,jsonb,text,uuid)', 'R08 · conciliar es el último paso', array[a_viejo, b_viejo, c_viejo], array[a_nuevo, b_nuevo, c_nuevo]),
+      ('public.journal_entry_inalterable()', 'folvy.asiento_quitar', array[i_viejo], array[i_nuevo])) t(firma, marca, viejos, nuevos) loop
+    v_def := pg_get_functiondef(r.firma::regprocedure);
+    continue when strpos(v_def, r.marca) > 0;   -- ya pasada
+    for k in 1 .. array_length(r.viejos, 1) loop
+      if (length(v_def) - length(replace(v_def, r.viejos[k], ''))) / length(r.viejos[k]) <> 1 then
+        raise exception 'R08 · 2040: % no es la medida (su trozo % no está una sola vez): no se toca.', r.firma, k;
+      end if;
+      v_def := replace(v_def, r.viejos[k], r.nuevos[k]);
+    end loop;
+    execute v_def;
+  end loop;
+end $do$;
 revoke all on function public._bank_casar_nucleo(uuid, jsonb, text, text, jsonb, text, uuid) from public, anon, authenticated, service_role;
 
--- ── 2 · Deshacer avisa ──────────────────────────────────────────────────────
+-- ── 4 · Por qué no se puede quitar, y quitarlo ──────────────────────────────
+create or replace function public._bank_asiento_razon_contra(p_entry uuid)
+returns text language plpgsql stable security definer set search_path = public as $$
+declare e public.journal_entry; v_corte date;
+begin
+  select * into e from public.journal_entry where id = p_entry;
+  if e.id is null or e.status <> 'validado' then return 'no está validado'; end if;
+  if exists (select 1 from public.conta_erp10_salida_partida p where p.entry_id = e.id)
+     or exists (select 1 from public.conta_erp10_envio x where x.entry_id = e.id)
+     or exists (select 1 from public.conta_erp10_a_mano x where x.entry_id = e.id) then
+    return 'ya salió a ERP10';
+  end if;
+  if public.conta_iva_presentado(e.company_id, e.entry_date) is not null and public._conta_asiento_lleva_iva(e.id) is not null then
+    return format('lleva IVA y el trimestre del %s ya está presentado', to_char(e.entry_date, 'DD/MM/YYYY'));
+  end if;
+  if exists (select 1 from public.external_send x where x.entry_id = e.id) then return 'se envió a Diez'; end if;
+  if exists (select 1 from public.tax_return_line t join public.journal_line l on l.id = t.journal_line_id where l.entry_id = e.id) then return 'está en una declaración'; end if;
+  v_corte := public._conta_corte(e.company_id);
+  if v_corte is not null and e.entry_date < v_corte then return 'es de antes del corte'; end if;
+  if exists (select 1 from public.vat_book_entry v where v.entry_id = e.id) or exists (select 1 from public.journal_entry_document d where d.entry_id = e.id)
+     or exists (select 1 from public.conta_pdf_llave k where k.entry_id = e.id) or exists (select 1 from public.external_document d where d.entry_id = e.id) then
+    return 'tiene su libro de IVA o sus documentos';
+  end if;
+  if exists (select 1 from public.journal_entry o where o.reverses_entry_id = e.id or o.voided_by_entry_id = e.id) or e.reverses_entry_id is not null then
+    return 'anula a otro o lo anulan';
+  end if;
+  if exists (select 1 from public.journal_entry o where o.company_id = e.company_id and o.chain_seq > e.chain_seq)
+     or exists (select 1 from public.journal_entry o where o.company_id = e.company_id and o.fiscal_year_id = e.fiscal_year_id and o.series = e.series and o.number > e.number) then
+    return 'detrás ya hay otros asientos en el diario, y quitarlo dejaría un hueco en la numeración';
+  end if;
+  return null;
+end $$;
+revoke all on function public._bank_asiento_razon_contra(uuid) from public, anon, authenticated, service_role;
+comment on function public._bank_asiento_razon_contra(uuid) is
+  'R08 · Por qué un asiento validado de Bancos no se puede quitar del diario al deshacer (y se anula con su contraasiento), en palabras; null si se puede: es el último de su serie y de la cadena y no ha salido a ningún sitio.';
+
+create or replace function public._bank_asiento_quitar(p_entry uuid, p_motivo text)
+returns void language plpgsql security definer set search_path = public as $$
+declare e public.journal_entry; v_porque text;
+begin
+  select * into e from public.journal_entry where id = p_entry;
+  if e.id is null then return; end if;
+  -- El cerrojo de numerar de la empresa (el de validar): nadie valida detrás mientras tanto.
+  perform pg_advisory_xact_lock(hashtextextended('journal_entry_numero:' || e.company_id, 0));
+  v_porque := public._bank_asiento_razon_contra(p_entry);
+  if v_porque is not null then
+    raise exception 'No se quita del diario el asiento %/%: %.', e.series, e.number, v_porque using errcode = '23514';
+  end if;
+  insert into public.conta_asiento_borrado (lote, account_id, company_id, que, entry_id, asiento, lineas, iva, documentos, enlaces, numero_antes, cadena_antes, motivo, quien)
+  select gen_random_uuid(), e.account_id, e.company_id, 'asiento', e.id, to_jsonb(e),
+         (select coalesce(jsonb_agg(to_jsonb(l) order by l.position), '[]') from public.journal_line l where l.entry_id = e.id),
+         '[]'::jsonb, '[]'::jsonb,
+         jsonb_build_object('factura_pago', (select coalesce(jsonb_agg(s.id), '[]') from public.supplier_invoice s where s.payment_entry_id = e.id),
+                            'actividad', (select coalesce(jsonb_agg(a.id), '[]') from public.document_activity a where a.journal_entry_id = e.id)),
+         e.number, jsonb_build_object('chain_seq', e.chain_seq, 'prev_hash', e.prev_hash, 'hash', e.hash),
+         p_motivo, public.conta_nombre_actor();
+  update public.supplier_invoice set payment_entry_id = null, updated_at = now() where payment_entry_id = e.id;
+  update public.document_activity set journal_entry_id = null where journal_entry_id = e.id;
+  perform set_config('folvy.asiento_quitar', e.id::text, true);
+  delete from public.journal_entry where id = e.id;   -- sus líneas, en cascada
+  perform set_config('folvy.asiento_quitar', '', true);
+end $$;
+revoke all on function public._bank_asiento_quitar(uuid, text) from public, anon, authenticated, service_role;
+comment on function public._bank_asiento_quitar(uuid, text) is
+  'R08 · Quita del diario un asiento validado de Bancos al deshacerlo, solo si es el último de su serie y de la cadena y no ha salido a ningún sitio (_bank_asiento_razon_contra): no deja hueco. Con su respaldo en conta_asiento_borrado.';
+
+-- ── 2 · Deshacer ────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.bank_deshacer(p_match uuid, p_motivo text)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare v_b public.bank_match; v_e public.journal_entry; v_que text; v_otros uuid[]; i record;
+declare v_b public.bank_match; v_e public.journal_entry; v_que text; v_otros uuid[]; i record; v_porque text; v_quitar boolean := false;
 begin
   select * into v_b from public.bank_match where id = p_match for update;
   if v_b.id is null then raise exception 'Ese movimiento ya no está conciliado: vuelve a cargar.' using errcode = 'P0002'; end if;
@@ -335,15 +188,14 @@ begin
       delete from public.journal_entry where id = v_e.id;  -- una propuesta no deja rastro en el libro; su rastro es este casado deshecho
       v_que := 'su asiento propuesto se quita';
     elsif v_e.status = 'validado' then
-      -- R08: lo que ya salió a ERP10, o lleva IVA de un trimestre presentado, no se deshace en silencio.
-      if exists (select 1 from public.conta_erp10_salida_partida p where p.entry_id = v_e.id and p.estado = 'salida') then
-        raise exception 'No se deshace: el asiento %/% ya salió a ERP10. Si está mal, corrígelo allí y aquí con un asiento a mano.', v_e.series, v_e.number using errcode = '23514';
+      -- R08 (Julio, 19/11): se QUITA del diario si se puede sin hueco ni nada fuera; si no, contraasiento, y se dice por qué.
+      v_porque := public._bank_asiento_razon_contra(v_e.id);
+      if v_porque is null then
+        v_quitar := true;
+      else
+        perform public.journal_entry_anular(v_e.id, 'Deshecho en Bancos: ' || trim(p_motivo), current_date, public.conta_nombre_actor());
+        v_que := format('su asiento %s/%s se anula con un contraasiento: %s', v_e.series, v_e.number, v_porque);
       end if;
-      if public.conta_iva_presentado(v_e.company_id, v_e.entry_date) is not null and public._conta_asiento_lleva_iva(v_e.id) is not null then
-        raise exception 'No se deshace: el asiento %/% lleva IVA y el trimestre del % ya está presentado.', v_e.series, v_e.number, to_char(v_e.entry_date, 'DD/MM/YYYY') using errcode = '23514';
-      end if;
-      perform public.journal_entry_anular(v_e.id, 'Deshecho en Bancos: ' || trim(p_motivo), current_date, public.conta_nombre_actor());
-      v_que := format('su asiento %s/%s se anula con un contraasiento', v_e.series, v_e.number);
     end if;
   else
     v_que := 'el asiento enlazado se queda como estaba';
@@ -363,6 +215,11 @@ begin
       perform public.channel_settlement_uncollect(i.channel_settlement_id);
     end if;
   end loop;
+  -- R08 · Con el casado ya deshecho y lo de fuera quitado, el asiento validado sale del diario.
+  if v_quitar then
+    perform public._bank_asiento_quitar(v_e.id, 'Deshecho en Bancos: ' || trim(p_motivo));
+    v_que := format('su asiento %s/%s se quita del diario', v_e.series, v_e.number);
+  end if;
   perform public._bank_log(v_b.account_id, v_b.company_id, v_b.movement_id, v_b.id, null, 'deshecho', 'persona',
     'Deshecho: ' || trim(p_motivo) || ' (' || v_que || ')', jsonb_build_object('asiento', v_b.journal_entry_id));
   return jsonb_build_object('deshechos', to_jsonb(v_otros), 'asiento', v_que);

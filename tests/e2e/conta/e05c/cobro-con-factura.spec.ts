@@ -111,7 +111,7 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(deshacer).toBeVisible()
       await deshacer.click()
       // R08 · Lo que está en el diario se anula con su contraasiento; lo propuesto (staging sin la 2040) se quita.
-      await expect(aviso(page)).toHaveText(enElDiario ? new RegExp(`^Deshecho: el movimiento de ${cliente} vuelve a estar por conciliar, y su asiento \\d+/\\d+ se anula con un contraasiento\\.$`)
+      await expect(aviso(page)).toHaveText(enElDiario ? new RegExp(`^Deshecho: el movimiento de ${cliente} vuelve a estar por conciliar, y su asiento \\d+/\\d+ (se quita del diario|se anula con un contraasiento: .+)\\.$`)
         : `Deshecho: el movimiento de ${cliente} vuelve a estar por conciliar, y su asiento propuesto se quita.`, { timeout: 30_000 })
       expect(await cobroDe(s, p, f)).toEqual({ estado: 'por_cobrar', pendiente: 242, cobros: [] })
       expect(errores, 'errores de la página').toEqual([])
