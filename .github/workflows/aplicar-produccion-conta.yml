@@ -133,10 +133,29 @@ env:
   PGCONNECT_TIMEOUT: '15'
 
 jobs:
+  # X09 (19/11) · EL COMMIT, LO PRIMERO. Antes de esperar a la e2e y de leer Diez: «commit»
+  # son los 40 caracteres del último commit de «rama», y si no, para con una frase que dice
+  # qué se ha puesto y cuál es el último (scripts/ci/commit-de-la-rama.mjs). El 19/11 un real
+  # con el commit pegado dos veces cayó en «guarda-diez» con un «exit code 128» sin decir
+  # nada. Sin entorno ni secretos: solo mira la rama.
+  commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/ci
+      - name: El commit es el último de la rama, entero (40 caracteres)
+        env:
+          RAMA: ${{ inputs.rama }}
+          COMMIT: ${{ inputs.commit }}
+        run: node scripts/ci/commit-de-la-rama.mjs validar
+
   # W12 · Regla T9 (29/10): el ensayo espera a que acabe la e2e de su rama (tope
   # de 45 min; si se pasa, en rojo). Va aparte y sin la cola de producción:
   # esperar aquí no para los runs de las demás ramas.
   espera-e2e:
+    needs: commit
     if: inputs.modo == 'ensayo' && inputs.rama != ''
     runs-on: ubuntu-latest
     timeout-minutes: 55
@@ -160,6 +179,7 @@ jobs:
   #   · en el ENSAYO solo lo dice (aviso): el ensayo mide la tanda, no Diez;
   #   · una tanda sin guarda-diez.json no lee nada y sigue.
   guarda-diez:
+    needs: commit
     if: inputs.modo != 'vuelta_atras'
     runs-on: ubuntu-latest
     environment: lectura
@@ -204,10 +224,10 @@ jobs:
           echo "::warning::Guarda de Diez: hoy no cuadra (o no se ha podido leer). En el ENSAYO solo se dice; el REAL pararía aquí."
 
   aplicar:
-    needs: [espera-e2e, guarda-diez]
+    needs: [commit, espera-e2e, guarda-diez]
     # Sigue si la espera ha ido bien o no tocaba (saltada), y si la guarda de Diez
     # no ha parado (B01r26: en el real, Diez no está como la tanda necesita).
-    if: always() && !cancelled() && needs.espera-e2e.result != 'failure' && needs.guarda-diez.result != 'failure'
+    if: always() && !cancelled() && needs.commit.result == 'success' && needs.espera-e2e.result != 'failure' && needs.guarda-diez.result != 'failure'
     runs-on: ubuntu-latest
     # W12 · Regla T10 y W12b (30/10): los secretos de producción solo existen en
     # dos entornos, y los dos solo admiten ejecuciones de main. El ensayo, en
@@ -295,12 +315,13 @@ jobs:
           set -euo pipefail
           # El commit tiene que ser el último de la rama: lo que se ensaya es lo que se fusionará.
           ultimo=$(git ls-remote origin "refs/heads/$RAMA_PEDIDA" | cut -f1)
-          if [ -z "$ultimo" ]; then echo "::error::No existe la rama «$RAMA_PEDIDA»."; exit 1; fi
-          if [ "$ultimo" != "$COMMIT" ]; then echo "::error::«commit» ($COMMIT) no es el último de «$RAMA_PEDIDA» ($ultimo). Qué hacer: lánzalo con el último."; exit 1; fi
+          # X09: el primer job («commit») ya lo ha dicho con su frase; aquí queda por si ha habido otro push mientras esperaba.
+          if [ -z "$ultimo" ]; then echo "::error::La rama ya no existe. Mira el job «commit»."; exit 1; fi
+          if [ "$ultimo" != "$COMMIT" ]; then echo "::error::El commit ya no es el último de la rama: ha habido otro push mientras esperaba. Lánzalo otra vez con el último."; exit 1; fi
           git fetch -q --depth=1 origin "$COMMIT"
           # Solo DATOS: los guiones (scripts/, salvo las cuentas) y el workflow siguen siendo los de main.
           git checkout "$COMMIT" -- supabase src scripts/conta/produccion/cuentas
-          echo "De $RAMA_PEDIDA ($COMMIT): supabase/, src/ y scripts/conta/produccion/cuentas/. El resto, de main ($GITHUB_SHA)."
+          echo "De la rama (su último commit, el del informe): supabase/, src/ y scripts/conta/produccion/cuentas/. El resto, de main."
 
       - name: Guarda 1 y 2 · el secreto apunta a PRODUCCIÓN y no a staging
         timeout-minutes: 15
@@ -383,8 +404,9 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/aplicar-produccion-conta.yml/runs?branch=main&event=workflow_dispatch&status=success&per_page=100" > /tmp/ensayos.json
           n=$(jq --arg t "$buscado" '[.workflow_runs[] | select(.head_branch == "main" and .display_title == $t)] | length' /tmp/ensayos.json)
           if [ "$n" -lt 1 ]; then
-            echo "::error::No hay ningún ENSAYO en verde lanzado desde main de «${RAMA}» en el commit ${COMMIT} (se busca «$buscado»). Primero el ensayo, luego el real."
-            exit 1
+            # X09: el título exacto que buscó y los ensayos que hay de esa rama (con su estado).
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/aplicar-produccion-conta.yml/runs?event=workflow_dispatch&per_page=100" > /tmp/todos.json
+            RAMA="${RAMA}" BUSCADO="$buscado" ENSAYOS=/tmp/todos.json node scripts/ci/commit-de-la-rama.mjs sin-ensayo
           fi
           echo "Hay al menos un ensayo en verde de este commit."
           echo "Ensayo en verde de este mismo commit: sí ($n)." >> "$INFORME"; echo >> "$INFORME"

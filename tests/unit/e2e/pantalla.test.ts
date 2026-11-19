@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { TOPES, bloque, deLaTraza, erroresDeLaSalida, leerContexto, limpiar, ordenarPantalla, resumenError, resumenMd } from '../../../scripts/e2e/pantalla.mjs'
+import { TOPES, bloque, compactarFilas, deLaTraza, domDeLaTraza, erroresDeLaSalida, fraseFuera, leerContexto, limpiar, ordenarPantalla, repartirPantalla, resumenError, resumenMd } from '../../../scripts/e2e/pantalla.mjs'
 
 const F = join(__dirname, 'fixtures/pantalla')
 const leer = (n: string) => readFileSync(join(F, n), 'utf8')
@@ -96,12 +96,12 @@ describe('el bloque del registro: qué prueba, qué esperaba y qué había, en e
     expect(b.slice(i)).toContain('    - button "8 · Gastos imputados al patrimonio neto" [pressed]')
     expect(b.at(-2)).toBe('── fin de: conta/k03/pestanas.spec.ts:38 ──')
   })
-  it('una pantalla larga se corta en su tope por prueba, y lo dice', () => {
-    const larga = Array.from({ length: 100 }, (_, k) => `- text: fila ${k}`)
+  it('una pantalla larga se corta en su tope por prueba, y dice de qué parte es lo que quita', () => {
+    const larga = Array.from({ length: TOPES.lineasPantalla + 100 }, (_, k) => `- text: fila ${k}`)
     const t = bloque({ ...f, pantalla: larga }).join('\n')
-    expect(t).toContain('- text: fila 59')
-    expect(t).not.toContain('- text: fila 60')
-    expect(t).toContain(`… y ${100 - TOPES.lineasPantalla} líneas más; la pantalla entera está en el artefacto.`)
+    expect(t).toContain(`- text: fila ${TOPES.lineasPantalla - 1}`)
+    expect(t).not.toContain(`- text: fila ${TOPES.lineasPantalla}\n`)
+    expect(t).toContain('… y 100 líneas de lo demás, que no caben: la pantalla entera está en el artefacto.')
   })
   it('pasado el tope del run: solo la cabecera y el error, y se dice dónde está', () => {
     const t = bloque(f, { copiar: false }).join('\n')
@@ -136,5 +136,70 @@ describe('lo que importa, delante: la pantalla real del plan contable en staging
   })
   it('un diálogo o un aviso va delante de todo', () => {
     expect(ordenarPantalla(['- navigation "Menú":', '  - link "Inicio"', '- main:', '  - heading "X" [level=1]', '- dialog "¿Borrar?":', '  - button "Borrar"'])[0]).toBe('- dialog "¿Borrar?":')
+  })
+})
+
+// X09 (19/11) · El volcado se cortaba a las 60 líneas justo antes de lo importante (Q no vio qué
+// se quedaba cargando; N, en qué casilla se paró). Contra un árbol largo DE VERDAD: la pantalla
+// «Salida a ERP10» (paso 3, 219 cuentas, el grupo «quedan igual» abierto) en el marco del núcleo,
+// con datos inventados, recién pulsado «Ya la he metido a mano» (la tabla, en aria-busy); y las
+// instantáneas del DOM de su traza (fixtures/pantalla/x09-nucleo-paso3.*: ver su «# Origen»).
+describe('X09 · un árbol largo de verdad: la pestaña activa, entera y delante', () => {
+  const md = leer('x09-nucleo-paso3.error-context.md')
+  const crudo = (md.match(/```yaml\s*\n([\s\S]*?)\n```/)?.[1] ?? '').split('\n').filter((l) => l.trim())
+  const X = leerContexto(md)
+  const DOM = domDeLaTraza(leer('x09-nucleo-paso3.trace.eventos').split('\n'))
+  const zona = (ls: string[]) => {
+    const i = ls.findIndex((l) => l.startsWith('- main "Ejercicios"'))
+    const j = ls.findIndex((l, k) => k > i && /^- /.test(l))
+    return ls.slice(i, j < 0 ? undefined : j)
+  }
+  const fallo = { donde: 'conta/x06/comprobar-erp10.spec.ts:87', titulo: 'paso 3', tamano: 'ordenador', error: X.error, pantalla: X.pantalla, activa: DOM.activa, ocupados: DOM.ocupados }
+
+  it('el árbol es largo de verdad: más de mil líneas, y la pestaña sola pasa de sobra las 60 de antes', () => {
+    expect(crudo.length).toBeGreaterThan(1000)
+    expect(zona(X.pantalla!).length).toBeGreaterThan(60)
+  })
+  it('las filas, en una línea: fuera las celdas que solo repiten el texto de la fila; las que tienen algo dentro se quedan', () => {
+    expect(X.pantalla!.length).toBeLessThan(crudo.length / 3)
+    expect(X.pantalla).toContain('        - row "43000100 Cliente Inventado 0 100,00 100,00"')
+    expect(X.pantalla!.some((l) => /^\s*- cell "Cliente Inventado 0"$/.test(l))).toBe(false)
+    expect(compactarFilas(['- row "a b":', '  - cell "a"', '  - cell "b":', '    - textbox "b"'])).toEqual(['- row "a b":', '  - cell "b":', '    - textbox "b"'])
+    expect(compactarFilas(['- row "a b":', '  - cell "a"', '  - cell "b"'])).toEqual(['- row "a b"'])
+  })
+  it('de la traza: la pestaña activa del marco y lo que estaba cargando (aria-busy), que el árbol no dice', () => {
+    expect(DOM.activa).toBe('Ejercicios')
+    expect(DOM.ocupados).toEqual(['en la pestaña «Ejercicios»: div.cxe-marco («Cuenta Nombre Saldo en Sumied Saldo en ERP10 Diferencia 3 cuentas no quedan igual 41000012»)'])
+    expect(domDeLaTraza([])).toEqual({ activa: null, ocupados: [] })
+  })
+  it('en el registro: lo que cargaba lo primero, después la pestaña activa ENTERA, y el resto detrás', () => {
+    const t = bloque(fallo)
+    const i = t.indexOf('Lo que había en pantalla:')
+    expect(t[i + 1]).toBe('  [cargando] en la pestaña «Ejercicios»: div.cxe-marco («Cuenta Nombre Saldo en Sumied Saldo en ERP10 Diferencia 3 cuentas no quedan igual 41000012»)')
+    expect(t[i + 2]).toBe('  - main "Ejercicios":')
+    const z = zona(X.pantalla!)
+    expect(t.slice(i + 2, i + 2 + z.length)).toEqual(z.map((l) => `  ${l.length > TOPES.ancho ? `${l.slice(0, TOPES.ancho - 1)}…` : l}`))
+    expect(t.join('\n')).toContain('- button "Ya la he metido a mano"')
+  })
+  it('si no cabe todo, el tope se cuenta sobre lo que importa: la pestaña sigue entera y se dice qué se ha quitado', () => {
+    const z = zona(X.pantalla!)
+    const r = repartirPantalla(X.pantalla!, { zona: 'Ejercicios', tope: z.length + 3 })
+    expect(r.lineas.slice(0, z.length)).toEqual(z)
+    expect([...r.fuera.keys()]).toEqual(expect.arrayContaining(['la cabecera', 'la cinta', 'el menú']))
+    expect(fraseFuera(r.fuera)).toMatch(/^… y \d+ líneas de .*la cinta.* y el menú, que no caben: la pantalla entera está en el artefacto\.$/)
+    const t = bloque(fallo, { topes: { ...TOPES, lineasPantalla: z.length + 3 } }).join('\n')
+    expect(t).toMatch(/… y \d+ líneas de .*el menú, que no caben/)
+    // Con el tope de antes (60), la pestaña se cortaba: ahora, solo si la pestaña sola no cabe, y lo dice.
+    const corto = repartirPantalla(X.pantalla!, { zona: 'Ejercicios', tope: 60 })
+    expect(fraseFuera(corto.fuera)).toMatch(/^… y \d+ líneas de la pestaña «Ejercicios», la franja de arriba, la cabecera/)
+  })
+  it('los avisos y los diálogos, delante de la pestaña', () => {
+    const r = repartirPantalla(['- navigation "Menú":', '  - link "Uno"', '- main "Asientos":', '  - paragraph: Hola', '- dialog "¿Seguro?":', '  - button "Sí"'])
+    expect(r.lineas).toEqual(['- dialog "¿Seguro?":', '  - button "Sí"', '- main "Asientos":', '  - paragraph: Hola', '- navigation "Menú":', '  - link "Uno"'])
+  })
+  it('el resumen del run: también la pestaña y lo que cargaba, primero', () => {
+    const t = resumenMd(fallo).join('\n')
+    expect(t).toContain('# [cargando] en la pestaña «Ejercicios»')
+    expect(t.indexOf('- main "Ejercicios":')).toBeLessThan(t.indexOf('- banner:') < 0 ? Infinity : t.indexOf('- banner:'))
   })
 })
