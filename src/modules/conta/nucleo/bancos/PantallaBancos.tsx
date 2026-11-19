@@ -27,7 +27,7 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { usePestana, useSeVe } from '@/modules/conta/diseno/plantillas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
-import { leerDatosBancos, subirTicket, type BancoVista } from '@/modules/conta/services/bancosPantallas'
+import { facturasPendientes, leerDatosBancos, subirTicket, type BancoVista, type FacturaPendiente } from '@/modules/conta/services/bancosPantallas'
 import { bancoInicial, mesInicial } from '@/modules/conta/bancos/navegacion'
 import { mesesElegibles, nombreCorto, PROPUESTA_RECALCULADA, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import { asientoQueSeCrea, confirmable, porValidar, quienEs, textoDelBanco } from '@/modules/conta/lib/conciliarVista'
@@ -40,8 +40,10 @@ import { cifra } from '../ficha/textos'
 import { useUltimo } from '../ficha/useUltimo'
 import { cuentasQueEncajan, fechaVista, type CuentaDelPlan } from '../ficha/teclas'
 import { aQueVa, etiquetaDe, ingresoPago, mover, porRevisar, segurosMarcados } from './rejilla'
-import { casarConAlternativa, casarConCuenta, confirmarPropuesta, confirmarVarios, deshacerCasado, escribirAMano, textoConfirmados, textoDeshecho } from './conciliar'
+import { casarConAlternativa, casarConCuenta, casarConFactura, confirmarPropuesta, confirmarVarios, deshacerCasado, escribirAMano, textoConfirmados, textoDeshecho } from './conciliar'
 import { leerBancos, saldoALaFecha, urlDelJustificante } from './servicio'
+import { mesDeAlLado, textoMes } from './mes'
+import { casadoConFactura, facturasQueEncajan } from './factura'
 import './bancos.css'
 
 type Aviso = { tono: 'ok' | 'falta' | 'mal'; texto: string }
@@ -49,7 +51,8 @@ type Aviso = { tono: 'ok' | 'falta' | 'mal'; texto: string }
 const TECLAS = [
   { tecla: 'Intro', texto: 'confirma lo que propone Sumied' },
   { tecla: '↑ ↓', texto: 'otro movimiento' },
-  { tecla: 'F4', texto: 'busca la cuenta' },
+  { tecla: 'F4', texto: 'busca la cuenta o la factura' },
+  { tecla: 'Re Pág Av Pág', texto: 'otro mes' },
   { tecla: 'F5', texto: 'abre el mayor de la cuenta en otra pestaña' },
   { tecla: 'Esc', texto: 'cierra' },
 ] as const
@@ -77,7 +80,11 @@ export default function PantallaBancos() {
   const datos = useUltimo(useLeer(accountId && companyId ? () => leerDatosBancos(accountId, companyId) : null, `${accountId}:${companyId}:${vuelta}:datos`).datos, `${accountId}:${companyId}`)
   const bancos = datos?.bancos ?? []
   const banco: BancoVista | null = bancos.find((b) => b.id === query.get('banco')) ?? bancoInicial(bancos, datos?.dudas ?? {})
-  const mes = datos && banco ? mesInicial(mesesElegibles(datos.primerMovimiento, hoy), banco, hoy) : null
+  // E05b · El periodo, como ERP10: el de la dirección (?mes=), o el del último extracto del banco, como hoy.
+  const meses = useMemo(() => (datos ? mesesElegibles(datos.primerMovimiento, hoy) : []), [datos, hoy])
+  const pedido = query.get('mes')
+  const mes = datos && banco ? (pedido && meses.includes(pedido) ? pedido : mesInicial(meses, banco, hoy)) : null
+  const [buscarFactura, setBuscarFactura] = useState<string | null>(null)
   const leida = useLeer(datos && banco && mes ? () => leerBancos(accountId, companyId, datos, banco, mes, hoy) : null, `${companyId}:${banco?.id}:${mes}:${vuelta}`)
   const lectura = { datos: useUltimo(leida.datos, `${companyId}:${banco?.id}:${mes}`), error: leida.error }
   const movs = useMemo(() => lectura.datos?.movs ?? [], [lectura.datos])
@@ -131,11 +138,21 @@ export default function PantallaBancos() {
     if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); ir(mover(sel, e.key === 'ArrowDown' ? 1 : -1, movs.length)) }
     else if (e.key === 'Enter' && m && confirmable(m)) { e.preventDefault(); void confirmar(m) }
+    // F4 en un pago sin casar: «Es otra factura», con el buscador abierto.
+    else if (e.key === 'F4' && m && m.importeCent < 0 && m.estado !== 'casado') { e.preventDefault(); setBuscarFactura(m.id) }
   }
   useEffect(() => {
     const esc = (e: KeyboardEvent) => {
-      if (!seVe() || e.key !== 'Escape' || e.defaultPrevented) return
+      if (!seVe() || e.defaultPrevented) return
       const t = e.target as HTMLElement | null
+      // Re Pág y Av Pág: el mes de antes y el de después (fuera de una casilla, que las usa para moverse).
+      if ((e.key === 'PageUp' || e.key === 'PageDown') && !e.ctrlKey && !e.altKey && !e.metaKey && mes && !t?.closest('input, textarea, select')) {
+        e.preventDefault()
+        const otro = mesDeAlLado(meses, mes, e.key)
+        if (otro !== mes) elegirMes(otro)
+        return
+      }
+      if (e.key !== 'Escape') return
       if (t?.closest('[role="dialog"], [role="combobox"][aria-expanded="true"]')) return
       if (pestana?.cerrar) { e.preventDefault(); pestana.cerrar() }
     }
@@ -143,7 +160,8 @@ export default function PantallaBancos() {
     return () => window.removeEventListener('keydown', esc)
   })
 
-  const elegirBanco = (id: string) => { const p = new URLSearchParams(query); p.set('banco', id); setQuery(p, { replace: true }); abierto.current = ''; setAviso(null) }
+  const elegirBanco = (id: string) => { const p = new URLSearchParams(query); p.set('banco', id); p.delete('mes'); setQuery(p, { replace: true }); abierto.current = ''; setAviso(null) }
+  function elegirMes(x: string) { const p = new URLSearchParams(query); p.set('mes', x); if (banco) p.set('banco', banco.id); setQuery(p, { replace: true }); abierto.current = ''; setAviso(null); setBuscarFactura(null) }
   const cuadre = lectura.datos?.cuadre ?? null
   const estado = !cuadre || cuadre.bancoCent === null || cuadre.libroCent === null
     ? { tono: 'gris' as const, fuerte: 'Sin saldo del extracto.', resto: banco?.cuenta ? `Sumied, ${euros(cuadre?.libroCent ?? null)}` : '' }
@@ -162,6 +180,11 @@ export default function PantallaBancos() {
         <select className="kb-banco" aria-label="Banco" data-cuenta={banco?.cuenta ?? undefined} value={banco?.id ?? ''} onChange={(e) => elegirBanco(e.target.value)}>
           {bancos.map((b) => <option key={b.id} value={b.id}>{b.cuenta ? `${b.cuenta} · ` : ''}{nombreCorto(b)}</option>)}
         </select>
+        {mes && (
+          <select className="kb-mes" aria-label="Periodo" value={mes} onChange={(e) => elegirMes(e.target.value)} data-prueba="periodo">
+            {meses.map((x) => <option key={x} value={x}>{textoMes(x)}</option>)}
+          </select>
+        )}
         {!cargando && <span className="kf-cola" data-prueba="por-revisar">{revisar} por revisar</span>}
         {!cargando && seguros.length > 0 && (
           <button type="button" className="kf-boton-hueco kb-confirmar-n" disabled={ocupado} onClick={() => void confirmarLosN()}>Confirmar los {seguros.length}</button>
@@ -211,16 +234,17 @@ export default function PantallaBancos() {
           acepta="image/*,application/pdf" tituloSoltar="Falta el justificante" textoSoltar="Arrastra aquí la foto o el PDF del ticket, o pulsa para elegirlo."
           otra={{ nombre: 'Qué es', contenido: m ? <QueEs m={m} banco={banco} nombres={nombres} cuentas={cuentasPlan} ocupado={ocupado} companyId={companyId}
             confirmar={() => void confirmar(m)} deshacer={() => void deshacer(m)} validar={() => void validarAsiento(m)} hacer={hacer}
-            abrirHoy={() => navegar(`${rutaBancos('movimientos')}?banco=${banco?.id ?? ''}&mes=${mes ?? ''}&mov=${m.id}`)} /> : <p className="kf-panel-nota">Elige un movimiento.</p> }} />
+            buscando={buscarFactura === m.id} ponerBuscando={(si) => setBuscarFactura(si ? m.id : null)} /> : <p className="kf-panel-nota">Elige un movimiento.</p> }} />
       </div>
     </div>
   )
 }
 
 /** «Qué es»: el movimiento, lo que propone Sumied y su porqué, y lo que se puede hacer con él. */
-function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, deshacer, validar: validarIt, hacer, abrirHoy }: {
+function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, deshacer, validar: validarIt, hacer, buscando, ponerBuscando }: {
   m: MovimientoBanco; banco: BancoVista | null; nombres: Readonly<Record<string, string>>; cuentas: CuentaDelPlan[]; ocupado: boolean; companyId: string
-  confirmar: () => void; deshacer: () => void; validar: () => void; hacer: (q: () => Promise<string>) => Promise<void>; abrirHoy: () => void
+  confirmar: () => void; deshacer: () => void; validar: () => void; hacer: (q: () => Promise<string>) => Promise<void>
+  buscando: boolean; ponerBuscando: (si: boolean) => void
 }) {
   const [texto, setTexto] = useState<string | null>(null)
   const [regla, setRegla] = useState(false)
@@ -234,6 +258,16 @@ function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, desh
   const comision = primeraHoja(nombres, '626')
   const aCuenta = (c: CuentaDelPlan) => hacer(() => casarConCuenta(companyId, m, { cuenta: c.codigo, nombre: c.nombre, concepto: `${quienEs(m)} · ${c.nombre}`, regla: regla ? m.conceptoLimpio.trim() || null : null }))
   const casado = m.estado === 'casado' && m.casado
+  // «Es otra factura» (E05b): las facturas recibidas sin pagar, las de hoy (bank_facturas_recibidas_pendientes).
+  // La clave lleva «buscando»: useLeer solo vuelve a leer cuando cambia la clave (la e2e 44473982157 se quedó sin lista).
+  const facturas = useLeer(buscando ? () => facturasPendientes(companyId) : null, `${companyId}:${m.id}:${buscando ? 'buscando' : 'no'}:facturas`)
+  const [textoFactura, setTextoFactura] = useState<string | null>(null)
+  const [elegida, setElegida] = useState<FacturaPendiente | null>(null)
+  const si = useRef<HTMLButtonElement>(null)
+  useEffect(() => { if (buscando) document.getElementById(`kb-factura-${m.id}`)?.focus() }, [buscando, m.id])
+  useEffect(() => { if (elegida) si.current?.focus() }, [elegida])
+  const conFactura = elegida ? casadoConFactura(m, elegida) : null
+  const lineasFactura = conFactura ? asientoQueSeCrea(m, conFactura.destino, banco?.cuenta ?? null) : null
   return (
     <div className="kb-que-es" data-prueba="que-es">
       <p className="kb-que-es-arriba"><span>{fechaVista(m.fecha)} · {quienEs(m)} · {entra ? 'ingreso' : 'pago'}</span><strong className="kf-cifra">{euros(Math.abs(m.importeCent))}</strong></p>
@@ -249,7 +283,25 @@ function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, desh
           {confirmable(m) && (
             <button type="button" className="kf-guardar kb-si" disabled={ocupado} onClick={confirmar} data-prueba="confirmar">Sí, es ese {entra ? 'ingreso' : 'pago'} <kbd>Intro</kbd></button>
           )}
-          {!entra && <button type="button" className="kf-enlace" onClick={abrirHoy}>Es otra factura</button>}
+          {!entra && !buscando && <button type="button" className="kf-enlace" onClick={() => ponerBuscando(true)} data-prueba="otra-factura">Es otra factura</button>}
+          {!entra && buscando && (
+            <div className="kb-otra-factura" data-prueba="buscar-factura">
+              <span className="kf-titulo">Es otra factura</span>
+              <Buscador id={`kb-factura-${m.id}`} etiqueta="Factura" placeholder="Proveedor o número de factura" abrir valor={textoFactura ?? ''} ponerTexto={setTextoFactura}
+                cargando={facturas.datos === null && !facturas.error} lista={(t) => facturasQueEncajan(m, facturas.datos ?? [], t)}
+                texto={(f) => `${f.proveedor} · ${f.numero ?? 'sin número'} · del ${fechaVista(f.fecha)} · queda ${cifra(f.pendienteCent / 100)}`}
+                elegir={(f) => { setElegida(f); setTextoFactura(`${f.proveedor} · ${f.numero ?? 'sin número'}`) }} />
+              {facturas.error && <p className="kf-aviso" data-tono="mal">{facturas.error}</p>}
+              {facturas.datos && facturas.datos.length === 0 && <p>No hay ninguna factura recibida sin pagar.</p>}
+            </div>
+          )}
+          {elegida && conFactura && (
+            <>
+              <p><strong>Paga la factura {elegida.numero ?? 'sin número'} de {elegida.proveedor}.</strong> Del {fechaVista(elegida.fecha)}, queda {cifra(elegida.pendienteCent / 100)}.</p>
+              <button type="button" ref={si} className="kf-guardar kb-si" disabled={ocupado} data-prueba="confirmar-factura"
+                onClick={() => void hacer(() => casarConFactura(m, elegida, quienEs(m)))}>Sí, es esa factura <kbd>Intro</kbd></button>
+            </>
+          )}
           <div className="kb-otra-cosa" role="group" aria-label="O es otra cosa">
             <span className="kf-titulo">O es otra cosa</span>
             {(p?.alternativas ?? []).map((a) => <button key={a.etiqueta} type="button" className="kf-boton-hueco" disabled={ocupado} onClick={() => void hacer(() => casarConAlternativa(m, a))}>{a.etiqueta}</button>)}
@@ -260,7 +312,9 @@ function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, confirmar, desh
               <label className="kb-regla"><input type="checkbox" checked={regla} onChange={(e) => setRegla(e.target.checked)} /> Hacerlo solo la próxima vez que pase igual</label>
             )}
           </div>
-          {lineas && <AsientoQueSale lineas={asiento} etiqueta={cuadra ? { texto: `Cuadra · ${cifra(suma / 100)}`, tono: 'bien' } : { texto: 'No cuadra', tono: 'ambar' }} />}
+          {lineasFactura ? <AsientoQueSale lineas={lineasFactura.map((l) => ({ codigo: l.cuenta, nombre: nombres[l.cuenta] ?? '', debe: l.debeCent ? l.debeCent / 100 : null, haber: l.haberCent ? l.haberCent / 100 : null }))}
+              etiqueta={{ texto: `Cuadra · ${cifra(lineasFactura.reduce((t, l) => t + l.debeCent, 0) / 100)}`, tono: 'bien' }} />
+            : lineas && <AsientoQueSale lineas={asiento} etiqueta={cuadra ? { texto: `Cuadra · ${cifra(suma / 100)}`, tono: 'bien' } : { texto: 'No cuadra', tono: 'ambar' }} />}
         </>
       )}
     </div>

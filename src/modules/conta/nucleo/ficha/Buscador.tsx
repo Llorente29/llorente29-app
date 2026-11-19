@@ -8,13 +8,15 @@
 import { useState, type KeyboardEvent as KE } from 'react'
 
 /** Una casilla que busca en una lista (el proveedor, la cuenta): escribe, F4 o ↓ abre, Intro elige. */
-export function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cuenta, duda, placeholder, cargando }: {
+export function Buscador<T>({ id, valor, ponerTexto, lista, texto, elegir, etiqueta, cuenta, duda, placeholder, cargando, abrir = false }: {
   id: string; valor: string; ponerTexto: (t: string) => void; lista: (t: string) => T[]; texto: (x: T) => string; elegir: (x: T) => void
   etiqueta: string; cuenta?: string | null; duda?: boolean; placeholder?: string
   /** La lista aún no ha llegado: Intro no se escapa a la casilla siguiente con la búsqueda sin resolver (e2e 1510). */
   cargando?: boolean
+  /** E05b · Nace con la lista abierta (Bancos: «Es otra factura» enseña las facturas sin escribir nada). */
+  abrir?: boolean
 }) {
-  const [abierta, setAbierta] = useState(false)
+  const [abierta, setAbierta] = useState(abrir)
   const [sel, setSel] = useState(0)
   const opciones = abierta ? lista(valor).slice(0, 12) : []
   const teclas = (e: KE<HTMLInputElement>) => {
