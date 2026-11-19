@@ -41599,6 +41599,50 @@ COMMENT ON FUNCTION public.conta_erp10_emitidas_por_salir(p_company uuid, p_mes 
 
 
 --
+-- Name: conta_erp10_envio_tomar(uuid, uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_envio_tomar(p_company uuid, p_entry uuid, p_clase text, p_quien_nombre text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_e public.conta_erp10_envio;
+  v_nuevo boolean := false;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  if not exists (select 1 from public.journal_entry e where e.id = p_entry and e.company_id = v_c.id and e.account_id = v_c.account_id) then
+    raise exception 'Ese asiento no es de esta empresa.' using errcode = '23514';
+  end if;
+  if p_clase not in ('recibida', 'emitida', 'asiento') then raise exception 'Clase no válida: %', p_clase using errcode = '22023'; end if;
+
+  insert into public.conta_erp10_envio (account_id, company_id, entry_id, clase, estado, quien_nombre)
+  values (v_c.account_id, v_c.id, p_entry, p_clase, 'enviando', nullif(btrim(coalesce(p_quien_nombre, '')), ''))
+  on conflict (entry_id) do nothing
+  returning * into v_e;
+  if v_e.id is not null then
+    return jsonb_build_object('tomado', true, 'envio', to_jsonb(v_e));
+  end if;
+
+  -- Ya tenía fila: se vuelve a coger solo si no pudo, o si se quedó a medias hace más de 3 minutos.
+  update public.conta_erp10_envio
+     set estado = 'enviando', intentos = intentos + 1, motivo = null, cambiado_en = now(),
+         quien_nombre = coalesce(nullif(btrim(coalesce(p_quien_nombre, '')), ''), quien_nombre)
+   where entry_id = p_entry
+     and (estado = 'no_pudo' or (estado = 'enviando' and cambiado_en < now() - interval '3 minutes'))
+  returning * into v_e;
+  if v_e.id is not null then
+    return jsonb_build_object('tomado', true, 'envio', to_jsonb(v_e));
+  end if;
+
+  select * into v_e from public.conta_erp10_envio where entry_id = p_entry;
+  return jsonb_build_object('tomado', false, 'envio', to_jsonb(v_e));
+end $$;
+
+
+--
 -- Name: conta_erp10_igualado_poner(uuid, date, text, date, integer, integer, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -116315,6 +116359,44 @@ COMMENT ON TABLE public.conta_erp10_a_mano IS 'X06 · Lo que alguien dice que me
 
 
 --
+-- Name: conta_erp10_envio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_erp10_envio (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    entry_id uuid NOT NULL,
+    clase text NOT NULL,
+    estado text NOT NULL,
+    erp10_ejercicio text,
+    erp10_serie text,
+    erp10_documento integer,
+    enlazada boolean DEFAULT false NOT NULL,
+    pdf text,
+    motivo text,
+    intentos integer DEFAULT 1 NOT NULL,
+    lote_id uuid,
+    quien_nombre text,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    cambiado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_erp10_envio_check CHECK (((estado = 'en_erp10'::text) = (erp10_documento IS NOT NULL))),
+    CONSTRAINT conta_erp10_envio_clase_check CHECK ((clase = ANY (ARRAY['recibida'::text, 'emitida'::text, 'asiento'::text]))),
+    CONSTRAINT conta_erp10_envio_erp10_documento_check CHECK (((erp10_documento IS NULL) OR (erp10_documento > 0))),
+    CONSTRAINT conta_erp10_envio_estado_check CHECK ((estado = ANY (ARRAY['enviando'::text, 'en_erp10'::text, 'no_pudo'::text]))),
+    CONSTRAINT conta_erp10_envio_intentos_check CHECK ((intentos > 0)),
+    CONSTRAINT conta_erp10_envio_pdf_check CHECK (((pdf IS NULL) OR (pdf = ANY (ARRAY['subido'::text, 'fallo'::text]))))
+);
+
+
+--
+-- Name: TABLE conta_erp10_envio; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_erp10_envio IS 'X10b · Lo que Sumied escribe en ERP10 por la API, asiento a asiento: la intención antes de escribir y lo que ERP10 le da. Lo escribe solo conta-erp10-escribir.';
+
+
+--
 -- Name: conta_erp10_igualado; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -119194,6 +119276,27 @@ CREATE TABLE public.conta_tpv_documento (
 --
 
 COMMENT ON TABLE public.conta_tpv_documento IS 'R03: las facturas de un día del TPV, con su número y su contador (la serie del TPV), con signo: una devolución va en negativo. canal = la columna «Entrega» limpia («local» si se vendió en el local).';
+
+
+--
+-- Name: conta_tpv_factura_cuenta; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_tpv_factura_cuenta (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    company_account_id uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_name text
+);
+
+
+--
+-- Name: TABLE conta_tpv_factura_cuenta; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_tpv_factura_cuenta IS 'R07: la cuenta de «La factura del día va a» («Clientes de contado»), una por empresa. La factura del día la lleva al debe y el cobro del día la deja a cero.';
 
 
 --
@@ -133558,6 +133661,14 @@ ALTER TABLE ONLY public.conta_erp10_a_mano
 
 
 --
+-- Name: conta_erp10_envio conta_erp10_envio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_envio
+    ADD CONSTRAINT conta_erp10_envio_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_erp10_igualado conta_erp10_igualado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -134427,6 +134538,22 @@ ALTER TABLE ONLY public.conta_tpv_documento
 
 ALTER TABLE ONLY public.conta_tpv_documento
     ADD CONSTRAINT conta_tpv_documento_uno UNIQUE (dia_id, contador, numero);
+
+
+--
+-- Name: conta_tpv_factura_cuenta conta_tpv_factura_cuenta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_factura_cuenta
+    ADD CONSTRAINT conta_tpv_factura_cuenta_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_tpv_factura_cuenta conta_tpv_factura_cuenta_una; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_factura_cuenta
+    ADD CONSTRAINT conta_tpv_factura_cuenta_una UNIQUE (company_id);
 
 
 --
@@ -139709,6 +139836,20 @@ CREATE INDEX conta_enlace_pago_sesion_idx ON public.conta_enlace_pago USING btre
 --
 
 CREATE INDEX conta_erp10_a_mano_empresa_idx ON public.conta_erp10_a_mano USING btree (company_id);
+
+
+--
+-- Name: conta_erp10_envio_asiento_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX conta_erp10_envio_asiento_uq ON public.conta_erp10_envio USING btree (entry_id);
+
+
+--
+-- Name: conta_erp10_envio_empresa_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_erp10_envio_empresa_idx ON public.conta_erp10_envio USING btree (company_id, creado_en DESC);
 
 
 --
@@ -145564,6 +145705,13 @@ CREATE TRIGGER trg_conta_tpv_documento_misma_cuenta BEFORE INSERT OR UPDATE ON p
 
 
 --
+-- Name: conta_tpv_factura_cuenta trg_conta_tpv_factura_cuenta_misma_cuenta; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_conta_tpv_factura_cuenta_misma_cuenta BEFORE INSERT OR UPDATE ON public.conta_tpv_factura_cuenta FOR EACH ROW EXECUTE FUNCTION public.conta_misma_cuenta();
+
+
+--
 -- Name: conta_tpv_forma_cuenta trg_conta_tpv_forma_cuenta_misma_cuenta; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -149947,6 +150095,38 @@ ALTER TABLE ONLY public.conta_erp10_a_mano
 
 
 --
+-- Name: conta_erp10_envio conta_erp10_envio_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_envio
+    ADD CONSTRAINT conta_erp10_envio_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_erp10_envio conta_erp10_envio_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_envio
+    ADD CONSTRAINT conta_erp10_envio_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_erp10_envio conta_erp10_envio_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_envio
+    ADD CONSTRAINT conta_erp10_envio_entry_id_fkey FOREIGN KEY (entry_id) REFERENCES public.journal_entry(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: conta_erp10_envio conta_erp10_envio_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_envio
+    ADD CONSTRAINT conta_erp10_envio_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.conta_erp10_salida_lote(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: conta_erp10_igualado conta_erp10_igualado_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -151696,6 +151876,30 @@ ALTER TABLE ONLY public.conta_tpv_documento
 
 ALTER TABLE ONLY public.conta_tpv_documento
     ADD CONSTRAINT conta_tpv_documento_dia_id_fkey FOREIGN KEY (dia_id) REFERENCES public.conta_tpv_dia(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tpv_factura_cuenta conta_tpv_factura_cuenta_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_factura_cuenta
+    ADD CONSTRAINT conta_tpv_factura_cuenta_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tpv_factura_cuenta conta_tpv_factura_cuenta_company_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_factura_cuenta
+    ADD CONSTRAINT conta_tpv_factura_cuenta_company_account_id_fkey FOREIGN KEY (company_account_id) REFERENCES public.company_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: conta_tpv_factura_cuenta conta_tpv_factura_cuenta_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_factura_cuenta
+    ADD CONSTRAINT conta_tpv_factura_cuenta_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
 
 
 --
@@ -162106,6 +162310,19 @@ CREATE POLICY conta_erp10_a_mano_leer ON public.conta_erp10_a_mano FOR SELECT TO
 
 
 --
+-- Name: conta_erp10_envio; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_erp10_envio ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_erp10_envio conta_erp10_envio_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_erp10_envio_leer ON public.conta_erp10_envio FOR SELECT TO authenticated USING ((account_id = ANY (public.current_user_account_ids())));
+
+
+--
 -- Name: conta_erp10_igualado; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -163077,6 +163294,40 @@ ALTER TABLE public.conta_tpv_documento ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_tpv_documento_select ON public.conta_tpv_documento FOR SELECT USING ((account_id = ANY (( SELECT public.current_user_account_ids() AS current_user_account_ids)::uuid[])));
+
+
+--
+-- Name: conta_tpv_factura_cuenta; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_tpv_factura_cuenta ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_tpv_factura_cuenta conta_tpv_factura_cuenta_delete; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_tpv_factura_cuenta_delete ON public.conta_tpv_factura_cuenta FOR DELETE USING (public.current_user_is_admin_or_manager_of(account_id));
+
+
+--
+-- Name: conta_tpv_factura_cuenta conta_tpv_factura_cuenta_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_tpv_factura_cuenta_insert ON public.conta_tpv_factura_cuenta FOR INSERT WITH CHECK (public.current_user_is_admin_or_manager_of(account_id));
+
+
+--
+-- Name: conta_tpv_factura_cuenta conta_tpv_factura_cuenta_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_tpv_factura_cuenta_select ON public.conta_tpv_factura_cuenta FOR SELECT USING ((account_id = ANY (( SELECT public.current_user_account_ids() AS current_user_account_ids)::uuid[])));
+
+
+--
+-- Name: conta_tpv_factura_cuenta conta_tpv_factura_cuenta_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_tpv_factura_cuenta_update ON public.conta_tpv_factura_cuenta FOR UPDATE USING (public.current_user_is_admin_or_manager_of(account_id));
 
 
 --
@@ -178393,6 +178644,14 @@ GRANT ALL ON FUNCTION public.conta_erp10_emitidas_por_salir(p_company uuid, p_me
 
 
 --
+-- Name: FUNCTION conta_erp10_envio_tomar(p_company uuid, p_entry uuid, p_clase text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_envio_tomar(p_company uuid, p_entry uuid, p_clase text, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_envio_tomar(p_company uuid, p_entry uuid, p_clase text, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_erp10_igualado_poner(p_company uuid, p_mes date, p_fichero text, p_fecha date, p_cuentas integer, p_con_diferencia integer, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -191476,6 +191735,14 @@ GRANT SELECT ON TABLE public.conta_erp10_a_mano TO authenticated;
 
 
 --
+-- Name: TABLE conta_erp10_envio; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.conta_erp10_envio TO authenticated;
+GRANT ALL ON TABLE public.conta_erp10_envio TO service_role;
+
+
+--
 -- Name: TABLE conta_erp10_igualado; Type: ACL; Schema: public; Owner: -
 --
 
@@ -192244,6 +192511,14 @@ GRANT SELECT ON TABLE public.conta_tpv_dia TO authenticated;
 
 GRANT ALL ON TABLE public.conta_tpv_documento TO service_role;
 GRANT SELECT ON TABLE public.conta_tpv_documento TO authenticated;
+
+
+--
+-- Name: TABLE conta_tpv_factura_cuenta; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_tpv_factura_cuenta TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.conta_tpv_factura_cuenta TO authenticated;
 
 
 --
