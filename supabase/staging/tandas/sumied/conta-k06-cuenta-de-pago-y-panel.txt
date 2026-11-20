@@ -1,3 +1,8 @@
 # K06 · La recibida: la cuenta de pago (solo añade una función: conta_recibida_pagar_con_cuenta).
 supabase/migrations/20261120T0840_k06_pagar_con_cuenta.sql
 supabase/staging/sql/20261120_k06_pagar_con_cuenta_prueba.sql
+# Lo que necesita la e2e de la cuenta del pago (tests/e2e/conta/k06), en la gestoría de la cuenta del
+# núcleo: la 55100001 del socio y una plataforma de prueba con su 40000073, su 43000091, una
+# liquidación y una factura de comisión ligada a ella por tamaño. Solo añade, con ids y fechas fijos:
+# se puede aplicar dos veces igual (W07), y va de verdad desde la rama (W05).
+supabase/seeds/conta/seed_k06_cuenta_de_pago_staging.sql
