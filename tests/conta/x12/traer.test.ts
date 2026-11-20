@@ -139,7 +139,7 @@ describe('el lector: mes a mes, y si se corta, sigue donde se quedó', () => {
     await l.traer()
     const v = l.estado
     expect(v.estado).toBe('hecho')
-    expect(v.cuantos).toEqual({ subcuentas: 3, asientos: 451, facturas: 1 })
+    expect(v.cuantos).toEqual({ subcuentas: 3, proveedores: 1, clientes: 0, asientos: 451, facturas: 1 })
     expect(sim.vistas.filter((x) => x.ruta.startsWith('/api/apuntes?') && x.ruta.includes('20250301')).map((x) => /\$skip=(\d+)/.exec(x.ruta)?.[1])).toEqual(['0', '1', '2'])
     expect(sim.vistas.every((x) => x.metodo === 'GET' || x.ruta === '/token')).toBe(true)
     const r = leidoDeLaConexion(v.datos).resumen
@@ -157,7 +157,7 @@ describe('el lector: mes a mes, y si se corta, sigue donde se quedó', () => {
     }
     const a = new LectorTraer('s:2025', '2025', corta, almacen, { hoy: HOY, reintentosMs: [] })
     await a.traer()
-    expect(a.estado).toMatchObject({ estado: 'cortado', fallo: 'Se ha ido la red (inventado).', enCurso: { parte: { que: 'apuntes', mes: '2025-03' }, pagina: 1 }, cuantos: { asientos: 200 } })
+    expect(a.estado).toMatchObject({ estado: 'cortado', fallo: 'Se ha ido la red (inventado).', enCurso: { parte: { que: 'apuntes', mes: '2025-03' }, pagina: 1 }, cuantos: { asientos: 200, proveedores: 1, clientes: 0 } })
     expect(comoVaLaFila(a.estado, 'diario')).toEqual({ leyendo: false, texto: 'Se ha cortado en marzo: sigue donde se quedó', haLeido: '200 asientos' })
     const antes = llamadas
 
@@ -170,7 +170,7 @@ describe('el lector: mes a mes, y si se corta, sigue donde se quedó', () => {
     expect(b.estado.estado).toBe('hecho')
     expect(pedidas[0]).toEqual({ que: 'apuntes', ejercicio: '2025', mes: '2025-03', pagina: 1 })
     expect(pedidas.some((p) => p.que === 'subcuentas' || p.que === 'resumen' || (p.mes ?? '') < '2025-03')).toBe(false)
-    expect(b.estado.cuantos).toEqual({ subcuentas: 3, asientos: 451, facturas: 1 })
+    expect(b.estado.cuantos).toEqual({ subcuentas: 3, proveedores: 1, clientes: 0, asientos: 451, facturas: 1 })
     expect(new Set(b.estado.datos.apuntes.map((x) => x.documento)).size).toBe(451)
     expect(antes + pedidas.length).toBe(1 + 1 + 2 * 12 + 2 + 1) // subcuentas, resumen, cada mes (asientos y facturas), las dos páginas de más de marzo, y la que falló // la que falló, y ni una más de las que hacían falta
   })
@@ -189,6 +189,7 @@ describe('el lector: mes a mes, y si se corta, sigue donde se quedó', () => {
     expect(comoVaLaFila(l.estado, 'recibidas')).toEqual({ leyendo: false, texto: 'Leyendo facturas: marzo, 3 de 12', haLeido: '0 facturas' })
     expect(comoVaLaFila(l.estado, 'plan_cuentas')).toEqual({ leyendo: false, texto: 'Leído; esperando a lo demás', haLeido: '3 cuentas' })
     expect(comoVaLaFila(l.estado, 'sumas_saldos')).toEqual({ leyendo: false, texto: 'Se calcula al acabar los asientos', haLeido: null })
+    expect(comoVaLaFila(l.estado, 'proveedores')).toEqual({ leyendo: false, texto: 'Leído; esperando a lo demás', haLeido: '1 ficha' })
     ;(parar as unknown as () => void)()
     await corriendo
     expect(comoVaLaFila(l.estado, 'diario')).toBeNull()

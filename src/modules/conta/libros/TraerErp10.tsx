@@ -266,7 +266,8 @@ export function TraerErp10() {
                     {filas1.map((f) => {
                       // X12 · Mientras se trae de ERP10, la fila dice por dónde va (y lo que lleva leído).
                       const va = vista && f.tipo !== 'inmovilizado' ? comoVaLaFila(vista, f.tipo) : null
-                      const estado = va ? (vista?.estado === 'cortado' ? 'mira' : 'leyendo') : f.estado
+                      // En ámbar, solo la que se ha cortado; las ya leídas enteras esperan en gris.
+                      const estado = va ? (va.texto.startsWith('Se ha cortado') ? 'mira' : 'leyendo') : f.estado
                       return (
                         <tr key={f.tipo} className={estado === 'mira' ? 'cxt-fila-mira' : undefined} aria-busy={va?.leyendo || undefined}>
                           <td><strong>{f.que}</strong>{f.siLoTiene && <span className="cxt-gris"> · si lo tiene</span>}</td>
@@ -316,7 +317,7 @@ export function TraerErp10() {
               <>
                 <h2 className="cxe-der-titulo" id="cxt-mirar">Qué mirar antes de traerlo · {nAmbar1}</h2>
                 <div className="cxe-der-cuerpo">
-                  {vista?.estado === 'cortado' && vista.fallo && <div className="cxe-aviso" role="alert"><p><strong>Se ha cortado al traer de ERP10.</strong> {vista.fallo} «Seguir trayendo de ERP10» sigue donde se quedó, sin volver a leer lo leído.</p></div>}
+                  {vista?.estado === 'cortado' && <div className="cxe-aviso" role="alert"><p><strong>Se ha cortado al traer de ERP10.</strong> {vista.fallo ? `${vista.fallo} ` : ''}«Seguir trayendo de ERP10» sigue donde se quedó, sin volver a leer lo leído.</p></div>}
                   {trayendo && <div className="cxe-nota" role="status"><p><strong>Trayendo de ERP10 el ejercicio {vista?.ejercicio}.</strong> Tarda unos minutos: puedes seguir trabajando en otra pestaña y volver.</p></div>}
                   {!subidos.length && !deErp10 && !trayendo && vista?.estado !== 'cortado' && <div className="cxe-nota"><p><strong>Todavía no has soltado ningún fichero.</strong> Con el plan de cuentas y los proveedores ya puedes traer las cuentas y las fichas; el diario y las facturas, cuando los tengas.</p></div>}
                   {avisos1.map(avisoCaja)}

@@ -140,6 +140,7 @@ for (const tam of TAMANOS) {
       await expect(diario).toContainText(/Leyendo asientos: febrero, 2 de 1[12]/, { timeout: 30_000 })
       await expect(diario).toContainText('Traído de ERP10')
       await expect(tabla.getByRole('row', { name: /^Plan de cuentas/ })).toContainText('Leído; esperando a lo demás')
+      await expect(tabla.getByRole('row', { name: /^Proveedores/ })).toContainText('4 fichas')
       await expect(tabla.getByRole('row', { name: /^Sumas y saldos/ })).toContainText('Se calcula al acabar los asientos')
       await expect(page.getByRole('button', { name: 'Ver lo que entra' })).toBeDisabled()
       await expect(page.locator('.cxe')).not.toContainText(/\bAPI\b|página/)
@@ -150,6 +151,9 @@ for (const tam of TAMANOS) {
       await page.reload({ waitUntil: 'load' })
       await expect(page.locator('h1#cxt-titulo')).toHaveText('Traer de ERP10', { timeout: 40_000 })
       await expect(tabla.getByRole('row', { name: /^Diario/ })).toContainText('Se ha cortado en febrero: sigue donde se quedó', { timeout: 30_000 })
+      // En ámbar solo lo cortado: lo ya leído entero espera en gris; y el panel lo dice.
+      await expect(tabla.getByRole('row', { name: /^Plan de cuentas/ })).toContainText('Leyendo')
+      await expect(page.getByRole('alert').filter({ hasText: 'Se ha cortado al traer de ERP10.' })).toContainText('«Seguir trayendo de ERP10» sigue donde se quedó')
       await page.screenshot({ path: `${DIR}/cortado-${tam.width}.png` })
       await page.getByRole('button', { name: 'Seguir trayendo de ERP10' }).click()
       await expect(tabla.getByRole('row', { name: /^Diario/ })).toContainText('Todos cuadran · igual que ERP10', { timeout: 90_000 })

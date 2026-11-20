@@ -58,7 +58,7 @@ export interface VistaLector {
   /** Por qué se ha cortado, en palabras. */
   fallo: string | null
   /** Cuánto se lleva leído. */
-  cuantos: { subcuentas: number; asientos: number; facturas: number }
+  cuantos: { subcuentas: number; proveedores: number; clientes: number; asientos: number; facturas: number }
   /** Lo leído (solo con estado «hecho» está entero). */
   datos: DeLaConexion
   /** Cuándo se acabó (o null). */
@@ -101,7 +101,10 @@ export class LectorTraer {
     const mesesLeidos = partes.filter((p) => p.que === 'apuntes' && this.meta.hechas.includes(claveParte(p))).map((p) => p.mes as string)
     return {
       estado, ejercicio: this.ejercicio, partes, hechas: [...this.meta.hechas], enCurso, fallo,
-      cuantos: { subcuentas: subcuentas.length, asientos: apuntes.length, facturas: facturas.length },
+      cuantos: {
+        subcuentas: subcuentas.length, proveedores: subcuentas.filter((x) => /^4[01]/.test(x.codigo)).length, clientes: subcuentas.filter((x) => /^4[34]/.test(x.codigo)).length,
+        asientos: apuntes.length, facturas: facturas.length,
+      },
       datos: { ejercicio: this.ejercicio, subcuentas, apuntes, facturas, resumen, mesesLeidos },
       acabado: this.meta.acabado,
     }
@@ -214,7 +217,10 @@ export function comoVaLaFila(v: VistaLector, tipo: TipoFila): { leyendo: boolean
   const que = QUE_DE[tipo]
   const delQue = v.partes.filter((p) => p.que === que)
   const hechas = delQue.filter((p) => v.hechas.includes(claveParte(p))).length
-  const haLeido = que === 'subcuentas' ? `${n(v.cuantos.subcuentas)} ${v.cuantos.subcuentas === 1 ? 'cuenta' : 'cuentas'}`
+  // Los proveedores y los clientes, sus fichas (las subcuentas 40 y 41, y 43 y 44), como cuando está leído.
+  const fichas = (x: number) => `${n(x)} ${x === 1 ? 'ficha' : 'fichas'}`
+  const haLeido = tipo === 'proveedores' ? fichas(v.cuantos.proveedores) : tipo === 'clientes' ? fichas(v.cuantos.clientes)
+    : que === 'subcuentas' ? `${n(v.cuantos.subcuentas)} ${v.cuantos.subcuentas === 1 ? 'cuenta' : 'cuentas'}`
     : que === 'apuntes' ? `${n(v.cuantos.asientos)} ${v.cuantos.asientos === 1 ? 'asiento' : 'asientos'}`
     : `${n(v.cuantos.facturas)} ${v.cuantos.facturas === 1 ? 'factura' : 'facturas'}`
   if (tipo === 'sumas_saldos') {
