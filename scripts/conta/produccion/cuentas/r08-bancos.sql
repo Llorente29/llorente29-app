@@ -10,13 +10,12 @@
 --      la apertura y el cierre de cada uno, lo nuevo que trae, el cierre del anterior y el
 --      hueco que sale con la cadena (cierre − (cierre anterior + lo nuevo)), frente al que
 --      guardó la lectura.
---   4. Lo que dice el detector de cargos anulados (_bank_cargos_anulados) de cada empresa con
---      bancos: el extracto, el día, el hueco y los importes de los cargos que señala.
---   5. Los movimientos de cada extracto de noviembre con hueco por la cadena: día, importe,
---      estado y si alguien dijo «No, es bueno» (sin concepto).
 --   3. De cada banco con su 572 (regla 31: si cuadran, con la vara de la pantalla): el cierre del
---      último extracto de la cadena hasta hoy y el saldo de la 572 en Sumied hasta hoy, con lo
---      validado (lo que está en el diario) y con lo propuesto.
+--      último extracto de la cadena y el saldo de la 572 en Sumied, con lo validado (lo que está
+--      en el diario) y con lo propuesto; todo lo creado antes del corte.
+-- (Lo que decía el detector de cargos anulados y los movimientos de cada extracto con hueco se
+--  midieron en los ensayos 44601818955 y 44613014664 y están en el #747: leían datos vivos sin
+--  corte posible y se quitan, W06.)
 with b as (
   select b.account_id, b.company_id, e.id, e.status, e.entry_date,
          (select coalesce(sum(l.debit), 0) from public.journal_line l where l.entry_id = e.id) importe
@@ -56,21 +55,11 @@ select clave, valor from (
   union all
   select 3, 'banco ' || left(u.treasury_account_id::text, 8) || ' · empresa ' || left(u.company_id::text, 8) || ' · ' || coalesce(a.code, 'sin 572'),
          'último extracto ' || to_char(u.period_to, 'DD/MM') || ' cierra ' || u.closing_balance
-         || ' · Sumied hoy validado ' || coalesce((select sum(l.debit - l.credit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
-              where l.company_account_id = a.id and e.status in ('validado', 'anulado') and e.entry_date <= current_date and e.source_type <> 'closing'), 0)
+         || ' · Sumied validado ' || coalesce((select sum(l.debit - l.credit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
+              where l.company_account_id = a.id and e.status in ('validado', 'anulado') and e.created_at < timestamptz '2026-11-20 00:00:00+01' and e.source_type <> 'closing'), 0)
          || ' · con lo propuesto ' || coalesce((select sum(l.debit - l.credit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
-              where l.company_account_id = a.id and e.status in ('validado', 'anulado', 'propuesto') and e.entry_date <= current_date and e.source_type <> 'closing'), 0)
+              where l.company_account_id = a.id and e.status in ('validado', 'anulado', 'propuesto') and e.created_at < timestamptz '2026-11-20 00:00:00+01' and e.source_type <> 'closing'), 0)
     from ult u join public.treasury_account t on t.id = u.treasury_account_id
     left join public.company_account_link k on k.entity = 'bank_account' and k.entity_id = t.id::text and k.role = 'principal' and k.company_id = t.company_id
     left join public.company_account a on a.id = k.company_account_id
-  union all
-  select 4, 'empresa ' || left(e.id::text, 8) || ' · detector · extracto ' || left(a.statement_id::text, 8) || ' · ' || to_char(a.dia, 'DD/MM'),
-         'hueco ' || a.hueco || ' · cargos ' || (select string_agg(m.amount::text, ' ' order by m.amount) from public.bank_movement m where m.id = any(a.ids))
-    from public.company e cross join lateral public._bank_cargos_anulados(e.id) a
-   where exists (select 1 from public.treasury_account t where t.company_id = e.id)
-  union all
-  select 5, 'banco ' || left(c.treasury_account_id::text, 8) || ' · extracto ' || lpad(c.orden::text, 3, '0') || ' · mov ' || to_char(m.op_date, 'DD/MM') || ' ' || m.amount || ' · ' || left(m.id::text, 4),
-         m.status || case when m.not_cancelled_at is not null then ' · dijeron «es bueno»' else '' end
-    from cad c join public.bank_movement m on m.statement_id = c.id
-   where c.period_to >= date '2026-11-01' and c.closing_balance - (c.cierre_anterior + c.nuevo) <> 0
 ) t order by o, clave;
