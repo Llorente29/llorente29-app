@@ -479,7 +479,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const conceptoTexto = propuesta?.concepto ?? (prov ? `${b.numero || 'Factura'}-${prov.nombre}` : '')
 
   return (
-    <div className="kf-ficha" ref={raiz} onKeyDown={(e) => { marcarTocada(); alPulsar(e) }} onPointerDown={marcarTocada} data-prueba="ficha-recibida-nucleo" aria-busy={cargando || undefined}>
+    <div className="kf-ficha kf-recibida" ref={raiz} onKeyDown={(e) => { marcarTocada(); alPulsar(e) }} onPointerDown={marcarTocada} data-prueba="ficha-recibida-nucleo" aria-busy={cargando || undefined}>
       <header className="kf-cabecera">
         <h1>Factura recibida</h1>
         <span className="kf-cola">{cola}</span>
@@ -528,11 +528,14 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 principal={{ texto: `Es ${emisor.nombre}: elegirlo`, hacer: () => void elegirYGuardar(emisor.proveedorId, emisor.nombre, `Elegido ${emisor.nombre}: el NIF de la factura es el suyo.`) }}
                 secundario={{ texto: 'Es uno que ya tengo', hacer: () => setAbrirProveedor((n) => n + 1) }} />
             )}
-            <div className="kf-fila" style={{ gridTemplateColumns: '1.7fr 1.1fr 1.1fr 1.1fr 1.7fr' }}>
+            {/* K06 · El concepto, en su propia fila, como en la emitida del K05 (Julio, 20/11: a 1456 y a 1366 no se corta nada). */}
+            <div className="kf-fila" style={{ gridTemplateColumns: '1.7fr 1.1fr 1.1fr 1.1fr' }}>
               <Casilla rotulo="N.º de factura" origen={origen.numero} htmlFor="kf-numero"><input id="kf-numero" data-casilla value={b.numero} onChange={(e) => ed.poner('numero', e.target.value)} /></Casilla>
               <Casilla rotulo="Fecha factura" origen={origen.fecha} htmlFor="kf-fecha"><CasillaFecha id="kf-fecha" etiqueta="Fecha factura" iso={b.fecha} hoy={hoy} poner={(x) => ed.poner('fecha', x)} /></Casilla>
               <Casilla rotulo="Se deduce en" htmlFor="kf-deduce"><input id="kf-deduce" readOnly tabIndex={-1} value={trimestreDe(b.fecha)} /></Casilla>
               <Casilla rotulo="Serie / documento" htmlFor="kf-serie"><input id="kf-serie" readOnly tabIndex={-1} value={fac?.asiento?.numero ? `2 / ${fac.asiento.numero}` : '2 / —'} /></Casilla>
+            </div>
+            <div className="kf-fila" style={{ gridTemplateColumns: '1fr' }}>
               <Casilla rotulo="Concepto del asiento" origen={origen.concepto} htmlFor="kf-concepto"><input id="kf-concepto" readOnly tabIndex={-1} value={conceptoTexto} title={conceptoTexto} /></Casilla>
             </div>
             {!aMano && (
