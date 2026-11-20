@@ -1,4 +1,4 @@
 {
-  "segundos": 43,
-  "medido": "run 44629118563 (segundo intento), commit 6888ff20 (X10d, 19/11): X10b 12,9 s y 13,1 s, X10d 8,3 s y 8,3 s, a 1456 × 816 y 1366 × 768; el móvil se salta"
+  "segundos": 56,
+  "medido": "run 44696217410, commit f1862570 (X11, 20/11): X10b (con «Medir lo que se puede traer») 17,6 s y 16,5 s, X10d 11,6 s y 10,5 s, a 1456 × 816 y 1366 × 768; el móvil se salta"
 }
