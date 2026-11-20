@@ -47,6 +47,13 @@ const numero = (t: string | null): number => {
   return limpio ? Number(limpio) : 0
 }
 
+/** La medida de la regla 31, al registro del run: la cifra de hoy y la nueva, leídas con el mismo lector. */
+const medida: string[] = []
+function igual(que: string, deHoy: number, nueva: number) {
+  medida.push(`${que}: hoy ${deHoy.toFixed(2)} · nuevo ${nueva.toFixed(2)}${deHoy === nueva ? '' : '  ← NO'}`)
+  expect.soft(nueva, `${que}: la de hoy`).toBe(deHoy)
+}
+
 /** Lo que hay en la base: las anotaciones del libro de recibidas de la cuenta A en unas fechas (para el registro del run). */
 async function anotacionesRecibidas(s: Sesion, desde: string, hasta: string): Promise<string[]> {
   const r = await fetch(`${STAGING_URL}/rest/v1/vat_book_entry?select=number,invoice_type,issue_date,tax_base,tax_amount,voided_at,source_type&account_id=eq.${CUENTA_A.id}`
@@ -149,8 +156,8 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
       }
       await listadoCargado(page, 'sumas')
       await elPeriodo(page, 'Todo el ejercicio')
-      expect.soft(numero(await total(page, 'Debe').textContent()), 'sumas y saldos: el Debe, el de hoy').toBe(hoy.sumas.debe)
-      expect.soft(numero(await total(page, 'Haber').textContent()), 'sumas y saldos: el Haber, el de hoy').toBe(hoy.sumas.haber)
+      igual('sumas y saldos · Debe', hoy.sumas.debe, numero(await total(page, 'Debe').textContent()))
+      igual('sumas y saldos · Haber', hoy.sumas.haber, numero(await total(page, 'Haber').textContent()))
       await expect(listado(page).getByRole('status').filter({ hasText: /^Cuadra\./ })).toBeVisible()
       await cargada(page, 'sumas y saldos')
       await noRueda(page, 'sumas y saldos')
@@ -178,9 +185,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
       await elPeriodo(page, 'Todo el ejercicio')
       const cuenta = listado(page).locator(`tbody tr[data-clase="cuenta"][data-cuenta="${hoy.sumas.cuenta}"]`)
       const cifras = await cuenta.locator('td.kl-der').allTextContents()
-      expect.soft(numero(cifras[0]), 'el mayor: el Debe, el de hoy').toBe(hoy.mayor.debe)
-      expect.soft(numero(cifras[1]), 'el mayor: el Haber, el de hoy').toBe(hoy.mayor.haber)
-      expect.soft(numero(cifras[2]) - numero(cifras[3]), 'el mayor: el saldo, el de hoy').toBeCloseTo(hoy.mayor.saldo, 2)
+      igual(`mayor ${hoy.sumas.cuenta} · Debe`, hoy.mayor.debe, numero(cifras[0]))
+      igual(`mayor ${hoy.sumas.cuenta} · Haber`, hoy.mayor.haber, numero(cifras[1]))
+      igual(`mayor ${hoy.sumas.cuenta} · saldo`, hoy.mayor.saldo, Math.round((numero(cifras[2]) - numero(cifras[3])) * 100) / 100)
 
       // ── 4. Un movimiento: su documento a la derecha; Intro, su asiento en otra pestaña.
       const mov = listado(page).locator('tbody tr[data-clase="movimiento"]').first()
@@ -202,7 +209,8 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
       await expect(meses).toHaveCount(hoy.diario.length)
       for (let i = 0; i < hoy.diario.length; i++) {
         const v = await meses.nth(i).locator('td.kl-der').allTextContents()
-        expect.soft([numero(v[0]), numero(v[1])], `el diario de ${hoy.diario[i].mes}`).toEqual([hoy.diario[i].debe, hoy.diario[i].haber])
+        igual(`diario ${hoy.diario[i].mes} · Debe`, hoy.diario[i].debe, numero(v[0]))
+        igual(`diario ${hoy.diario[i].mes} · Haber`, hoy.diario[i].haber, numero(v[1]))
       }
       await cargada(page, 'el diario')
       await capturar(page, `4-diario-${sufijo}`)
@@ -217,10 +225,12 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
           const iso = (f: string) => f.split('/').reverse().join('-')
           console.log(`[Q06] libro de recibidas del ${d} al ${h}, en la base:\n  ${(await anotacionesRecibidas(sesion, iso(d), iso(h))).join('\n  ') || 'ninguna'}`)
         }
-        expect.soft(numero(await total(page, 'Base').textContent()), `el libro de ${que}: la base, la de hoy`).toBe(deHoy.base)
-        expect.soft(numero(await total(page, 'Cuota').textContent()), `el libro de ${que}: la cuota, la de hoy`).toBe(deHoy.cuota)
+        igual(`libro de ${que} · base`, deHoy.base, numero(await total(page, 'Base').textContent()))
+        igual(`libro de ${que} · cuota`, deHoy.cuota, numero(await total(page, 'Cuota').textContent()))
         if (que === 'emitidas') { await cargada(page, 'el libro de emitidas'); await capturar(page, `5-libro-de-emitidas-${sufijo}`) }
       }
+
+      console.log(`[Q06] mismas cifras a ${ancho} × ${alto} (regla 31):\n  ${medida.splice(0).join('\n  ')}`)
 
       // ── 6. «Ver como se imprime», el PDF y el Excel (sumas y saldos, su pestaña sigue como se dejó).
       await page.goto('/conta/libros/mayor/sumas-saldos', { timeout: 30_000 })
