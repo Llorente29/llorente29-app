@@ -57,3 +57,20 @@ begin
      where account_id = r.account_id and source = 'lastapp' and external_location_id = r.viejo;
   end loop;
 end $$;
+
+-- N11 (20/11) · Las tres recibidas de la D01 (supabase/seeds/conta/seed_d01_staging.sql) se
+-- sembraron sin el destinatario en su lectura. Desde el E03 (#727), una recibida sin destinatario
+-- leído pregunta «¿De quién es?» y se va a «Por aclarar», y la e2e de la D01 las busca en «Por
+-- revisar» (noche del 19/11, 44501328392). Van a nombre de su empresa, como dice ya la semilla:
+-- aquí, en el carril, con el nombre y el NIF de SU empresa (la del carril, regla 9).
+do $$
+declare n int := current_setting('e2e.carril')::int;
+begin
+  update public.supplier_invoice si
+     set reading = jsonb_set(si.reading, '{factura,destinatario}', jsonb_build_object('nombre', c.legal_name, 'nif', c.tax_id))
+    from public.company c
+   where c.id = si.company_id and c.account_id = si.account_id
+     and si.id in (select pg_temp.en_carril(x, n) from unnest(array['d0100000-0000-4000-8000-0000000000f1', 'd0100000-0000-4000-8000-0000000000f2',
+                                                                   'd0100000-0000-4000-8000-0000000000f3']::uuid[]) x)
+     and si.reading ? 'factura' and not (si.reading->'factura' ? 'destinatario');
+end $$;

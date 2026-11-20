@@ -48,7 +48,8 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(page.locator('.k-nucleo')).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('.s-barra')).toHaveCount(0)
     const cinta = page.getByRole('tablist', { name: 'La cinta' })
-    await expect(cinta.getByRole('tab')).toHaveText(['Definiciones', 'Asientos', 'Importaciones', 'Listados', 'Utilidades', 'Impuestos'])
+    // E05 (#732): Tesorería, con Bancos, entre Asientos e Importaciones.
+    await expect(cinta.getByRole('tab')).toHaveText(['Definiciones', 'Asientos', 'Tesorería', 'Importaciones', 'Listados', 'Utilidades', 'Impuestos'])
     // exact: «Inicio» está dentro de «Definiciones», y Playwright busca por trozo.
     await expect(page.getByRole('tab', { name: 'Inicio', exact: true })).toHaveAttribute('aria-selected', 'true')
     await expect(page.locator('.k-marca')).toHaveText('Sumied')
@@ -77,7 +78,10 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
 
     // Los contadores de la cinta y la línea de estado, con número (arreglos 2 y 3).
     await expect(page.locator('[data-boton="recibidas"] .k-contador')).toHaveText('9', { timeout: 30_000 })
+    // Bancos vive en Tesorería desde el E05 (#732): su contador se mira allí, y se vuelve a Asientos.
+    await cinta.getByRole('tab', { name: 'Tesorería' }).click()
     await expect(page.locator('[data-boton="bancos"] .k-contador')).toHaveText('14', { timeout: 30_000 })
+    await cinta.getByRole('tab', { name: 'Asientos' }).click()
     const estado = page.getByRole('contentinfo', { name: 'Cómo va la empresa' })
     await expect(estado).toContainText('14 movimientos del banco por revisar')
     await expect(estado).toContainText('Asientos al día')

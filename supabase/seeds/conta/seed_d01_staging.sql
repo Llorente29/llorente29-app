@@ -26,7 +26,10 @@ begin
                                        needs_review, created_by_name, arrival_channel, reading_confidence, reading)
   values (p_id, p_acc, p_prov, p_emp, p_num, p_dia, 'en_revision', 'ocr', p_base + v_cuota, p_base, v_cuota, p_conf <> 'seguro', 'semilla D01', p_canal, p_conf,
           jsonb_build_object('porque', jsonb_build_array(p_porque), 'comprobaciones', '[]'::jsonb, 'confianza', p_conf,
-                             'factura', jsonb_build_object('proveedor', jsonb_build_object('nombre', p_propuesto, 'nif', null))));
+                             'factura', jsonb_build_object('proveedor', jsonb_build_object('nombre', p_propuesto, 'nif', null),
+                                                           -- N11 · A nombre de la empresa (desde el E03, sin destinatario leído pregunta «¿De quién es?»).
+                                                           'destinatario', (select jsonb_build_object('nombre', c.legal_name, 'nif', c.tax_id)
+                                                                              from public.company c where c.id = p_emp and c.account_id = p_acc))));
   insert into public.supplier_invoice_tax (account_id, supplier_invoice_id, vat_pct, base, vat_amount) values (p_acc, p_id, p_tipo, p_base, v_cuota);
   insert into public.supplier_invoice_line (supplier_invoice_id, raw_text, qty, unit_price, line_amount, vat_pct, position)
   select p_id, l->>'texto', nullif(l->>'cantidad', '')::numeric, null, (l->>'importe')::numeric, p_tipo, o::int

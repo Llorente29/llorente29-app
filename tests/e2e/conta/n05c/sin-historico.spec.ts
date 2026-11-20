@@ -44,6 +44,9 @@ test('N05c · sin decidir, la confirmación y «Empezar ya»', async ({ page }) 
       works_without_history_at: decidido, works_without_history_by_name: decidido ? QUIEN : null }
     return r.fulfill({ response: res, json: filas })
   })
+  // N06a (#713): el día de inicio lo dice la base (conta_empresa_dia_de_inicio), no se calcula del
+  // ejercicio: se simula igual, el siguiente al traído (31/10/2026).
+  await page.route(/\/rest\/v1\/rpc\/conta_empresa_dia_de_inicio(\?|$)/, (r) => json(r, '2026-11-01'))
   await page.route(/\/rest\/v1\/rpc\/conta_trabajar_sin_historico(\?|$)/, (r) => {
     llamadas.push(r.request().postDataJSON())
     decidido = new Date().toISOString()
