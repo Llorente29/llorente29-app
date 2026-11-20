@@ -131,9 +131,10 @@ test('subir los ficheros del TPV: lo que cuadra se guarda, lo que no lo dice; y 
   const f = page.getByRole('dialog', { name: 'A qué cuenta va cada forma de pago' })
   await expect(f.locator('[data-prueba="aviso-forma-nueva"]')).toHaveText(
     'Hay una forma de pago nueva: Too Good To Go. Dime a qué cuenta va y no te lo vuelvo a preguntar. Hasta entonces, los días que la llevan no se pueden validar.', { timeout: 30_000 })
-  const asiento = f.getByRole('table', { name: 'Cómo queda el asiento de un día' })
+  // Desde el R07 el día va en dos asientos: lo cobrado (Too Good To Go, sin cuenta) en «El cobro del día»; el ejemplo, en «La factura del día».
+  const asiento = f.getByRole('table', { name: 'El cobro del día' })
   await expect(asiento.getByRole('row').filter({ hasText: 'Too Good To Go · sin cuenta' })).toContainText('17,24', { timeout: 30_000 })
-  await expect(asiento).toContainText('Ejemplo: el 10/11')
+  await expect(f.getByRole('table', { name: 'La factura del día' })).toContainText('Ejemplo: el 10/11')
   await expect(f.getByRole('button', { name: 'Guardar' })).toBeDisabled()
   await expect(page.getByText('Falta 1 cuenta por elegir.')).toBeVisible()
   await sinRodar(page)
