@@ -41574,6 +41574,54 @@ COMMENT ON FUNCTION public.conta_erp10_asientos_por_salir(p_company uuid, p_mes 
 
 
 --
+-- Name: conta_erp10_atascados(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_atascados(p_company uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_z public.conta_erp10_salida_empresa;
+  v_n integer;
+  v_parados integer;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null or (auth.uid() is not null and not public.belongs_to_account(v_c.account_id)) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  select * into v_z from public.conta_erp10_salida_empresa where company_id = v_c.id;
+  if v_z.company_id is null or not v_z.encendida then
+    return jsonb_build_object('encendida', false, 'sin_salir', 0, 'parados', 0);
+  end if;
+  select count(*), count(*) filter (where v.estado = 'no_pudo')
+    into v_n, v_parados
+    from public.journal_entry e
+    left join public.conta_erp10_envio v on v.entry_id = e.id
+   where e.company_id = v_c.id and e.account_id = v_c.account_id
+     and e.status = 'validado' and e.entry_date >= v_z.desde
+     and e.validated_at < now() - interval '1 hour'
+     and e.source_type not in ('migrated', 'opening', 'closing', 'template', 'reversal')
+     and e.external_program is null and e.import_run_id is null
+     and not exists (select 1 from public.conta_erp10_salida_partida p where p.entry_id = e.id and p.estado = 'salida')
+     and not exists (select 1 from public.vat_book_entry b where b.entry_id = e.id and b.account_id = e.account_id and b.import_run_id is not null)
+     and not exists (select 1 from public.supplier_invoice si where si.journal_entry_id = e.id and si.account_id = e.account_id and si.source = 'traida')
+     and not exists (select 1 from public.customer_invoice ci where ci.entry_id = e.id and ci.company_id = e.company_id
+                       and (ci.origin = 'traida' or ci.import_run_id is not null))
+     and (v.id is null or v.estado <> 'en_erp10');
+  return jsonb_build_object('encendida', true, 'sin_salir', v_n, 'parados', v_parados);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_atascados(p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_atascados(p_company uuid) IS 'X10f · Lo validado hace más de una hora que no ha salido a ERP10 (ni por el Excel ni por la conexión) en una empresa con la salida encendida, y cuántos de ellos se han quedado parados. Para el aviso de la barra de abajo. Solo lee.';
+
+
+--
 -- Name: conta_erp10_cambiadas(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -41608,6 +41656,52 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_erp10_cambiadas(p_company uuid) IS 'X02 · Lo que salió a ERP10 y cuyo asiento está ahora anulado en Sumied: va a la hoja aparte para corregirlo a mano en ERP10 (no se vuelve a mandar). La otra mitad de «ha cambiado», la huella de la fila, la compara el navegador. Solo lee.';
+
+
+--
+-- Name: conta_erp10_cola(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_cola(p_limite integer DEFAULT 10) RETURNS TABLE(entry_id uuid, account_id uuid, company_id uuid, entry_date date, validado_en timestamp with time zone)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select e.id, e.account_id, e.company_id, e.entry_date, e.validated_at
+    from public.journal_entry e
+    join public.conta_erp10_salida_empresa z on z.company_id = e.company_id and z.account_id = e.account_id and z.encendida
+   where e.status = 'validado'
+     and e.entry_date >= z.desde
+     and e.source_type not in ('migrated', 'opening', 'closing', 'template', 'reversal')
+     and e.external_program is null and e.import_run_id is null
+     and not exists (select 1 from public.conta_erp10_salida_partida p where p.entry_id = e.id and p.estado = 'salida')
+     and not exists (select 1 from public.vat_book_entry v where v.entry_id = e.id and v.account_id = e.account_id and v.import_run_id is not null)
+     and not exists (select 1 from public.supplier_invoice si where si.journal_entry_id = e.id and si.account_id = e.account_id and si.source = 'traida')
+     and not exists (select 1 from public.customer_invoice ci where ci.entry_id = e.id and ci.company_id = e.company_id
+                       and (ci.origin = 'traida' or ci.import_run_id is not null))
+     -- Conectada, con su código de empresa de ERP10.
+     and exists (select 1 from public.account_connector ac join public.connector k on k.id = ac.connector_id
+                  where k.code = 'erp10' and ac.account_id = e.account_id and ac.scope = 'company' and ac.company_id = e.company_id
+                    and ac.status = 'connected' and coalesce(btrim(ac.external_account_id), '') <> '')
+     -- La prueba: la primera salida de la empresa, igualada después en el paso 3.
+     and exists (select 1 from public.conta_erp10_igualado g
+                  where g.company_id = e.company_id and g.account_id = e.account_id
+                    and g.igualado_en > (select min(q.creado_en) from public.conta_erp10_envio q
+                                          where q.company_id = e.company_id and q.account_id = e.account_id and q.estado = 'en_erp10'))
+     -- Nada dos veces, y lo parado se queda parado.
+     and not exists (select 1 from public.conta_erp10_envio v where v.entry_id = e.id and (
+            (v.estado = 'en_erp10' and (v.lote_id is not null or v.cambiado_en > now() - interval '2 minutes'))
+         or (v.estado = 'enviando' and v.cambiado_en > now() - interval '10 minutes')
+         or (v.estado = 'no_pudo' and (v.intentos >= 3 or v.como = 'excel' or v.cambiado_en > now() - interval '5 minutes'))))
+   order by e.validated_at nulls last, e.id
+   limit greatest(1, least(coalesce(p_limite, 10), 50))
+$$;
+
+
+--
+-- Name: FUNCTION conta_erp10_cola(p_limite integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_cola(p_limite integer) IS 'X10f · Lo validado que le toca salir solo a ERP10 ahora, en el orden en que se validó (ver la migración 2010). Solo el servidor.';
 
 
 --
@@ -41700,6 +41794,36 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_erp10_comprobar(p_company uuid, p_fecha date) IS 'X06 · Lo que necesita la comparación con el sumas y saldos de ERP10: los saldos de Sumied a esa fecha en su ejercicio (con el código de cada cuenta en ERP10), cada asiento desde que sale (menos lo traído) con si salió, si está metido a mano y lo que pone en cada cuenta, las tandas y lo último igualado. Solo lee.';
+
+
+--
+-- Name: conta_erp10_despertar(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_despertar() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_secreto text;
+begin
+  if not exists (select 1 from public.conta_erp10_cola(1)) then return; end if;
+  select decrypted_secret into v_secreto from vault.decrypted_secrets where name = 'cron_secret';
+  if v_secreto is null then
+    raise exception 'Falta cron_secret en el Vault: no se puede despertar a conta-erp10-cola.' using errcode = '55000';
+  end if;
+  perform net.http_post(
+    url := public._project_url() || '/functions/v1/conta-erp10-cola',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
+    body := '{}'::jsonb, timeout_milliseconds := 150000);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_despertar(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_despertar() IS 'X10f · Cada minuto (cron conta-erp10-despertar, solo donde está el secreto de los vigías): si hay algo en la cola de ERP10, llama a conta-erp10-cola. Si falta el secreto, falla (cron lo apunta como failed), no calla.';
 
 
 --
@@ -117114,6 +117238,7 @@ CREATE TABLE public.conta_erp10_envio (
     dia boolean,
     cobro_serie text,
     cobro_documento integer,
+    como text,
     CONSTRAINT conta_erp10_envio_check CHECK (((estado = 'en_erp10'::text) = (erp10_documento IS NOT NULL))),
     CONSTRAINT conta_erp10_envio_clase_check CHECK ((clase = ANY (ARRAY['recibida'::text, 'emitida'::text, 'asiento'::text]))),
     CONSTRAINT conta_erp10_envio_erp10_documento_check CHECK (((erp10_documento IS NULL) OR (erp10_documento > 0))),
@@ -117149,6 +117274,13 @@ COMMENT ON COLUMN public.conta_erp10_envio.cobro_serie IS 'X10e · La serie que 
 --
 
 COMMENT ON COLUMN public.conta_erp10_envio.cobro_documento IS 'X10e · El número que da ERP10 al cobro de un día de un solo asiento.';
+
+
+--
+-- Name: COLUMN conta_erp10_envio.como; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_erp10_envio.como IS 'X10f · Cómo salió: «sola» (la cola, conta-erp10-cola), «a_mano» (el botón o «Volver a intentarlo») o «excel» (no sale por la conexión: sale con el Excel; la cola no lo vuelve a coger). Null: lo de antes del X10f.';
 
 
 --
@@ -179509,6 +179641,15 @@ GRANT ALL ON FUNCTION public.conta_erp10_asientos_por_salir(p_company uuid, p_me
 
 
 --
+-- Name: FUNCTION conta_erp10_atascados(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_atascados(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_atascados(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_atascados(p_company uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_erp10_cambiadas(p_company uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -179518,12 +179659,28 @@ GRANT ALL ON FUNCTION public.conta_erp10_cambiadas(p_company uuid) TO service_ro
 
 
 --
+-- Name: FUNCTION conta_erp10_cola(p_limite integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_cola(p_limite integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_cola(p_limite integer) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_erp10_comprobar(p_company uuid, p_fecha date); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.conta_erp10_comprobar(p_company uuid, p_fecha date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_erp10_comprobar(p_company uuid, p_fecha date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_erp10_comprobar(p_company uuid, p_fecha date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_erp10_despertar(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_despertar() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_despertar() TO service_role;
 
 
 --
