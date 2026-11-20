@@ -40,6 +40,13 @@ function ordenAsiento(l: LineaDiaEjemplo): number {
   return l.forma && esDeliverect(l.forma) ? 2 : 1
 }
 
+/** El tipo de IVA detrás del nombre de la cuenta, si el nombre no lo dice ya («IVA repercutido 10 %»). */
+function conTipo(nombre: string | null, tipo: number | null | undefined): string {
+  if (tipo == null) return ''
+  const t = `${Number(tipo).toLocaleString('es-ES')} %`
+  return (nombre ?? '').replace(/\s+/g, ' ').includes(t) ? '' : ` ${t}`
+}
+
 function TablaAsiento({ a, etiqueta, prueba, pie }: { a: AsientoDelDia; etiqueta: string; prueba: string; pie: ReactNode }) {
   const lineas = a.lineas.map((l, i) => ({ l, i })).sort((x, y) => ordenAsiento(x.l) - ordenAsiento(y.l) || x.i - y.i).map(({ l }) => l)
   return (
@@ -50,7 +57,7 @@ function TablaAsiento({ a, etiqueta, prueba, pie }: { a: AsientoDelDia; etiqueta
           {lineas.map((l, i) => (
             <tr key={i} data-sin-cuenta={l.sin_cuenta ? '' : undefined} data-contado={l.contado ? '' : undefined}>
               <td>{l.sin_cuenta ? `${l.forma ?? ''}${l.canal && l.canal !== 'local' ? ` · ${nombreCanal(l.canal)}` : ''} · sin cuenta`
-                : `${l.cuenta} · ${l.nombre ?? ''}${l.tipo != null ? ` ${Number(l.tipo).toLocaleString('es-ES')} %` : ''}`}</td>
+                : `${l.cuenta} · ${l.nombre ?? ''}${conTipo(l.nombre, l.tipo)}`}</td>
               <td className="tpv-cifra">{l.debe ? cifra(l.debe) : ''}</td>
               <td className="tpv-cifra">{l.haber ? cifra(l.haber) : ''}</td>
             </tr>
