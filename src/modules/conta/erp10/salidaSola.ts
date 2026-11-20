@@ -68,6 +68,20 @@ export type SalidoHoy = {
   cuando: string
 }
 
+/**
+ * Una fila de conta_erp10_envio tal como la da la base, con su asiento embebido (`journal_entry(series, number,
+ * concept)`, por la clave ajena entry_id): lo que enseña la lista de hoy. Sin asiento embebido, «—».
+ */
+export function aSalidoHoy(x: Record<string, unknown>): SalidoHoy {
+  const je = (x.journal_entry ?? null) as Record<string, unknown> | null
+  const txt = (v: unknown) => (typeof v === 'string' && v.trim() ? v : null)
+  return {
+    entryId: String(x.entry_id), numero: je && je.series != null ? `${je.series}/${je.number ?? '—'}` : '—', concepto: txt(je?.concept) ?? '',
+    estado: x.estado as SalidoHoy['estado'], documento: x.erp10_documento == null ? null : Number(x.erp10_documento), motivo: txt(x.motivo),
+    intentos: Number(x.intentos ?? 1), como: (x.como as SalidoHoy['como']) ?? null, cuando: txt(x.cambiado_en) ?? '',
+  }
+}
+
 export type FilaHoy = { entryId: string; hora: string; numero: string; concepto: string; tono: 'verde' | 'gris' | 'ambar'; estado: string; como: string }
 
 /** La hora en Madrid; sin hora (o una que no lo es), «—»: una fila rara nunca tumba la pantalla. */

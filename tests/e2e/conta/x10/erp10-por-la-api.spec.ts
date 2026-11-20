@@ -619,15 +619,22 @@ async function erp10Sola(page: Page, s: Sesion, empresas: Record<string, Empresa
     apuntado: async (lote, r) => { const f = filas.get(r.entryId); if (f) f.lote_id = lote },
   })
   // conta_erp10_envio la escribe solo el servidor (aquí, el sustituto): la pantalla la lee de aquí, con sus filtros.
-  await page.route((u) => u.pathname.endsWith('/rest/v1/conta_erp10_envio'), (route: Route) => {
+  // El asiento de cada envío, como lo embebe la base (journal_entry por entry_id), leído de staging.
+  const asientos = new Map<string, { series: number; number: number | null; concept: string }>()
+  await page.route((u) => u.pathname.endsWith('/rest/v1/conta_erp10_envio'), async (route: Route) => {
     const u = new URL(route.request().url())
+    const faltan = [...filas.values()].map((x) => x.entry_id).filter((id) => id !== '00000000-0000-4000-8000-00000000f10f' && !asientos.has(id))
+    if (faltan.length && (u.searchParams.get('select') ?? '').includes('journal_entry(')) {
+      for (const a of await api<{ id: string; series: number; number: number | null; concept: string }[]>(s, 'GET', `journal_entry?select=id,series,number,concept&id=in.(${faltan.join(',')})`)) asientos.set(a.id, a)
+    }
     const eq = (k: string) => { const v = u.searchParams.get(k); return v?.startsWith('eq.') ? v.slice(3) : null }
     const hoy = hoyEnMadrid()
     let xs = [...filas.values()].filter((x) => (!eq('entry_id') || x.entry_id === eq('entry_id')) && (!eq('estado') || x.estado === eq('estado')))
     if (u.searchParams.get('or')) xs = xs.filter((x) => x.estado === 'no_pudo' || x.cambiado_en.slice(0, 10) >= hoy)
     if (u.searchParams.get('order')?.startsWith('creado_en.asc')) xs.sort((a, b) => a.creado_en.localeCompare(b.creado_en))
     if (u.searchParams.get('limit')) xs = xs.slice(0, Number(u.searchParams.get('limit')))
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(xs.map((x) => ({ ...x, company_id: EMPRESA_A, account_id: CUENTA_A.id }))) })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(xs.map((x) => ({ ...x, company_id: EMPRESA_A, account_id: CUENTA_A.id,
+      ...((u.searchParams.get('select') ?? '').includes('journal_entry(') ? { journal_entry: asientos.get(x.entry_id) ?? null } : {}) }))) })
   })
   await page.route('**/functions/v1/conta-erp10-escribir', async (route: Route) => {
     const b = route.request().postDataJSON() as { company_id: string; mes: string; quien: string | null }
@@ -703,8 +710,13 @@ test('X10f · 1456 × 816 y 1366 × 768: lo validado sale solo a ERP10, la ficha
   await page.goto('/conta/libros/cierre/salida-erp10', { waitUntil: 'load' })
   const tabla = page.getByRole('table', { name: 'Hoy en ERP10' })
   await expect(tabla).toBeVisible({ timeout: 40_000 })
+  // Cada fila con el número de su asiento en Sumied (el que da la base), no «—».
+  const [nb] = await api<{ series: number; number: number }[]>(s, 'GET', `journal_entry?select=series,number&id=eq.${buena.id}`)
+  const [nm] = await api<{ series: number; number: number }[]>(s, 'GET', `journal_entry?select=series,number&id=eq.${mala.id}`)
   await expect(tabla.getByRole('row').filter({ hasText: 'Sola' })).toHaveCount(1)
   await expect(tabla.getByRole('row').filter({ hasText: 'A mano' })).toHaveCount(1)
+  await expect(tabla.getByRole('row').filter({ hasText: 'Sola' }).getByRole('link')).toHaveText(`${nb.series}/${nb.number}`)
+  await expect(tabla.getByRole('row').filter({ hasText: 'A mano' }).getByRole('link')).toHaveText(`${nm.series}/${nm.number}`)
   for (const tam of [TAMANOS[1], TAMANOS[0]]) { await page.setViewportSize(tam); await expect(tabla).toBeInViewport(); await page.screenshot({ path: `${DIR}/x10f-hoy-${tam.width}.png` }) }
   expect(errores).toEqual([])
 })

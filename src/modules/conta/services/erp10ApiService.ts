@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase'
 import { hayBase, rpc, tabla } from '@/modules/conta/services/bd'
 import type { FilaSumas } from '@/modules/conta/lib/traer'
 import type { DocumentoErp10, EnvioErp10 } from '@/modules/conta/erp10/casar'
-import type { DatosLinea, EnvioDeUnAsiento, SalidoHoy } from '@/modules/conta/erp10/salidaSola'
+import { aSalidoHoy, type DatosLinea, type EnvioDeUnAsiento, type SalidoHoy } from '@/modules/conta/erp10/salidaSola'
 import { getConnectorCredentialsStatus, saveConnectorCredentials } from '@/modules/integrations/services/connectorCredentialsService'
 
 type Fila = Record<string, unknown>
@@ -319,14 +319,7 @@ export async function leerSalidoHoy(accountId: string, companyId: string): Promi
     .or(`cambiado_en.gte.${hoy}T00:00:00+01:00,estado.eq.no_pudo`)
     .order('cambiado_en', { ascending: false }).limit(200)
   if (error) throw new Error(`No se ha podido leer lo que ha salido hoy: ${error.message}`)
-  return ((data ?? []) as Fila[]).map((x) => {
-    const je = (x.journal_entry ?? null) as Fila | null
-    return {
-      entryId: String(x.entry_id), numero: je ? `${je.series}/${je.number ?? '—'}` : '—', concepto: str(je?.concept) ?? '',
-      estado: x.estado as SalidoHoy['estado'], documento: x.erp10_documento == null ? null : Number(x.erp10_documento), motivo: str(x.motivo) ?? null,
-      intentos: Number(x.intentos ?? 1), como: (x.como as SalidoHoy['como']) ?? null, cuando: str(x.cambiado_en) ?? '',
-    }
-  })
+  return ((data ?? []) as Fila[]).map(aSalidoHoy)
 }
 
 /** Cuántos asientos llevan más de una hora validados sin salir a ERP10 (la barra de abajo). */

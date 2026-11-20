@@ -3,7 +3,7 @@
 // anular lo que ya está en ERP10, la lista de hoy (lo que no ha salido, arriba) y la frase de la barra.
 
 import { describe, expect, it } from 'vitest'
-import { avisoYaEnErp10, fraseAtascados, lineaErp10, listaDeHoy, type DatosLinea, type EnvioDeUnAsiento } from '@/modules/conta/erp10/salidaSola'
+import { aSalidoHoy, avisoYaEnErp10, fraseAtascados, lineaErp10, listaDeHoy, type DatosLinea, type EnvioDeUnAsiento } from '@/modules/conta/erp10/salidaSola'
 
 const base: DatosLinea = { validado: true, fecha: '2026-11-20', envio: null, salida: { encendida: true, desde: '2026-11-01' }, conElExcel: null, pruebaHecha: true }
 const envio = (o: Partial<EnvioDeUnAsiento>): EnvioDeUnAsiento => ({ estado: 'en_erp10', serie: '2', documento: 1234, motivo: null, intentos: 1, como: 'sola', ...o })
@@ -51,6 +51,16 @@ describe('X10f · la lista de hoy y la barra', () => {
     expect(f.map((x) => [x.numero, x.hora, x.estado, x.como])).toEqual([
       ['2/3', '11:00', 'No ha salido: Falla', 'Sola'], ['2/2', '11:00', 'En ERP10 · asiento 11', 'A mano'], ['2/1', '10:00', 'En ERP10 · asiento 10', 'Sola'],
     ])
+  })
+  it('la fila tal como la da la base (con su asiento embebido por entry_id) enseña la serie y el número del asiento', () => {
+    // La forma de PostgREST para «select=entry_id, estado, …, journal_entry(series, number, concept)»: el asiento, un objeto.
+    const deLaBase = { entry_id: 'e-6', estado: 'en_erp10', erp10_documento: 1001, motivo: null, intentos: 1, como: 'sola', cambiado_en: '2026-11-20T18:46:00.123456+00:00',
+      journal_entry: { series: 2, number: 6, concept: 'E2E X10 · recibida X10F-E2E-1' } }
+    expect(listaDeHoy([aSalidoHoy(deLaBase)])).toEqual([
+      { entryId: 'e-6', hora: '19:46', numero: '2/6', concepto: 'E2E X10 · recibida X10F-E2E-1', tono: 'verde', estado: 'En ERP10 · asiento 1001', como: 'Sola' },
+    ])
+    // Sin su asiento (no debería pasar: entry_id es su clave ajena), «—», no un hueco.
+    expect(aSalidoHoy({ ...deLaBase, journal_entry: null }).numero).toBe('—')
   })
   it('una fila sin hora no tumba la pantalla: «—»', () => {
     expect(listaDeHoy([{ entryId: 'x', numero: '2/9', concepto: '', estado: 'en_erp10', documento: 9, motivo: null, intentos: 1, como: null, cuando: '' }]).map((x) => [x.hora, x.como])).toEqual([['—', '—']])
