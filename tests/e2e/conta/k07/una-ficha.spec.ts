@@ -93,6 +93,16 @@ async function fichaLista(page: Page) {
   await expect(laDeAntes(page)).toHaveCount(0)
 }
 
+/**
+ * Intro fuera de una casilla: «Guardar y siguiente» (decisión 11). Dentro de una casilla, Intro pasa a la siguiente;
+ * por eso primero se saca el foco de donde se ha escrito (el body no se enfoca: pulsar sobre él no lo saca; e2e 44807111244).
+ */
+async function introFuera(page: Page) {
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  await expect.poll(() => page.evaluate(() => document.activeElement === document.body || document.activeElement === null)).toBe(true)
+  await page.keyboard.press('Enter')
+}
+
 /** Si sale la duda del gasto, se deja la propuesta (no es lo que se prueba aquí). */
 async function sinDudaDeGasto(page: Page) {
   const dejar = ficha(page).locator('.kf-duda').getByRole('button', { name: /^Dejar / })
@@ -141,7 +151,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await sinDudaDeGasto(page)
     await expect(ficha(page).locator('[data-prueba="cuadra"]')).toContainText('Cuadra', { timeout: 30_000 })
     // Intro fuera de una casilla: «Guardar y siguiente» guarda (el documento nuevo y el número), valida y pasa a la siguiente.
-    await page.locator('body').press('Enter')
+    await introFuera(page)
     await expect(page.getByText(/Apuntada y validada/).first()).toBeVisible({ timeout: 60_000 })
     await expect(page).not.toHaveURL(new RegExp(factura(t, 1)), { timeout: 30_000 })
     await fichaLista(page)
@@ -156,7 +166,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
 
     // ── 3 · Cambiar el documento de la contabilizada: confirma, lo cambia y el historial tiene el de antes. ──
     await ficha(page).locator('[data-prueba="cambiar-documento"]').setInputFiles({ name: 'k07-c.pdf', mimeType: 'application/pdf', buffer: pdfDe('K07 - k07-c.pdf') })
-    const confirma = ficha(page).locator('.kf-duda')
+    const confirma = ficha(page).locator('[data-prueba="confirmar-documento"]')
     await expect(confirma).toContainText('Cambias el documento de una factura contabilizada. El de antes queda en su historial.')
     await expect(confirma).toContainText('«k07-c.pdf»')
     if (t === 1) await page.screenshot({ path: `${DIR}/cambiar-documento-contabilizada-${ancho}.png` })
@@ -209,7 +219,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     }
     await sinDudaDeGasto(page)
     await expect(ficha(page).locator('[data-prueba="cuadra"]')).toContainText('Cuadra', { timeout: 30_000 })
-    await page.locator('body').press('Enter')
+    await introFuera(page)
     await expect(page.getByText(/Apuntada y validada/).first()).toBeVisible({ timeout: 60_000 })
     await expect(laDeAntes(page)).toHaveCount(0)
 

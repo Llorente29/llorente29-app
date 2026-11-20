@@ -575,9 +575,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       </header>
       {aviso && <p className="kf-aviso" data-tono={aviso.tono} role="status" data-prueba="aviso-ficha">{aviso.texto}</p>}
       {confirmarDoc?.de === invoiceId && (
-        <Duda fuerte="Confirma." texto={<>{docAccion?.que === 'cambiar_contabilizada' ? docAccion.confirmar : ''} El nuevo: «{confirmarDoc.file.name}». El asiento no cambia.</>}
+        <div data-prueba="confirmar-documento"><Duda fuerte="Confirma." texto={<>{docAccion?.que === 'cambiar_contabilizada' ? docAccion.confirmar : ''} El nuevo: «{confirmarDoc.file.name}». El asiento no cambia.</>}
           principal={{ texto: 'Cambiarlo', hacer: () => void cambiarYa(confirmarDoc.file) }}
-          secundario={{ texto: 'Dejar el de antes', hacer: () => setConfirmarDoc(null) }} />
+          secundario={{ texto: 'Dejar el de antes', hacer: () => setConfirmarDoc(null) }} /></div>
       )}
       {verHistorial === invoiceId && (
         <section className="kf-historial" role="dialog" aria-label="El historial de la factura" data-prueba="historial">
@@ -739,13 +739,13 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
               </div>
             </div>
 
-            {duda && (
+            {duda && !soloLectura && (
               <Duda texto={duda.texto}
                 principal={{ texto: `Dejar ${duda.dejar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.dejar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }}
                 secundario={{ texto: `Cambiar a ${duda.cambiar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.cambiar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }} />
             )}
 
-            {dudaPago && (
+            {dudaPago && !soloLectura && (
               <Duda texto={textoDudaPago(dudaPago, (c) => cuentasPago?.nombres.get(c) ?? '').texto}
                 principal={{ texto: `Dejar ${dudaPago.cuentas[0]}`, hacer: () => ed.poner('pagoCuenta', dudaPago.cuentas[0]) }}
                 secundario={{ texto: `Cambiar a ${dudaPago.cuentas[1]}`, hacer: () => ed.poner('pagoCuenta', dudaPago.cuentas[1]) }} />
