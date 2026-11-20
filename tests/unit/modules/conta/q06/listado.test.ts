@@ -200,7 +200,7 @@ describe('Q06 · el libro de IVA: el de hoy, mes › factura', () => {
   it('mes › factura, con su asiento (Intro lo abre)', () => {
     expect(a.raiz).toEqual(['mes:2026-06', 'mes:2026-07'])
     expect(a.filas.get('mes:2026-07')!.celdas[0]).toBe('Julio 2026 · 2 facturas')
-    expect(a.filas.get('f:0131')).toMatchObject({ entryId: 'e-0131', celdas: ['03/06/2026', 'A-0131', 'B00000002', 'Restaurante Cliente Ejemplo, S.L.', 458.43, 10, 45.84, 504.27] })
+    expect(a.filas.get('f:0131')).toMatchObject({ entryId: 'e-0131', celdas: ['03/06', 'A-0131', 'B00000002', 'Restaurante Cliente Ejemplo, S.L.', 458.43, 10, 45.84, 504.27] })
   })
   it('lo que le falta para un requerimiento, y el cuadre con el diario, con las frases de hoy', () => {
     expect(a.filas.get('f:0160')!.mirar).toBe('Le falta para un requerimiento: NIF del destinatario.')

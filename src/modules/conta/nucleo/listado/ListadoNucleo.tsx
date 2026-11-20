@@ -77,8 +77,8 @@ const ANCHOS: Record<QueListado, number[]> = {
   sumas: [17, 30, 13, 13, 13.5, 13.5],
   mayor: [13, 8, 31, 12, 12, 12, 12],
   diario: [18, 46, 18, 18],
-  emitidas: [14, 13, 11, 21, 11, 7, 11, 12],
-  recibidas: [14, 13, 11, 21, 11, 7, 11, 12],
+  emitidas: [11, 15, 12, 20, 11, 6, 12, 13],
+  recibidas: [11, 15, 12, 20, 11, 6, 12, 13],
 }
 
 const LIBROS: Record<'emitidas' | 'recibidas', Libro[]> = { emitidas: ['issued'], recibidas: ['received', 'investment'] }

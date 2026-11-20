@@ -303,7 +303,7 @@ export function arbolIva(anotaciones: readonly AnotacionLibro[], libro: 'issued'
     const id = `f:${a.id}`
     filas.set(id, {
       id, padre: idm, nivel: 1, clase: 'factura', hijos: [], entryId: a.entryId,
-      celdas: [ddmmaaaa(a.issueDate), numero, a.counterpartTaxId ?? '', a.counterpartName ?? '', a.taxBase, a.taxRate, a.taxAmount, a.total],
+      celdas: [ddmm(a.issueDate), numero, a.counterpartTaxId ?? '', a.counterpartName ?? '', a.taxBase, a.taxRate, a.taxAmount, a.total],
       mirar: falta.length ? `Le falta para un requerimiento: ${falta.join(', ')}.` : undefined,
     })
     m.hijos.push(id)

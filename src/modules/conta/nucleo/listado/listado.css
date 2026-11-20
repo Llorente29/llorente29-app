@@ -37,7 +37,7 @@
   height: 26px; padding: 0 8px; border: 1px solid var(--kf-casilla-borde); border-radius: 4px; background: var(--k-blanco); color: var(--k-tinta); font: inherit;
 }
 .kl-datos input { width: 108px; }
-.kl-datos input.kl-cuenta { width: 74px; }
+.kl-datos input.kl-cuenta { width: 88px; }
 .kl-datos input[aria-invalid='true'] { border-color: var(--kf-ambar-borde); }
 
 /* ── El listado ─────────────────────────────────────────────────────── */

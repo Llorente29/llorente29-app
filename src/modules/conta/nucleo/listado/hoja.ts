@@ -19,7 +19,7 @@ export const LINEAS_POR_PAGINA = (que: QueListado): number => (APAISADA[que] ? 2
 
 /** El ancho de cada columna en la hoja, en milímetros (A4 con 14 de margen). */
 const ANCHOS: Record<QueListado, number[]> = {
-  sumas: [22, 62, 24.5, 24.5, 24.5, 24.5],
+  sumas: [25, 61, 24, 24, 24, 24],
   diario: [24, 98, 30, 30],
   mayor: [22, 22, 105, 30, 30, 30, 30],
   emitidas: [22, 34, 26, 85, 28, 14, 28, 32],
@@ -30,7 +30,7 @@ export const anchosDeLaHoja = (que: QueListado): number[] => ANCHOS[que]
 /** Una celda como se escribe en la hoja: las cifras con dos decimales y su punto de miles. */
 export function textoCelda(v: Celda, col: Columna): string {
   if (v === null || v === undefined) return ''
-  if (typeof v === 'number') return col.titulo === '%' ? `${v.toLocaleString('es-ES', { maximumFractionDigits: 2 })} %` : cifra(v)
+  if (typeof v === 'number') return col.titulo === '%' ? v.toLocaleString('es-ES', { maximumFractionDigits: 2 }) : cifra(v)
   return v
 }
 
