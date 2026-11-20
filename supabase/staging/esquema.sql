@@ -117111,6 +117111,9 @@ CREATE TABLE public.conta_erp10_envio (
     quien_nombre text,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
     cambiado_en timestamp with time zone DEFAULT now() NOT NULL,
+    dia boolean,
+    cobro_serie text,
+    cobro_documento integer,
     CONSTRAINT conta_erp10_envio_check CHECK (((estado = 'en_erp10'::text) = (erp10_documento IS NOT NULL))),
     CONSTRAINT conta_erp10_envio_clase_check CHECK ((clase = ANY (ARRAY['recibida'::text, 'emitida'::text, 'asiento'::text]))),
     CONSTRAINT conta_erp10_envio_erp10_documento_check CHECK (((erp10_documento IS NULL) OR (erp10_documento > 0))),
@@ -117125,6 +117128,27 @@ CREATE TABLE public.conta_erp10_envio (
 --
 
 COMMENT ON TABLE public.conta_erp10_envio IS 'X10b · Lo que Sumied escribe en ERP10 por la API, asiento a asiento: la intención antes de escribir y lo que ERP10 le da. Lo escribe solo conta-erp10-escribir.';
+
+
+--
+-- Name: COLUMN conta_erp10_envio.dia; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_erp10_envio.dia IS 'X10e · Es de un día del TPV: su factura del día o, con el día en dos asientos, su cobro.';
+
+
+--
+-- Name: COLUMN conta_erp10_envio.cobro_serie; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_erp10_envio.cobro_serie IS 'X10e · La serie que da ERP10 al cobro de un día de un solo asiento.';
+
+
+--
+-- Name: COLUMN conta_erp10_envio.cobro_documento; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_erp10_envio.cobro_documento IS 'X10e · El número que da ERP10 al cobro de un día de un solo asiento.';
 
 
 --
