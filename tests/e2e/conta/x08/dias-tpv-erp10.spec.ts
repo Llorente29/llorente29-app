@@ -30,6 +30,7 @@ import { resolve } from 'node:path'
 import * as XLSX from 'xlsx'
 import { CARRIL, CUENTA_A, STAGING_URL, anonKey, enCarril, entrarComo, type Sesion } from '../sesion'
 import { rest } from '../api'
+import { asegurarFacturaDelDia } from '../r07/facturaDelDia'
 import { leerRevo } from '../../../../src/modules/conta/lib/lectorRevo'
 
 test.skip(CARRIL === null, 'Los días del TPV escriben en la cuenta A (valida, enciende la salida, saca y apunta): necesita su carril.')
@@ -81,6 +82,8 @@ async function preparar(s: Sesion): Promise<{ contado: string; caja: string; pla
   // «Clientes de contado»: una 430 de la sociedad que lo dice en su nombre (la respuesta X08 · 3). No se inventa en la pantalla: la prueba la da de alta.
   const contado = ctas.find((c) => c.code.startsWith('430') && /contado/i.test(c.name))?.code
     ?? (await api<{ code: string }>(s, 'POST', 'rpc/company_account_add', { p_company: EMPRESA_A, p_hoja: '4300', p_nombre: 'Clientes de contado', p_quien_nombre: QUIEN })).code
+  // R07 · Desde la 0900, sin la cuenta de la factura del día no se valida: la de «contado» de arriba.
+  await asegurarFacturaDelDia(s, EMPRESA_A)
   for (const dia of ['2026-11-09', '2026-11-10']) {
     const ya = await rpc<{ dia: string }[]>(s, 'conta_tpv_dias', { p_company: EMPRESA_A, p_desde: dia, p_hasta: dia })
     if (ya.length) continue

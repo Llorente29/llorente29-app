@@ -42,7 +42,12 @@ export interface Cierre {
   fuente?: 'folvy' | 'tpv'
   /** R05 · Lo del día del TPV (conta_tpv_dias): solo en los de fuente «tpv». */
   tpv?: CierreTpv
+  /** R07 · El cobro del día, si el día va en dos asientos (la factura del día y su cobro, conta_dia_cobro). */
+  cobro?: CobroDelDia | null
 }
+
+/** R07 · El asiento del cobro del día que va con la factura del día. */
+export interface CobroDelDia { id: string; numero: number | null; estado: string }
 
 /** R05 · Un día del TPV en la lista: una fila por día, con su numeración, base, IVA y cómo se cobró. */
 export interface CierreTpv {
@@ -296,4 +301,17 @@ export function etiquetaAjuste(a: AjustePedido): string {
   if (a.deOtroDia) return 'DE OTRO DÍA'
   if (a.dia) return `PASADO AL ${fechaCorta(a.dia)}`
   return 'CAMBIADO'
+}
+
+/**
+ * R07 · Los asientos de un cierre, como se enseñan en la lista y en la ficha: «Factura del día nº 5 ·
+ * cobro nº 6» si va en dos; «Asiento nº 5» si va en uno; null si aún no tiene número.
+ */
+export function textoAsientos(x: Pick<Cierre, 'numeroAsiento' | 'cobro'>): string | null {
+  const n = (v: number) => v.toLocaleString('es-ES')
+  if (x.cobro) {
+    if (x.numeroAsiento == null) return 'Factura del día y su cobro, sin validar'
+    return `Factura del día nº ${n(x.numeroAsiento)} · cobro nº ${x.cobro.numero == null ? '—' : n(x.cobro.numero)}`
+  }
+  return x.numeroAsiento == null ? null : `Asiento nº ${n(x.numeroAsiento)}`
 }
