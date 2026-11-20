@@ -185,9 +185,26 @@ async function erp10Escribe(page: Page, s: Sesion, empresas: Record<string, Empr
   })
 }
 
+/**
+ * Lo que una pasada anterior de hoy de estas pruebas dejó por salir (una que cayó antes de sacar lo suyo): se apunta como
+ * salido, para que la de prueba sea la de esta pasada. Solo lo de las e2e del X10 (su concepto «E2E X10…»).
+ */
+async function limpiarLoDeHoy(s: Sesion, hoy: string) {
+  const mes = `${hoy.slice(0, 7)}-01`
+  const ps = await api<{ partidas: { entry_id: string; clase: string; concepto: string; sale: boolean }[] }>(s, 'POST', 'rpc/conta_erp10_por_salir', { p_company: EMPRESA_A, p_mes: mes })
+  const viejas = ps.partidas.filter((x) => x.sale && x.concepto.startsWith('E2E X10') && ['recibida', 'emitida', 'asiento'].includes(x.clase))
+  if (!viejas.length) return
+  await api(s, 'POST', 'rpc/conta_erp10_lote_apuntar', {
+    p_company: EMPRESA_A, p_mes: mes, p_quien_nombre: QUIEN,
+    p_partidas: viejas.map((x) => ({ entry_id: x.entry_id, clase: x.clase, huella: 'e2e-x10-limpieza' })),
+    p_ficheros: [{ nombre: 'Limpieza de una pasada anterior (e2e)', filas: viejas.length, huella: 'e2e-x10-limpieza' }],
+  })
+}
+
 /** La salida, encendida desde hoy, y una recibida validada de hoy (como el X06). */
 async function prepararSalida(s: Sesion, hoy: string) {
   await api(s, 'POST', 'rpc/conta_erp10_salida_poner', { p_company: EMPRESA_A, p_encender: true, p_codigo: '0007', p_largo: 8, p_desde: hoy, p_quien_nombre: QUIEN })
+  await limpiarLoDeHoy(s, hoy)
   const [t21] = await api<{ id: string }[]>(s, 'GET', 'tax_rate?select=id&is_system=is.true&valid_to=is.null&code=eq.iva_general')
   const [soportado] = await api<{ code: string }[]>(s, 'GET', `company_account?select=code&company_id=eq.${EMPRESA_A}&code=like.472*&order=code&limit=1`)
   const iva = soportado?.code
@@ -314,7 +331,8 @@ for (const tam of TAMANOS) {
     await expect(texto).toHaveValue(/\| Diario \(asientos de 2025\) \| `\/api\/apuntes` \| 200 \|/)
     expect(await texto.inputValue()).not.toContain(nif)
     await expect(medida.getByRole('button', { name: 'Copiar lo medido' })).toBeVisible()
-    await expect(tarjeta).not.toContainText(/token|API|endpoint/)
+    // Las palabras de Sumied; lo medido para copiar cita lo que contesta ERP10 tal cual (p. ej. «…un endpoint de Estimaciones…»).
+    expect(await tarjeta.evaluate((el) => { const c = el.cloneNode(true) as HTMLElement; c.querySelectorAll('textarea').forEach((t) => t.remove()); return c.textContent ?? '' })).not.toMatch(/token|API|endpoint/)
     await medida.scrollIntoViewIfNeeded()
     await page.screenshot({ path: `${DIR}/medir-${tam.width}.png` })
     await tarjeta.getByRole('button', { name: 'Plegar' }).click()
@@ -374,6 +392,7 @@ for (const tam of TAMANOS) {
     await conCodigo(s, await conectar(s))
     // La salida desde hoy y un pago sin I.V.A. (dos apuntes), validado: un asiento del X07.
     await api(s, 'POST', 'rpc/conta_erp10_salida_poner', { p_company: EMPRESA_A, p_encender: true, p_codigo: '0007', p_largo: 8, p_desde: hoy, p_quien_nombre: QUIEN })
+    await limpiarLoDeHoy(s, hoy)
     const banco = await cuenta(s, '572', 'Banco inventado X10d')
     const concepto = `E2E X10d · pago ${Date.now() % 100000}`
     const p = await api<{ id: string }>(s, 'POST', 'rpc/journal_entry_proponer', {
@@ -482,6 +501,7 @@ test('X10e · 1366 × 768 y 1456 × 816: el día del TPV sale por la conexión (
   await conCodigo(s, await conectar(s))
   const asientos = await diaDeHoy(page, s, hoy)
   await api(s, 'POST', 'rpc/conta_erp10_salida_poner', { p_company: EMPRESA_A, p_encender: true, p_codigo: '0007', p_largo: 8, p_desde: hoy, p_quien_nombre: QUIEN })
+  await limpiarLoDeHoy(s, hoy)
 
   // Lo que el día y su cobro dejan en Sumied: lo que a ERP10 le falta (y la 477 del día, la que ERP10 tiene para el IVA repercutido).
   const leer = (fn: string) => api<{ dias?: { entryId: string; lineas: { cuenta: string; debe: number; haber: number; tipoIva: number | null }[] }[]; asientos?: { entryId: string; lineas: { cuenta: string; debe: number; haber: number }[] }[] }>(s, 'POST', `rpc/${fn}`, { p_company: EMPRESA_A, p_mes: `${hoy.slice(0, 7)}-01` })
