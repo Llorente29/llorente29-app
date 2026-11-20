@@ -64,8 +64,8 @@ export interface Salida {
     recibidas: { entryId: string; fila: Fila; api?: RecibidaParaApi; pdf?: { ruta: string; nombre: string } | null }[]
     /** X07 · Cada asiento, con sus filas (una por apunte, numeradas en A). X08: también el cobro de cada día. */
     asientos: { entryId: string; filas: Fila[]; api?: AsientoParaApi }[]
-    /** X08 · Cada día del TPV, su fila de expedidas (el resumen del día). */
-    dias: { entryId: string; fila: Fila }[]
+    /** X08 · Cada día del TPV, su fila de expedidas (el resumen del día). R07: con el asiento de su cobro, si va en dos. */
+    dias: { entryId: string; fila: Fila; cobroId?: string }[]
     pdfs: { nombre: string; ruta: string; entryId: string }[]
   }
   /** Lo que suma lo que sale (para la confirmación). */
@@ -103,8 +103,12 @@ export function armarSalida(ps: PorSalir, rs: RecibidasPorSalir, em: EmitidasPor
   // misma en ERP10, una de un asiento y otra de una factura, no salen ninguna de las dos.
   // X08 · Los días del TPV: su factura del día y su cobro, que va con los asientos.
   const prepD = prepararDiasTpv(ds.dias, ds.contado, { plan, largo: ps.largo, yaSalidas })
-  const esDia = new Set(ds.dias.map((d) => d.entryId))
-  const prepA0 = prepararAsientos([...as.asientos, ...prepD.dias.map((d) => d.cobro)], { plan, largo: ps.largo, yaSalidas })
+  // R07 · Un día en dos asientos: su cobro es un asiento del diario (origen «sales_day_payment»), que llega con los
+  // asientos y sale solo con su factura del día. Como el cobro armado de antes, va con los días, no cuenta como asiento.
+  const cobrosDelDiario = new Set(as.asientos.filter((a) => a.origen === 'sales_day_payment').map((a) => a.entryId))
+  const esDia = new Set([...ds.dias.map((d) => d.entryId), ...cobrosDelDiario])
+  const armados = (xs: typeof prepD.dias) => xs.flatMap((d) => (d.cobro ? [d.cobro] : []))
+  const prepA0 = prepararAsientos([...as.asientos, ...armados(prepD.dias)], { plan, largo: ps.largo, yaSalidas })
   const cruce = convertirCuentas([...prepE.filas, ...prepR.filas, ...prepA0.asientos, ...prepD.dias].flatMap((f) => f.usa), plan, ps.largo, yaSalidas).noCaben
   const chocan: { entryId: string; numero: string; porque: string }[] = []
   const sinCruce = <T extends { entryId: string; numero: string; usa: string[] }>(fs: T[]) => fs.filter((f) => {
@@ -116,10 +120,16 @@ export function armarSalida(ps: PorSalir, rs: RecibidasPorSalir, em: EmitidasPor
   const filasR = sinCruce(prepR.filas)
   const filasD0 = sinCruce(prepD.dias)
   // Los asientos, numerados otra vez (desde 1) sin los que chocan; con el cobro de cada día que sale.
-  const prepA = cruce.size ? prepararAsientos([...as.asientos, ...filasD0.map((d) => d.cobro)], { plan, largo: ps.largo, yaSalidas, noCaben: cruce }) : prepA0
+  const prepA1 = cruce.size ? prepararAsientos([...as.asientos, ...armados(filasD0)], { plan, largo: ps.largo, yaSalidas, noCaben: cruce }) : prepA0
   // Un día sale con su cobro o no sale (si su cobro no pudiera ir al fichero de asientos).
-  const conCobro = new Set(prepA.asientos.map((a) => a.entryId))
-  const filasD = filasD0.filter((d) => conCobro.has(d.entryId))
+  const conCobro = new Set(prepA1.asientos.map((a) => a.entryId))
+  const filasD = filasD0.filter((d) => conCobro.has(d.cobroId ?? d.entryId))
+  // R07 · Y un cobro del día no sale sin su factura del día (se dice, regla 7): los asientos se numeran otra vez sin él.
+  const salenCobros = new Set(filasD.map((d) => d.cobroId).filter((k): k is string => !!k))
+  const cobrosSolos = prepA1.asientos.filter((a) => cobrosDelDiario.has(a.entryId) && !salenCobros.has(a.entryId)).map((a) => a.entryId)
+  const prepA = cobrosSolos.length
+    ? prepararAsientos([...as.asientos.filter((a) => !cobrosSolos.includes(a.entryId)), ...armados(filasD0)], { plan, largo: ps.largo, yaSalidas, noCaben: cruce })
+    : prepA1
 
   const total = (xml: string) => columnas(xml)['045'] - 1
   const aFactura = (f: { entryId: string; numero: string; fila: Fila; pdf: string | null }, col: number): FacturaQueSale => {
@@ -164,6 +174,17 @@ export function armarSalida(ps: PorSalir, rs: RecibidasPorSalir, em: EmitidasPor
       entryId: p.entryId, clase: 'dia' as const, fecha: p.fecha, quien: 'Día de ventas', numero: `${p.serie}/${p.numero ?? ''}`,
       porque: 'No se ha leído el día del TPV: vuelve a cargar la página.',
     })),
+    // R07 · Un día en dos asientos cuyo cobro no está para salir (no ha llegado con los asientos): no sale sin él.
+    ...filasD0.filter((d) => d.cobroId && !conCobro.has(d.cobroId) && !prepA1.noSalen.some((x) => x.entryId === d.cobroId)).map((d) => ({
+      entryId: d.entryId, clase: 'dia' as const, fecha: d.fecha, quien: d.local ?? 'Día de ventas', numero: d.numero,
+      porque: 'Su cobro del día no está para salir este mes: la factura del día sale junto a él.',
+    })),
+    // R07 · El cobro de un día que no sale.
+    ...cobrosSolos.map((k) => {
+      const a = as.asientos.find((x) => x.entryId === k)!
+      return { entryId: k, clase: 'dia' as const, fecha: a.fecha, quien: a.concepto, numero: `${a.serie}/${a.numero ?? ''}`,
+        porque: 'Es el cobro de un día de ventas: sale junto a su factura del día, y esa no sale.' }
+    }),
     ...[...prepE.noSalen, ...prepR.noSalen, ...prepD.noSalen,
       ...prepA.noSalen.filter((x) => (!cruce.size || !chocan.some((y) => y.entryId === x.entryId)) && (!esDia.has(x.entryId) || !chocan.some((y) => y.entryId === x.entryId))),
       ...chocan].map((x) => {
@@ -246,7 +267,7 @@ export function armarSalida(ps: PorSalir, rs: RecibidasPorSalir, em: EmitidasPor
       })),
       // X10d · El asiento para la conexión con ERP10; los cobros de los días del TPV, no (esperan al R07: dos asientos por día).
       asientos: prepA.asientos.map((a) => ({ entryId: a.entryId, filas: a.filas, ...(esDia.has(a.entryId) ? {} : { api: a.api }) })),
-      dias: filasD.map((d) => ({ entryId: d.entryId, fila: d.fila })),
+      dias: filasD.map((d) => ({ entryId: d.entryId, fila: d.fila, ...(d.cobroId ? { cobroId: d.cobroId } : {}) })),
       pdfs,
     },
     totalRecibidas, totalEmitidas, totalAsientos, totalDias,
@@ -263,8 +284,10 @@ export function soloUna(x: Salida, entryId: string): Salida | null {
   const recibidas = x.ficheros.recibidas.filter((f) => f.entryId === entryId)
   // X07 · Un asiento solo: el primero (y único) del fichero, con el 1 en A.
   const colA = columnasAsientos()['001'] - 1
-  const asientos = x.ficheros.asientos.filter((f) => f.entryId === entryId).map((a) => ({ entryId: a.entryId, filas: a.filas.map((f) => f.map((v, i) => (i === colA ? 1 : v))) }))
   const dias = x.ficheros.dias.filter((f) => f.entryId === entryId)
+  // R07 · Un día en dos asientos vuelve a salir con el asiento de su cobro.
+  const suyos = new Set([entryId, ...dias.flatMap((d) => (d.cobroId ? [d.cobroId] : []))])
+  const asientos = x.ficheros.asientos.filter((f) => suyos.has(f.entryId)).map((a) => ({ entryId: a.entryId, filas: a.filas.map((f) => f.map((v, i) => (i === colA ? 1 : v))) }))
   if (!expedidas.length && !recibidas.length && !asientos.length && !dias.length) return null
   const emitidas = x.listas.emitidas.filter((f) => f.entryId === entryId)
   const rec = x.listas.recibidas.filter((f) => f.entryId === entryId)

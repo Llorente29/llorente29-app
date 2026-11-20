@@ -735,6 +735,13 @@ export function prepararAsientos(lista: readonly AsientoParaErp10[], o: {
 // No sale (y se dice por qué): sin rango, con dos contadores del TPV (dos rangos), con
 // varios asientos el mismo día y local (uno por plataforma), sin «Clientes de contado» o
 // con más de una, y lo que no cabe en la configuración.
+//
+// R07 (respuesta R07 · 1, 20/11): desde que la empresa elige la cuenta de la factura del día,
+// Sumied ya guarda el día en DOS asientos unidos: la factura del día («Clientes de contado» al
+// debe, contra ventas e I.V.A.) y su cobro (lo cobrado contra «Clientes de contado»). Entonces
+// la factura sale igual que antes, de su propio asiento, y el cobro no se arma: es el asiento
+// del cobro del día (`cobroId`), que sale con los asientos, y solo junto a su factura. Los días
+// de antes, de un solo asiento, salen como siempre.
 
 /** Un apunte del asiento de un día (conta_erp10_dias_tpv_por_salir). */
 export type LineaDia = {
@@ -760,6 +767,8 @@ export type DiaParaErp10 = {
   /** Revo: cuántos contadores (series del TPV) lleva el día. */
   contadores: number | null
   lineas: LineaDia[]
+  /** R07 · El asiento del cobro del día, si el día va en dos (la factura del día y su cobro). */
+  cobroId?: string | null
 }
 export type CuentaContado = { codigo: string; plantilla: string; nombre: string }
 
@@ -773,6 +782,8 @@ export type DiaLeido = {
   /** Lo cobrado a cada cuenta (con su signo: una devolución en caja resta). */
   cobros: { cuenta: string; nombre: string; importe: number }[]
   total: number
+  /** R07 · El cobro va en su propio asiento (el día en dos): no se arma con `cobroDia`. */
+  cobroId: string | null
 }
 
 export const FRASE_SIN_RANGO = 'Falta el rango de facturas del día.'
@@ -795,6 +806,9 @@ export function leerDia(d: DiaParaErp10, contado: readonly CuentaContado[], xml 
   const ingresos = new Map<string, number>()
   const iva = new Map<number, { base: number; cuota: number }>()
   const cobros = new Map<string, { nombre: string; importe: number }>()
+  // R07 · La factura del día en su asiento: lo que va a «Clientes de contado» es su total.
+  const cobroId = d.cobroId ? String(d.cobroId) : null
+  let enContado = 0
   for (const l of d.lineas) {
     const neto = c(l.haber) - c(l.debe)
     if (neto === 0) continue
@@ -806,6 +820,8 @@ export function leerDia(d: DiaParaErp10, contado: readonly CuentaContado[], xml 
       const x = iva.get(pct) ?? { base: 0, cuota: 0 }
       x.base += c(Math.abs(Number(l.baseIva))) * (neto < 0 ? -1 : 1); x.cuota += neto
       iva.set(pct, x)
+    } else if (cobroId && l.cuenta === contado[0].codigo) {
+      enContado -= neto
     } else {
       // Lo cobrado: la cuenta de cada forma de pago (caja, banco, la 430 de una plataforma…).
       const x = cobros.get(l.cuenta) ?? { nombre: (l.nombre || l.cuenta).trim(), importe: 0 }
@@ -824,11 +840,15 @@ export function leerDia(d: DiaParaErp10, contado: readonly CuentaContado[], xml 
   for (const x of ivas) if (!Number.isInteger(x.pct)) return no(`Lleva un I.V.A. del ${x.pct} %, que no es un tipo entero. No sale.`)
   const cobrado = [...cobros].filter(([, x]) => x.importe !== 0).map(([cuenta, x]) => ({ cuenta, nombre: x.nombre, importe: x.importe }))
   if (cobrado.some((x) => x.cuenta === contado[0].codigo)) return no(`Cobra en la propia cuenta de Clientes de contado (${contado[0].codigo}). No sale.`)
-  const total = cobrado.reduce((t, x) => t + x.importe, 0)
-  if (total <= 0) return no('Lo cobrado el día no es positivo. No sale.')
+  if (cobroId && cobrado.length) {
+    return no(`La factura del día lleva, además de Clientes de contado (${contado[0].codigo}), lo cobrado en ${cobrado.map((x) => x.cuenta).join(', ')}: lo cobrado va en su cobro. No sale.`)
+  }
+  if (cobroId && enContado === 0) return no(`La factura del día no lleva Clientes de contado (${contado[0].codigo}). No sale.`)
+  const total = cobroId ? enContado : cobrado.reduce((t, x) => t + x.importe, 0)
+  if (total <= 0) return no(cobroId ? 'La factura del día no es positiva. No sale.' : 'Lo cobrado el día no es positivo. No sale.')
   const leido: DiaLeido = {
     entryId: d.entryId, serie: d.serie, numero: d.numero, fecha: d.fecha, local: d.local, primero, ultimo,
-    facturas: Number(d.facturas ?? 0), contado: contado[0], ingresos: vivos.map(([cuenta, importe]) => ({ cuenta, importe })), iva: ivas, cobros: cobrado, total,
+    facturas: Number(d.facturas ?? 0), contado: contado[0], ingresos: vivos.map(([cuenta, importe]) => ({ cuenta, importe })), iva: ivas, cobros: cobrado, total, cobroId,
   }
   if (!Number.isInteger(leido.facturas) || leido.facturas <= 0) return no('No dice cuántas facturas lleva el día. No sale.')
   const mal = cuadreEmitida(leido)
@@ -865,8 +885,11 @@ export function cobroDia(x: DiaLeido): AsientoParaErp10 {
 }
 
 export type SalidaDias = {
-  /** En orden de fecha. Cada día, su fila de expedidas y su asiento de cobro. */
-  dias: { entryId: string; numero: string; fecha: string; local: string | null; facturas: number; total: number; fila: Fila; cobro: AsientoParaErp10; usa: string[] }[]
+  /**
+   * En orden de fecha. Cada día, su fila de expedidas y su asiento de cobro: armado del asiento
+   * del día (`cobro`), o, con el día en dos asientos (R07), el del cobro del día (`cobroId`).
+   */
+  dias: { entryId: string; numero: string; fecha: string; local: string | null; facturas: number; total: number; fila: Fila; cobro: AsientoParaErp10 | null; cobroId: string | null; usa: string[] }[]
   noSalen: NoSale[]
 }
 
@@ -899,7 +922,8 @@ export function prepararDiasTpv(lista: readonly DiaParaErp10[], contado: readonl
     const mala = usa.find((k) => conv.noCaben.has(k) || o.noCaben?.has(k))
     const numero = rangoDe(x)
     if (mala) { noSalen.push({ entryId: x.entryId, numero, porque: (conv.noCaben.get(mala) ?? o.noCaben!.get(mala))! }); continue }
-    dias.push({ entryId: x.entryId, numero, fecha: x.fecha, local: x.local, facturas: x.facturas, total: e(x.total), fila: filaDia(x, conv.erp, xml), cobro: cobroDia(x), usa })
+    dias.push({ entryId: x.entryId, numero, fecha: x.fecha, local: x.local, facturas: x.facturas, total: e(x.total), fila: filaDia(x, conv.erp, xml),
+      cobro: x.cobroId ? null : cobroDia(x), cobroId: x.cobroId, usa })
   }
   return { dias, noSalen }
 }

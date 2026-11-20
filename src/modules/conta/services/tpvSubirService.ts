@@ -72,3 +72,56 @@ export async function leerCuentasEmpresa(companyId: string): Promise<CuentaElegi
   const largo = Math.max(0, ...filas.map((c) => c.code.length))
   return filas.filter((c) => c.code.length === largo).map((c) => ({ id: c.id, codigo: c.code, nombre: c.name }))
 }
+
+// ── R07 · La factura del día y su cobro ─────────────────────────────────────────────
+// Nombres dentro de cadenas (regla 40): conta_tpv_factura_de, conta_tpv_factura_guardar y
+// conta_tpv_dia_ejemplo son del R07 (20261120T0900); company_account_add, del C02.
+
+export interface FacturaDelDia {
+  /** La cuenta elegida, con lo que suma en el mes y desde qué día va cada día en dos asientos. */
+  factura: { cuenta: string; nombre: string; desde: string; mes: number } | null
+  /** Si no hay ninguna elegida: una 430 de la empresa que ya se llama «contado». */
+  propuesta: { cuenta: string; nombre: string } | null
+}
+
+export async function leerFacturaDelDia(companyId: string, mes: string | null): Promise<FacturaDelDia> {
+  const r = await rpc<{ factura: { cuenta: string; nombre: string; desde: string; mes: number } | null; propuesta: { cuenta: string; nombre: string } | null }>(
+    'conta_tpv_factura_de', { p_company: companyId, p_mes: mes })
+  return { factura: r.factura ? { ...r.factura, mes: Number(r.factura.mes) } : null, propuesta: r.propuesta ?? null }
+}
+
+/** Guardar a qué cuenta va la factura del día. Devuelve la frase de la base (regla 8). */
+export async function guardarFacturaDelDia(companyId: string, cuenta: string, quien: string | null): Promise<{ texto: string; desde: string }> {
+  const r = await rpc<{ texto: string; desde: string }>('conta_tpv_factura_guardar', { p_company: companyId, p_cuenta: cuenta, p_quien_nombre: quien })
+  return { texto: r.texto, desde: r.desde }
+}
+
+/** Dar de alta «Clientes de contado» (una 430 nueva, la siguiente libre). Devuelve su código. */
+export async function altaClientesDeContado(companyId: string, quien: string | null): Promise<string> {
+  const r = await rpc<{ id: string; code: string }>('company_account_add', {
+    p_company: companyId, p_hoja: '4300', p_nombre: 'Clientes de contado', p_plain_name: null, p_entity: null, p_entity_id: null, p_quien_nombre: quien, p_source: 'manual',
+  })
+  return r.code
+}
+
+export interface LineaDiaEjemplo extends LineaEjemplo { contado: boolean }
+export interface AsientoDelDia { lineas: LineaDiaEjemplo[]; debe: number; haber: number }
+export interface DiaEjemplo {
+  dia: string; motivo: string | null
+  primero: string | null; ultimo: string | null; facturas: number | null
+  factura: AsientoDelDia | null; cobro: AsientoDelDia | null; sinCuenta: number
+}
+
+/** «Cómo quedan los asientos de un día» con las cuentas que se están eligiendo: lo propone la base, sin guardar nada. */
+export async function diaEjemplo(diaId: string, elecciones: Eleccion[], facturaId: string | null): Promise<DiaEjemplo> {
+  type A = { lineas: LineaDiaEjemplo[]; debe: number; haber: number } | null
+  const r = await rpc<{ dia: string; motivo: string | null; primero: number | string | null; ultimo: number | string | null; facturas: number | null; factura: A; cobro: A; sin_cuenta?: number }>(
+    'conta_tpv_dia_ejemplo', { p_dia: diaId, p_cuentas: elecciones, p_factura: facturaId })
+  const asiento = (a: A): AsientoDelDia | null => (a ? {
+    lineas: (a.lineas ?? []).map((l) => ({ ...l, debe: Number(l.debe), haber: Number(l.haber), contado: !!l.contado })), debe: Number(a.debe ?? 0), haber: Number(a.haber ?? 0),
+  } : null)
+  return {
+    dia: r.dia, motivo: r.motivo, primero: r.primero == null ? null : String(r.primero), ultimo: r.ultimo == null ? null : String(r.ultimo), facturas: r.facturas == null ? null : Number(r.facturas),
+    factura: asiento(r.factura), cobro: asiento(r.cobro), sinCuenta: Number(r.sin_cuenta ?? 0),
+  }
+}

@@ -33,7 +33,7 @@ import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoP
 import { Boton, BotonEnlace, Chip, Dialogo } from '@/modules/conta/diseno'
 import { CifrasBandeja, FiltroBuscar, FiltrosLista, PestanasEstado, TablaLista, conCambio, type ColumnaLista } from '@/modules/conta/diseno/plantillas'
 import {
-  NOMBRE_ESTADO_CIERRE, cobradoTpv, filtrarCierres, listos, numeracionTpv, pestanaDe, pestanasCierres, resumenDeAyer, subidoTpv, type Cierre,
+  NOMBRE_ESTADO_CIERRE, cobradoTpv, filtrarCierres, listos, numeracionTpv, pestanaDe, pestanasCierres, resumenDeAyer, subidoTpv, textoAsientos, type Cierre,
 } from '@/modules/conta/lib/cierres'
 import { leerCierres, validarCierre, validarCierreTpv } from '@/modules/conta/services/cierresService'
 import { LoQueDejaElCierre } from './LoQueDejaElCierre'
@@ -116,10 +116,13 @@ export default function CierresPage() {
   const estado = (x: Cierre) => {
     const e = NOMBRE_ESTADO_CIERRE[x.estado]
     // R06 (maqueta 1): un día del TPV que se puede validar dice «Listo para validar».
-    return <Chip tono={e.tono}>{x.fuente === 'tpv' && x.estado === 'por_validar' ? 'Listo para validar' : e.texto}</Chip>
+    const chip = <Chip tono={e.tono}>{x.fuente === 'tpv' && x.estado === 'por_validar' ? 'Listo para validar' : e.texto}</Chip>
+    // R07 · Un día en dos asientos enseña los dos: la factura del día y su cobro.
+    const asientos = x.cobro ? textoAsientos(x) : null
+    return asientos ? <span className="s-lista-texto-doble">{chip}<span className="s-tarjeta-apoyo" data-prueba="asientos-del-dia">{asientos}</span></span> : chip
   }
   // R06 · El motivo de un día del TPV sin cuenta lleva a «A qué cuenta va cada forma de pago».
-  const motivoTpv = (x: Cierre) => x.motivo && /^Falta decir a qué cuenta va/.test(x.motivo) && x.tpv
+  const motivoTpv = (x: Cierre) => x.motivo && /^Falta (decir a qué cuenta va|la cuenta de la factura del día)/.test(x.motivo) && x.tpv
     ? <button type="button" className="s-boton s-boton-enlace s-tarjeta-apoyo" data-tono="duda"
         onClick={(e) => { e.stopPropagation(); setVentana({ cual: 'formas', dia: x.tpv!.diaId }) }}>{x.motivo} Elegir la cuenta</button>
     : <span className="s-tarjeta-apoyo" data-tono="duda">{x.motivo}</span>
@@ -209,7 +212,10 @@ export default function CierresPage() {
         if (x.fuente === 'tpv' && x.tpv) {
           // R05 · Un día del TPV se propone y se valida a la vez, con su PDF; sin factura de Sumied (las facturas son las del TPV).
           const r = await validarCierreTpv(x.tpv.diaId, userName)
-          hechos.push({ id, ok: true, texto: `${nombreCierre(x)}: validado con su PDF y el asiento nº ${r.numero.toLocaleString('es-ES')} · ${plural(x.tpv.facturas, 'factura', 'facturas')}, ${numeracionTpv(x.tpv)} (${eurosExactos(x.total)}).` })
+          const asientos = r.cobroNumero != null
+            ? `la factura del día es el asiento nº ${r.numero.toLocaleString('es-ES')} y su cobro el nº ${r.cobroNumero.toLocaleString('es-ES')}`
+            : `el asiento nº ${r.numero.toLocaleString('es-ES')}`
+          hechos.push({ id, ok: true, texto: `${nombreCierre(x)}: validado con su PDF y ${asientos} · ${plural(x.tpv.facturas, 'factura', 'facturas')}, ${numeracionTpv(x.tpv)} (${eurosExactos(x.total)}).` })
         } else {
           const r = await validarCierre(x.asientoId!, userName)
           hechos.push({ id, ok: true, texto: `${nombreCierre(x)}: validado con la factura ${r.factura ?? '—'}, su PDF y el asiento nº ${r.numero.toLocaleString('es-ES')} (${eurosExactos(x.total)}).` })

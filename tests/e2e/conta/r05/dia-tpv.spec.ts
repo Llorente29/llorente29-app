@@ -22,6 +22,7 @@ import { resolve } from 'node:path'
 import { CUENTA_A, STAGING_URL, anonKey, entrarComo, enCarril, type Sesion } from '../sesion'
 import { rest } from '../api'
 import { leerRevo } from '../../../../src/modules/conta/lib/lectorRevo'
+import { asegurarFacturaDelDia } from '../r07/facturaDelDia'
 
 const DIR = 'docs/conta/capturas/r05'
 const CIERRE_GLOVO = enCarril('acebcda4-f03a-4f84-bfe4-062a941e60a2')
@@ -62,6 +63,8 @@ async function preparar(s: Sesion): Promise<string> {
     const r = await rest(s, 'POST', 'conta_tpv_forma_cuenta', formas.map(([forma, canal, cta]) => ({ account_id: CUENTA_A.id, company_id: empresa, forma, canal, company_account_id: cta, created_by_name: 'e2e R05' })))
     if (r.status >= 300) throw new Error(`No se han podido guardar las cuentas de las formas de pago: ${r.status} ${JSON.stringify(r.datos)}`)
   }
+  // R07 · Desde la 0900, sin la cuenta de la factura del día no se valida.
+  await asegurarFacturaDelDia(s, empresa)
   const lectura = leerRevo(['Ordenes', 'Documentos', 'Impuestos', 'Pagos'].map((n) => ({ nombre: `${n}_2026-11-09.csv`, contenido: new Uint8Array(readFileSync(resolve(EJEMPLO, `${n}_2026-11-09.csv`))) })))
   if (!lectura.ok) throw new Error(lectura.problemas.join(' | '))
   const dias = await rpc<{ dia: string; estado: string }[]>(s, 'conta_tpv_dias', { p_company: empresa, p_desde: '2026-11-09', p_hasta: '2026-11-09' })
@@ -103,7 +106,7 @@ test('el día del TPV sale en Cierres del día, una fila por día, y se valida c
   await expect(dialogo.getByText(/Los días del TPV no llevan factura de Sumied/)).toBeVisible()
   await dialogo.getByRole('button', { name: /^Validar \d+ cierres?$/ }).click()
   const resultado = page.locator('[data-prueba="resultado-validar"]')
-  await expect(resultado.getByText(/^✓ TPV · Revo · 9 nov: validado con su PDF y el asiento nº [\d.]+ · 48 facturas, 5001 a 5048 \(1\.100,00 €\)\.$/)).toBeVisible({ timeout: 200_000 })
+  await expect(resultado.getByText(/^✓ TPV · Revo · 9 nov: validado con su PDF y (el asiento nº [\d.]+|la factura del día es el asiento nº [\d.]+ y su cobro el nº [\d.]+) · 48 facturas, 5001 a 5048 \(1\.100,00 €\)\.$/)).toBeVisible({ timeout: 200_000 })
   await expect(page.getByText('Validado').first()).toBeVisible({ timeout: 30_000 })
   await foto(page, 'cierres-tpv-validado')
   expect(errores).toEqual([])

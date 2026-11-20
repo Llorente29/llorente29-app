@@ -1,36 +1,72 @@
 // src/modules/conta/ventas/tpv/FormasDePago.tsx
 //
-// R06 · «A qué cuenta va cada forma de pago» (maqueta 3). Se abre sola cuando un
-// día trae una forma de pago sin cuenta (desde «Cuenta sin elegir» y desde el
-// motivo que impide validar) y siempre desde Ajustes › Ventas por día.
+// R06 · «A qué cuenta va cada forma de pago» (maqueta 3), con la factura del día del R07
+// (maqueta 4, aprobada por Julio el 19/11). Se abre sola cuando un día trae una forma de
+// pago sin cuenta (desde «Cuenta sin elegir» y desde el motivo que impide validar) y
+// siempre desde Ajustes › Ventas por día.
 //
 //   · Arriba, en ámbar, la forma nueva.
-//   · La tabla: la forma como la escribe el TPV (Deliverect, partida por
-//     plataforma), la cuenta (el buscador de siempre, BuscarCuentaHoja) y lo que
-//     suma en el mes.
-//   · A la derecha, «Cómo queda el asiento de un día», en vivo: lo propone la
-//     base (conta_tpv_asiento_ejemplo → _conta_tpv_propuesta) con las cuentas que
-//     se están eligiendo, sin guardar nada.
-//   · «Guardar» no se enciende mientras falte una cuenta, y lo dice; al guardar,
-//     confirma con contenido y los días que la llevaban pasan a «Listo para validar».
+//   · «La factura del día»: una fila, «La factura del día va a», con su cuenta (el buscador
+//     de siempre; si no hay ninguna, Sumied propone la 430 que ya se llame «contado», o se
+//     da de alta desde aquí) y lo que suma en el mes; y desde cuándo va cada día en dos.
+//   · «Cómo se ha cobrado»: la forma como la escribe el TPV (Deliverect, partida por
+//     plataforma), la cuenta y lo que suma en el mes.
+//   · A la derecha, «Cómo quedan los asientos de un día», en vivo: la factura del día y su
+//     cobro, uno debajo del otro, los propone la base (conta_tpv_dia_ejemplo →
+//     _conta_tpv_propuesta) con las cuentas que se están eligiendo, sin guardar nada.
+//   · «Guardar» no se enciende mientras falte una cuenta, y lo dice; al guardar, confirma
+//     con contenido y los días que la llevaban pasan a «Listo para validar».
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Boton, Chip } from '@/modules/conta/diseno'
 import { BuscarCuentaHoja } from '@/modules/conta/diseno/plantillas'
-import { avisoFormasNuevas, cifra, diaCorto, enElMes, esDeliverect, faltanCuentas, nombreCanal, type FormaCuenta } from '@/modules/conta/lib/subirTpv'
 import {
-  asientoEjemplo, guardarFormas, leerCuentasEmpresa, leerFormas,
-  type AsientoEjemplo, type CuentaElegible, type Eleccion, type Formas, type LineaEjemplo,
+  avisoFormasNuevas, cifra, desdeDosAsientos, diaCorto, enElMes, esDeliverect, faltaParaGuardar, nombreCanal, rangoTickets, saldoContado, type FormaCuenta,
+} from '@/modules/conta/lib/subirTpv'
+import {
+  altaClientesDeContado, diaEjemplo, guardarFacturaDelDia, guardarFormas, leerCuentasEmpresa, leerFacturaDelDia, leerFormas,
+  type AsientoDelDia, type CuentaElegible, type DiaEjemplo, type Eleccion, type FacturaDelDia, type Formas, type LineaDiaEjemplo,
 } from '@/modules/conta/services/tpvSubirService'
 import { VentanaAncha } from './VentanaAncha'
 
 const clave = (f: Pick<FormaCuenta, 'forma' | 'canal'>) => `${f.forma.trim().toLowerCase()}|${f.canal ?? ''}`
+const FACTURA = '__factura_del_dia__'
 
-/** Como en la maqueta: los cobros (lo del local, las plataformas, lo que no tiene cuenta), y después ventas e IVA. */
-function ordenAsiento(l: LineaEjemplo): number {
+/** Como en la maqueta: lo del local, las plataformas, lo que no tiene cuenta, «Clientes de contado», y después ventas e IVA. */
+function ordenAsiento(l: LineaDiaEjemplo): number {
+  if (l.contado) return l.debe !== 0 ? 0 : 6
   if (l.debe === 0 && l.haber !== 0) return l.tipo != null ? 5 : 4
   if (l.sin_cuenta) return 3
   return l.forma && esDeliverect(l.forma) ? 2 : 1
+}
+
+/** El tipo de IVA detrás del nombre de la cuenta, si el nombre no lo dice ya («IVA repercutido 10 %»). */
+function conTipo(nombre: string | null, tipo: number | null | undefined): string {
+  if (tipo == null) return ''
+  const t = `${Number(tipo).toLocaleString('es-ES')} %`
+  return (nombre ?? '').replace(/\s+/g, ' ').includes(t) ? '' : ` ${t}`
+}
+
+function TablaAsiento({ a, etiqueta, prueba, pie }: { a: AsientoDelDia; etiqueta: string; prueba: string; pie: ReactNode }) {
+  const lineas = a.lineas.map((l, i) => ({ l, i })).sort((x, y) => ordenAsiento(x.l) - ordenAsiento(y.l) || x.i - y.i).map(({ l }) => l)
+  return (
+    <div className="tpv-tabla-caja tpv-caja-abierta">
+      <table className="tpv-asiento" aria-label={etiqueta} data-prueba={prueba}>
+        <thead><tr><th>Cuenta</th><th className="tpv-cifra">Debe</th><th className="tpv-cifra">Haber</th></tr></thead>
+        <tbody>
+          {lineas.map((l, i) => (
+            <tr key={i} data-sin-cuenta={l.sin_cuenta ? '' : undefined} data-contado={l.contado ? '' : undefined}>
+              <td>{l.sin_cuenta ? `${l.forma ?? ''}${l.canal && l.canal !== 'local' ? ` · ${nombreCanal(l.canal)}` : ''} · sin cuenta`
+                : `${l.cuenta} · ${l.nombre ?? ''}${conTipo(l.nombre, l.tipo)}`}</td>
+              <td className="tpv-cifra">{l.debe ? cifra(l.debe) : ''}</td>
+              <td className="tpv-cifra">{l.haber ? cifra(l.haber) : ''}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot><tr><td>{pie}</td><td className="tpv-cifra" colSpan={2}>Debe <strong>{cifra(a.debe)}</strong> · Haber <strong>{cifra(a.haber)}</strong></td></tr></tfoot>
+      </table>
+    </div>
+  )
 }
 
 export function FormasDePago({ companyId, quien, diaId = null, alCerrar, alGuardar }: {
@@ -45,19 +81,26 @@ export function FormasDePago({ companyId, quien, diaId = null, alCerrar, alGuard
   const [datos, setDatos] = useState<Formas | null>(null)
   const [cuentas, setCuentas] = useState<CuentaElegible[]>([])
   const [eleccion, setEleccion] = useState<Record<string, string | null>>({})
-  const [ejemplo, setEjemplo] = useState<AsientoEjemplo | null>(null)
+  /** La factura del día: lo guardado y lo que se elige (el código de la cuenta). */
+  const [factura, setFactura] = useState<FacturaDelDia | null>(null)
+  const [facturaElegida, setFacturaElegida] = useState<string | null>(null)
+  const [ejemplo, setEjemplo] = useState<DiaEjemplo | null>(null)
   const [buscando, setBuscando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [guardando, setGuardando] = useState(false)
+  const [dandoDeAlta, setDandoDeAlta] = useState(false)
   const [hecho, setHecho] = useState<string | null>(null)
 
   useEffect(() => {
     let vivo = true
     Promise.all([leerFormas(companyId, diaId), leerCuentasEmpresa(companyId)])
-      .then(([f, c]) => {
+      .then(async ([f, c]) => {
+        const fd = await leerFacturaDelDia(companyId, f.mes)
         if (!vivo) return
-        setDatos(f); setCuentas(c)
+        setDatos(f); setCuentas(c); setFactura(fd)
         setEleccion(Object.fromEntries(f.formas.map((x) => [clave(x), x.cuenta_id])))
+        // Sin ninguna elegida, Sumied propone la 430 que ya se llama «contado».
+        setFacturaElegida(fd.factura?.cuenta ?? fd.propuesta?.cuenta ?? null)
       })
       .catch((e: unknown) => { if (vivo) setError(e instanceof Error ? e.message : String(e)) })
     return () => { vivo = false }
@@ -67,28 +110,40 @@ export function FormasDePago({ companyId, quien, diaId = null, alCerrar, alGuard
   const elecciones: Eleccion[] = useMemo(() => formas.map((f) => ({ forma: f.forma, canal: f.canal, cuenta_id: eleccion[clave(f)] ?? null })), [formas, eleccion])
   const faltan = elecciones.filter((x) => !x.cuenta_id).length
   const nuevas = formas.filter((f) => f.nueva)
+  const facturaId = cuentas.find((x) => x.codigo === facturaElegida)?.id ?? null
 
-  // El asiento de ejemplo, en vivo (lo propone la base con lo que se está eligiendo).
+  // Los dos asientos de ejemplo, en vivo (los propone la base con lo que se está eligiendo).
   const ejemploDia = datos?.ejemplo ?? null
-  const firma = JSON.stringify(elecciones)
+  const firma = JSON.stringify([elecciones, facturaId])
   useEffect(() => {
     if (!ejemploDia) return
     let vivo = true
     const t = setTimeout(() => {
-      asientoEjemplo(ejemploDia, elecciones.filter((x) => x.cuenta_id))
+      diaEjemplo(ejemploDia, elecciones.filter((x) => x.cuenta_id), facturaId)
         .then((r) => { if (vivo) setEjemplo(r) })
         .catch((e: unknown) => { if (vivo) setError(e instanceof Error ? e.message : String(e)) })
     }, 150)
     return () => { vivo = false; clearTimeout(t) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `firma` resume `elecciones`
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `firma` resume `elecciones` y la factura
   }, [ejemploDia, firma])
+
+  // Hasta que la base no parte el día en dos (antes de aplicar el R07), la factura del día no se exige.
+  const partido = !!ejemplo?.cobro || !!factura?.factura
+  const sinFactura = partido && !facturaElegida
+  const facturaCambia = !!facturaElegida && facturaElegida !== (factura?.factura?.cuenta ?? null)
+  const falta = faltaParaGuardar(faltan, sinFactura)
 
   async function guardar() {
     setGuardando(true); setError(null)
     try {
+      const textos: string[] = []
       const cambiadas = elecciones.filter((x) => x.cuenta_id && x.cuenta_id !== formas.find((f) => clave(f) === clave(x))?.cuenta_id)
-      const r = await guardarFormas(companyId, cambiadas.length ? cambiadas : elecciones, quien)
-      setHecho(r.texto)
+      if (formas.length && (cambiadas.length || !facturaCambia)) textos.push((await guardarFormas(companyId, cambiadas.length ? cambiadas : elecciones, quien)).texto)
+      if (facturaCambia && facturaElegida) {
+        textos.push((await guardarFacturaDelDia(companyId, facturaElegida, quien)).texto)
+        setFactura(await leerFacturaDelDia(companyId, datos?.mes ?? null))
+      }
+      setHecho(textos.join(' '))
       alGuardar()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -97,10 +152,24 @@ export function FormasDePago({ companyId, quien, diaId = null, alCerrar, alGuard
     }
   }
 
+  async function darDeAlta() {
+    setDandoDeAlta(true); setError(null)
+    try {
+      const codigo = await altaClientesDeContado(companyId, quien)
+      setCuentas(await leerCuentasEmpresa(companyId))
+      setFacturaElegida(codigo); setHecho(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDandoDeAlta(false)
+    }
+  }
+
   const nombreCuenta = (id: string | null) => { const c = cuentas.find((x) => x.id === id); return c ? `${c.codigo} · ${c.nombre}` : null }
-  const lineas = [...(ejemplo?.lineas ?? [])].map((l, i) => ({ l, i })).sort((a, b) => ordenAsiento(a.l) - ordenAsiento(b.l) || a.i - b.i).map(({ l }) => l)
+  const nombreFactura = facturaElegida ? (cuentas.find((x) => x.codigo === facturaElegida)?.nombre ?? factura?.propuesta?.nombre ?? '') : null
   const hayDeliverect = formas.some((f) => esDeliverect(f.forma))
   const plataformas = [...new Set(formas.filter((f) => esDeliverect(f.forma) && f.canal).map((f) => nombreCanal(f.canal)))]
+  const rango = ejemplo ? rangoTickets(ejemplo.primero, ejemplo.ultimo) : null
 
   const izquierda = (
     <>
@@ -113,6 +182,45 @@ export function FormasDePago({ companyId, quien, diaId = null, alCerrar, alGuard
             : 'Dime a qué cuenta va cada una y no te lo vuelvo a preguntar. Hasta entonces, los días que las llevan no se pueden validar.'}</p>
         </div>
       )}
+
+      {factura && (
+        <section className="tpv-seccion" aria-label="La factura del día" data-prueba="factura-del-dia">
+          <h3 className="tpv-seccion-titulo">La factura del día</h3>
+          <div className="tpv-tabla-caja tpv-caja-abierta">
+            <table className="tpv-formas" aria-label="A qué cuenta va la factura del día">
+              <colgroup><col className="tpv-col-forma" /><col className="tpv-col-cuenta" /><col className="tpv-col-mes" /></colgroup>
+              <tbody>
+                <tr data-prueba="fila-factura-del-dia">
+                  <td><span className="tpv-forma-nombre">La factura del día va a</span>
+                    {!factura.factura && facturaElegida && facturaElegida === factura.propuesta?.cuenta && <> <Chip tono="duda">Propuesta</Chip></>}</td>
+                  <td className="tpv-elegir">
+                    <button type="button" className="tpv-elegir-boton" data-falta={facturaElegida ? undefined : ''} aria-label="Cuenta de la factura del día"
+                      onClick={() => setBuscando(buscando === FACTURA ? null : FACTURA)}>
+                      <span>{facturaElegida ? `${facturaElegida} · ${nombreFactura}` : 'Elige una cuenta'}</span><span aria-hidden="true">▾</span>
+                    </button>
+                    {buscando === FACTURA && (
+                      <BuscarCuentaHoja cuentas={cuentas} inicial=""
+                        alElegir={(c) => { setFacturaElegida(c.codigo); setBuscando(null); setHecho(null) }}
+                        alCerrar={() => setBuscando(null)} />
+                    )}
+                  </td>
+                  <td className="tpv-cifra">{cifra(factura.factura?.mes ?? 0)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="tpv-nota">Cada día, todos los tickets de un local se apuntan en una sola factura, con su primer y su último número. Así lo pide Hacienda y así lo hace ERP10.</p>
+          {factura.factura
+            ? <p className="tpv-nota" data-prueba="desde-dos-asientos">{desdeDosAsientos(factura.factura.desde)} Los días ya validados se quedan como están.</p>
+            : partido && <p className="tpv-nota">Al guardar, desde hoy cada día va en dos asientos: la factura del día y su cobro. Los días ya validados se quedan como están.</p>}
+          {!factura.factura && !factura.propuesta && !facturaElegida && (
+            <p className="tpv-nota">No hay ninguna «Clientes de contado» en el plan de la empresa. Elige una cuenta, o{' '}
+              <Boton variante="enlace" disabled={dandoDeAlta} onClick={() => void darDeAlta()}>{dandoDeAlta ? 'dando de alta…' : 'da de alta «Clientes de contado»'}</Boton>.</p>
+          )}
+        </section>
+      )}
+
+      <h3 className="tpv-seccion-titulo">Cómo se ha cobrado</h3>
       {datos && formas.length === 0 && <p className="tpv-nota">Todavía no hay ninguna forma de pago: salen aquí cuando subes las ventas de un día.</p>}
       {formas.length > 0 && (
         <div className="tpv-tabla-caja tpv-caja-abierta">
@@ -162,44 +270,39 @@ export function FormasDePago({ companyId, quien, diaId = null, alCerrar, alGuard
 
   const derecha = (
     <>
-      <h3 className="tpv-der-titulo">Cómo queda el asiento de un día</h3>
-      {!ejemploDia && datos && <p className="tpv-nota">Cuando haya un día subido, aquí sale su asiento.</p>}
+      <h3 className="tpv-der-titulo">{ejemplo && !ejemplo.cobro && !ejemplo.motivo ? 'Cómo queda el asiento de un día' : 'Cómo quedan los asientos de un día'}</h3>
+      {!ejemploDia && datos && <p className="tpv-nota">Cuando haya un día subido, aquí salen sus asientos.</p>}
       {ejemplo?.motivo && <div className="tpv-aviso" data-tono="duda"><p>{ejemplo.motivo}</p></div>}
-      {ejemplo && !ejemplo.motivo && (
-        <div className="tpv-tabla-caja tpv-caja-abierta">
-          <table className="tpv-asiento" aria-label="Cómo queda el asiento de un día" data-prueba="asiento-ejemplo">
-            <thead><tr><th>Cuenta</th><th className="tpv-cifra">Debe</th><th className="tpv-cifra">Haber</th></tr></thead>
-            <tbody>
-              {lineas.map((l, i) => (
-                <tr key={i} data-sin-cuenta={l.sin_cuenta ? '' : undefined}>
-                  <td>{l.sin_cuenta ? `${l.forma}${l.canal && l.canal !== 'local' ? ` · ${nombreCanal(l.canal)}` : ''} · sin cuenta`
-                    : `${l.cuenta} · ${l.nombre ?? ''}${l.tipo != null ? ` ${Number(l.tipo).toLocaleString('es-ES')} %` : ''}`}</td>
-                  <td className="tpv-cifra">{l.debe ? cifra(l.debe) : ''}</td>
-                  <td className="tpv-cifra">{l.haber ? cifra(l.haber) : ''}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot><tr>
-              <td>Ejemplo: el {diaCorto(ejemplo.dia)}</td>
-              <td className="tpv-cifra" colSpan={2}>Debe <strong>{cifra(ejemplo.debe)}</strong> · Haber <strong>{cifra(ejemplo.haber)}</strong></td>
-            </tr></tfoot>
-          </table>
-        </div>
+      {ejemplo?.factura && !ejemplo.motivo && (
+        <>
+          {ejemplo.cobro && <h4 className="tpv-asiento-titulo">1 · La factura del día{rango ? <span className="tpv-fila-apoyo"> · {rango}</span> : null}</h4>}
+          <TablaAsiento a={ejemplo.factura} etiqueta={ejemplo.cobro ? 'La factura del día' : 'Cómo queda el asiento de un día'}
+            prueba={ejemplo.cobro ? 'asiento-factura' : 'asiento-ejemplo'} pie={`Ejemplo: el ${diaCorto(ejemplo.dia)}`} />
+        </>
+      )}
+      {ejemplo?.cobro && !ejemplo.motivo && (
+        <>
+          <h4 className="tpv-asiento-titulo">2 · El cobro del día</h4>
+          <TablaAsiento a={ejemplo.cobro} etiqueta="El cobro del día" prueba="asiento-cobro"
+            pie={<span data-prueba="contado-a-cero">Clientes de contado queda a {cifra(saldoContado(ejemplo.factura, ejemplo.cobro))}</span>} />
+          <p className="tpv-nota">Así sale también a ERP10: la factura del día, con su primer y su último ticket, y el cobro aparte, el mismo día.</p>
+        </>
       )}
       <p className="tpv-nota">Se puede cambiar cuando quieras en Ajustes › Ventas por día. El cambio vale para los días que aún no están validados.</p>
     </>
   )
 
+  const cambiaAlgo = facturaCambia || elecciones.some((x) => x.cuenta_id !== formas.find((f) => clave(f) === clave(x))?.cuenta_id) || formas.length > 0
   return (
     <VentanaAncha titulo="A qué cuenta va cada forma de pago" alCerrar={alCerrar} reparto="formas"
       izquierda={izquierda} derecha={derecha}
-      frase={hecho ? null : faltanCuentas(faltan)}
+      frase={hecho ? null : falta}
       acciones={hecho
         ? <Boton variante="principal" data-autofocus onClick={alCerrar}>Ver la lista</Boton>
         : <>
             <Boton variante="secundario" onClick={alCerrar}>Cancelar</Boton>
-            <Boton variante="principal" disabled={faltan > 0 || !formas.length || guardando} onClick={() => void guardar()}
-              title={faltan > 0 ? faltanCuentas(faltan) ?? undefined : undefined}>{guardando ? 'Guardando…' : 'Guardar'}</Boton>
+            <Boton variante="principal" disabled={!!falta || !cambiaAlgo || guardando} onClick={() => void guardar()}
+              title={falta ?? undefined}>{guardando ? 'Guardando…' : 'Guardar'}</Boton>
           </>} />
   )
 }

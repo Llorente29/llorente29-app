@@ -152,7 +152,7 @@ export function aDias(r: Record<string, unknown>): DiasPorSalir {
     dias: ((r.dias ?? []) as Record<string, unknown>[]).map((d) => ({
       entryId: String(d.entryId), serie: n(d.serie), numero: num(d.numero), fecha: String(d.fecha), concepto: String(d.concepto ?? ''),
       origen: o(d.origen), local: s(d.local), localId: s(d.localId), primero: s(d.primero), ultimo: s(d.ultimo),
-      facturas: num(d.facturas), contadores: num(d.contadores),
+      facturas: num(d.facturas), contadores: num(d.contadores), cobroId: s(d.cobroId),
       lineas: ((d.lineas ?? []) as Record<string, unknown>[]).map((l) => ({
         cuenta: String(l.cuenta), plantilla: String(l.plantilla), nombre: String(l.nombre ?? ''), debe: n(l.debe), haber: n(l.haber),
         tipoIva: num(l.tipoIva), baseIva: num(l.baseIva), libro: s(l.libro),

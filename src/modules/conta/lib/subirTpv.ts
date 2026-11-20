@@ -362,3 +362,29 @@ export function faltanCuentas(n: number): string | null {
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 /** «2026-11-01» → «En noviembre». */
 export const enElMes = (mes: string) => `En ${MESES[Number(mes.slice(5, 7)) - 1] ?? 'el mes'}`
+
+// ── R07 · La factura del día y su cobro ──────────────────────────────────────
+
+/** «Desde el 20/11/2026, cada día va en dos asientos: la factura del día y su cobro.» */
+export const desdeDosAsientos = (desde: string) =>
+  `Desde el ${desde.slice(8, 10)}/${desde.slice(5, 7)}/${desde.slice(0, 4)}, cada día va en dos asientos: la factura del día y su cobro.`
+
+/** «tickets 5001 a 5048» · «ticket 5001» · null si el día no guarda su rango. */
+export function rangoTickets(primero: string | number | null, ultimo: string | number | null): string | null {
+  if (primero == null || primero === '') return null
+  return ultimo == null || String(ultimo) === String(primero) ? `ticket ${primero}` : `tickets ${primero} a ${ultimo}`
+}
+
+/** Lo que queda en «Clientes de contado» después de los dos asientos: la factura la carga, el cobro la descarga. */
+export function saldoContado(...asientos: ({ lineas: { contado?: boolean; sin_cuenta?: boolean; forma?: string | null; debe: number; haber: number }[] } | null)[]): number {
+  const c = (x: number) => Math.round(x * 100)
+  const es = (l: { contado?: boolean; forma?: string | null }) => !!l.contado || l.forma === 'Clientes de contado'
+  return asientos.reduce((t, a) => t + (a?.lineas ?? []).filter(es).reduce((u, l) => u + c(l.debe) - c(l.haber), 0), 0) / 100
+}
+
+/** Lo que falta para guardar la ventana: las formas sin cuenta y la cuenta de la factura del día. */
+export function faltaParaGuardar(formasSinCuenta: number, sinFactura: boolean): string | null {
+  if (sinFactura && formasSinCuenta <= 0) return 'Falta la cuenta de la factura del día.'
+  const f = faltanCuentas(formasSinCuenta + (sinFactura ? 1 : 0))
+  return f && sinFactura ? `${f.replace(/\.$/, '')}, una de ellas la de la factura del día.` : f
+}
