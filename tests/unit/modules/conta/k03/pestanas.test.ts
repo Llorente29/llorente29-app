@@ -162,8 +162,9 @@ describe('K03 · el teclado común', () => {
     expect(teclaDelMarco({ key: 'F4', defaultPrevented: true }, ctx)).toBeNull()
   })
   it('F8 da la vuelta a las tres clases de documento nuevo; fuera de ellas, nada', () => {
-    expect(VUELTA_F8).toEqual(['documentos/nueva', 'ventas/facturas/nueva', 'libros/diario/nuevo'])
-    expect(teclaDelMarco({ key: 'F8' }, { ...ctx, pathname: '/conta/documentos/nueva' })).toEqual({ que: 'clase', a: 'ventas/facturas/nueva' })
+    // K05: la emitida de F8 es la de contabilizar a mano (ventas/facturas/a-mano), no la de emitir de Facturación.
+    expect(VUELTA_F8).toEqual(['documentos/nueva', 'ventas/facturas/a-mano', 'libros/diario/nuevo'])
+    expect(teclaDelMarco({ key: 'F8' }, { ...ctx, pathname: '/conta/documentos/nueva' })).toEqual({ que: 'clase', a: 'ventas/facturas/a-mano' })
     expect(teclaDelMarco({ key: 'F8' }, { ...ctx, pathname: '/conta/libros/diario/nuevo' })).toEqual({ que: 'clase', a: 'documentos/nueva' })
     expect(teclaDelMarco({ key: 'F8' }, ctx)).toBeNull()
   })
