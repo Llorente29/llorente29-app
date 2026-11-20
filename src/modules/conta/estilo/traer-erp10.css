@@ -35,6 +35,7 @@
 .cxt-soltar-encima { border-color: var(--cx-azul); background: var(--cx-azul-suave); }
 .cxt-soltar-icono { font-size: 1.3rem; color: var(--cx-azul); }
 .cxt-elegir { height: 34px; flex-shrink: 0; }
+.cxt-soltar-botones { display: flex; gap: 8px; flex-shrink: 0; } /* X12 · «Elegir ficheros» y «Traerlo de ERP10», con el mismo peso */
 
 .cxt-pie { flex-direction: column; gap: 2px; }
 
