@@ -1,0 +1,19 @@
+{
+ "_que": "K06 · la cuenta de pago de la recibida · contexto medido en la BASE LOCAL con la estructura de staging (estructura/staging 6a85ee186, 20/11 07:48Z), en SOLO LECTURA: no en producción (esta sesión no lee producción). 0840 añade una función nueva; no cambia ninguna que exista. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-20T08:55Z",
+ "tanda": {
+  "supabase/migrations/20261120T0840_k06_pagar_con_cuenta.sql": "56ee51683088ffe2260664311e2f9889"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
