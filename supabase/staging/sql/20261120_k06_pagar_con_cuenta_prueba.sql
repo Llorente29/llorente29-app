@@ -1,7 +1,8 @@
 -- supabase/staging/sql/20261120_k06_pagar_con_cuenta_prueba.sql
 --
--- SOLO STAGING. Prueba del K06 (20261120T0840_k06_pagar_con_cuenta), con \i
--- dentro de la transacción y ROLLBACK: staging no cambia. Nombra el objeto:
+-- SOLO STAGING. Prueba del K06 (20261120T0840_k06_pagar_con_cuenta), que el
+-- ensayo de staging pone delante en la misma sesión. Todo en una transacción
+-- con ROLLBACK: staging no cambia. Nombra el objeto:
 -- public.conta_recibida_pagar_con_cuenta(uuid,uuid,text,date,text) (nueva). No
 -- cambia ninguna que exista.
 --
@@ -9,9 +10,8 @@
 -- subcuenta del socio (55100001) y las recibidas son inventadas, dentro de la
 -- transacción (T11).
 --
---   0. Lo de antes: la función no existe; _bank_recibida_pagado es la del N10
---      (no se toca: se mira su md5 antes y después).
---   1. La 0840.
+--   0. La 0840 está delante (la pone el ensayo); _bank_recibida_pagado es la
+--      del N10 (no se toca: se mira su md5 al empezar y al acabar).
 --   2. Regla 10, por sus caminos:
 --      a. guardar una recibida pagada con la 551: su asiento validado (serie 4,
 --         Debe 40000071 / Haber 55100001 por el total), su pago con su asiento,
@@ -39,17 +39,14 @@ create temp table _k06 (clave text primary key, valor text) on commit drop;
 grant select, insert on _k06 to authenticated;
 insert into _k06 values ('md5_pagado', md5(pg_get_functiondef('public._bank_recibida_pagado(uuid)'::regprocedure)));
 do $$ begin
-  if to_regprocedure('public.conta_recibida_pagar_con_cuenta(uuid,uuid,text,date,text)') is not null then
-    raise exception 'PRUEBA K06 · 0: la función ya existe: ¿está aplicada?';
+  if to_regprocedure('public.conta_recibida_pagar_con_cuenta(uuid,uuid,text,date,text)') is null then
+    raise exception 'PRUEBA K06 · 0: falta la 0840 delante (la pone el ensayo de staging).';
   end if;
   if not exists (select 1 from public.company where id = 'c0e20000-0000-4000-8000-0000000000e3') then
     raise exception 'PRUEBA K06 · 0: falta la gestoría del núcleo (seed_k02_nucleo_staging.sql).';
   end if;
-  raise notice '0 · sin la 0840; _bank_recibida_pagado medida (md5).';
+  raise notice '0 · la 0840 delante; _bank_recibida_pagado medida (md5).';
 end $$;
-
--- 1 · La 0840.
-\i supabase/migrations/20261120T0840_k06_pagar_con_cuenta.sql
 
 -- Lo inventado: la 55100001 del socio y cuatro recibidas del Proveedor de Prueba Ficha Uno (su 40000071).
 insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
