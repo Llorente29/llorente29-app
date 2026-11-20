@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { ClienteErp10, type AlmacenToken, type TokenGuardado } from '../../../supabase/functions/_shared/erp10Cliente'
 import { facturaT, pedidaDelCuerpo, rutaDe, traerUnaPagina, type ApunteT, type FacturaT, type PedirPagina, type ResumenT, type SubcuentaT } from '../../../supabase/functions/_shared/erp10Traer'
 import {
@@ -194,6 +194,14 @@ describe('el lector: mes a mes, y si se corta, sigue donde se quedó', () => {
     expect(comoVaLaFila(l.estado, 'diario')).toBeNull()
     expect(partesDe('2025', HOY)).toHaveLength(2 + 24)
     expect(partesDe('2026', HOY)).toHaveLength(2 + 22)
+  })
+})
+
+describe('el ERP10 simulado de la e2e', () => {
+  it('es el de los ficheros del N07, tal cual (la e2e no abre Excel: lee este JSON)', () => {
+    const { cif: _c, ...resto } = erp10DeLosFicheros(cargaDeLosFicheros())
+    void _c
+    expect(JSON.parse(readFileSync('tests/conta/x12/erp10DeLosFicheros.json', 'utf8'))).toEqual(JSON.parse(JSON.stringify(resto)))
   })
 })
 

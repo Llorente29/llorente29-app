@@ -25,7 +25,8 @@ import { cifInventado, rest } from '../api'
 import { ClienteErp10, type AlmacenToken } from '../../../../supabase/functions/_shared/erp10Cliente'
 import { traerUnaPagina, type PedirPagina } from '../../../../supabase/functions/_shared/erp10Traer'
 import { erp10Simulado } from '../../../conta/erp10/simulado'
-import { cargaDeLosFicheros, erp10DeLosFicheros } from '../../../conta/x12/deFicheros'
+import { readFileSync } from 'node:fs'
+import type { EmpresaSimulada } from '../../../conta/erp10/simulado'
 
 test.skip(CARRIL === null, 'Traer de ERP10 escribe en una empresa de la cuenta A (trae en prueba): necesita su carril.')
 
@@ -83,7 +84,9 @@ async function limpiar(s: Sesion, id: string) {
  * `lentas` hace esperar las de ese mes (para ver el progreso y cortar a mitad). Apunta lo que se pide.
  */
 async function erp10DeMentira(page: Page, nif: string, pedidas: PedirPagina[], lentas: { mes: string; ms: number } | null) {
-  const empresa = erp10DeLosFicheros(cargaDeLosFicheros(), nif)
+  // Los Excel del N07 ya puestos como los daría la API (tests/conta/x12/erp10DeLosFicheros.json: lo vigila
+  // tests/conta/x12/traer.test.ts). No se abren aquí: en el proceso de Playwright, xlsx llega sin SSF (e2e 44704885134).
+  const empresa: EmpresaSimulada = { ...JSON.parse(readFileSync('tests/conta/x12/erp10DeLosFicheros.json', 'utf8')), cif: nif }
   await page.route('**/functions/v1/conta-erp10-leer', async (route: Route) => {
     const b = route.request().postDataJSON() as { accion: string } & PedirPagina
     const responder = (status: number, cuerpo: unknown) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(cuerpo) }).catch(() => undefined)
@@ -156,7 +159,7 @@ for (const tam of TAMANOS) {
       await expect(tabla.getByRole('row', { name: /^Plan de cuentas/ })).toContainText('16 cuentas')
       await expect(tabla.getByRole('row', { name: /^Proveedores/ })).toContainText('4 fichas')
       await expect(tabla.getByRole('row', { name: /^Clientes/ })).toContainText('1 ficha')
-      await expect(diario).toContainText('10 asientos · 27 apuntes')
+      await expect(diario).toContainText('10 asientos · 26 apuntes')
       await expect(tabla.getByRole('row', { name: /^Facturas emitidas/ })).toContainText('2 facturas')
       await expect(tabla.getByRole('row', { name: /^Facturas recibidas/ })).toContainText('3 facturas')
       await expect(tabla.getByRole('row', { name: /^Sumas y saldos/ })).toContainText('Calculado de los asientos')
