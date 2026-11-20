@@ -133,7 +133,7 @@ describe('el workflow de la e2e (W02)', () => {
     expect(sh).toContain('MAX=${CARRIL_MAX:-2}')
     // Con los carriles cogidos, espera su turno: no falla al momento.
     const g = readFileSync('scripts/e2e/carril/guardian_e2e.sql', 'utf8')
-    expect(g).toMatch(/pg_temp\.coger_carril\(:max, :'espera'\)/)
+    expect(g).toMatch(/pg_temp\.coger_carril\(:max, :'espera', :'id'::uuid, :'dueno', :'caduca_carril'::int\)/)
     expect(g).toMatch(/perform pg_sleep/)
   })
 

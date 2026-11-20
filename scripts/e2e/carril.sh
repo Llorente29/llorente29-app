@@ -38,8 +38,18 @@
 # staging pasa a Small, se pone a 4 allí, sin tocar el código.
 #
 # CÓMO SE CIERRA.
-#   · El CARRIL: (4203, N), un cerrojo consultivo exclusivo, todo el job, en un
-#     psql en segundo plano (un «guardián»): el carril N es de este job y de nadie más.
+#   · El CARRIL (N11, 20/11): una RESERVA con latido en e2e_carril.carril
+#     (scripts/e2e/carril/reserva_carril.sql), y además el cerrojo consultivo
+#     (4203, N) en un psql en segundo plano (un «guardián»), que es lo único que
+#     miran las ramas de antes. Un carril está libre solo sin las dos cosas.
+#     Por qué la reserva: si staging se reinicia, las conexiones mueren y con ellas
+#     el cerrojo, pero las pruebas siguen en su carril. El 19/11 a las 22:22
+#     staging se reinició, la e2e de x10d cogió el carril 1 de la entera de r08 a
+#     las 22:32 y lo borró: «No se pudo entrar como …carril-1…: HTTP 400» en una
+#     docena de ficheros. La reserva late cada CARRIL_LATIDO_S (15 s) con llamadas
+#     cortas, que siguen después de un reinicio, y caduca a los
+#     CARRIL_RESERVA_CADUCA_S (300 s) si el job muere. Y soltar no borra un carril
+#     que ya es de otro.
 #   · La BARRERA (Respuesta 4 al V04, 27/10): una RESERVA con latido en
 #     e2e_carril.barrera (scripts/e2e/carril/barrera.sql), no un cerrojo sujeto
 #     por una conexión. «lee» la reserva cada fichero de pruebas mientras corre
@@ -87,6 +97,7 @@ BARRERA_MIN=${CARRIL_BARRERA_MIN:-20}
 MIGRAR_MIN=${CARRIL_MIGRAR_MIN:-15}
 CADUCA_S=${CARRIL_CADUCA_S:-60}
 LATIDO_S=${CARRIL_LATIDO_S:-15}
+CADUCA_CARRIL_S=${CARRIL_RESERVA_CADUCA_S:-300}
 MAX=${CARRIL_MAX:-2}
 VIEJO=${CARRIL_CERROJO_VIEJO:-1}
 : "${DB_URL:?Falta DB_URL}"
@@ -113,6 +124,7 @@ guardian() {
   # Dos horas de latido en tramos de 20 s (ver guardian_e2e.sql).
   [ -s "$CARRIL_DIR/latido.sql" ] || for _ in $(seq 360); do echo 'select pg_sleep(20);'; done > "$CARRIL_DIR/latido.sql"
   PGAPPNAME="$app" stdbuf -oL -eL "$PSQL" "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 -v espera="${espera}min" -v max="$MAX" -v quien="$app" \
+    -v id="$(cat "$CARRIL_DIR/carril.reserva" 2>/dev/null || echo 00000000-0000-0000-0000-000000000000)" -v caduca_carril="$CADUCA_CARRIL_S" -v dueno="e2e-carril ${CARRIL_YO:-?}" \
     -f "$SQL/guardian_${modo}.sql" -f "$CARRIL_DIR/latido.sql" > "$CARRIL_DIR/$nombre.log" 2>&1 &
   echo $! > "$CARRIL_DIR/$nombre.pid"
 }
@@ -200,11 +212,40 @@ soltar_reserva() {
   rm -f "$CARRIL_DIR/$nombre.reserva"
 }
 
+# ── El carril: su reserva con latido (reserva_carril.sql, N11) ───────────────
+# reserva_carril <op> [número]: una llamada corta. Reintenta un fallo de conexión.
+reserva_carril() {
+  local i out id
+  id=$(cat "$CARRIL_DIR/carril.reserva" 2>/dev/null || echo 00000000-0000-0000-0000-000000000000)
+  for i in 1 2 3; do
+    if out=$(q -A -t -v op="$1" -v id="$id" -v numero="${2:-0}" -v quien="e2e-carril ${CARRIL_YO:-?}" -v caduca="$CADUCA_CARRIL_S" -f "$SQL/reserva_carril.sql" 2>&1); then
+      printf '%s\n' "$out"; return 0
+    fi
+    [ "$i" -lt 3 ] && sleep "$i"
+  done
+  printf '%s\n' "$out" >&2; return 1
+}
+
+# El latido del carril, aparte: llamadas cortas, así que sigue después de un
+# reinicio de staging. Si la reserva la tiene otro, lo deja escrito en carril.perdido.
+latir_carril() {
+  local n=$1
+  ( trap 'exit 0' TERM
+    while sleep "$LATIDO_S"; do
+      r=$(reserva_carril latir "$n" 2>/dev/null) || continue
+      case "$r" in perdido*) echo "${r#perdido }" > "$CARRIL_DIR/carril.perdido" ;; esac
+    done ) > /dev/null 2>&1 < /dev/null &
+  echo $! > "$CARRIL_DIR/carril.latido"
+  disown $! 2>/dev/null || true
+}
+
 # Quién tiene los carriles: para decir a quién se espera.
 quien_carriles() {
-  q -A -t -c "select string_agg(a.application_name, ' | ' order by l.objid)
-                from pg_locks l join pg_stat_activity a on a.pid = l.pid
-               where l.locktype = 'advisory' and l.classid = 4203 and l.granted" 2>/dev/null || true
+  { reserva_carril quien 2>/dev/null | sed -n 's/^hay //p'
+    q -A -t -c "select 'cerrojo: ' || string_agg(a.application_name, ' | ' order by l.objid)
+                  from pg_locks l join pg_stat_activity a on a.pid = l.pid
+                 where l.locktype = 'advisory' and l.classid = 4203 and l.granted" 2>/dev/null
+  } | grep -v '^cerrojo: $' | paste -sd ' ' - || true
 }
 
 # Suelta el cerrojo del guardián <nombre>: termina en el servidor su proceso
@@ -226,6 +267,9 @@ matar_guardian() {
 }
 
 coger() {
+  cat /proc/sys/kernel/random/uuid > "$CARRIL_DIR/carril.reserva"
+  rm -f "$CARRIL_DIR/carril.perdido"
+  reserva_carril preparar > /dev/null || { echo "::error::No se puede hablar con staging para la reserva del carril."; exit 1; }
   guardian e2e "e2e-carril ${CARRIL_YO:-?}"
   local t0 n; t0=$(date +%s)
   n=$(esperar_linea 'carril ' | awk '{print $2}') || { matar_guardian; exit 1; }
@@ -234,6 +278,7 @@ coger() {
     matar_guardian; exit 1
   fi
   echo "$n" > "$CARRIL_DIR/numero"
+  latir_carril "$n"
   if grep -q '^carril-espera' "$CARRIL_DIR/guardian.log"; then
     echo "::notice title=Espera al carril::Carril $n cogido tras $(( $(date +%s) - t0 )) s en cola: estaban los $MAX cogidos (${CARRIL_YO:-?})."
   else
@@ -309,17 +354,29 @@ borrar() {
 
 soltar() {
   plantilla_soltar
+  local n='' dueno=''
   if [ -s "$CARRIL_DIR/numero" ]; then
+    n=$(cat "$CARRIL_DIR/numero")
+    [ -s "$CARRIL_DIR/carril.perdido" ] && echo "::warning::La reserva del carril $n se perdió mientras corría: la tiene $(cat "$CARRIL_DIR/carril.perdido"). Lo que falló desde entonces puede ser por eso."
+    # N11: si el carril ya es de otro (su reserva se perdió y alguien lo cogió), no se borra: sería borrarle sus pruebas.
+    dueno=$(reserva_carril mio "$n" 2>/dev/null || echo 'mio')
+  fi
+  if [ -n "$n" ] && [ "${dueno%% *}" = ajeno ]; then
+    echo "::warning::El carril $n lo tiene ahora ${dueno#ajeno }: no lo borro (se perdió su reserva mientras corría)."
+  elif [ -n "$n" ]; then
     # Borrar también escribe en staging: con la barrera, para no hacerlo en
     # mitad de una aplicación (el 26/10, un borrar a las 13:22:39 cayó dentro
     # del ensayo de vuelta atrás y le cambió las cuentas).
     if BARRERA_QUE=borrar barrera_entrar; then
-      borrar || echo "::warning::No se ha podido borrar el carril $(cat "$CARRIL_DIR/numero"): lo borra el próximo que lo coja."
+      borrar || echo "::warning::No se ha podido borrar el carril $n: lo borra el próximo que lo coja."
     else
-      echo "::warning::Sin la barrera no se borra el carril $(cat "$CARRIL_DIR/numero"): lo borra el próximo que lo coja."
+      echo "::warning::Sin la barrera no se borra el carril $n: lo borra el próximo que lo coja."
     fi
   fi
   soltar_reserva barrera
+  if [ -s "$CARRIL_DIR/carril.latido" ]; then kill "$(cat "$CARRIL_DIR/carril.latido")" 2>/dev/null || true; rm -f "$CARRIL_DIR/carril.latido"; fi
+  [ -n "$n" ] && { reserva_carril salir "$n" > /dev/null 2>&1 || echo "::warning::No he podido quitar la reserva del carril $n: caduca sola en ${CADUCA_CARRIL_S} s."; }
+  rm -f "$CARRIL_DIR/carril.reserva" "$CARRIL_DIR/carril.perdido"
   matar_guardian
   rm -f "$CARRIL_DIR/numero"
   echo "Carril soltado."
