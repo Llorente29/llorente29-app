@@ -2,3 +2,7 @@
 # conta_recibida_documento_cambiar).
 supabase/migrations/20261120T2004_k07_cambiar_documento.sql
 supabase/staging/sql/20261120_k07_cambiar_documento_prueba.sql
+# Lo que necesita la e2e de una sola ficha (tests/e2e/conta/k07), en la gestoría de la cuenta del núcleo:
+# dos recibidas por revisar y una de un emisor que no existe, por tamaño. Solo añade, con ids fijos:
+# se puede aplicar dos veces igual (W07), y va de verdad desde la rama (W05).
+supabase/seeds/conta/seed_k07_una_ficha_staging.sql
