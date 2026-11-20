@@ -166,3 +166,5 @@
 /* X10c · El paso 3, factura a factura (lo que salió por la conexión con su número de ERP10). */
 .cxe-casadas ul { margin: 4px 0 0; padding-left: 18px; }
 .cxe-casadas-bien { color: var(--cx-verde-oscuro); }
+/* X11 · Lo medido, para copiar: el texto entero, en letra de máquina, sin cambiar la forma de la tarjeta. */
+.cxe-conexion-medida { width: 100%; box-sizing: border-box; margin-top: 8px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 8px; border: 1px solid var(--cx-borde-control); border-radius: 6px; background: transparent; color: inherit; resize: vertical; }

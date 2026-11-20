@@ -9,6 +9,10 @@
 //     y el resumen de ERP10 sin importes ni nombres), cuántas facturas, si sus PDF
 //     se bajan (getfile, solo mirando) y lo que salió de Sumied esos meses, para
 //     ver si hay cosas metidas a mano en ERP10. Solo un administrador.
+//   · { company_id, accion: 'medir', ejercicio? }: X11 (20/11) · lo que da la API de
+//     cada cosa que trae «Traer de ERP10» por fichero (_shared/erp10Medir.ts): rutas,
+//     totales, páginas, campos y tiempos. Solo recuentos, sin nombres, NIF ni
+//     importes; solo GET. El ejercicio, por defecto el anterior. Solo un administrador.
 //   · { company_id, accion: 'saldos', desde, hasta }: las líneas de los apuntes
 //     entre los dos días, sumadas por cuenta (el sumas y saldos del paso 3, sin
 //     Excel). Cualquiera que vea la sociedad.
@@ -23,6 +27,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { clienteErp10 } from "../_shared/erp10Despacho.ts";
+import { medidaEnTexto, medirParaTraer } from "../_shared/erp10Medir.ts";
 import { finalDelNif, FrenoErp10, lineas, porTipo, resumenSinDatos, sumarPorCuenta, type ClienteErp10 } from "../_shared/erp10Cliente.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -55,19 +60,19 @@ Deno.serve(async (req) => {
   const { data: u } = await sb.auth.getUser();
   if (!u?.user) return json({ error: "no autenticado" }, 401);
 
-  let b: { company_id?: unknown; accion?: unknown; desde?: unknown; hasta?: unknown; documentos?: unknown } = {};
+  let b: { company_id?: unknown; accion?: unknown; desde?: unknown; hasta?: unknown; documentos?: unknown; ejercicio?: unknown } = {};
   try { b = await req.json(); } catch { /* vacío */ }
   const companyId = typeof b.company_id === "string" && /^[0-9a-f-]{36}$/i.test(b.company_id) ? b.company_id : "";
-  const accion = b.accion === "probar" || b.accion === "saldos" ? b.accion : "";
-  if (!companyId || !accion) return json({ error: "faltan company_id o accion (probar o saldos)" }, 400);
+  const accion = b.accion === "probar" || b.accion === "saldos" || b.accion === "medir" ? b.accion : "";
+  if (!companyId || !accion) return json({ error: "faltan company_id o accion (probar, medir o saldos)" }, 400);
 
   // La sociedad, con los permisos de quien llama: si no es de su cuenta, no está.
   const { data: co, error: e0 } = await sb.from("company").select("id, account_id").eq("id", companyId).maybeSingle();
   if (e0) return json({ error: `no se ha podido leer la sociedad: ${e0.message}` }, 500);
   if (!co) return json({ error: "Esa sociedad no es de tu cuenta." }, 403);
-  if (accion === "probar") {
+  if (accion === "probar" || accion === "medir") {
     const { data: admin } = await sb.rpc("current_user_is_admin_of", { p_account_id: co.account_id });
-    if (admin !== true) return json({ error: "Solo un administrador de la cuenta prueba la conexión con ERP10." }, 403);
+    if (admin !== true) return json({ error: accion === "probar" ? "Solo un administrador de la cuenta prueba la conexión con ERP10." : "Solo un administrador de la cuenta mide lo que se puede traer de ERP10." }, 403);
   }
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
   if (!(await cuentaPuedeSalir(srv, co.account_id))) return json({ error: EN_LA_DEMO, demo: true }, 409);
@@ -76,6 +81,12 @@ Deno.serve(async (req) => {
     const c = await clienteErp10(srv, co.account_id, companyId);
     if (!c) return json({ error: "Esta sociedad no está conectada con ERP10: pon su código de empresa en Integraciones › ERP10 (despacho)." }, 404);
     if (accion === "probar") return json(await probar(srv, c.cliente, co.account_id, companyId));
+    if (accion === "medir") {
+      const ej = typeof b.ejercicio === "string" && /^\d{4}$/.test(b.ejercicio) ? b.ejercicio : String(Number(hoyMadrid().slice(0, 4)) - 1);
+      await c.cliente.probar();
+      const m = await medirParaTraer({ get: (r) => c.cliente.get(r), ahora: () => Date.now() }, { ejercicio: ej, codEmpresa: c.cliente.codEmpresa });
+      return json({ ok: true, medida: m, texto: medidaEnTexto(m) });
+    }
     const desde = dia(b.desde), hasta = dia(b.hasta);
     if (!desde || !hasta || desde > hasta) return json({ error: "faltan desde y hasta (AAAA-MM-DD)" }, 400);
     const apuntes = await c.cliente.apuntesEntre(desde, hasta);
