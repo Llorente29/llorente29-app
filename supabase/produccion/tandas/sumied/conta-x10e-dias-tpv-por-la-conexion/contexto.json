@@ -1,0 +1,19 @@
+{
+ "_que": "X10e · los días del TPV por la conexión · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción (esta sesión no lee producción). 1140 solo añade tres columnas que admiten nulos a conta_erp10_envio; no cambia ninguna que exista. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-20T11:40Z",
+ "tanda": {
+  "supabase/migrations/20261120T1140_x10e_erp10_envio_dia.sql": "6052c6b0d8b5ba259a8ee3222b4496ca"
+ },
+ "contexto": {
+  "tablas": ["public.conta_erp10_envio"],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

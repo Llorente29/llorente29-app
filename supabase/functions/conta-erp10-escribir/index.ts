@@ -33,7 +33,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { clienteErp10 } from "../_shared/erp10Despacho.ts";
 import { FrenoErp10 } from "../_shared/erp10Cliente.ts";
-import { sacarAsiento, sacarEmitida, sacarRecibida, type Envio, type PuertoEscribir, type Resultado } from "../_shared/erp10Escribir.ts";
+import { partidasDeLoQueSale, sacarUno, type Envio, type PuertoEscribir, type Resultado } from "../_shared/erp10Escribir.ts";
 import { carpetaDe, loQueSaleDesdeLaBase, pedidasDelCuerpo } from "../_shared/erp10DesdeLaBase.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -41,16 +41,18 @@ const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const TOPE_MS = 40_000;
 const EN_LA_DEMO = "En la demo no se escribe en ERP10.";
-type Clase = "recibida" | "emitida" | "asiento";
+type Clase = "recibida" | "emitida" | "asiento" | "dia";
 const PRIMERA: Record<Clase, string> = {
   recibida: "La primera factura recibida que esta sociedad saca a ERP10 sale sola, para probar. Sácala, compruébala en el paso 3 y después saca las demás.",
   emitida: "La primera factura emitida que esta sociedad saca a ERP10 sale sola, para probar. Sácala, compruébala en el paso 3 y después saca las demás.",
   asiento: "El primer asiento que esta sociedad saca a ERP10 sale solo, para probar. Sácalo, compruébalo en el paso 3 y después saca los demás.",
+  dia: "El primer día del TPV que esta sociedad saca a ERP10 sale solo, para probar. Sácalo, compruébalo en el paso 3 y después saca los demás.",
 };
 const SIN_COMPROBAR: Record<Clase, string> = {
   recibida: "Antes de sacar más facturas recibidas, comprueba en el paso 3 la de prueba y dala por igualada.",
   emitida: "Antes de sacar más facturas emitidas, comprueba en el paso 3 la de prueba y dala por igualada.",
   asiento: "Antes de sacar más asientos, comprueba en el paso 3 el de prueba y dalo por igualado.",
+  dia: "Antes de sacar más días del TPV, comprueba en el paso 3 el de prueba y dalo por igualado.",
 };
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -101,12 +103,14 @@ Deno.serve(async (req) => {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 
-  // Por clase: la primera, sola; las demás, después de comprobarla.
-  for (const clase of ["recibida", "emitida", "asiento"] as const) {
+  // Por clase: la primera, sola; las demás, después de comprobarla. X10e: los días del TPV, su propia clase
+  // (sus envíos llevan la marca del día y no cuentan como emitidas ni como asientos).
+  for (const clase of ["recibida", "emitida", "asiento", "dia"] as const) {
     const n = base.salen.filter((x) => x.clase === clase).length;
     if (!n) continue;
-    const { data: entradas, error: e1 } = await srv.from("conta_erp10_envio").select("creado_en").eq("company_id", companyId).eq("account_id", co.account_id)
-      .eq("clase", clase).eq("estado", "en_erp10").order("creado_en", { ascending: true }).limit(1);
+    const q = srv.from("conta_erp10_envio").select("creado_en").eq("company_id", companyId).eq("account_id", co.account_id).eq("estado", "en_erp10");
+    const { data: entradas, error: e1 } = await (clase === "dia" ? q.eq("clase", "emitida").eq("dia", true) : q.eq("clase", clase).or("dia.is.null,dia.eq.false"))
+      .order("creado_en", { ascending: true }).limit(1);
     if (e1) return json({ error: `no se ha podido leer lo que ya ha salido a ERP10: ${e1.message}` }, 500);
     const primera = (entradas ?? [])[0]?.creado_en as string | undefined;
     if (n > 1 && !primera) return json({ error: PRIMERA[clase], primera: true, clase }, 409);
@@ -145,10 +149,12 @@ Deno.serve(async (req) => {
         altaApunte: (ap) => c.cliente.altaApunte(ap),
       },
       // Los números de ERP10 que ya son de otro asiento de Sumied: un asiento no se enlaza a su gemelo.
+      // X10e: y el cobro de un día de un solo asiento, que va en la misma fila que su factura.
       usados: async (entryId) => {
-        const { data } = await srv.from("conta_erp10_envio").select("erp10_serie, erp10_documento").eq("company_id", companyId).eq("account_id", co.account_id)
+        const { data } = await srv.from("conta_erp10_envio").select("erp10_serie, erp10_documento, cobro_serie, cobro_documento").eq("company_id", companyId).eq("account_id", co.account_id)
           .eq("estado", "en_erp10").neq("entry_id", entryId);
-        return new Set(((data ?? []) as { erp10_serie: string | null; erp10_documento: number | null }[]).map((x) => `${x.erp10_serie ?? ""}/${x.erp10_documento ?? ""}`));
+        type U = { erp10_serie: string | null; erp10_documento: number | null; cobro_serie: string | null; cobro_documento: number | null };
+        return new Set(((data ?? []) as U[]).flatMap((x) => [`${x.erp10_serie ?? ""}/${x.erp10_documento ?? ""}`, ...(x.cobro_documento ? [`${x.cobro_serie ?? ""}/${x.cobro_documento}`] : [])]));
       },
     };
 
@@ -157,16 +163,15 @@ Deno.serve(async (req) => {
     for (const x of base.salen) {
       if (Date.now() - t0 > TOPE_MS) { quedan.push(x.entryId); continue; }
       // Si uno falla, los demás siguen: cada uno dice lo suyo.
-      resultados.push(x.clase === "recibida" ? await sacarRecibida(x.api, base.cuentasNuevas, x.pdf, puerto)
-        : x.clase === "emitida" ? await sacarEmitida(x.api, base.cuentasNuevas, x.pdf, puerto)
-        : await sacarAsiento(x.api, base.cuentasNuevas, puerto));
+      // X10e: un día puede dar dos (su factura y su cobro, si va aparte).
+      resultados.push(...(await sacarUno(x, base.cuentasNuevas, puerto)));
     }
 
     // Lo que ha entrado (o ya estaba) y no está apuntado en la salida de Sumied: un lote, con la huella de su fila (de la base).
     const porApuntar = resultados.filter((r) => (r.estado === "en_erp10" || r.estado === "ya_estaba") && r.sinApuntar);
     let apuntado: string | null = null;
     if (porApuntar.length) {
-      const deLaBase = new Map(base.salen.map((x) => [x.entryId, x]));
+      const deLaBase = partidasDeLoQueSale(base.salen);
       const partidas = porApuntar.map((r) => ({ entry_id: r.entryId, clase: deLaBase.get(r.entryId)!.clase, huella: deLaBase.get(r.entryId)!.huella }));
       const { data: lote, error: eL } = await sb.rpc("conta_erp10_lote_apuntar", {
         p_company: companyId, p_mes: mes, p_partidas: partidas, p_quien_nombre: quien,

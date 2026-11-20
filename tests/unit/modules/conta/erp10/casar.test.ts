@@ -48,3 +48,26 @@ describe('casar factura a factura', () => {
     expect(no[0].detalle).toBe('Salió como 1/5001 y ERP10 ya no tiene ese número: lo han borrado o cambiado allí.')
   })
 })
+
+// X10e · Día a día: el día de un solo asiento salió en dos documentos (su factura del día y su cobro) y se casan juntos.
+describe('X10e · casar día a día', () => {
+  const dia = { ...asiento(9, [['5700000', 300], ['4300001', 250], ['47700000', -50], ['70000000', -500]]), entryId: 'd-9', serie: 1, factura: null }
+  const B: Comprobar = { ...BASE, saldos: [...BASE.saldos, { codigo: '5700000', plantilla: '570', nombre: 'Caja', saldo: 0, erp: '57000000' }, { codigo: '4300001', plantilla: '4300', nombre: 'Plataforma', saldo: 0, erp: '43000001' }], asientos: [dia] }
+  const factura = { serie: '1', documento: 1000, lineas: [['43000099', 55000], ['47700000', -5000], ['70000000', -50000]].map(([cuenta, importe]) => ({ cuenta: String(cuenta), importe: Number(importe) })) }
+  const cobro = { serie: '1', documento: 5001, lineas: [['57000000', 30000], ['43000001', 25000], ['43000099', -55000]].map(([cuenta, importe]) => ({ cuenta: String(cuenta), importe: Number(importe) })) }
+  const envio = { entryId: 'd-9', clase: 'dia', serie: '1', documento: 1000, cobro: { serie: '1', documento: 5001 } }
+  it('la factura del día y su cobro, juntos, igual que su asiento de Sumied («Clientes de contado» se va)', () => {
+    const r = casarFacturas([envio], [factura, cobro], B)
+    expect(r).toMatchObject([{ numero: '1/9', clase: 'dia', estado: 'igual', detalle: 'Está en ERP10 como 1/1000 y su cobro 1/5001, igual.' }])
+    expect(frasesCasadas(r).resumen).toBe('Día a día: el que salió por la conexión está en ERP10 con su número, igual.')
+  })
+  it('si ERP10 ya no tiene su cobro, lo dice con el número', () => {
+    const r = casarFacturas([envio], [factura], B)
+    expect(r[0]).toMatchObject({ estado: 'no_esta', detalle: 'Salió como 1/1000 y su cobro 1/5001 y ERP10 ya no tiene el 1/5001: lo han borrado o cambiado allí.' })
+  })
+  it('con facturas, asientos y días, la línea de arriba los nombra a los tres', () => {
+    const r = [{ entryId: 'x', numero: 'F', serie: '2', documento: 1, clase: 'recibida', estado: 'igual' as const, detalle: '' }, { entryId: 'y', numero: 'A', serie: '1', documento: 2, clase: 'asiento', estado: 'igual' as const, detalle: '' },
+      { entryId: 'z', numero: 'D', serie: '1', documento: 3, clase: 'dia', estado: 'igual' as const, detalle: '' }]
+    expect(frasesCasadas(r).resumen).toBe('Factura a factura, asiento a asiento y día a día: las 3 que salieron por la conexión están en ERP10 con su número, igual.')
+  })
+})

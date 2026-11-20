@@ -2,7 +2,7 @@
 // conexión con ERP10 (supabase/functions/_shared/erp10Escribir.ts, asientoErp10 y sacarAsiento),
 // armados en el servidor desde la base con la misma pieza que el Excel (erp10DesdeLaBase.ts).
 // Uno de dos apuntes y otro de más; el cuerpo del navegador no cambia lo que entra; nada sale dos
-// veces (también con un corte a la mitad y con dos asientos gemelos); un día del TPV no sale; y la
+// veces (también con un corte a la mitad y con dos asientos gemelos); un día del TPV ya sale (X10e); y la
 // regla 10 con el ERP10 simulado: sacar, que falle uno, volver a sacar. Datos inventados (T11).
 
 import { describe, expect, it } from 'vitest'
@@ -98,10 +98,10 @@ describe('desde la base, con la misma pieza que el Excel', () => {
     const a = r.salen[0]
     expect(a.clase === 'asiento' && asientoErp10(a.api)).toMatchObject({ apunte: { Detalles: [{ Cuenta: '41000012', Debe: 100 }, { Cuenta: '57200001', Haber: 100 }] } })
   })
-  it('un día del TPV no sale por la conexión (ni su cobro): lo dice', async () => {
+  it('X10e · un día del TPV ya sale por la conexión: su factura del día y su cobro (tests/conta/erp10/diasConexion.test.ts)', async () => {
     const r = await loQueSaleDesdeLaBase(BASE, [id(9)])
-    expect(r.salen).toEqual([])
-    expect(r.noSalen).toEqual([{ entryId: id(9), porque: 'Es un día del TPV, y todavía no sale por la conexión: sigue con el Excel.' }])
+    expect(r.noSalen).toEqual([])
+    expect(r.salen.map((x) => [x.clase, x.entryId])).toEqual([['dia', id(9)]])
   })
 })
 

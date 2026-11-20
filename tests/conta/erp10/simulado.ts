@@ -26,6 +26,8 @@ export type EmpresaSimulada = {
   sinAlmacen?: boolean
   /** X10d · El alta de un asiento cuya descripción lleve esto falla con un 500. */
   fallaAsiento?: string
+  /** X10e · La cuenta de IVA repercutido que pone ERP10 en el asiento de una emitida (la que tiene configurada). */
+  ivaRepercutido?: string
 }
 
 export function erp10Simulado(o: { empresas: Record<string, EmpresaSimulada>; claves?: { client_id: string; password: string } }) {
@@ -105,10 +107,16 @@ export function erp10Simulado(o: { empresas: Record<string, EmpresaSimulada>; cl
       const f = { ...b, Documento: documento }
       ;(e.facturas ??= []).push(f)
       // Como ERP10: el asiento de la factura, con el gasto al debe, el IVA (una sola 472) y el proveedor al haber.
-      const cuotas = [1, 2, 3].reduce((t, i) => t + Number(b[`CuotaIVA${i}`] ?? 0), 0)
-      e.apuntes.push({ Serie: String(b.Serie), Documento: documento, TipoAsiento: 1, Fecha: Number(b.Fecha ?? b.FechaFactura), Detalles: [
-        ...((b.Apuntes ?? []) as { Cuenta: string; Importe: number }[]).map((a) => ({ Cuenta: a.Cuenta, Debe: a.Importe, Haber: 0 })),
-        ...(cuotas ? [{ Cuenta: '47200000', Debe: Math.round(cuotas * 100) / 100, Haber: 0 }] : []),
+      // X10e · Una emitida (serie 1), al revés: el cliente al debe; los ingresos y el IVA repercutido (una sola 477), al haber.
+      const cuotas = Math.round([1, 2, 3].reduce((t, i) => t + Number(b[`CuotaIVA${i}`] ?? 0), 0) * 100) / 100
+      const apuntes = (b.Apuntes ?? []) as { Cuenta: string; Importe: number }[]
+      e.apuntes.push({ Serie: String(b.Serie), Documento: documento, TipoAsiento: 1, Fecha: Number(b.Fecha ?? b.FechaFactura), Detalles: String(b.Serie) === '1' ? [
+        { Cuenta: String(b.CuentaCliente), Debe: Number(b.TotalFactura), Haber: 0 },
+        ...apuntes.map((a) => ({ Cuenta: a.Cuenta, Debe: 0, Haber: a.Importe })),
+        ...(cuotas ? [{ Cuenta: e.ivaRepercutido ?? '47700000', Debe: 0, Haber: cuotas }] : []),
+      ] : [
+        ...apuntes.map((a) => ({ Cuenta: a.Cuenta, Debe: a.Importe, Haber: 0 })),
+        ...(cuotas ? [{ Cuenta: '47200000', Debe: cuotas, Haber: 0 }] : []),
         { Cuenta: String(b.CuentaCliente), Debe: 0, Haber: Number(b.TotalFactura) },
       ] })
       return r(200, f)
