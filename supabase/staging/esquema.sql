@@ -5313,6 +5313,140 @@ $$;
 
 
 --
+-- Name: _conta_dia_cobro_junto(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_dia_cobro_junto() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_otro uuid; v_o public.journal_entry;
+begin
+  select case when c.factura_entry_id = old.id then c.cobro_entry_id else c.factura_entry_id end into v_otro
+    from public.conta_dia_cobro c where old.id in (c.factura_entry_id, c.cobro_entry_id);
+  if v_otro is null then return null; end if;
+  select * into v_o from public.journal_entry where id = v_otro;
+  if tg_op = 'DELETE' then
+    delete from public.conta_dia_cobro where old.id in (factura_entry_id, cobro_entry_id);
+    -- Descartar el cobro descarta el día: si no, el cierre de la hora siguiente volvería a proponer los dos.
+    if old.source_type = 'sales_day_payment' and v_o.status in ('propuesto', 'borrador') and v_o.source_type = 'sales_day'
+       and exists (select 1 from public.journal_dismissal d where d.company_id = old.company_id and d.source_type = 'sales_day_payment' and d.source_key = old.source_id::text) then
+      insert into public.journal_dismissal (account_id, company_id, source_type, source_key, reason, created_by, created_by_name)
+      select v_o.account_id, v_o.company_id, 'sales_day', s.location_id || ':' || s.sales_day || coalesce(':' || s.unit_key, ''), d.reason, d.created_by, d.created_by_name
+        from public.sales_day_summary s, public.journal_dismissal d
+       where s.id = v_o.source_id and d.company_id = old.company_id and d.source_type = 'sales_day_payment' and d.source_key = old.source_id::text
+      on conflict (company_id, source_type, source_key) do update set reason = excluded.reason;
+    end if;
+    if v_o.status in ('propuesto', 'borrador') then delete from public.journal_entry where id = v_otro; end if;
+    return null;
+  end if;
+  if new.status = 'validado' and old.status in ('propuesto', 'borrador') and v_o.status in ('propuesto', 'borrador') then
+    perform public._journal_entry_validar(v_otro, coalesce(new.validated_by_name, public.conta_nombre_actor()));
+  elsif new.status = 'anulado' and old.status = 'validado' and v_o.status = 'validado' then
+    perform public.journal_entry_anular(v_otro, 'Va con el asiento ' || old.series || '/' || old.number || ', que se ha anulado: ' || coalesce(new.void_reason, ''),
+                                        current_date, coalesce(new.voided_by_name, public.conta_nombre_actor()));
+  end if;
+  return null;
+end $$;
+
+
+--
+-- Name: _conta_dia_concepto(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_dia_concepto(p_que text, p_concepto text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select case when coalesce(p_concepto, '') ~ '^Ventas del día' then regexp_replace(p_concepto, '^Ventas del día', p_que)
+              else p_que || coalesce(' · ' || nullif(p_concepto, ''), '') end
+$$;
+
+
+--
+-- Name: _conta_dia_partir(jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_dia_partir(p_lineas jsonb, p_contado text) RETURNS jsonb
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+declare v_l jsonb; v_neto numeric := 0; v_fact jsonb := '[]'; v_cob jsonb := '[]'; v_base jsonb;
+begin
+  if p_contado is null or p_lineas is null then return null; end if;
+  for v_l in select * from jsonb_array_elements(p_lineas) loop
+    if coalesce(v_l->>'cuenta', '') ~ '^(6|7|477)' then
+      v_fact := v_fact || v_l;
+    else
+      v_cob := v_cob || v_l;
+      v_neto := v_neto + coalesce((v_l->>'debe')::numeric, 0) - coalesce((v_l->>'haber')::numeric, 0);
+      if v_base is null then v_base := v_l - array['cuenta', 'debe', 'haber', 'concepto', 'forma', 'canal', 'iva', 'tercero_id']; end if;
+    end if;
+  end loop;
+  if jsonb_array_length(v_cob) = 0 then return null; end if;
+  -- La factura: «Clientes de contado» por lo que se cobra, en lugar de cada forma de pago.
+  v_fact := jsonb_build_array(coalesce(v_base, '{}') || jsonb_build_object('cuenta', p_contado, 'debe', greatest(v_neto, 0), 'haber', greatest(-v_neto, 0),
+                                                                      'concepto', 'La factura del día · Clientes de contado')) || v_fact;
+  -- El cobro: cada forma de pago, contra «Clientes de contado», que queda a cero.
+  v_cob := v_cob || jsonb_build_array(coalesce(v_base, '{}') || jsonb_build_object('cuenta', p_contado, 'debe', greatest(-v_neto, 0), 'haber', greatest(v_neto, 0),
+                                                                      'concepto', 'El cobro del día · Clientes de contado'));
+  return jsonb_build_object('factura', v_fact, 'cobro', v_cob);
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_dia_partir(p_lineas jsonb, p_contado text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_dia_partir(p_lineas jsonb, p_contado text) IS 'R07: de las líneas de un día de ventas, la factura del día (Clientes de contado por lo cobrado, contra ventas e IVA) y su cobro (lo cobrado contra Clientes de contado). null si no hay nada que cobrar.';
+
+
+--
+-- Name: _conta_dia_proponer(uuid, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_dia_proponer(p_company uuid, p_prop jsonb, p_quien text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_contado text; v_desde date; v_partido jsonb; v_r jsonb; v_c jsonb; v_cuenta uuid;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  select a.code, coalesce(f.desde, (f.created_at at time zone 'Europe/Madrid')::date) into v_contado, v_desde from public.conta_tpv_factura_cuenta f
+    join public.company_account a on a.id = f.company_account_id and a.company_id = f.company_id
+   where f.company_id = p_company and f.account_id = v_cuenta and a.status is distinct from 'cerrada';
+  if v_contado is not null and (p_prop->'entrada'->>'fecha')::date >= v_desde then
+    v_partido := public._conta_dia_partir(p_prop->'lineas', v_contado);
+  end if;
+  if v_partido is null then
+    return public._journal_entry_proponer(p_company, p_prop->'entrada', p_prop->'lineas', p_prop->'resumen', p_quien, null);
+  end if;
+  v_r := public._journal_entry_proponer(p_company,
+           jsonb_set(p_prop->'entrada', '{concepto}', to_jsonb(public._conta_dia_concepto('Factura del día', p_prop->'entrada'->>'concepto'))),
+           v_partido->'factura', p_prop->'resumen', p_quien, null);
+  -- El cobro, solo con una factura nueva (una de antes, ya propuesta de un asiento, se queda como está).
+  if not coalesce((v_r->>'existente')::boolean, false) and not coalesce((v_r->>'descartada')::boolean, false) and v_r->>'id' is not null then
+    v_c := public._journal_entry_proponer(p_company,
+             jsonb_build_object('series', p_prop->'entrada'->'series', 'fecha', p_prop->'entrada'->'fecha',
+               'concepto', public._conta_dia_concepto('Cobro del día', p_prop->'entrada'->>'concepto'), 'source_type', 'sales_day_payment', 'source_id', v_r->>'id',
+               'confianza', coalesce(p_prop->'entrada'->>'confianza', 'seguro'), 'porque', 'Lo cobrado el día contra «Clientes de contado»: la deja a cero.',
+               'razones', '[]'::jsonb, 'party_id', null, 'documento', p_prop->'entrada'->'documento'),
+             v_partido->'cobro', '{}'::jsonb, p_quien, null);
+    insert into public.conta_dia_cobro (account_id, company_id, factura_entry_id, cobro_entry_id)
+    values (v_cuenta, p_company, (v_r->>'id')::uuid, (v_c->>'id')::uuid) on conflict do nothing;
+  end if;
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_dia_proponer(p_company uuid, p_prop jsonb, p_quien text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_dia_proponer(p_company uuid, p_prop jsonb, p_quien text) IS 'R07: propone un día de ventas por el embudo de siempre; con la cuenta de la factura del día y desde su «desde», en dos asientos unidos (la factura y su cobro).';
+
+
+--
 -- Name: _conta_dir_coincide(text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -9863,7 +9997,7 @@ declare
   v_d public.conta_tpv_dia; v_programa text; v_ventas text; v_faltan text[] := '{}';
   v_lineas jsonb := '[]'::jsonb; v_t record; v_c record; v_tasa uuid; v_477 text;
   v_debe bigint := 0; v_haber bigint := 0; v_base bigint := 0; v_nif int; v_dev int; v_c_dev bigint; v_razones jsonb;
-  v_rango text;
+  v_rango text; v_contado text; v_partido jsonb;
   linea constant text := '{"local_id": null, "comun": true, "marca_id": null, "tercero_id": null, "documento": null, "iva": null, "retencion": null}';
 begin
   select * into v_d from public.conta_tpv_dia where id = p_dia;
@@ -9941,6 +10075,10 @@ begin
     v_haber := v_haber + greatest(v_t.q, 0); v_debe := v_debe + greatest(-v_t.q, 0);
   end loop;
 
+  -- R07 · la factura del día y su cobro: la factura lleva «Clientes de contado» (la cuenta de «La factura del día va a»).
+  select a.code into v_contado from public.conta_tpv_factura_cuenta f join public.company_account a on a.id = f.company_account_id and a.company_id = f.company_id
+   where f.company_id = v_d.company_id and f.account_id = v_d.account_id and a.status is distinct from 'cerrada';
+  if v_contado is null then v_faltan := v_faltan || 'Falta la cuenta de la factura del día.'::text; end if;
   if cardinality(v_faltan) > 0 then
     return jsonb_build_object('sin_propuesta', (select string_agg(x, ' ' order by o) from (select x, min(o) as o from unnest(v_faltan) with ordinality as u(x, o) group by x) z));
   end if;
@@ -9954,6 +10092,7 @@ begin
                                                      public.conta_euros_exactos(v_debe / 100.0), public.conta_euros_exactos(v_haber / 100.0)));
   end if;
 
+  v_partido := public._conta_dia_partir(v_lineas, v_contado);
   select count(*) filter (where cliente_nif is not null), count(*) filter (where total < 0), coalesce(round(sum(total) filter (where total < 0) * 100), 0)
     into v_nif, v_dev, v_c_dev from public.conta_tpv_documento where dia_id = p_dia;
   select jsonb_agg(r.j order by r.k) into v_razones from (
@@ -9970,12 +10109,18 @@ begin
 
   return jsonb_build_object(
     'entrada', jsonb_build_object(
-      'series', 1, 'fecha', v_d.dia, 'concepto', 'Ventas del día · TPV ' || v_programa,
+      'series', 1, 'fecha', v_d.dia, 'concepto', 'Factura del día · TPV ' || v_programa || ' · tickets ' || v_rango,
       'source_type', 'sales_day', 'source_id', v_d.id, 'confianza', 'seguro',
       'porque', v_d.documentos || ' factura' || case when v_d.documentos = 1 then '' else 's' end || ' del TPV, ' || case when v_d.primer_numero = v_d.ultimo_numero then 'la ' else 'de la ' end || replace(v_rango, ' a ', ' a la ')
                 || ', cuadran con lo cobrado, al céntimo.',
       'razones', v_razones, 'party_id', null, 'documento', v_d.primer_numero || case when v_d.primer_numero = v_d.ultimo_numero then '' else '-' || v_d.ultimo_numero end),
-    'lineas', v_lineas);
+    'lineas', v_partido->'factura',
+    'cobro', jsonb_build_object(
+      'entrada', jsonb_build_object('series', 1, 'fecha', v_d.dia, 'concepto', 'Cobro del día · TPV ' || v_programa,
+        'source_type', 'sales_day_payment', 'source_id', v_d.id, 'confianza', 'seguro',
+        'porque', 'Lo cobrado el día, por forma de pago, contra «Clientes de contado»: la deja a cero.', 'razones', '[]'::jsonb, 'party_id', null,
+        'documento', v_d.primer_numero || case when v_d.primer_numero = v_d.ultimo_numero then '' else '-' || v_d.ultimo_numero end),
+      'lineas', v_partido->'cobro'));
 end
 $$;
 
@@ -41612,8 +41757,11 @@ begin
   ),
   contado as (
     select a.id, a.code, a.template_code, a.name from public.company_account a
-     where a.company_id = v_c.id and a.account_id = v_c.account_id and a.code like '430%'
-       and (a.name ilike '%contado%' or a.plain_name ilike '%contado%') and a.status is distinct from 'cerrada'
+     where a.company_id = v_c.id and a.account_id = v_c.account_id and a.status is distinct from 'cerrada'
+       -- R07 · la cuenta de la factura del día, la elegida; si no hay, las 430 que dicen «contado», como hasta ahora.
+       and case when exists (select 1 from public.conta_tpv_factura_cuenta f where f.company_id = v_c.id and f.account_id = v_c.account_id)
+                then exists (select 1 from public.conta_tpv_factura_cuenta f where f.company_id = v_c.id and f.account_id = v_c.account_id and f.company_account_id = a.id)
+                else a.code like '430%' and (a.name ilike '%contado%' or a.plain_name ilike '%contado%') end
   ),
   cuentas as (
     select distinct l.cuenta_id as id, l.code, l.template_code, l.name from lineas l
@@ -41638,6 +41786,7 @@ begin
         'localId', f.location_id,
         'primero', coalesce(r.primero, f.primero), 'ultimo', coalesce(r.ultimo, f.ultimo), 'facturas', coalesce(r.facturas, f.facturas),
         'contadores', r.contadores, 'unidad', f.unit_key, 'resumenes', f.resumenes,
+        'cobroId', (select k.cobro_entry_id from public.conta_dia_cobro k where k.factura_entry_id = e.id and k.company_id = v_c.id),
         'lineas', (select jsonb_agg(jsonb_build_object('cuenta', l.code, 'plantilla', l.template_code, 'nombre', l.name,
                       'debe', l.debit, 'haber', l.credit, 'tipoIva', l.tipo_iva, 'baseIva', l.base_iva, 'libro', l.vat_book) order by l.position)
                      from lineas l where l.entry_id = e.id))
@@ -55067,7 +55216,7 @@ begin
           elsif v_p ? 'sin_propuesta' then
             v_res := 'sin_propuesta'; v_porque := v_p->>'sin_propuesta';
           else
-            v_r := public._journal_entry_proponer(p_company, v_p->'entrada', v_p->'lineas', v_p->'resumen', p_quien, null);
+            v_r := public._conta_dia_proponer(p_company, v_p, p_quien);  -- R07 · la factura del día y su cobro
             v_res := case when (v_r->>'descartada')::boolean then 'descartado' when (v_r->>'existente')::boolean then 'ya_estaba' else 'propuesto' end;
             v_entry := nullif(v_r->>'id', '')::uuid;
           end if;
@@ -55089,7 +55238,7 @@ begin
             elsif v_u->'propuesta' ? 'sin_propuesta' then
               v_ures := 'sin_propuesta'; v_porques := v_porques || (v_canal || ': ' || (v_u->'propuesta'->>'sin_propuesta'));
             else
-              v_r := public._journal_entry_proponer(p_company, v_u->'propuesta'->'entrada', v_u->'propuesta'->'lineas', v_u->'propuesta'->'resumen', p_quien, null);
+              v_r := public._conta_dia_proponer(p_company, v_u->'propuesta', p_quien);  -- R07 · la factura del día y su cobro
               v_ures := case when (v_r->>'descartada')::boolean then 'descartado' when (v_r->>'existente')::boolean then 'ya_estaba' else 'propuesto' end;
               if v_ures = 'propuesto' then
                 v_dia_asientos := v_dia_asientos + 1;
@@ -57737,6 +57886,79 @@ begin
                   else 'Guardado: su IVA se deduce.' end
              || case when v_quitados > 0 then ' Su asiento propuesto se ha quitado para proponerlo otra vez.' else '' end);
 end $$;
+
+
+--
+-- Name: conta_recibida_pagar_con_cuenta(uuid, uuid, text, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_pagar_con_cuenta(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_cuenta uuid := public._pc01e2_empresa(p_company);
+  v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'Sumied');
+  v_inv public.supplier_invoice; v_s public.supplier; v_prov text; v_ca public.company_account;
+  v_pend numeric; v_party uuid; v_pago uuid; v_r jsonb; v_entry uuid; v_val jsonb; v_numero text; v_concepto text; v_nombre text;
+begin
+  if p_fecha is null then raise exception 'Falta el día del pago.' using errcode = '22023'; end if;
+  if p_fecha > public.conta_hoy() then
+    raise exception 'El pago es de un día que aún no ha llegado (%): queda pendiente de pagar.', to_char(p_fecha, 'DD/MM/YYYY') using errcode = '22023';
+  end if;
+  select * into v_inv from public.supplier_invoice where id = p_invoice and account_id = v_cuenta for update;
+  if v_inv.id is null or coalesce(v_inv.company_id, p_company) <> p_company then raise exception 'Esa factura no es de la empresa.' using errcode = '23514'; end if;
+  v_numero := coalesce(v_inv.invoice_number, 'sin número');
+  if v_inv.status <> 'aprobada' then raise exception 'La factura % no está por pagar (está %).', v_numero, v_inv.status using errcode = '23514'; end if;
+  if v_inv.payment_method is not distinct from 'compensation' then
+    raise exception 'La factura % se paga con su liquidación (compensación): no con otra cuenta.', v_numero using errcode = '23514';
+  end if;
+  select * into v_s from public.supplier where id = v_inv.supplier_id;
+  v_prov := public._pc01e2_cuenta_proveedor(p_company, v_s.id);
+  if v_prov is null then
+    raise exception '% no tiene su cuenta de proveedor (400) en el plan: sin ella el pago no tendría asiento.', coalesce(v_s.name, 'Su proveedor') using errcode = '23514';
+  end if;
+  select * into v_ca from public.company_account where company_id = p_company and code = btrim(coalesce(p_cuenta, ''));
+  if v_ca.id is null then raise exception 'La cuenta % no está en el plan de la empresa.', coalesce(nullif(btrim(p_cuenta), ''), '(vacía)') using errcode = '23514'; end if;
+  if v_ca.kind = 'group' then raise exception 'La % es un grupo del plan: elige una subcuenta.', v_ca.code using errcode = '23514'; end if;
+  if v_ca.code = v_prov then raise exception 'La % es la del proveedor: no es una cuenta de pago.', v_ca.code using errcode = '23514'; end if;
+  if exists (select 1 from public.company_account_link l where l.company_id = p_company and l.entity = 'bank_account' and l.company_account_id = v_ca.id) then
+    raise exception 'La % es de un banco, una tarjeta o la caja: ese pago espera el cargo y se casa en Bancos.', v_ca.code using errcode = '23514';
+  end if;
+  select pendiente into v_pend from public.conta_recibida_pago where invoice_id = v_inv.id;
+  v_pend := round(coalesce(v_pend, 0) - public._pc01e2_en_remesa(v_inv.id), 2);
+  if v_pend <= 0 then raise exception 'A la factura % no le queda nada por pagar.', v_numero using errcode = '23514'; end if;
+
+  select party_id into v_party from public.party_role where account_id = v_cuenta and supplier_id = v_s.id and role = 'supplier' order by created_at limit 1;
+  v_nombre := coalesce(nullif(v_ca.plain_name, ''), v_ca.name);
+  v_concepto := 'Pago factura ' || v_numero;
+  insert into public.supplier_invoice_payment (account_id, company_id, invoice_id, paid_on, amount, method, note, created_by, created_by_name)
+  values (v_cuenta, p_company, v_inv.id, p_fecha, v_pend, null, format('Pagada con la %s (%s), desde su ficha', v_ca.code, v_nombre), auth.uid(), v_quien)
+  returning id into v_pago;
+  v_r := public._journal_entry_proponer(p_company,
+    jsonb_build_object('series', 4, 'fecha', p_fecha, 'source_type', 'supplier_payment', 'source_id', v_pago,
+      'concepto', v_concepto, 'party_id', v_party, 'documento', v_inv.invoice_number, 'fecha_documento', v_inv.invoice_date,
+      'confianza', 'seguro', 'porque', format('Pago de la factura con la %s, desde su ficha.', v_ca.code)),
+    jsonb_build_array(
+      jsonb_build_object('cuenta', v_prov, 'tercero_id', v_party, 'documento', v_inv.invoice_number, 'concepto', v_concepto, 'debe', v_pend, 'haber', 0, 'comun', true),
+      jsonb_build_object('cuenta', v_ca.code, 'documento', v_inv.invoice_number, 'concepto', v_concepto, 'debe', 0, 'haber', v_pend, 'comun', true)),
+    null, v_quien, auth.uid());
+  v_entry := nullif(v_r->>'id', '')::uuid;
+  if v_entry is null then raise exception 'El asiento del pago no se ha podido proponer (%).', v_r using errcode = '23514'; end if;
+  v_val := public.journal_entry_validar(v_entry, v_quien);
+  update public.supplier_invoice_payment set entry_id = v_entry where id = v_pago;
+  perform public.mark_supplier_invoice_paid(v_inv.id, p_fecha, null);
+  return jsonb_build_object('asiento', v_entry, 'serie', 4, 'numero', v_val->'numero', 'importe', v_pend, 'cuenta', v_ca.code,
+    'frase', format('Pago apuntado con la %s (%s): %s el %s, asiento 4 / %s. La factura %s queda pagada.',
+      v_ca.code, v_nombre, public.conta_euros_exactos(v_pend), to_char(p_fecha, 'DD/MM/YYYY'), v_val->>'numero', v_numero));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_pagar_con_cuenta(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_pagar_con_cuenta(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_quien_nombre text) IS 'K06 · El pago de una recibida validada con una cuenta que no es una tesorería ni la 430 de su liquidación (la 551 del socio…): su asiento validado (serie 4, Debe 400 / Haber la cuenta), su pago en supplier_invoice_payment y la factura pagada.';
 
 
 --
@@ -60790,6 +61012,115 @@ COMMENT ON FUNCTION public.conta_tpv_asiento_ejemplo(p_dia uuid, p_cuentas jsonb
 
 
 --
+-- Name: conta_tpv_dia_ejemplo(uuid, jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tpv_dia_ejemplo(p_dia uuid, p_cuentas jsonb DEFAULT '[]'::jsonb, p_factura uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_d public.conta_tpv_dia; v_ventas uuid; v_falta record; v_p jsonb; v_res jsonb; v_c jsonb; v_cta uuid;
+  v_sustitutas jsonb := '[]'::jsonb; v_contado_falta boolean := false; v_contado text;
+begin
+  select * into v_d from public.conta_tpv_dia where id = p_dia;
+  if v_d.id is null or not public.belongs_to_account(v_d.account_id) then raise exception 'Ese día no está.' using errcode = 'P0002'; end if;
+  if jsonb_typeof(coalesce(p_cuentas, '[]'::jsonb)) <> 'array' then raise exception 'Las cuentas van en una lista.' using errcode = '22023'; end if;
+  if p_factura is not null and not exists (select 1 from public.company_account where id = p_factura and company_id = v_d.company_id and status is distinct from 'cerrada') then
+    raise exception 'La cuenta elegida para la factura del día no es de esta empresa.' using errcode = '22023';
+  end if;
+  begin
+    for v_c in select * from jsonb_array_elements(coalesce(p_cuentas, '[]'::jsonb)) loop
+      delete from public.conta_tpv_forma_cuenta
+       where company_id = v_d.company_id and lower(forma) = lower(v_c ->> 'forma') and canal is not distinct from nullif(v_c ->> 'canal', '');
+      v_cta := nullif(v_c ->> 'cuenta_id', '')::uuid;
+      if v_cta is not null then
+        if not exists (select 1 from public.company_account where id = v_cta and company_id = v_d.company_id and status is distinct from 'cerrada') then
+          raise exception 'La cuenta elegida para «%» no es de esta empresa.', v_c ->> 'forma' using errcode = '22023';
+        end if;
+        insert into public.conta_tpv_forma_cuenta (account_id, company_id, forma, canal, company_account_id, created_by_name)
+        values (v_d.account_id, v_d.company_id, v_c ->> 'forma', nullif(v_c ->> 'canal', ''), v_cta, 'ejemplo');
+      end if;
+    end loop;
+    select id into v_ventas from public.company_account
+     where company_id = v_d.company_id and kind = 'template' and template_code = '700' and status is distinct from 'cerrada' order by code limit 1;
+    -- La factura del día: la que se está eligiendo, la guardada o, si no hay, una cualquiera en su lugar («sin cuenta»).
+    if p_factura is not null then
+      insert into public.conta_tpv_factura_cuenta (account_id, company_id, company_account_id, created_by_name)
+      values (v_d.account_id, v_d.company_id, p_factura, 'ejemplo')
+      on conflict (company_id) do update set company_account_id = excluded.company_account_id;
+    elsif not exists (select 1 from public.conta_tpv_factura_cuenta where company_id = v_d.company_id) then
+      -- En su lugar, una cuenta que el día no usa (ni ventas, ni IVA, ni la de una forma de pago): se enseña «sin cuenta».
+      select a.id into v_cta from public.company_account a
+       where a.company_id = v_d.company_id and a.status is distinct from 'cerrada' and length(a.code) >= 8 and a.code !~ '^(6|7|477)'
+         and not exists (select 1 from public.conta_tpv_forma_cuenta k where k.company_id = v_d.company_id and k.company_account_id = a.id)
+       order by a.code limit 1;
+      if v_cta is not null then
+        insert into public.conta_tpv_factura_cuenta (account_id, company_id, company_account_id, created_by_name) values (v_d.account_id, v_d.company_id, v_cta, 'ejemplo');
+        v_contado_falta := true;
+      end if;
+    end if;
+    select a.code into v_contado from public.conta_tpv_factura_cuenta f join public.company_account a on a.id = f.company_account_id where f.company_id = v_d.company_id;
+    if v_ventas is not null then
+      for v_falta in
+        select distinct on (lower(x.forma), x.canal) x.forma, x.canal from public._conta_tpv_formas_de(v_d.company_id, array[p_dia]) x
+         where public._conta_tpv_cuenta_de(v_d.company_id, x.forma, x.canal) is null
+           and (x.canal is not null or not exists (
+             select 1 from public.conta_tpv_forma_cuenta k where k.company_id = v_d.company_id and lower(k.forma) = lower(x.forma) and k.canal is not null))
+      loop
+        insert into public.conta_tpv_forma_cuenta (account_id, company_id, forma, canal, company_account_id, created_by_name)
+        values (v_d.account_id, v_d.company_id, v_falta.forma, v_falta.canal, v_ventas, 'ejemplo');
+        v_sustitutas := v_sustitutas || jsonb_build_object('forma', lower(v_falta.forma), 'canal', v_falta.canal);
+      end loop;
+    end if;
+    v_p := public._conta_tpv_propuesta(p_dia);
+    raise exception using errcode = 'RR007', message = 'deshacer el ejemplo';
+  exception when sqlstate 'RR007' then
+    null;
+  end;
+
+  if v_p ? 'sin_propuesta' then
+    return jsonb_build_object('dia', v_d.dia, 'motivo', v_p ->> 'sin_propuesta', 'factura', null, 'cobro', null);
+  end if;
+  with uno as (
+    select q.que, jsonb_agg(
+             case when l ->> 'cuenta' = v_contado and v_contado_falta
+                  then jsonb_build_object('cuenta', null, 'nombre', null, 'sin_cuenta', true, 'forma', 'Clientes de contado', 'canal', null, 'contado', true,
+                                          'debe', (l ->> 'debe')::numeric, 'haber', (l ->> 'haber')::numeric, 'concepto', l ->> 'concepto')
+                  when v_sustitutas @> jsonb_build_array(jsonb_build_object('forma', lower(l ->> 'forma'), 'canal', l -> 'canal'))
+                  then jsonb_build_object('cuenta', null, 'nombre', null, 'sin_cuenta', true, 'forma', l ->> 'forma', 'canal', l -> 'canal', 'contado', false,
+                                          'debe', (l ->> 'debe')::numeric, 'haber', (l ->> 'haber')::numeric, 'concepto', l ->> 'concepto')
+                  else jsonb_build_object('cuenta', l ->> 'cuenta', 'sin_cuenta', false, 'forma', l ->> 'forma', 'canal', l -> 'canal', 'tipo', l -> 'tipo',
+                                          'contado', l ->> 'cuenta' = v_contado,
+                                          'nombre', (select coalesce(a.plain_name, a.name) from public.company_account a where a.company_id = v_d.company_id and a.code = l ->> 'cuenta'),
+                                          'debe', (l ->> 'debe')::numeric, 'haber', (l ->> 'haber')::numeric, 'concepto', l ->> 'concepto') end
+             order by o) as lineas
+      from (values ('factura', v_p -> 'lineas'), ('cobro', v_p -> 'cobro' -> 'lineas')) q(que, ls)
+      cross join lateral jsonb_array_elements(coalesce(q.ls, '[]'::jsonb)) with ordinality as z(l, o)
+     group by q.que
+  )
+  select jsonb_build_object('dia', v_d.dia, 'motivo', null,
+           'primero', v_d.primer_numero, 'ultimo', v_d.ultimo_numero, 'facturas', v_d.documentos,
+           'factura', (select jsonb_build_object('lineas', u.lineas,
+                         'debe', (select sum((l ->> 'debe')::numeric) from jsonb_array_elements(u.lineas) l),
+                         'haber', (select sum((l ->> 'haber')::numeric) from jsonb_array_elements(u.lineas) l)) from uno u where u.que = 'factura'),
+           'cobro', (select jsonb_build_object('lineas', u.lineas,
+                         'debe', (select sum((l ->> 'debe')::numeric) from jsonb_array_elements(u.lineas) l),
+                         'haber', (select sum((l ->> 'haber')::numeric) from jsonb_array_elements(u.lineas) l)) from uno u where u.que = 'cobro'),
+           'sin_cuenta', (select count(*) from uno u, jsonb_array_elements(u.lineas) l where (l ->> 'sin_cuenta')::boolean))
+    into v_res;
+  return v_res;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_tpv_dia_ejemplo(p_dia uuid, p_cuentas jsonb, p_factura uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_tpv_dia_ejemplo(p_dia uuid, p_cuentas jsonb, p_factura uuid) IS 'R07: «Cómo quedan los asientos de un día» (la factura del día y su cobro) con las cuentas que se están eligiendo, sin guardar nada.';
+
+
+--
 -- Name: conta_tpv_dia_guardar(uuid, date, text, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -61098,7 +61429,11 @@ begin
     'dia', public.conta_tpv_dia_leer(v_d.company_id, v_d.dia, v_d.programa),
     'empresa', (select jsonb_build_object('nombre', c.legal_name, 'nif', c.tax_id) from public.company c where c.id = v_d.company_id),
     'account_id', v_d.account_id, 'serie', 1, 'numero_previsto', v_num,
-    'concepto', v_p->'entrada'->>'concepto', 'lineas', v_lineas);
+    'concepto', v_p->'entrada'->>'concepto', 'lineas', v_lineas,
+    -- R07 · la factura del día y su cobro: el cobro, con el nombre de cada cuenta.
+    'cobro', jsonb_build_object('concepto', v_p->'cobro'->'entrada'->>'concepto',
+      'lineas', (select jsonb_agg(l || jsonb_build_object('nombre', (select a.name from public.company_account a where a.company_id = v_d.company_id and a.code = l->>'cuenta')) order by o)
+                   from jsonb_array_elements(v_p->'cobro'->'lineas') with ordinality as z(l, o))));
 end
 $$;
 
@@ -61120,7 +61455,7 @@ CREATE FUNCTION public.conta_tpv_dia_validar(p_dia uuid, p_entry uuid, p_numero 
     AS $_$
 declare
   v_d public.conta_tpv_dia; v_p jsonb; v_e jsonb; v_y uuid; v_fecha date; v_l jsonb; v_pos int := 0; v_cta uuid; v_v jsonb;
-  v_quien text := coalesce(p_quien_nombre, public.conta_nombre_actor()); v_prefijo text; v_obj record;
+  v_quien text := coalesce(p_quien_nombre, public.conta_nombre_actor()); v_prefijo text; v_obj record; v_cobro uuid := gen_random_uuid(); v_vc jsonb;
 begin
   select * into v_d from public.conta_tpv_dia where id = p_dia for update;
   if v_d.id is null or not public.belongs_to_account(v_d.account_id) then raise exception 'Ese día no está.' using errcode = 'P0002'; end if;
@@ -61184,13 +61519,29 @@ begin
   update public.vat_book_entry set number = v_d.primer_numero::text, number_to = v_d.ultimo_numero::text, updated_at = now()
    where entry_id = p_entry and book = 'issued';
 
+  -- R07 · la factura del día y su cobro: el cobro, el mismo día, unido a su factura (se validan, se deshacen y se ven juntos).
+  insert into public.journal_entry (id, account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, source_id, status,
+                                    confidence, reason, reasons, party_id, document_ref, document_date, created_by, created_by_name)
+  values (v_cobro, v_d.account_id, v_d.company_id, v_y, 1, v_fecha, v_p->'cobro'->'entrada'->>'concepto', 'sales_day_payment', p_entry, 'propuesto',
+          'seguro', v_p->'cobro'->'entrada'->>'porque', '[]'::jsonb, null, v_p->'cobro'->'entrada'->>'documento', v_d.dia, auth.uid(), v_quien);
+  v_pos := 0;
+  for v_l in select * from jsonb_array_elements(v_p->'cobro'->'lineas') loop
+    v_pos := v_pos + 1;
+    select id into v_cta from public.company_account where company_id = v_d.company_id and code = v_l->>'cuenta';
+    if v_cta is null then raise exception 'La cuenta % no está en el plan de la empresa.', v_l->>'cuenta' using errcode = '23514'; end if;
+    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, concept, location_id, is_common)
+    values (v_d.account_id, v_d.company_id, v_cobro, v_pos, v_cta, coalesce((v_l->>'debe')::numeric, 0), coalesce((v_l->>'haber')::numeric, 0), v_l->>'concepto', null, true);
+  end loop;
+  insert into public.conta_dia_cobro (account_id, company_id, factura_entry_id, cobro_entry_id) values (v_d.account_id, v_d.company_id, p_entry, v_cobro);
+  v_vc := public.journal_entry_validar(v_cobro, v_quien);
+
   -- 5 · El día, contabilizado: ya no se sustituye subiéndolo otra vez.
   update public.conta_tpv_dia set estado = 'contabilizado', entry_id = p_entry where id = p_dia;
 
-  return jsonb_build_object('id', p_entry, 'dia', v_d.dia, 'serie', v_v->'serie', 'numero', v_v->'numero',
+  return jsonb_build_object('id', p_entry, 'dia', v_d.dia, 'serie', v_v->'serie', 'numero', v_v->'numero', 'cobro_id', v_cobro, 'cobro_numero', v_vc->'numero',
     'facturas', v_d.documentos, 'primero', v_d.primer_numero, 'ultimo', v_d.ultimo_numero, 'total', v_d.total,
-    'texto', format('Ventas del %s (TPV · %s): validadas con su PDF y el asiento nº %s · %s factura%s, %s, %s.',
-      to_char(v_d.dia, 'DD/MM/YYYY'), case v_d.programa when 'revo' then 'Revo' else v_d.programa end, v_v->>'numero',
+    'texto', format('Ventas del %s (TPV · %s): la factura del día es el asiento nº %s y su cobro el nº %s · %s factura%s, %s, %s.',
+      to_char(v_d.dia, 'DD/MM/YYYY'), case v_d.programa when 'revo' then 'Revo' else v_d.programa end, v_v->>'numero', v_vc->>'numero',
       v_d.documentos, case when v_d.documentos = 1 then '' else 's' end,
       case when v_d.primer_numero = v_d.ultimo_numero then 'la ' || v_d.primer_numero else 'de la ' || v_d.primer_numero || ' a la ' || v_d.ultimo_numero end,
       public.conta_euros_exactos(v_d.total)));
@@ -61264,6 +61615,60 @@ $$;
 --
 
 COMMENT ON FUNCTION public.conta_tpv_dias(p_company uuid, p_desde date, p_hasta date) IS 'R05: los días del TPV de una empresa para Cierres del día: por validar, en espera con su motivo, o validados, y el aviso de un salto de numeración. Solo lee.';
+
+
+--
+-- Name: conta_tpv_factura_de(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tpv_factura_de(p_company uuid, p_mes date DEFAULT NULL::date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid; v jsonb;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not public.belongs_to_account(v_acc) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  select jsonb_build_object('cuenta', a.code, 'nombre', coalesce(a.plain_name, a.name), 'desde', coalesce(f.desde, (f.created_at at time zone 'Europe/Madrid')::date),
+           'mes', coalesce((select sum(l.debit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
+                             where l.company_account_id = a.id and e.status = 'validado' and e.source_type = 'sales_day'
+                               and e.entry_date >= date_trunc('month', coalesce(p_mes, current_date))::date
+                               and e.entry_date < (date_trunc('month', coalesce(p_mes, current_date)) + interval '1 month')::date), 0))
+    into v from public.conta_tpv_factura_cuenta f join public.company_account a on a.id = f.company_account_id
+   where f.company_id = p_company and f.account_id = v_acc;
+  return jsonb_build_object('factura', v,
+    -- Lo que propone Sumied si no hay ninguna: una 430 que ya se llame «contado».
+    'propuesta', (select jsonb_build_object('cuenta', a.code, 'nombre', coalesce(a.plain_name, a.name)) from public.company_account a
+                   where a.company_id = p_company and a.account_id = v_acc and a.code like '430%' and length(a.code) >= 8
+                     and (a.name ilike '%contado%' or a.plain_name ilike '%contado%') and a.status is distinct from 'cerrada'
+                   order by a.code limit 1));
+end $$;
+
+
+--
+-- Name: conta_tpv_factura_guardar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tpv_factura_guardar(p_company uuid, p_cuenta text, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid; v_a public.company_account; v_desde date;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not public.belongs_to_account(v_acc) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_acc) then raise exception 'Solo un administrador o un encargado de la cuenta elige la cuenta de la factura del día.' using errcode = '42501'; end if;
+  select * into v_a from public.company_account where company_id = p_company and account_id = v_acc and code = p_cuenta and status is distinct from 'cerrada';
+  if v_a.id is null then raise exception 'La cuenta % no está en el plan de la empresa.', p_cuenta using errcode = '23514'; end if;
+  if length(v_a.code) < 8 then raise exception 'La % es una cuenta de grupo: elige una subcuenta.', v_a.code using errcode = '23514'; end if;
+  insert into public.conta_tpv_factura_cuenta (account_id, company_id, company_account_id, created_by_name, desde)
+  values (v_acc, p_company, v_a.id, coalesce(p_quien_nombre, public.conta_nombre_actor()), (now() at time zone 'Europe/Madrid')::date)
+  on conflict (company_id) do update set company_account_id = excluded.company_account_id, created_by_name = excluded.created_by_name
+  returning coalesce(desde, (created_at at time zone 'Europe/Madrid')::date) into v_desde;
+  return jsonb_build_object('cuenta', v_a.code, 'nombre', coalesce(v_a.plain_name, v_a.name), 'desde', v_desde,
+    'texto', format('La factura del día va a la %s · %s. Desde el %s, cada día va en dos asientos: la factura del día y su cobro.',
+                    v_a.code, coalesce(v_a.plain_name, v_a.name), to_char(v_desde, 'DD/MM/YYYY')));
+end $$;
 
 
 --
@@ -109044,6 +109449,26 @@ COMMENT ON TABLE e2e_carril.barrera IS 'SOLO STAGING. La barrera de las e2e: res
 
 
 --
+-- Name: carril; Type: TABLE; Schema: e2e_carril; Owner: -
+--
+
+CREATE TABLE e2e_carril.carril (
+    numero integer NOT NULL,
+    id uuid NOT NULL,
+    quien text NOT NULL,
+    desde timestamp with time zone DEFAULT now() NOT NULL,
+    latido_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE carril; Type: COMMENT; Schema: e2e_carril; Owner: -
+--
+
+COMMENT ON TABLE e2e_carril.carril IS 'SOLO STAGING. De quién es cada carril de las e2e: una reserva con latido (scripts/e2e/carril/reserva_carril.sql). Una que no late ya no cuenta.';
+
+
+--
 -- Name: claves; Type: TABLE; Schema: propuestas; Owner: -
 --
 
@@ -116188,6 +116613,27 @@ COMMENT ON TABLE public.conta_despacho_entrada IS 'G05 (08/11/2026). Cada vez qu
 
 
 --
+-- Name: conta_dia_cobro; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_dia_cobro (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    factura_entry_id uuid NOT NULL,
+    cobro_entry_id uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_dia_cobro; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_dia_cobro IS 'R07: el cobro del día que va con cada factura del día. Se validan, se anulan y se quitan juntos (_conta_dia_cobro_junto). Sin claves ajenas a propósito: el enlace lo borra el disparador.';
+
+
+--
 -- Name: conta_diez_autorizo; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -119577,7 +120023,8 @@ CREATE TABLE public.conta_tpv_factura_cuenta (
     company_id uuid NOT NULL,
     company_account_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    created_by_name text
+    created_by_name text,
+    desde date
 );
 
 
@@ -119586,6 +120033,13 @@ CREATE TABLE public.conta_tpv_factura_cuenta (
 --
 
 COMMENT ON TABLE public.conta_tpv_factura_cuenta IS 'R07: la cuenta de «La factura del día va a» («Clientes de contado»), una por empresa. La factura del día la lleva al debe y el cobro del día la deja a cero.';
+
+
+--
+-- Name: COLUMN conta_tpv_factura_cuenta.desde; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_tpv_factura_cuenta.desde IS 'R07: desde qué día va cada día de ventas en dos asientos (la factura del día y su cobro); si está vacía, desde el día en que se eligió la cuenta. Los de antes, como estaban.';
 
 
 --
@@ -123340,7 +123794,7 @@ CREATE TABLE public.journal_entry (
     CONSTRAINT journal_entry_propuesta_con_porque CHECK (((status <> 'propuesto'::text) OR ((confidence IS NOT NULL) AND (length(TRIM(BOTH FROM COALESCE(reason, ''::text))) > 0)))),
     CONSTRAINT journal_entry_reasons_check CHECK ((jsonb_typeof(reasons) = 'array'::text)),
     CONSTRAINT journal_entry_series_check CHECK (((series = ANY (ARRAY[1, 2, 3, 4, 9])) OR ((series = 8) AND (source_type = 'migrated'::text)))),
-    CONSTRAINT journal_entry_source_type_check CHECK ((source_type = ANY (ARRAY['sales_day'::text, 'sales_adjustment'::text, 'supplier_invoice'::text, 'supplier_payment'::text, 'channel_settlement'::text, 'licensed_settlement'::text, 'payroll'::text, 'bank'::text, 'vat_settlement'::text, 'manual'::text, 'template'::text, 'reversal'::text, 'opening'::text, 'closing'::text, 'migrated'::text, 'purchase_accrual'::text, 'purchase_accrual_reversal'::text, 'customer_invoice'::text, 'customer_payment'::text]))),
+    CONSTRAINT journal_entry_source_type_check CHECK ((source_type = ANY (ARRAY['sales_day'::text, 'sales_adjustment'::text, 'supplier_invoice'::text, 'supplier_payment'::text, 'channel_settlement'::text, 'licensed_settlement'::text, 'payroll'::text, 'bank'::text, 'vat_settlement'::text, 'manual'::text, 'template'::text, 'reversal'::text, 'opening'::text, 'closing'::text, 'migrated'::text, 'purchase_accrual'::text, 'purchase_accrual_reversal'::text, 'customer_invoice'::text, 'customer_payment'::text, 'sales_day_payment'::text]))),
     CONSTRAINT journal_entry_status_check CHECK ((status = ANY (ARRAY['propuesto'::text, 'borrador'::text, 'validado'::text, 'anulado'::text]))),
     CONSTRAINT journal_entry_traido CHECK (((source_type = 'migrated'::text) = (external_program IS NOT NULL))),
     CONSTRAINT journal_entry_validado_completo CHECK (((status <> ALL (ARRAY['validado'::text, 'anulado'::text])) OR ((validated_at IS NOT NULL) AND (hash IS NOT NULL) AND (chain_seq IS NOT NULL))))
@@ -132022,6 +132476,14 @@ ALTER TABLE ONLY e2e_carril.barrera
 
 
 --
+-- Name: carril carril_pkey; Type: CONSTRAINT; Schema: e2e_carril; Owner: -
+--
+
+ALTER TABLE ONLY e2e_carril.carril
+    ADD CONSTRAINT carril_pkey PRIMARY KEY (numero);
+
+
+--
 -- Name: claves claves_clave_key; Type: CONSTRAINT; Schema: propuestas; Owner: -
 --
 
@@ -133795,6 +134257,30 @@ ALTER TABLE ONLY public.conta_crm
 
 ALTER TABLE ONLY public.conta_despacho_entrada
     ADD CONSTRAINT conta_despacho_entrada_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_dia_cobro conta_dia_cobro_cobro_entry_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_dia_cobro
+    ADD CONSTRAINT conta_dia_cobro_cobro_entry_id_key UNIQUE (cobro_entry_id);
+
+
+--
+-- Name: conta_dia_cobro conta_dia_cobro_factura_entry_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_dia_cobro
+    ADD CONSTRAINT conta_dia_cobro_factura_entry_id_key UNIQUE (factura_entry_id);
+
+
+--
+-- Name: conta_dia_cobro conta_dia_cobro_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_dia_cobro
+    ADD CONSTRAINT conta_dia_cobro_pkey PRIMARY KEY (id);
 
 
 --
@@ -146376,6 +146862,13 @@ CREATE TRIGGER trg_journal_entry_0_traido_no_se_anula BEFORE UPDATE OF status ON
 --
 
 CREATE TRIGGER trg_journal_entry_0_trimestre_presentado BEFORE INSERT OR UPDATE OF entry_date ON public.journal_entry FOR EACH ROW EXECUTE FUNCTION public._tg_s01p_trimestre_presentado();
+
+
+--
+-- Name: journal_entry trg_journal_entry_dia_cobro_junto; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_journal_entry_dia_cobro_junto AFTER DELETE OR UPDATE OF status ON public.journal_entry FOR EACH ROW EXECUTE FUNCTION public._conta_dia_cobro_junto();
 
 
 --
@@ -162434,6 +162927,19 @@ CREATE POLICY conta_despacho_entrada_select ON public.conta_despacho_entrada FOR
 
 
 --
+-- Name: conta_dia_cobro; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_dia_cobro ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_dia_cobro conta_dia_cobro_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_dia_cobro_select ON public.conta_dia_cobro FOR SELECT USING ((account_id = ANY (( SELECT public.current_user_account_ids() AS current_user_account_ids)::uuid[])));
+
+
+--
 -- Name: conta_diez_autorizo; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -171654,6 +172160,38 @@ GRANT ALL ON FUNCTION public._conta_de_quien(p_invoice uuid) TO service_role;
 
 REVOKE ALL ON FUNCTION public._conta_despachos_de_quien_llama() FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_despachos_de_quien_llama() TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_dia_cobro_junto(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_dia_cobro_junto() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_dia_cobro_junto() TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_dia_concepto(p_que text, p_concepto text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_dia_concepto(p_que text, p_concepto text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_dia_concepto(p_que text, p_concepto text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_dia_partir(p_lineas jsonb, p_contado text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_dia_partir(p_lineas jsonb, p_contado text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_dia_partir(p_lineas jsonb, p_contado text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_dia_proponer(p_company uuid, p_prop jsonb, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_dia_proponer(p_company uuid, p_prop jsonb, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_dia_proponer(p_company uuid, p_prop jsonb, p_quien text) TO service_role;
 
 
 --
@@ -181876,6 +182414,15 @@ GRANT ALL ON FUNCTION public.conta_recibida_iva_no_deducible(p_invoice uuid, p_n
 
 
 --
+-- Name: FUNCTION conta_recibida_pagar_con_cuenta(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_pagar_con_cuenta(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_pagar_con_cuenta(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_pagar_con_cuenta(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_recibida_papel_poner(p_invoice uuid, p_ruta text, p_nombre text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -182535,6 +183082,15 @@ GRANT ALL ON FUNCTION public.conta_tpv_asiento_ejemplo(p_dia uuid, p_cuentas jso
 
 
 --
+-- Name: FUNCTION conta_tpv_dia_ejemplo(p_dia uuid, p_cuentas jsonb, p_factura uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tpv_dia_ejemplo(p_dia uuid, p_cuentas jsonb, p_factura uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tpv_dia_ejemplo(p_dia uuid, p_cuentas jsonb, p_factura uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tpv_dia_ejemplo(p_dia uuid, p_cuentas jsonb, p_factura uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_tpv_dia_guardar(p_company uuid, p_dia date, p_programa text, p_lectura jsonb, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -182577,6 +183133,24 @@ GRANT ALL ON FUNCTION public.conta_tpv_dia_validar(p_dia uuid, p_entry uuid, p_n
 REVOKE ALL ON FUNCTION public.conta_tpv_dias(p_company uuid, p_desde date, p_hasta date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_tpv_dias(p_company uuid, p_desde date, p_hasta date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_tpv_dias(p_company uuid, p_desde date, p_hasta date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tpv_factura_de(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tpv_factura_de(p_company uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tpv_factura_de(p_company uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tpv_factura_de(p_company uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tpv_factura_guardar(p_company uuid, p_cuenta text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tpv_factura_guardar(p_company uuid, p_cuenta text, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tpv_factura_guardar(p_company uuid, p_cuenta text, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tpv_factura_guardar(p_company uuid, p_cuenta text, p_quien_nombre text) TO service_role;
 
 
 --
@@ -191961,6 +192535,14 @@ GRANT SELECT ON TABLE public.conta_crm TO authenticated;
 
 GRANT ALL ON TABLE public.conta_despacho_entrada TO service_role;
 GRANT SELECT ON TABLE public.conta_despacho_entrada TO authenticated;
+
+
+--
+-- Name: TABLE conta_dia_cobro; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_dia_cobro TO service_role;
+GRANT SELECT ON TABLE public.conta_dia_cobro TO authenticated;
 
 
 --
