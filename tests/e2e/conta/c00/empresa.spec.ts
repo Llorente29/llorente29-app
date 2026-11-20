@@ -204,7 +204,8 @@ test('cuenta A: la ficha basta para presentar el 200 y depositar las cuentas', a
   await page.getByLabel('Plantilla media fija').fill('3')
   await page.getByLabel('Plantilla media no fija').fill('1,5')
   await page.getByLabel('¿Cuentas auditadas?').selectOption('no')
-  await page.getByRole('button', { name: 'Guardar' }).click()
+  // Desde el X04 la página lleva también «Salida a ERP10», con su propio «Guardar»: el de la plantilla, en su formulario.
+  await page.getByRole('form', { name: /^Plantilla y auditoría de / }).getByRole('button', { name: 'Guardar' }).click()
   await expect(page.getByText('3 fija · 1,5 no fija')).toBeVisible()
 
   // Socios: la administradora firma las cuentas y tiene su NIF.

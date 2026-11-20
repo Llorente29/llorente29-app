@@ -46,7 +46,10 @@ test('cuenta A: Sus cuentas, le pagas desde su banco (y se quita), el 347 y el e
   // las tarjetas, y «Sus facturas se apuntan en» una sola vez. Local habitual
   // y el registro sanitario editable ya no están aquí.
   const pestana = page.locator('.cxp-cuentas')
-  await expect(pestana.locator('select, input, textarea')).toHaveCount(0)
+  await expect(cuentas.locator('select, input, textarea')).toHaveCount(0)
+  // S01o·2 (#440, 02/11): debajo, «Cómo le compras», con sus tres campos (y ninguno más en la pestaña).
+  await expect(pestana.locator('select, input, textarea')).toHaveCount(3)
+  for (const campo of ['Entrega mercancía', 'Mandar el justificante al pagar', 'Local por defecto']) await expect(pestana.getByLabel(campo)).toBeVisible()
   await expect(page.getByText('Sus facturas se apuntan en', { exact: true })).toHaveCount(1)
   await expect(page.getByLabel('Local habitual')).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Qué tipos de gasto usa tu negocio' })).toBeVisible()

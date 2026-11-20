@@ -152,6 +152,8 @@ jobs:
             sleep 2
           done
           echo "Cerrojos del guardián muerto sueltos solos a los $(( $(date +%s) - t0 )) s." | tee -a "$GITHUB_STEP_SUMMARY"
+          # N11: el cerrojo se suelta solo, la reserva no (late aparte, para sobrevivir a un reinicio): se suelta aquí.
+          scripts/e2e/carril.sh soltar
 
       - name: Carril · borrar y soltar (pase lo que pase)
         if: always() && (github.event_name == 'push' || inputs.de_verdad)

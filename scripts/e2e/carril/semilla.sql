@@ -57,3 +57,35 @@ begin
      where account_id = r.account_id and source = 'lastapp' and external_location_id = r.viejo;
   end loop;
 end $$;
+
+-- N11 (20/11) · Las tres recibidas de la D01 (supabase/seeds/conta/seed_d01_staging.sql) se
+-- sembraron sin el destinatario en su lectura. Desde el E03 (#727), una recibida sin destinatario
+-- leído pregunta «¿De quién es?» y se va a «Por aclarar», y la e2e de la D01 las busca en «Por
+-- revisar» (noche del 19/11, 44501328392). Van a nombre de su empresa, como dice ya la semilla:
+-- aquí, en el carril, con el nombre y el NIF de SU empresa (la del carril, regla 9).
+do $$
+declare n int := current_setting('e2e.carril')::int;
+begin
+  update public.supplier_invoice si
+     set reading = jsonb_set(si.reading, '{factura,destinatario}', jsonb_build_object('nombre', c.legal_name, 'nif', c.tax_id))
+    from public.company c
+   where c.id = si.company_id and c.account_id = si.account_id
+     and si.id in (select pg_temp.en_carril(x, n) from unnest(array['d0100000-0000-4000-8000-0000000000f1', 'd0100000-0000-4000-8000-0000000000f2',
+                                                                   'd0100000-0000-4000-8000-0000000000f3']::uuid[]) x)
+     and si.reading ? 'factura' and not (si.reading->'factura' ? 'destinatario');
+end $$;
+
+-- N11 (20/11) · Los certificados de la asesoría P01 dependen de «hoy» (supabase/seeds/conta/
+-- seed_p01_despacho_staging.sql, «se recalcula cada vez que se pasa la semilla»), y la plantilla
+-- se sembró hace semanas: el que tenía que caducar «en 6 días» ya había caducado, y p01/despacho
+-- no encontraba «Certificado caduca en» (noche del 19/11). Aquí, en el carril, las mismas cuatro
+-- caducidades que pone la semilla, contadas desde hoy.
+do $$
+declare n int := current_setting('e2e.carril')::int; r record;
+begin
+  for r in select * from (values ('ce1', interval '300 days', 'active'), ('ce2', interval '6 days', 'active'),
+                                 ('ce3', interval '-10 days', 'expired'), ('ce4', interval '-3 days', 'expired')) v(sufijo, cuanto, estado) loop
+    update public.tax_certificate set valid_to = now() + r.cuanto, status = r.estado
+     where id = pg_temp.en_carril(('d5ac0000-0000-4000-8000-' || lpad(r.sufijo, 12, '0'))::uuid, n);
+  end loop;
+end $$;

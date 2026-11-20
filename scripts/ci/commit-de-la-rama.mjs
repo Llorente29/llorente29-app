@@ -8,12 +8,17 @@
 //   · validarCommit: 40 caracteres hexadecimales, que existe y que es el último de la rama;
 //     si no, una frase que dice qué se ha puesto y cuál es el último;
 //   · fraseSinEnsayo: si el real no encuentra su ensayo en verde, el título exacto que buscó
-//     y los ensayos que hay de esa rama (con su estado y su hora).
+//     y los ensayos que hay de esa rama (con su estado y su hora);
+//   · sigueSiendoElUltimo (N11, 20/11): el «Aplicar SQL en staging» de una rama, antes de aplicar
+//     nada de verdad, comprueba con validarCommit que su commit sigue siendo el último de la rama.
+//     El 19/11 el de un commit anterior de R esperó a su e2e (T9), acabó 82 s después que el del
+//     commit nuevo y dejó en staging la semilla vieja (runs 44610968533 y 44610813373).
 // Lo usa el primer job del workflow («commit»), antes de «guarda-diez»; las funciones son
 // puras (tests/unit/ci/commitDeLaRama.test.ts).
 //
 //   node scripts/ci/commit-de-la-rama.mjs validar     (RAMA, COMMIT; mira el último con git ls-remote)
 //   node scripts/ci/commit-de-la-rama.mjs sin-ensayo  (RAMA, BUSCADO, ENSAYOS=fichero con la lista de runs)
+//   node scripts/ci/commit-de-la-rama.mjs vigente     (RAMA, COMMIT; sale con 1 si ya no es el último)
 
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, readFileSync } from 'node:fs'
@@ -57,6 +62,20 @@ export function validarCommit({ rama, commit, ultimo, existe = () => true }) {
   return { ok: false, frase: `${PRINCIPIO} Has puesto: ${c}, que no es el último de «${r}» (después ha habido otro push)${yUltimo}` }
 }
 
+/**
+ * ¿Sigue siendo `commit` el último de la rama? Antes de aplicar algo de verdad desde una rama: si
+ * después ha habido otro push, este run es de un commit viejo y no aplica nada (lo aplicará el run
+ * del commit nuevo). La misma comprobación que validarCommit; solo cambia la frase.
+ */
+export function sigueSiendoElUltimo({ rama, commit, ultimo }) {
+  const r = validarCommit({ rama, commit, ultimo })
+  if (r.ok) return r
+  if (ultimo === null || ultimo === undefined || ultimo === '') {
+    return { ok: false, frase: `No he podido leer el último commit de «${String(rama ?? '').trim()}» · Este run no aplica nada` }
+  }
+  return { ok: false, frase: `Hay un commit más nuevo en la rama: ${ultimo} · Este run no aplica nada (es de ${String(commit).slice(0, 7)})` }
+}
+
 const hora = (iso) => {
   try {
     return new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso)).replace(',', '')
@@ -88,15 +107,24 @@ export function fraseSinEnsayo({ buscado, rama, runs, max = 8 }) {
 
 // ── Desde el workflow ──────────────────────────────────────────────────────────
 
+/** El último commit de la rama, del remoto (nulo si no existe o no se puede leer). */
+function ultimoDe(rama) {
+  if (!String(rama ?? '').trim()) return null
+  try { return execFileSync('git', ['ls-remote', 'origin', `refs/heads/${rama.trim()}`], { encoding: 'utf8' }).split('\t')[0].trim() || null } catch { return null }
+}
+
 function main() {
   const que = process.argv[2]
   const resumen = (t) => { if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${t}\n\n`) }
+  if (que === 'vigente') {
+    const r = sigueSiendoElUltimo({ rama: process.env.RAMA ?? '', commit: process.env.COMMIT ?? '', ultimo: ultimoDe(process.env.RAMA ?? '') })
+    console.log(r.frase)
+    if (!r.ok) { resumen(`⏭️ ${r.frase}`); console.log(`::notice::${r.frase}`); process.exit(1) }
+    return
+  }
   if (que === 'validar') {
     const rama = process.env.RAMA ?? ''
-    let ultimo = null
-    if (rama.trim()) {
-      try { ultimo = execFileSync('git', ['ls-remote', 'origin', `refs/heads/${rama.trim()}`], { encoding: 'utf8' }).split('\t')[0].trim() || null } catch { ultimo = null }
-    }
+    const ultimo = ultimoDe(rama)
     const existe = (sha) => {
       try { execFileSync('git', ['fetch', '-q', '--depth=1', 'origin', sha], { stdio: 'ignore' }); return true } catch { return false }
     }
@@ -114,7 +142,7 @@ function main() {
     console.log(`::error::${frase.split('\n')[0]}`)
     process.exit(1)
   }
-  console.error('Uso: node scripts/ci/commit-de-la-rama.mjs validar|sin-ensayo')
+  console.error('Uso: node scripts/ci/commit-de-la-rama.mjs validar|sin-ensayo|vigente')
   process.exit(2)
 }
 

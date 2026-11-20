@@ -335,11 +335,12 @@ test('Cuenta A: subir una factura con la lectura cortada dice que no ha entrado 
   test.skip(lado(page) === 'movil', 'Se sube una vez; en el móvil, la cámara solo se comprueba que está.')
   await entrarComo(page, CUENTA_A.email)
   const errores = vigilar(page)
-  // La lectura con el modelo no corre en staging: se corta a propósito para ver el aviso.
+  // La lectura con el modelo no corre en staging: se corta a propósito para ver el aviso
+  // (desde el E02, #723, la frase de la lectura caída: FRASE_CAIDA de _shared/lecturaFallo.ts).
   await page.route('**/functions/v1/ocr-albaran', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"lectura cortada por la prueba"}' }))
   await page.goto(`/conta/documentos?mes=${MES}`)
   await page.locator('input[data-prueba="subir-ficheros"]').setInputFiles('tests/conta/d01/facturas-inventadas/f01-mercancia.pdf')
-  await expect(page.getByRole('status').filter({ hasText: 'f01-mercancia.pdf' })).toContainText(/no ha entrado: no se ha podido leer/, { timeout: 30_000 })
+  await expect(page.getByRole('status').filter({ hasText: 'f01-mercancia.pdf' })).toContainText(/no ha entrado: Ahora mismo no puedo leer facturas\. No has perdido ninguna/, { timeout: 30_000 })
   expect(errores).toEqual([])
 })
 

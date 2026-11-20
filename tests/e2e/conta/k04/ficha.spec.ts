@@ -238,7 +238,7 @@ test('las dos que faltaban del K03: «N más ▾» abierto y el rótulo de un m�
   await entrarEnLaGestoria(page)
   const ver = page.getByRole('button', { name: 'Ver los botones' })
   if (await ver.isVisible()) await ver.click()
-  for (const [cinta, id] of [['Asientos', 'recibidas'], ['Asientos', 'bancos'], ['Asientos', 'emitidas'], ['Asientos', 'asientos'], ['Listados', 'sumas'],
+  for (const [cinta, id] of [['Asientos', 'recibidas'], ['Tesorería', 'bancos'], ['Asientos', 'emitidas'], ['Asientos', 'asientos'], ['Listados', 'sumas'],
     ['Listados', 'mayor'], ['Listados', 'balance'], ['Listados', 'pyg'], ['Listados', 'iva'], ['Definiciones', 'plan'], ['Definiciones', 'tablas']] as const) {
     await page.getByRole('tablist', { name: 'La cinta' }).getByRole('tab', { name: cinta }).click()
     await page.locator(`[data-boton="${id}"]`).click()

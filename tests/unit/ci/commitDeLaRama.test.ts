@@ -3,7 +3,8 @@
 // ha puesto y cuál es el último. Commits inventados.
 
 import { describe, expect, it } from 'vitest'
-import { fraseSinEnsayo, validarCommit } from '../../../scripts/ci/commit-de-la-rama.mjs'
+import { readFileSync } from 'node:fs'
+import { fraseSinEnsayo, sigueSiendoElUltimo, validarCommit } from '../../../scripts/ci/commit-de-la-rama.mjs'
 
 const ULTIMO = 'bd9167f9b2a3b52646336a2ea7224c190bd1b6f0'
 const VIEJO = '3b9aef1d9d0f1ad393813191f9aa98978a69e2a9'
@@ -68,5 +69,32 @@ describe('fraseSinEnsayo: el real dice qué ensayo buscó y cuáles hay de esa r
     expect(fraseSinEnsayo({ buscado: 'ensayo · x · y', rama: 'x', runs: [] })).toContain('De «x» no hay ningún ensayo.')
     expect(fraseSinEnsayo({ buscado: 'ensayo · x · y', rama: 'x', runs: [run('ensayo · x · y', { head_branch: 'x' })] }))
       .toContain('«ensayo · x · y» · en verde · 19/11 07:52, lanzado desde «x» (no cuenta)')
+  })
+})
+
+describe('sigueSiendoElUltimo (N11): un «Aplicar SQL en staging» viejo no pisa uno nuevo', () => {
+  it('su commit es el último de la rama: aplica', () => {
+    expect(sigueSiendoElUltimo({ rama: RAMA, commit: ULTIMO, ultimo: ULTIMO })).toEqual({ ok: true, frase: `El commit ${ULTIMO} es el último de «${RAMA}».` })
+  })
+  it('después ha habido otro push (lo del 19/11, runs 44610968533 y 44610813373): no aplica nada, y lo dice', () => {
+    expect(sigueSiendoElUltimo({ rama: RAMA, commit: VIEJO, ultimo: ULTIMO }))
+      .toEqual({ ok: false, frase: `Hay un commit más nuevo en la rama: ${ULTIMO} · Este run no aplica nada (es de 3b9aef1)` })
+  })
+  it('si no se puede leer el último de la rama, tampoco aplica (mejor no aplicar que pisar)', () => {
+    expect(sigueSiendoElUltimo({ rama: RAMA, commit: VIEJO, ultimo: null }))
+      .toEqual({ ok: false, frase: `No he podido leer el último commit de «${RAMA}» · Este run no aplica nada` })
+  })
+  it('el aplicar de staging lo comprueba con el cerrojo ya cogido, antes de cada sitio que aplica de verdad desde una rama', () => {
+    const w = readFileSync('.github/workflows/aplicar-staging-conta.yml', 'utf8')
+    const paso = (nombre: string) => w.slice(w.indexOf(`- name: ${nombre}`), w.indexOf('- name:', w.indexOf(`- name: ${nombre}`) + 10))
+    const deVerdad = paso('Lo que solo añade, de verdad (desde la rama)')
+    const cerrojo = deVerdad.indexOf('scripts/e2e/cerrojo.sh coger')
+    const comprueba = deVerdad.indexOf('node scripts/ci/commit-de-la-rama.mjs vigente')
+    expect(cerrojo).toBeGreaterThan(0)
+    expect(comprueba, 'después de coger el cerrojo').toBeGreaterThan(cerrojo)
+    expect(comprueba, 'antes de aplicar nada').toBeLessThan(deVerdad.indexOf('de-verdad.sh'))
+    const real = paso('La tanda de producción en staging (real-con-fallo o real)')
+    expect(real.indexOf('node scripts/ci/commit-de-la-rama.mjs vigente')).toBeGreaterThan(0)
+    expect(real.indexOf('node scripts/ci/commit-de-la-rama.mjs vigente')).toBeLessThan(real.indexOf('real-en-staging.sh'))
   })
 })

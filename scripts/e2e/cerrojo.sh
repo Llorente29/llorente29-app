@@ -28,14 +28,14 @@ es_cogido() { printf '%s\n' "$1" | grep -qx 'cogido'; }
 coger() {
   local i r otro
   for i in $(seq 1 "$INTENTOS"); do
-    r=$("$PSQL" "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 -v yo="$CERROJO_YO" -v minutos="$MINUTOS" <<'SQL'
+    r=$(timeout -k 10 "${CERROJO_PSQL_S:-30}" "$PSQL" "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 -v yo="$CERROJO_YO" -v minutos="$MINUTOS" <<'SQL'
 update e2e.cerrojo set quien = :'yo', desde = now(), hasta = now() + make_interval(mins => :'minutos'::int)
  where id = 1 and (quien is null or hasta < now() or quien = :'yo')
 returning 'cogido';
 SQL
     )
     if es_cogido "$r"; then echo "Cerrojo cogido ($CERROJO_YO) en el intento $i."; return 0; fi
-    otro=$("$PSQL" "$DB_URL" -X -q -A -t -c "select quien || ' · desde ' || to_char(desde at time zone 'Europe/Madrid', 'HH24:MI') || ' · caduca ' || to_char(hasta at time zone 'Europe/Madrid', 'HH24:MI') from e2e.cerrojo where id = 1")
+    otro=$(timeout -k 10 "${CERROJO_PSQL_S:-30}" "$PSQL" "$DB_URL" -X -q -A -t -c "select quien || ' · desde ' || to_char(desde at time zone 'Europe/Madrid', 'HH24:MI') || ' · caduca ' || to_char(hasta at time zone 'Europe/Madrid', 'HH24:MI') from e2e.cerrojo where id = 1")
     echo "Espera ($i de $INTENTOS): el cerrojo lo tiene ${otro:-nadie}."
     sleep "$PAUSA"
   done
@@ -45,7 +45,7 @@ SQL
 
 soltar() {
   local r
-  r=$("$PSQL" "$DB_URL" -X -q -A -t -v yo="$CERROJO_YO" <<'SQL'
+  r=$(timeout -k 10 "${CERROJO_PSQL_S:-30}" "$PSQL" "$DB_URL" -X -q -A -t -v yo="$CERROJO_YO" <<'SQL'
 update e2e.cerrojo set quien = null, desde = null, hasta = null where id = 1 and quien = :'yo'
 returning 'soltado';
 SQL

@@ -14,21 +14,34 @@ select 'pid ' || pg_backend_pid();
 -- Micro, W02 17/10) el tercer trozo espera a que acabe uno, no cae en rojo.
 -- 0 solo si se acaba la espera. Escribe «carril-espera» la primera vez que no
 -- hay ninguno, para que el log diga que estuvo en cola.
-create function pg_temp.coger_carril(p_max int, p_espera interval) returns int
+-- N11 (20/11): libre es SIN cerrojo Y sin reserva viva en e2e_carril.carril (reserva_carril.sql):
+-- tras un reinicio de staging los cerrojos se pierden, las reservas no. Primero la reserva y solo
+-- después el cerrojo (el case lo obliga), para no quedarse con el cerrojo de uno ajeno. Al cogerlo
+-- escribe la suya, en la misma llamada: nadie más puede coger ese número mientras tenga el cerrojo.
+create function pg_temp.coger_carril(p_max int, p_espera interval, p_id uuid, p_quien text, p_caduca int) returns int
 language plpgsql as $f$
 declare n int; hasta timestamptz := clock_timestamp() + p_espera;
 begin
   loop
-    select c into n from generate_series(1, p_max) c where pg_try_advisory_lock(4203, c) limit 1;
-    if n is not null then return n; end if;
+    select c into n from generate_series(1, p_max) c
+     where case when exists (select 1 from e2e_carril.carril r
+                              where r.numero = c and r.latido_at >= clock_timestamp() - make_interval(secs => p_caduca))
+                then false else pg_try_advisory_lock(4203, c) end
+     limit 1;
+    if n is not null then
+      insert into e2e_carril.carril (numero, id, quien, desde, latido_at) values (n, p_id, p_quien, clock_timestamp(), clock_timestamp())
+        on conflict (numero) do update set id = excluded.id, quien = excluded.quien, desde = excluded.desde, latido_at = excluded.latido_at;
+      return n;
+    end if;
     if clock_timestamp() >= hasta then return 0; end if;
     perform pg_sleep(15);
   end loop;
 end $f$;
 select 'carril-espera ' || :max where not exists (
   select 1 from generate_series(1, :max) c
-   where not exists (select 1 from pg_locks l where l.locktype = 'advisory' and l.classid = 4203 and l.objid = c and l.granted));
-select 'carril ' || pg_temp.coger_carril(:max, :'espera');
+   where not exists (select 1 from pg_locks l where l.locktype = 'advisory' and l.classid = 4203 and l.objid = c and l.granted)
+     and not exists (select 1 from e2e_carril.carril r where r.numero = c and r.latido_at >= now() - make_interval(secs => :'caduca_carril'::int)));
+select 'carril ' || pg_temp.coger_carril(:max, :'espera', :'id'::uuid, :'dueno', :'caduca_carril'::int);
 -- Y aquí se queda: carril.sh le añade latido.sql, tramos de 20 s durante
 -- dos horas. A tramos y no de un tirón porque, con el pooler de Supabase, si
 -- el cliente muere la consulta en marcha SIGUE en el servidor (medido el 16/10:

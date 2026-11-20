@@ -25,7 +25,7 @@
 // acabar; sin carril se salta y lo dice. Capturas: docs/conta/capturas/e03/.
 
 import { mkdirSync, readFileSync } from 'node:fs'
-import { test, expect, type Page, type Route } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { CARRIL, CUENTA_A, STAGING_URL, anonKey, entrarComo, type Sesion } from '../sesion'
 import { rest } from '../api'
 
@@ -34,7 +34,6 @@ const PDF = 'tests/conta/d01/facturas-inventadas/semilla-f-2026-1022.pdf'
 const OTRA = 'Prueba Segunda Takeaway, S.L.'
 const EMPRESA = 'Taberna de Prueba Norte, S.L.'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1456) < 768 ? 'movil' : 'ordenador')
-const json = (r: Route, cuerpo: unknown) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(cuerpo) })
 
 interface Preparadas {
   cuenta: string; empresa: string; otra_empresa: string
@@ -88,33 +87,27 @@ test.describe('E03 · ¿de quién es esta factura?', () => {
   test.use({ actionTimeout: 20_000 })
   test.skip(!CARRIL, 'Escribe (pasa y valida facturas): solo en un carril, que se borra al acabar.')
 
-  test('a nombre de la otra sociedad: la pregunta, «Pasarla a …» y aparece en la otra con su PDF', async ({ page }) => {
+  // E04 (#730, 18/11): la de otra sociedad de la cuenta ya no pregunta: se pasa sola al leerla
+  // (_conta_pasar_sola). Lo que esta prueba miraba de ella se mira donde queda: en la otra
+  // sociedad, con su llegada y su PDF, con la línea verde del E04 y sin la pregunta. La pregunta
+  // con «Pasarla a …» y «Deshacer» los prueba e04/pasada-sola.spec.ts.
+  test('a nombre de la otra sociedad: se pasa sola (E04) y aparece en la otra con su PDF', async ({ page }) => {
     await ponerElTamano(page)
     const s = await entrarComo(page, CUENTA_A.email)
     const p = await preparar(s, page)
     try {
-      await page.goto(`/conta/documentos/recibidas/${p.otra.id}`)
-      const pregunta = page.locator('[data-prueba="de-quien"]')
-      await expect(pregunta).toContainText(`Esta factura va a nombre de ${OTRA}, no de ${EMPRESA}`)
-      await expect(pregunta.getByRole('button', { name: 'Pasarla a Prueba Segunda Takeaway' })).toBeVisible()
-      await expect(pregunta.getByRole('button', { name: 'Es de esta sociedad' })).toBeVisible()
-      // Los dos del mismo tamaño (en el ordenador, uno al lado del otro; en el móvil, uno debajo del otro).
-      const [a, b] = await Promise.all([pregunta.getByRole('button').nth(0).boundingBox(), pregunta.getByRole('button').nth(1).boundingBox()])
-      expect(Math.abs((a?.width ?? 0) - (b?.width ?? 0)), 'los dos botones, del mismo ancho').toBeLessThan(2)
-      await expect(page.locator('[data-validar-y-siguiente]').first()).toBeDisabled()
-      await capturar(page, 'otra-sociedad-pregunta')
-      await pregunta.getByRole('button', { name: 'Pasarla a Prueba Segunda Takeaway' }).click()
-      await expect(page.getByText(`Pasada a ${OTRA}, con su PDF. Ya no está en esta lista.`).first()).toBeVisible({ timeout: 30_000 })
-      await capturar(page, 'otra-sociedad-pasada')
       // En la base: en la otra sociedad, y su llegada con ella.
-      const f = await rest<{ company_id: string; raw_document_url: string }[]>(s, 'GET', `supplier_invoice?select=company_id,raw_document_url&account_id=eq.${p.cuenta}&id=eq.${p.otra.id}`)
-      expect(f.datos[0]?.company_id).toBe(p.otra_empresa)
+      await expect.poll(async () => {
+        const f = await rest<{ company_id: string }[]>(s, 'GET', `supplier_invoice?select=company_id&account_id=eq.${p.cuenta}&id=eq.${p.otra.id}`)
+        return f.datos[0]?.company_id ?? null
+      }, { timeout: 30_000, message: 'pasada sola a la otra sociedad' }).toBe(p.otra_empresa)
       const l = await rest<{ company_id: string }[]>(s, 'GET', `document_inbox?select=company_id&account_id=eq.${p.cuenta}&supplier_invoice_id=eq.${p.otra.id}`)
-      expect(l.datos[0]?.company_id).toBe(p.otra_empresa)
-      // En la pantalla de la otra sociedad: su ficha, ya sin pregunta, con su PDF.
+      if (l.datos.length) expect(l.datos[0]?.company_id).toBe(p.otra_empresa)
+      // En la pantalla de la otra sociedad: su ficha, con la línea verde y sin pregunta, con su PDF.
       await conEmpresa(page, p.cuenta, p.otra_empresa)
       await page.goto(`/conta/documentos/recibidas/${p.otra.id}`)
-      await expect(page.getByText(p.otra.numero).first()).toBeVisible()
+      await expect(page.getByText(p.otra.numero).first()).toBeVisible({ timeout: 30_000 })
+      await expect(page.locator('[data-prueba="pasada-sola"]')).toContainText(`Pasada sola desde ${EMPRESA}: va a nombre de ${OTRA} (B00000000).`, { timeout: 30_000 })
       await expect(page.locator('[data-prueba="de-quien"]')).toHaveCount(0)
       // Su PDF, el mismo: en la página (en el móvil va en su pestaña).
       await expect(page.locator('[data-prueba="papel-pdf"]').first()).toBeAttached({ timeout: 30_000 })
@@ -158,29 +151,18 @@ test.describe('E03 · ¿de quién es esta factura?', () => {
     } catch (e) { await contarPantalla(page, 'fuera'); throw e }
   })
 
+  // La lista la da ya la base (la 1835 es real): sin simularla. La de otra sociedad se pasa sola
+  // (E04); la que sigue preguntando es la de alguien de fuera.
   test('en la lista: «Por aclarar» con «¿De quién es?»', async ({ page }) => {
     await ponerElTamano(page)
     const s = await entrarComo(page, CUENTA_A.email)
     const p = await preparar(s, page)
     try {
       await conEmpresa(page, p.cuenta, p.empresa)
-      // Hasta el real, la lista de staging es la de antes (la 1835 va en ROLLBACK): se le añade lo que la 1835 pone.
-      await page.route(/\/rest\/v1\/rpc\/conta_documentos_recibidos(\?|$)/, async (r) => {
-        const real = await r.fetch()
-        const d = await real.json() as { filas: Record<string, unknown>[]; cifras: Record<string, number> }
-        let nuevas = 0
-        const filas = d.filas.map((f) => {
-          if (f.id !== p.otra.id || f.de_quien) return f
-          nuevas += f.estado === 'por_aclarar' ? 0 : 1
-          return { ...f, estado: 'por_aclarar', de_quien: { caso: 'otra_sociedad', sociedad: 'Prueba Segunda Takeaway' }, porque: `Esta factura va a nombre de ${OTRA}, no de ${EMPRESA}` }
-        })
-        await json(r, { ...d, filas, cifras: { ...d.cifras, por_aclarar: (d.cifras.por_aclarar ?? 0) + nuevas, para_mirar: Math.max(0, (d.cifras.para_mirar ?? 0) - nuevas) } })
-      })
-      await page.goto(`/conta/documentos?ver=por-aclarar&q=${encodeURIComponent(p.otra.numero)}`)
+      await page.goto(`/conta/documentos?ver=por-aclarar&q=${encodeURIComponent(p.fuera.numero)}`)
       await expect(page.getByRole('heading', { name: 'Facturas recibidas', level: 1 })).toBeVisible()
       await expect(page.getByText('¿De quién es?').first()).toBeVisible({ timeout: 30_000 })
       await capturar(page, 'lista-de-quien-es')
-      await page.unrouteAll({ behavior: 'ignoreErrors' })
     } catch (e) { await contarPantalla(page, 'lista'); throw e }
   })
 })
