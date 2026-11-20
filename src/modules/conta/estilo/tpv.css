@@ -121,7 +121,8 @@
   background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-control); border-radius: var(--s-radio-campo);
   font: inherit; color: var(--s-tinta); text-align: left; cursor: pointer;
 }
-.tpv-elegir-boton > :first-child { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* R07 · Nada se corta: una cuenta larga se lee entera, en dos líneas si hace falta. */
+.tpv-elegir-boton > :first-child { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; padding: var(--s-1) 0; }
 .tpv-elegir-boton[data-falta] { border-color: var(--s-falta); color: var(--s-falta); }
 .tpv-elegir .s-hoja-buscar { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; }
 .tpv-nota { margin: 0; color: var(--s-apoyo); font-size: var(--s-t-s); }

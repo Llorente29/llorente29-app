@@ -130,8 +130,10 @@ test('X08 · contra staging: dos días del TPV validados salen como una factura 
     await boton.click()
     await page.getByRole('dialog').getByRole('button', { name: /^Validar \d+ cierres?$/ }).click()
     const resultado = page.locator('[data-prueba="resultado-validar"]')
-    await expect(resultado.getByText(/^✓ TPV · Revo · 9 nov: validado/)).toBeVisible({ timeout: 300_000 })
-    await expect(resultado.getByText(/^✓ TPV · Revo · 10 nov: validado/)).toBeVisible({ timeout: 60_000 })
+    // Solo los que no lo estaban: en el mismo run, el R05 puede haber validado ya el 09/11 (la misma empresa del carril).
+    const faltaban = estados.filter((d) => d.estado !== 'validado').map((d) => Number(d.dia.slice(8, 10)))
+    for (const [i, d] of faltaban.entries())
+      await expect(resultado.getByText(new RegExp(`^✓ TPV · Revo · ${d} nov: validado`))).toBeVisible({ timeout: i ? 60_000 : 300_000 })
   }
   const validados = await rpc<{ dia: string; estado: string }[]>(s, 'conta_tpv_dias', { p_company: EMPRESA_A, p_desde: '2026-11-09', p_hasta: '2026-11-10' })
   expect(validados.map((d) => d.estado), 'los dos días, validados').toEqual(['validado', 'validado'])
