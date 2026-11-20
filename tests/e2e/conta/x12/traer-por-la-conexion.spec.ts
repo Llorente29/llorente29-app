@@ -121,7 +121,7 @@ for (const tam of TAMANOS) {
       await conectar(s, empresa)
       await page.addInitScript(([clave, valor]) => { window.localStorage.setItem(clave, valor) }, [`folvy.conta.empresa.${CUENTA_A.id}`, empresa] as const)
       const pedidas: PedirPagina[] = []
-      await erp10DeMentira(page, nif, pedidas, { mes: '2026-02', ms: 4000 })
+      await erp10DeMentira(page, nif, pedidas, { mes: '2026-02', ms: 12_000 })
 
       // 1 · «Traerlo de ERP10», al lado de «Elegir ficheros», con el mismo peso, en «Empresa nueva».
       await page.goto(RUTA, { waitUntil: 'load' })
