@@ -70,12 +70,16 @@ export type SalidoHoy = {
 
 export type FilaHoy = { entryId: string; hora: string; numero: string; concepto: string; tono: 'verde' | 'gris' | 'ambar'; estado: string; como: string }
 
-const hora = (iso: string) => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
+/** La hora en Madrid; sin hora (o una que no lo es), «—»: una fila rara nunca tumba la pantalla. */
+const hora = (iso: string | null | undefined) => {
+  const d = new Date(iso ?? '')
+  return Number.isNaN(d.getTime()) ? '—' : new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' }).format(d)
+}
 
 /** Lo que no ha salido, arriba (lo más reciente primero); después lo de hoy, de lo más reciente a lo más antiguo. Nada se esconde (regla 7). */
 export function listaDeHoy(xs: readonly SalidoHoy[]): FilaHoy[] {
   const orden = (x: SalidoHoy) => (x.estado === 'no_pudo' ? 0 : x.estado === 'enviando' ? 1 : 2)
-  return [...xs].sort((a, b) => orden(a) - orden(b) || b.cuando.localeCompare(a.cuando)).map((x) => ({
+  return [...xs].sort((a, b) => orden(a) - orden(b) || String(b.cuando ?? '').localeCompare(String(a.cuando ?? ''))).map((x) => ({
     entryId: x.entryId, hora: hora(x.cuando), numero: x.numero, concepto: x.concepto,
     tono: x.estado === 'en_erp10' ? 'verde' : x.estado === 'no_pudo' ? 'ambar' : 'gris',
     estado: x.estado === 'en_erp10' ? `En ERP10 · asiento ${x.documento}` : x.estado === 'enviando' ? 'Saliendo a ERP10…' : `No ha salido: ${sinPunto(x.motivo ?? 'sin motivo')}`,

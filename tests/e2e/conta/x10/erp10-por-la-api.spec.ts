@@ -133,7 +133,7 @@ async function erp10Escribe(page: Page, s: Sesion, empresas: Record<string, Empr
   // conta_erp10_envio la escribe solo el servidor (aquí, el sustituto): la pantalla la lee de lo que este ha apuntado.
   await page.route((u) => u.pathname.endsWith('/rest/v1/conta_erp10_envio'), (route: Route) => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify([...filas.values()].filter((x) => x.estado === 'en_erp10').map((x) => ({ ...x, clase: x.clase ?? 'recibida', creado_en: x.creado_en ?? new Date().toISOString() }))),
+    body: JSON.stringify([...filas.values()].filter((x) => x.estado === 'en_erp10').map((x) => ({ ...x, clase: x.clase ?? 'recibida', creado_en: x.creado_en ?? new Date().toISOString(), cambiado_en: x.creado_en ?? new Date().toISOString() }))),
   }))
   await page.route('**/functions/v1/conta-erp10-escribir', async (route: Route) => {
     const b = route.request().postDataJSON() as { company_id: string; mes: string; quien: string | null }

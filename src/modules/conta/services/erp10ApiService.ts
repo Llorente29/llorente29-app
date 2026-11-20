@@ -324,7 +324,7 @@ export async function leerSalidoHoy(accountId: string, companyId: string): Promi
     return {
       entryId: String(x.entry_id), numero: je ? `${je.series}/${je.number ?? '—'}` : '—', concepto: str(je?.concept) ?? '',
       estado: x.estado as SalidoHoy['estado'], documento: x.erp10_documento == null ? null : Number(x.erp10_documento), motivo: str(x.motivo) ?? null,
-      intentos: Number(x.intentos ?? 1), como: (x.como as SalidoHoy['como']) ?? null, cuando: String(x.cambiado_en),
+      intentos: Number(x.intentos ?? 1), como: (x.como as SalidoHoy['como']) ?? null, cuando: str(x.cambiado_en) ?? '',
     }
   })
 }

@@ -52,6 +52,9 @@ describe('X10f · la lista de hoy y la barra', () => {
       ['2/3', '11:00', 'No ha salido: Falla', 'Sola'], ['2/2', '11:00', 'En ERP10 · asiento 11', 'A mano'], ['2/1', '10:00', 'En ERP10 · asiento 10', 'Sola'],
     ])
   })
+  it('una fila sin hora no tumba la pantalla: «—»', () => {
+    expect(listaDeHoy([{ entryId: 'x', numero: '2/9', concepto: '', estado: 'en_erp10', documento: 9, motivo: null, intentos: 1, como: null, cuando: '' }]).map((x) => [x.hora, x.como])).toEqual([['—', '—']])
+  })
   it('la barra: el número en ámbar, y nada con cero', () => {
     expect(fraseAtascados(0)).toBeNull()
     expect(fraseAtascados(1)).toEqual({ fuerte: '1 asiento', resto: 'lleva más de una hora sin salir a ERP10' })
