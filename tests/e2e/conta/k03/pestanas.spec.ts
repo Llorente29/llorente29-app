@@ -59,7 +59,7 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await cargada(page, 'Recibidas')
     const buscar = zonaActiva(page).getByLabel('Buscar factura').first()
     await buscar.fill('Distribuciones')
-    await boton(page, 'Asientos', 'bancos')
+    await boton(page, 'Tesorería', 'bancos')
     await abierta(page, 'Bancos')
     await boton(page, 'Listados', 'sumas')
     await abierta(page, 'Sumas y saldos')

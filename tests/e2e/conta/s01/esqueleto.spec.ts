@@ -477,13 +477,17 @@ test('G03 · Ajustes › Tu empresa: el sector se cambia con su aviso antes y de
       /^Hecho: tu negocio es ahora del sector Gestoría o asesoría\. Ya salen: Clientes y cuotas/, 'g03-aviso-a-gestoria')
     await capturarSector(page, 'g03-ajustes-gestoria')
     await page.goto('/conta/ventas/facturas')
-    await expect(nombres(await paginas(page, 'Ventas'))).toHaveText(['Facturas', 'Cobros', 'Clientes y cuotas', 'Liquidaciones'])
+    // G04 (maqueta del 08/11): Clientes y cuotas ya no es una pestaña de Ventas, es su apartado (abajo).
+    await expect(nombres(await paginas(page, 'Ventas'))).toHaveText(['Facturas', 'Cobros', 'Liquidaciones'])
     await capturar(page, 'g03-menu-gestoria')
     await cerrarCajon(page)
     // Y su dirección ya abre la pantalla (sin el aviso).
     await page.goto('/conta/ventas/clientes-y-cuotas')
     await expect(page.locator('.cx-hueso')).toHaveCount(0, { timeout: 30_000 })
     await expect(page.getByText('Esto sale en las empresas del sector Gestoría.', { exact: false })).toHaveCount(0)
+    // Y sale su apartado en el menú, con sus dos páginas (G04).
+    await expect(nombres(await paginas(page, 'Clientes y cuotas'))).toHaveText(['Clientes', 'Tarifa y paquetes'])
+    await cerrarCajon(page)
 
     // En compacta, la misma tarjeta (cómoda es la de serie; el móvil, su proyecto).
     if (lado(page) === 'ordenador') {

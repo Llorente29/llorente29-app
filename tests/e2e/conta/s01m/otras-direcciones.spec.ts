@@ -24,7 +24,9 @@ test('S01m · un centro con otras direcciones con las que lo nombran las platafo
   page.on('pageerror', (e) => errores.push(e.message))
   await page.addInitScript(() => { window.sessionStorage.setItem('producto.marca', 'sumied') })
   await entrarComo(page, SOLA)
-  const centro = `Local ${marca()} S01m`
+  // N11: «Centro», no «Local»: el centro se queda en el carril y laboral/ls1-sumied comprueba que en
+  // Sumied ninguna pantalla de Laboral dice «local» (la noche del 19/11, 19 veces este nombre).
+  const centro = `Centro ${marca()} S01m`
   await page.goto('/conta/laboral/centros', { timeout: 30_000 })
   await expect(page.locator('[data-prueba="laboral-centros"]')).toBeVisible({ timeout: 30_000 })
   await page.locator('[data-prueba="centro-nuevo"]').click()
