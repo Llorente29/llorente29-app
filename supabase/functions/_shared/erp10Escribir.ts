@@ -22,12 +22,12 @@
 //   3. Lo que pasa se apunta en el acto: en ERP10 con su número, o no pudo con su motivo.
 //   4. El PDF, después: si no se sube, la factura sigue en ERP10 y se dice.
 
-import { descripcionRecibida } from './diezTexto.ts'
-import type { EmitidaParaApi, RecibidaParaApi } from './erp10Ficheros.ts'
+import { descripcionRecibida, textoDiez } from './diezTexto.ts'
+import type { AsientoParaApi, EmitidaParaApi, RecibidaParaApi } from './erp10Ficheros.ts'
 
 // X10c: la recibida y la emitida, como las lee la salida a ERP10 (erp10Ficheros.ts), con las cuentas
 // de ERP10 y los importes en céntimos. Las arma el servidor desde la base (erp10DesdeLaBase.ts).
-export type { EmitidaParaApi, RecibidaParaApi }
+export type { AsientoParaApi, EmitidaParaApi, RecibidaParaApi }
 
 /** Una cuenta que la salida da por nueva (ERP10 no la tiene): se da de alta si falta. */
 export type CuentaNueva = { codigo: string; nombre: string; nif: string | null }
@@ -35,6 +35,8 @@ export type CuentaNueva = { codigo: string; nombre: string; nif: string | null }
 export const SERIE_RECIBIDAS = '2'
 /** X10c · Las emitidas: la serie 1 de Diez (C04b R13, medida en la C0009: TipoAsiento 1, TipoFactura 1). */
 export const SERIE_EMITIDAS = '1'
+/** X10d · Los asientos: la serie 1, la misma que lleva el fichero de asientos del Excel (X07, filasAsiento). */
+export const SERIE_ASIENTOS = '1'
 const MESES_BUSQUEDA = 13
 const e = (cent: number) => Math.round(cent) / 100
 const aaaammdd = (iso: string) => Number(iso.slice(0, 10).replaceAll('-', ''))
@@ -138,7 +140,7 @@ export type Envio = {
 
 export interface PuertoEscribir {
   /** conta_erp10_envio_tomar: coge el asiento (una sola sentencia). */
-  tomar(entryId: string, clase: 'recibida' | 'emitida'): Promise<{ tomado: boolean; envio: Envio }>
+  tomar(entryId: string, clase: 'recibida' | 'emitida' | 'asiento'): Promise<{ tomado: boolean; envio: Envio }>
   /** Apunta lo que ha pasado en la fila del asiento. */
   poner(id: string, cambios: Partial<Envio>): Promise<void>
   /** El PDF de la factura (lo guardado en Sumied). */
@@ -149,14 +151,19 @@ export interface PuertoEscribir {
     facturasDelMes(aaaa_mm: string): Promise<Record<string, unknown>[]>
     altaFactura(fd: Record<string, unknown>): Promise<Record<string, unknown>>
     subirDocumento(d: { Ejercicio: string; Serie: string; Documento: number; NombreArchivo: string; Archivo: string }): Promise<{ status: number; motivo: string | null }>
+    /** X10d · Los apuntes (asientos) de un mes, y el alta de un asiento. */
+    apuntesDelMes?(aaaa_mm: string): Promise<{ Ejercicio?: string; Serie?: string; Documento?: number; TipoAsiento?: number; Fecha?: number; Detalles?: { Cuenta?: string; Debe?: number; Haber?: number }[] }[]>
+    altaApunte?(ap: Record<string, unknown>): Promise<Record<string, unknown>>
   }
+  /** X10d · Los números de ERP10 que ya son de otro asiento de Sumied (para no enlazar un asiento a su gemelo). */
+  usados?(entryId: string): Promise<Set<string>>
   hoy: string
 }
 
 export type Resultado = {
   entryId: string; numero: string
-  /** X10c */
-  clase?: 'recibida' | 'emitida'
+  /** X10c; X10d, también asiento. */
+  clase?: 'recibida' | 'emitida' | 'asiento'
   /** en_erp10: ha entrado ahora (o se ha enlazado); ya_estaba: entró antes; en_marcha: otro envío la tiene; no_pudo: con su porqué. */
   estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'
   ejercicio?: string; serie?: string; documento?: number; enlazada?: boolean
@@ -252,4 +259,85 @@ async function sacarFactura(x: Pedida, cuentasNuevas: readonly CuentaNueva[], pd
     await p.poner(v.id, { pdf: estadoPdf, motivo: motivoPdf })
   }
   return { ...base, estado: 'en_erp10', ejercicio, serie, documento, enlazada, pdf: estadoPdf, sinApuntar: true, ...(motivoPdf ? { porque: motivoPdf } : {}) }
+}
+
+// ── X10d · Los asientos ─────────────────────────────────────────────────────────────
+
+const cent = (x: unknown) => Math.round(Number(x ?? 0) * 100)
+/** Las líneas como se comparan: cuenta, debe y haber en céntimos, sin orden (como esElMismoApunte de Diez). */
+const firma = (xs: readonly { Cuenta?: string; Debe?: number; Haber?: number }[]) =>
+  xs.filter((l) => cent(l.Debe) !== 0 || cent(l.Haber) !== 0).map((l) => `${String(l.Cuenta ?? '').trim()}:${cent(l.Debe)}:${cent(l.Haber)}`).sort().join('|')
+
+/**
+ * El asiento de ERP10 (ApunteSimplificado, POST /api/apuntes/add) de un asiento de Sumied; o por
+ * qué no sale por aquí. Una línea por apunte (un apunte con debe y haber a la vez, en dos, como el
+ * Excel), con las cuentas de ERP10, la serie de asientos del Excel y el concepto en 40 caracteres.
+ */
+export function asientoErp10(x: AsientoParaApi): { apunte: Record<string, unknown> } | { porque: string } {
+  const vivos = x.apuntes.filter((l) => l.debe !== 0 || l.haber !== 0)
+  if (vivos.length < 2) return { porque: 'No tiene dos apuntes con importe. Míralo en Sumied.' }
+  if (vivos.some((l) => l.debe < 0 || l.haber < 0)) return { porque: 'Lleva un importe en negativo, y ERP10 los quiere en positivo. Métela a mano en ERP10.' }
+  const d = vivos.reduce((t, l) => t + l.debe, 0), h = vivos.reduce((t, l) => t + l.haber, 0)
+  if (d !== h) return { porque: `No cuadra: ${e(d)} al debe y ${e(h)} al haber.` }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(x.fecha)) return { porque: 'El asiento no tiene fecha.' }
+  const concepto = textoDiez(vivos.find((l) => l.concepto.trim())?.concepto ?? `Asiento ${x.numero}`)
+  const lineas = vivos.flatMap((l) => [
+    ...(l.debe ? [{ Cuenta: l.cuenta, Debe: e(l.debe), Haber: 0, Descripcion: textoDiez(l.concepto || concepto) }] : []),
+    ...(l.haber ? [{ Cuenta: l.cuenta, Debe: 0, Haber: e(l.haber), Descripcion: textoDiez(l.concepto || concepto) }] : []),
+  ])
+  return {
+    apunte: {
+      Ejercicio: x.fecha.slice(0, 4), Serie: SERIE_ASIENTOS, Fecha: aaaammdd(x.fecha), Descripcion: concepto,
+      Detalles: lineas.map((l, i) => ({ Linea: i + 1, ...l })),
+    },
+  }
+}
+
+/**
+ * X10d · Saca un asiento a ERP10, sin que pueda salir dos veces: lo coge, da de alta las cuentas que
+ * falten, busca en ERP10 uno general del mismo día con las mismas líneas (sin los que ya son de otro
+ * asiento de Sumied: los gemelos) y lo enlaza, o lo escribe; su número se apunta en el acto.
+ */
+export async function sacarAsiento(x: AsientoParaApi, cuentasNuevas: readonly CuentaNueva[], p: PuertoEscribir): Promise<Resultado> {
+  const base = { entryId: x.entryId, numero: x.numero, clase: 'asiento' as const }
+  const hecho = asientoErp10(x)
+  if ('porque' in hecho) return { ...base, estado: 'no_pudo', porque: hecho.porque }
+  if (!p.erp10.apuntesDelMes || !p.erp10.altaApunte) return { ...base, estado: 'no_pudo', porque: 'Esta conexión no sabe escribir asientos.' }
+  const t = await p.tomar(x.entryId, 'asiento')
+  const v = t.envio
+  if (!t.tomado) {
+    if (v.estado === 'en_erp10') return { ...base, estado: 'ya_estaba', ejercicio: v.erp10_ejercicio ?? undefined, serie: v.erp10_serie ?? undefined, documento: v.erp10_documento ?? undefined, enlazada: v.enlazada, pdf: null, sinApuntar: !v.lote_id }
+    return { ...base, estado: 'en_marcha', porque: 'Otro envío lo está metiendo en ERP10 ahora mismo (otra pestaña u otro clic). Espera un momento y vuelve a mirar.' }
+  }
+  const ap = hecho.apunte
+  const detalles = ap.Detalles as { Cuenta: string; Debe: number; Haber: number }[]
+  let ejercicio = String(ap.Ejercicio), serie = String(ap.Serie), documento: number, enlazada = false
+  try {
+    const usa = new Set(detalles.map((l) => l.Cuenta))
+    for (const c of cuentasNuevas.filter((k) => usa.has(k.codigo))) {
+      if (!(await p.erp10.tieneSubcuenta(c.codigo))) await p.erp10.crearSubcuenta({ Codigo: c.codigo, Descripcion: c.nombre, NIF: c.nif })
+    }
+    const usados = p.usados ? await p.usados(x.entryId) : new Set<string>()
+    const f = firma(detalles)
+    const vistos = new Map<string, { Ejercicio?: string; Serie?: string; Documento?: number }>()
+    for (const d of await p.erp10.apuntesDelMes(x.fecha.slice(0, 7))) {
+      if (Number(d.TipoAsiento ?? 0) !== 0 || Number(d.Fecha) !== Number(ap.Fecha) || firma(d.Detalles ?? []) !== f) continue
+      const k = `${d.Serie ?? ''}/${d.Documento ?? ''}`
+      if (!usados.has(k)) vistos.set(`${d.Ejercicio ?? ''}|${k}`, d)
+    }
+    const ya = [...vistos.values()]
+    if (ya.length > 1) throw new Error(`Hay ${ya.length} asientos iguales del mismo día en ERP10: no se toca nada. Míralo en ERP10.`)
+    if (ya.length === 1) {
+      ejercicio = String(ya[0].Ejercicio ?? ejercicio); serie = String(ya[0].Serie ?? serie); documento = Number(ya[0].Documento); enlazada = true
+    } else {
+      const creado = await p.erp10.altaApunte(ap)
+      ejercicio = String(creado.Ejercicio ?? ejercicio); serie = String(creado.Serie ?? serie); documento = Number(creado.Documento)
+    }
+  } catch (err) {
+    const porque = mensaje(err)
+    await p.poner(v.id, { estado: 'no_pudo', motivo: porque })
+    return { ...base, estado: 'no_pudo', porque }
+  }
+  await p.poner(v.id, { estado: 'en_erp10', erp10_ejercicio: ejercicio, erp10_serie: serie, erp10_documento: documento, enlazada, motivo: null })
+  return { ...base, estado: 'en_erp10', ejercicio, serie, documento, enlazada, pdf: null, sinApuntar: true }
 }

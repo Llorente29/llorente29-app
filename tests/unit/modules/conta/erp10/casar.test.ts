@@ -40,4 +40,11 @@ describe('casar factura a factura', () => {
     const r = casarFacturas(ENVIOS.slice(0, 2), [doc(101, [['62900001', 10000], ['47200021', 2100], ['40000001', -12100]])], BASE)
     expect(frasesCasadas(r)).toMatchObject({ bien: false, resumen: 'Factura a factura: 1 de 2 están en ERP10 igual; 1 no.' })
   })
+  it('X10d · los asientos: con su número de Sumied, y «asiento a asiento»', () => {
+    const r = casarFacturas([{ entryId: 'a-1', clase: 'asiento', serie: '1', documento: 5000 }], [{ serie: '1', documento: 5000, lineas: [{ cuenta: '62900001', importe: 10000 }, { cuenta: '47200021', importe: 2100 }, { cuenta: '40000001', importe: -12100 }] }], BASE)
+    expect(r).toMatchObject([{ numero: '2/1', estado: 'igual', clase: 'asiento' }])
+    expect(frasesCasadas(r).resumen).toBe('Asiento a asiento: el que salió por la conexión está en ERP10 con su número, igual.')
+    const no = casarFacturas([{ entryId: 'a-1', clase: 'asiento', serie: '1', documento: 5001 }], [], BASE)
+    expect(no[0].detalle).toBe('Salió como 1/5001 y ERP10 ya no tiene ese número: lo han borrado o cambiado allí.')
+  })
 })

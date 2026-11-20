@@ -26,20 +26,23 @@ export const NO_SE_BORRA = 'Si algo sale mal, se corrige a mano en ERP10: Sumied
 const eur = (cent: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cent / 100)
 const n = (k: number, uno: string, varios: string) => `${new Intl.NumberFormat('es-ES').format(k)} ${k === 1 ? uno : varios}`
 
-const facturas = (r: number, e: number) => {
+const facturas = (r: number, e: number, a = 0) => {
   const p: string[] = []
   if (r) p.push(n(r, 'factura recibida', 'facturas recibidas'))
   if (e) p.push(r ? n(e, 'emitida', 'emitidas') : n(e, 'factura emitida', 'facturas emitidas'))
-  return p.join(' y ')
+  // X10d · y los asientos.
+  if (a) p.push(n(a, 'asiento', 'asientos'))
+  return p.length > 1 ? `${p.slice(0, -1).join(', ')} y ${p[p.length - 1]}` : p.join('')
 }
 
 /** Antes de escribir (regla 8, y lo de la respuesta X10 · 2): qué va a entrar, y que no se puede borrar. X10c: recibidas y emitidas. */
-export function queVaAEntrar(o: { recibidas: number; emitidas: number; mes: string; prueba?: { clase: 'recibida' | 'emitida'; numero: string; tercero: string; total: number } | null }): string {
+export function queVaAEntrar(o: { recibidas: number; emitidas: number; asientos?: number; mes: string; prueba?: { clase: 'recibida' | 'emitida' | 'asiento'; numero: string; tercero: string; total: number } | null }): string {
+  if (o.prueba?.clase === 'asiento') return `Va a entrar en ERP10 un solo asiento de ${o.mes}, para probar: el ${o.prueba.numero} de Sumied, ${o.prueba.tercero} (${eur(o.prueba.total)} €). ${NO_SE_BORRA}`
   if (o.prueba) return `Va a entrar en ERP10 una sola factura ${o.prueba.clase} de ${o.mes}, para probar: la ${o.prueba.numero} de ${o.prueba.tercero} (${eur(o.prueba.total)} €). ${NO_SE_BORRA}`
-  return `Van a entrar en ERP10: ${facturas(o.recibidas, o.emitidas)} de ${o.mes}. ${NO_SE_BORRA}`
+  return `Van a entrar en ERP10: ${facturas(o.recibidas, o.emitidas, o.asientos ?? 0)} de ${o.mes}. ${NO_SE_BORRA}`
 }
 
-type Salida = { numero: string; clase?: 'recibida' | 'emitida'; estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'; serie?: string; documento?: number; enlazada?: boolean; pdf?: 'subido' | 'fallo' | null; porque?: string }
+type Salida = { numero: string; clase?: 'recibida' | 'emitida' | 'asiento'; estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'; serie?: string; documento?: number; enlazada?: boolean; pdf?: 'subido' | 'fallo' | null; porque?: string }
 
 /** Después: lo que ha entrado (con sus números de ERP10), lo que ya estaba y lo que no ha podido, con su porqué. */
 export function loQueHaEntrado(xs: readonly Salida[], mes: string): { texto: string; bien: boolean } {
@@ -54,9 +57,12 @@ export function loQueHaEntrado(xs: readonly Salida[], mes: string): { texto: str
   }
   const partes: string[] = []
   if (nuevas.length) {
-    const conPdf = nuevas.every((x) => x.pdf === 'subido') ? (nuevas.length === 1 ? ', con su PDF' : ', con sus PDF') : ''
+    const facturasNuevas = nuevas.filter((x) => x.clase !== 'asiento')
+    const conPdf = facturasNuevas.length && facturasNuevas.every((x) => x.pdf === 'subido') ? (facturasNuevas.length === 1 ? ', con su PDF' : ', con sus PDF') : ''
     const r = nuevas.filter((x) => (x.clase ?? 'recibida') === 'recibida').length
-    partes.push(`Han entrado en ERP10 ${facturas(r, nuevas.length - r)} de ${mes} (${nums(nuevas)})${conPdf}.`)
+    const a = nuevas.filter((x) => x.clase === 'asiento').length
+    const conPdfF = nuevas.some((x) => x.clase !== 'asiento') ? conPdf : ''
+    partes.push(`Han entrado en ERP10 ${facturas(r, nuevas.length - r - a, a)} de ${mes} (${nums(nuevas)})${conPdfF}.`)
   }
   if (enlazadas.length) partes.push(`${n(enlazadas.length, 'ya estaba', 'ya estaban')} en ERP10 (${nums(enlazadas)}): ${enlazadas.length === 1 ? 'se ha enlazado' : 'se han enlazado'}, sin meter otra.`)
   if (ya.length) partes.push(`${n(ya.length, 'había entrado', 'habían entrado')} antes (${nums(ya)}).`)

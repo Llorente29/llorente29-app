@@ -113,7 +113,8 @@ export function tokenDeLaEmpresa(guardado: string): { cod: string; token: string
 }
 
 /** X10b · Las únicas rutas que se escriben, y con qué método. */
-const ESCRITURAS: Record<string, 'POST'> = { '/api/subcuentas/add': 'POST', '/api/facturas/add': 'POST', '/api/facturas/upload': 'POST' }
+// X10d: y el alta de asiento (/api/apuntes/add, ApunteSimplificado).
+const ESCRITURAS: Record<string, 'POST'> = { '/api/subcuentas/add': 'POST', '/api/facturas/add': 'POST', '/api/facturas/upload': 'POST', '/api/apuntes/add': 'POST' }
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const esLocal = (b: string) => /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(b)
@@ -377,6 +378,15 @@ export class ClienteErp10 {
     if (r.status !== 200) throw new ErrorErp10(`ERP10 no ha dado de alta la factura (${r.status}): ${motivoDe(r.json, r.txt)}`, r.status)
     const j = (Array.isArray(r.json) ? r.json[0] : r.json) as Record<string, unknown> | null
     if (!j || !(Number(j.Documento) > 0)) throw new ErrorErp10('ERP10 ha contestado al alta sin el número de documento', r.status)
+    return j
+  }
+  /** X10d · Da de alta un asiento (ApunteSimplificado); devuelve el que ERP10 guarda, con su Documento. */
+  async altaApunte(ap: Record<string, unknown>): Promise<Record<string, unknown>> {
+    await this.asegurarToken()
+    const r = await this.llamar('POST', '/api/apuntes/add', undefined, ap)
+    if (r.status !== 200) throw new ErrorErp10(`ERP10 no ha dado de alta el asiento (${r.status}): ${motivoDe(r.json, r.txt)}`, r.status)
+    const j = (Array.isArray(r.json) ? r.json[0] : r.json) as Record<string, unknown> | null
+    if (!j || !(Number(j.Documento) > 0)) throw new ErrorErp10('ERP10 ha contestado al alta del asiento sin el número de documento', r.status)
     return j
   }
   /** Sube el PDF de una factura que ya está (DatosDocumento: el archivo en base64). */

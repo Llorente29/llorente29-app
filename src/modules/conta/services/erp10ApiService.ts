@@ -151,6 +151,18 @@ export async function probarErp10(companyId: string): Promise<Probado> {
   }
 }
 
+/**
+ * X11 · Lo que da ERP10 de cada cosa que trae «Traer de ERP10» por fichero, medido leyendo:
+ * rutas, totales, páginas, campos y tiempos (supabase/functions/_shared/erp10Medir.ts).
+ * Sin nombres, NIF ni importes: el texto se pega tal cual en el PR.
+ */
+export interface Medido { ejercicio: string; peticiones: number; ms: number; cortada: boolean; texto: string }
+export async function medirParaTraerErp10(companyId: string, ejercicio?: string): Promise<Medido> {
+  const d = await invocar({ company_id: companyId, accion: 'medir', ...(ejercicio ? { ejercicio } : {}) })
+  const m = (d.medida ?? {}) as Fila
+  return { ejercicio: String(m.ejercicio ?? ejercicio ?? ''), peticiones: Number(m.peticiones ?? 0), ms: Number(m.ms ?? 0), cortada: m.cortada === true, texto: String(d.texto ?? '') }
+}
+
 /** Los saldos de ERP10 de una sociedad entre dos días, sumados por cuenta (céntimos). */
 export async function leerSaldosErp10(companyId: string, desde: string, hasta: string, pedidos: { serie: string; documento: number }[] = []): Promise<{ filas: FilaSumas[]; lineas: number; leidoEn: string; documentos: DocumentoErp10[] }> {
   const d = await invocar({ company_id: companyId, accion: 'saldos', desde, hasta, documentos: pedidos })
@@ -171,7 +183,7 @@ export interface EstadoClase {
   /** Un «Darlo por igualado» posterior a la primera: ya se pueden sacar las demás. */
   comprobada: boolean
 }
-export type ClaseConexion = 'recibida' | 'emitida'
+export type ClaseConexion = 'recibida' | 'emitida' | 'asiento'
 export type EstadoEscribir = Record<ClaseConexion, EstadoClase>
 export async function leerEstadoEscribir(accountId: string, companyId: string): Promise<EstadoEscribir> {
   hayBase()
@@ -187,7 +199,7 @@ export async function leerEstadoEscribir(accountId: string, companyId: string): 
     const primera = (filas.find((x) => x.clase === c)?.creado_en as string | undefined) ?? null
     return { primera, comprobada: !!primera && !!ultimoIgualado && ultimoIgualado > primera }
   }
-  return { recibida: de('recibida'), emitida: de('emitida') }
+  return { recibida: de('recibida'), emitida: de('emitida'), asiento: de('asiento') }
 }
 
 /** Lo que dice el servidor de cada factura. */

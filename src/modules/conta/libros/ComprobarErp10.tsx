@@ -216,7 +216,7 @@ function Casadas({ xs }: { xs: Casada[] }) {
   const [ver, setVer] = useState(false)
   const f = frasesCasadas(xs)
   return (
-    <div className={`cxe-aviso-linea cxe-casadas${f.bien ? ' cxe-casadas-bien' : ''}`} role="note" aria-label="Factura a factura">
+    <div className={`cxe-aviso-linea cxe-casadas${f.bien ? ' cxe-casadas-bien' : ''}`} role="note" aria-label="Una a una, con su número de ERP10">
       {f.resumen}
       {!f.bien && <> <button type="button" className="cxe-enlace" aria-expanded={ver} onClick={() => setVer((v) => !v)}>{ver ? 'Ocultarlas' : 'Verlas'}</button></>}
       {ver && !f.bien && <ul>{f.malas.map((x) => <li key={x.entryId}><strong>{x.numero}</strong>: {x.detalle}</li>)}</ul>}

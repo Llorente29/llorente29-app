@@ -6,8 +6,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const bd = vi.hoisted(() => ({ leerMovimientos: vi.fn(), saldosContables: vi.fn(), leerDatosBancos: vi.fn() }))
+const base = vi.hoisted(() => ({ rpc: vi.fn() }))
 vi.mock('@/modules/conta/services/bancosPantallas', () => bd)
-vi.mock('@/modules/conta/services/bd', () => ({ tabla: () => ({}), mensaje: (x: string) => x }))
+vi.mock('@/modules/conta/services/bd', () => ({ tabla: () => ({}), mensaje: (x: string) => x, rpc: base.rpc }))
 vi.mock('@/lib/supabase', () => ({ supabase: null }))
 
 import { corteDelMes, extractoDelMes, mesDeAlLado, textoMes } from '@/modules/conta/nucleo/bancos/mes'
@@ -37,23 +38,34 @@ describe('E05b · el mes', () => {
   })
 })
 
-describe('E05b · qué se lee de cada mes', () => {
+// R08 · El saldo del banco es el del último extracto de la cadena (bank_saldo_extracto) y la 572,
+// lo que está en el diario (bank_saldo_diario): la base los da a la fecha de corte del mes.
+describe('E05b · qué se lee de cada mes (R08: el saldo del extracto y el del diario, de la base)', () => {
   const banco = { id: 'b', cuenta: '57200050' } as unknown as BancoVista
   const datos = { corte: null, extractos: [ext('b', '2026-10-31', 121410), ext('b', '2026-09-30', 100000)] } as unknown as DatosBancos
+  const responder = (extracto: { saldo: number; hasta: string } | null, diario: number) => base.rpc.mockImplementation((nombre: string) =>
+    Promise.resolve(nombre === 'bank_saldo_extracto' ? (extracto ? [{ ...extracto, llego: '2026-11-19T12:17:00Z' }] : []) : diario))
   it('septiembre: sus movimientos, la 572 al 30/09 y el extracto de septiembre', async () => {
     bd.leerMovimientos.mockResolvedValue([])
-    bd.saldosContables.mockResolvedValue({ '57200050': -3000 })
+    responder({ saldo: 1000, hasta: '2026-09-30' }, -30)
     const r = await leerBancos('acc', 'emp', datos, banco, '2026-09', '2026-11-19')
     expect(bd.leerMovimientos).toHaveBeenLastCalledWith('acc', 'b', '2026-09')
-    expect(bd.saldosContables).toHaveBeenLastCalledWith('emp', '2026-09-30', ['57200050'])
+    expect(base.rpc).toHaveBeenCalledWith('bank_saldo_extracto', { p_treasury: 'b', p_hasta: '2026-09-30' })
+    expect(base.rpc).toHaveBeenCalledWith('bank_saldo_diario', { p_company: 'emp', p_hasta: '2026-09-30', p_cuenta: '57200050' })
     expect(r.extractoHasta).toBe('2026-09-30')
     expect(r.cuadre).toMatchObject({ bancoCent: 100000, libroCent: -3000, faltaCent: 103000 })
   })
   it('octubre: los suyos, la 572 al 31/10 y el extracto de octubre', async () => {
-    bd.saldosContables.mockResolvedValue({ '57200050': 121410 })
+    responder({ saldo: 1214.10, hasta: '2026-10-31' }, 1214.10)
     const r = await leerBancos('acc', 'emp', datos, banco, '2026-10', '2026-11-19')
     expect(bd.leerMovimientos).toHaveBeenLastCalledWith('acc', 'b', '2026-10')
-    expect(bd.saldosContables).toHaveBeenLastCalledWith('emp', '2026-10-31', ['57200050'])
+    expect(base.rpc).toHaveBeenCalledWith('bank_saldo_diario', { p_company: 'emp', p_hasta: '2026-10-31', p_cuenta: '57200050' })
     expect(r.cuadre).toMatchObject({ bancoCent: 121410, libroCent: 121410, faltaCent: 0 })
+  })
+  it('un mes sin extracto que acabe dentro: no se sabe el saldo del banco', async () => {
+    responder({ saldo: 1000, hasta: '2026-09-30' }, 0)
+    const r = await leerBancos('acc', 'emp', datos, banco, '2026-10', '2026-11-19')
+    expect(r.extractoHasta).toBeNull()
+    expect(r.cuadre.bancoCent).toBeNull()
   })
 })

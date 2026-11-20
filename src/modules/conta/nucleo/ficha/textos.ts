@@ -15,3 +15,7 @@ export const TECLAS_DE_LA_FICHA: readonly { tecla: string; texto: string }[] = [
   { tecla: 'F8', texto: 'cambia a emitida o a asiento' },
   { tecla: 'Esc', texto: 'la deja sin guardar' },
 ]
+
+/** K05 · La de la emitida: F4 busca el cliente, y F8 cambia a la recibida o al asiento (la maqueta repite la de la recibida). */
+export const TECLAS_DE_LA_EMITIDA: readonly { tecla: string; texto: string }[] = TECLAS_DE_LA_FICHA.map((t) =>
+  t.tecla === 'F4' ? { ...t, texto: 'busca la cuenta o el cliente' } : t.tecla === 'F8' ? { ...t, texto: 'cambia a recibida o a asiento' } : t)

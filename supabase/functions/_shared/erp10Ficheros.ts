@@ -660,9 +660,29 @@ export function filasAsiento(x: AsientoLeido, n: number, cuentas: ReadonlyMap<st
   return filas
 }
 
+/**
+ * X10d · El asiento para sacarlo a ERP10 por la conexión: lo mismo que va a sus filas del Excel
+ * (el leído, en céntimos), con las cuentas YA en ERP10. El asiento lo arma el servidor
+ * (_shared/erp10Escribir.ts, asientoErp10).
+ */
+export type AsientoParaApi = {
+  entryId: string
+  /** «serie/número» de Sumied. */
+  numero: string
+  /** AAAA-MM-DD */
+  fecha: string
+  apuntes: { cuenta: string; nombre: string; concepto: string; debe: number; haber: number }[]
+}
+export function asientoParaApi(x: AsientoLeido, erp: ReadonlyMap<string, string>): AsientoParaApi {
+  return {
+    entryId: x.entryId, numero: `${x.serie}/${x.numero ?? ''}`, fecha: x.fecha,
+    apuntes: x.apuntes.map((l) => ({ ...l, cuenta: erp.get(l.cuenta) ?? l.cuenta })),
+  }
+}
+
 export type SalidaAsientos = {
-  /** En el orden del fichero: por fecha y, dentro de la fecha, por serie y número de Sumied. */
-  asientos: { entryId: string; numero: string; filas: Fila[]; usa: string[] }[]
+  /** En el orden del fichero: por fecha y, dentro de la fecha, por serie y número de Sumied. `api`: X10d. */
+  asientos: { entryId: string; numero: string; filas: Fila[]; usa: string[]; api: AsientoParaApi }[]
   noSalen: NoSale[]
   cuentas: Set<string>
 }
@@ -690,7 +710,7 @@ export function prepararAsientos(lista: readonly AsientoParaErp10[], o: {
     const usa = usadasPor(x)
     const mala = usa.find((k) => conv.noCaben.has(k) || o.noCaben?.has(k))
     if (mala) { noSalen.push({ entryId: x.entryId, numero: `${x.serie}/${x.numero ?? ''}`, porque: (conv.noCaben.get(mala) ?? o.noCaben!.get(mala))! }); continue }
-    asientos.push({ entryId: x.entryId, numero: `${x.serie}/${x.numero ?? ''}`, filas: filasAsiento(x, asientos.length + 1, conv.erp, o.serie ?? 1, o.xml ?? XML_ASIENTOS), usa })
+    asientos.push({ entryId: x.entryId, numero: `${x.serie}/${x.numero ?? ''}`, filas: filasAsiento(x, asientos.length + 1, conv.erp, o.serie ?? 1, o.xml ?? XML_ASIENTOS), usa, api: asientoParaApi(x, conv.erp) })
     for (const k of usa) cuentas.add(k)
   }
   return { asientos, noSalen, cuentas }
