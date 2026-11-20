@@ -110,7 +110,7 @@ test('subir los ficheros del TPV: lo que cuadra se guarda, lo que no lo dice; y 
   await expect(tabla.getByRole('row').filter({ hasText: '10/11' })).toContainText(/5049 a 5096.*1\.100,00.*Cuadra/)
   await expect(tabla.getByRole('row').filter({ hasText: '11/11' })).toContainText('No cuadra')
   await expect(v.locator('[data-prueba="aviso-2026-11-11"]')).toHaveText(
-    'El 11/11 no se guarda. Los pagos suman 1.080,07 € y las facturas 1.100,00 €. Faltan 19,93 €. Mira la orden 702002.Vuelve a sacar de Revo los cuatro ficheros de ese día y súbelos otra vez. Los demás días se guardan igual.')
+    'El 11/11 no se guarda. Los pagos suman 1.080,07 € y las facturas 1.100,00 €. Faltan 19,93 €. Mira la orden 702002.Los demás días se guardan igual.')
   await tabla.getByRole('row').filter({ hasText: '10/11' }).click()
   await expect(v.getByRole('heading', { name: 'El 10/11, por dentro' })).toBeVisible()
   await expect(v.getByText('Too Good To Go')).toBeVisible()

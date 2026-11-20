@@ -241,6 +241,12 @@ export interface DiaParaSubir {
 
 const facturasTexto = (n: number) => `${n} factura${n === 1 ? '' : 's'}`
 
+/** R11 · «Ajuste de redondeo: 0,02 € de IVA, en 2 facturas (manda la factura).» */
+export function textoAjuste(a: { iva: number; base: number; facturas: number }): string {
+  const partes = [a.iva ? `${eurosExactos(Math.abs(a.iva) / 100)} de IVA` : '', a.base ? `${eurosExactos(Math.abs(a.base) / 100)} de base` : ''].filter(Boolean)
+  return `Ajuste de redondeo: ${partes.join(' y ') || eurosExactos(0)}, en ${facturasTexto(a.facturas)} (manda la factura).`
+}
+
 export function prepararDias(dias: DiaLeido[], guardados: DiaYaGuardado[], cuentas: FormaCuenta[]): DiaParaSubir[] {
   const leidos = [...dias].sort((a, b) => a.dia.localeCompare(b.dia))
   return leidos.map((d) => {
@@ -253,7 +259,7 @@ export function prepararDias(dias: DiaLeido[], guardados: DiaYaGuardado[], cuent
     let aviso: DiaParaSubir['aviso'] = null
     if (fallos.length) {
       como = 'no_cuadra'
-      aviso = { titulo: `El ${dm} no se guarda.`, frases: fallos, queHacer: 'Vuelve a sacar de Revo los cuatro ficheros de ese día y súbelos otra vez. Los demás días se guardan igual.' }
+      aviso = { titulo: `El ${dm} no se guarda.`, frases: fallos, queHacer: 'Los demás días se guardan igual.' }
     } else if (g && igual) {
       como = 'igual'
     } else if (g && g.estado === 'validado') {
@@ -279,6 +285,8 @@ export function prepararDias(dias: DiaLeido[], guardados: DiaYaGuardado[], cuent
     const comprobaciones: DiaParaSubir['comprobaciones'] = []
     if (como !== 'no_cuadra') {
       comprobaciones.push({ texto: 'Facturas, IVA y pagos dan lo mismo', ok: true }, { texto: 'No hay saltos de numeración', ok: true })
+      // R11 · Manda la factura: lo que se ha ajustado al desglose del IVA, se dice.
+      if (d.ajuste) comprobaciones.push({ texto: textoAjuste(d.ajuste), ok: true })
       if (antes?.ultimo != null && dentro.primero != null) {
         const p = dentro.primero, u = antes.ultimo
         comprobaciones.push(p === u + 1

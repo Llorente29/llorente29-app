@@ -82,7 +82,7 @@ describe('¿cuadra?', () => {
     expect(x.aviso).toEqual({
       titulo: 'El 09/11 no se guarda.',
       frases: ['Los pagos suman 1.080,07 € y las facturas 1.100,00 €. Faltan 19,93 €. Mira la orden 700002.'],
-      queHacer: 'Vuelve a sacar de Revo los cuatro ficheros de ese día y súbelos otra vez. Los demás días se guardan igual.',
+      queHacer: 'Los demás días se guardan igual.',
     })
   })
   it('un pago de más, el IVA que no es el de las facturas y un hueco en la numeración', () => {
