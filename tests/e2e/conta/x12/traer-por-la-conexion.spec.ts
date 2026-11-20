@@ -159,7 +159,8 @@ for (const tam of TAMANOS) {
       await page.getByRole('button', { name: 'Seguir trayendo de ERP10' }).click()
       await expect(tabla.getByRole('row', { name: /^Diario/ })).toContainText('Todos cuadran · igual que ERP10', { timeout: 90_000 })
       const despues = pedidas.slice(antes)
-      expect(despues.filter((p) => p.que === 'subcuentas' || p.que === 'resumen' || (p.mes ?? '9999') < '2026-02'), 'al seguir, no vuelve a pedir lo leído').toEqual([])
+      // X13 · El diario entero y después las facturas: de las facturas aún no se había leído ninguna (e2e 44719689107).
+      expect(despues.filter((p) => p.que === 'subcuentas' || p.que === 'resumen' || (p.que === 'apuntes' && (p.mes ?? '9999') < '2026-02')), 'al seguir, no vuelve a pedir lo leído').toEqual([])
 
       // 4 · Lleno: como con los ficheros.
       await expect(tabla.getByRole('row', { name: /^Plan de cuentas/ })).toContainText('16 cuentas')

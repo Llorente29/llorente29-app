@@ -101,7 +101,9 @@ async function abrirEmpresa(page: Page, empresa: string) {
 }
 
 const pantalla = (page: Page) => page.getByRole('region', { name: 'Traer de ERP10' })
-const fila = (page: Page, que: string) => pantalla(page).getByRole('list', { name: 'Lo que se trae' }).getByRole('listitem').filter({ hasText: que })
+// Por su nombre exacto: «Diario» también sale en «Después del diario» de las filas de facturas (e2e 44719689107).
+const fila = (page: Page, que: string) => pantalla(page).getByRole('list', { name: 'Lo que se trae' }).getByRole('listitem')
+  .filter({ has: page.locator('strong.cxu-que').getByText(que, { exact: true }) })
 
 for (const tam of TAMANOS) {
   test(`X13 · ${tam.width} × ${tam.height}: llegar desde Inicio, traerlo todo, pararlo y seguir, «Verlos» y darlo por bueno`, async ({ page }) => {
