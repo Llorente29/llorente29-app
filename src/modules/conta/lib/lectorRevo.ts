@@ -246,6 +246,96 @@ export function tipoRevo(bruto: string): number | null {
 const euros = (c: number) => c / 100
 const cent = (e: number) => Math.round(e * 100)
 
+/** Céntimos repartidos en proporción a unos pesos, sin perder ninguno (los restos mayores primero). */
+function repartirPor(centimos: number, pesos: readonly number[]): number[] {
+  const suma = pesos.reduce((a, b) => a + b, 0)
+  if (!suma) return pesos.map((_, k) => (k === 0 ? centimos : 0))
+  const exactos = pesos.map((p) => (centimos * p) / suma)
+  const out = exactos.map((x) => Math.trunc(x))
+  let falta = centimos - out.reduce((a, b) => a + b, 0)
+  const orden = exactos.map((x, k) => ({ k, resto: Math.abs(x - Math.trunc(x)) })).sort((a, b) => b.resto - a.resto || a.k - b.k)
+  for (const { k } of orden) { if (falta === 0) break; out[k] += Math.sign(falta); falta -= Math.sign(falta) }
+  return out
+}
+
+/**
+ * R12 · Una orden con varias facturas (cuenta dividida, ticket cambiado por factura con NIF…).
+ *   1. Cuenta solo la buena: un ticket sin NIF con una gemela con NIF (los mismos importes) en la
+ *      misma orden, cuando lo pagado es una sola vez, se queda a cero (con su número); se dice. Un ticket y su anulación
+ *      en negativo se compensan solos (suman cero), y se quedan para que no falte su número.
+ *   2. Cada factura que queda lleva su IVA: el de la orden se reparte con lo que trae cada factura
+ *      en Documentos (por su tipo: el que da su IVA con su base) y, si no se puede saber, en
+ *      proporción a su total; el céntimo que quede lo ajusta después «manda la factura» (R11).
+ *   3. La base une el IVA a la factura por la orden: la segunda y siguientes facturas de una orden
+ *      van como «orden·2», «orden·3»…; los pagos siguen en la orden, que es la de la primera.
+ * Cambia `docs` e `imps` en su sitio.
+ */
+function porFactura<D extends { dia: string; orden: string; numero: number; nif: string | null; base: number; cuota: number; total: number },
+  I extends { dia: string; orden: string; tipo: number; base: number; cuota: number }, C extends { orden: string; importe: number }>(
+  docs: D[], imps: I[], cobs: readonly C[], avisos: { dia: string | null; texto: string }[],
+): void {
+  const porOrden = new Map<string, D[]>()
+  for (const d of docs) { const g = porOrden.get(d.orden) ?? []; g.push(d); porOrden.set(d.orden, g) }
+  for (const [orden, todas] of porOrden) {
+    if (todas.length < 2) continue
+    let ds = [...todas]
+    const sustituidas: D[] = []
+    // 1 · El ticket que sustituye una factura con NIF.
+    const pagado = cobs.filter((x) => x.orden === orden).reduce((a, x) => a + cent(x.importe), 0)
+    for (const d of [...ds]) {
+      if (d.nif) continue
+      const buena = ds.find((e) => e !== d && e.nif && cent(e.total) === cent(d.total) && cent(e.base) === cent(d.base) && cent(e.cuota) === cent(d.cuota))
+      if (!buena || ds.reduce((a, e) => a + cent(e.total), 0) - cent(d.total) !== pagado) continue
+      ds = ds.filter((e) => e !== d)
+      sustituidas.push(d)
+      avisos.push({ dia: d.dia, texto: `La factura ${d.numero} (sin NIF) la sustituye la ${buena.numero}, con NIF y los mismos importes: cuenta solo la ${buena.numero}.` })
+    }
+    const suyas = imps.filter((i) => i.orden === orden)
+    if (!suyas.length) continue
+    // El ticket sustituido se queda con su número (que no falte en la numeración) y a cero, con su
+    // renglón de IVA a cero, para que la base lo una a su factura y no lo cuente dos veces.
+    const ceros: I[] = sustituidas.map((d, j) => {
+      const clave = `${orden}·${todas.length + j + 1}`
+      d.orden = clave; d.base = 0; d.cuota = 0; d.total = 0
+      return { ...suyas[0], orden: clave, base: 0, cuota: 0 }
+    })
+    imps.push(...ceros)
+    if (ds.length < 2) {
+      if (ds.length === 1 && sustituidas.length) ds[0].orden = orden
+      continue
+    }
+    // 2 · El IVA de la orden, a cada factura.
+    const tipos = [...new Set(suyas.map((i) => i.tipo))]
+    const tipoDe = (d: D): number | null => {
+      if (tipos.length === 1) return tipos[0]
+      const t = tipos.filter((x) => Math.abs(Math.round(Math.abs(cent(d.base)) * x / 100) - Math.abs(cent(d.cuota))) <= 1)
+      return t.length === 1 ? t[0] : null
+    }
+    const asignados = ds.map(tipoDe)
+    const claves = ds.map((_, k) => (k === 0 ? orden : `${orden}·${k + 1}`))
+    const nuevas: I[] = []
+    // Lo de cada factura vale solo si, tipo a tipo, da lo que trae Impuestos de la orden (con el
+    // céntimo por factura de «manda la factura»); si no, se reparte y el descuadre se sigue viendo.
+    const daLoMismo = (tipo: number, que: 'base' | 'cuota') =>
+      Math.abs(ds.reduce((a, d, k) => a + (asignados[k] === tipo ? cent(d[que]) : 0), 0) - suyas.filter((i) => i.tipo === tipo).reduce((a, i) => a + cent(i[que]), 0)) <= ds.length
+    const conSuIva = asignados.every((t) => t !== null) && tipos.every((t) => daLoMismo(t, 'base') && daLoMismo(t, 'cuota'))
+    if (conSuIva) {
+      ds.forEach((d, k) => nuevas.push({ ...suyas[0], orden: claves[k], tipo: asignados[k]!, base: d.base, cuota: d.cuota }))
+    } else {
+      const pesos = ds.map((d) => Math.abs(cent(d.total)))
+      for (const l of suyas) {
+        const bases = repartirPor(cent(l.base), pesos)
+        const cuotas = repartirPor(cent(l.cuota), pesos)
+        ds.forEach((_, k) => { if (bases[k] || cuotas[k]) nuevas.push({ ...l, orden: claves[k], base: euros(bases[k]), cuota: euros(cuotas[k]) }) })
+      }
+    }
+    for (const i of suyas) imps.splice(imps.indexOf(i), 1)
+    imps.push(...nuevas)
+    ds.forEach((d, k) => { d.orden = claves[k] })
+    avisos.push({ dia: ds[0].dia, texto: `La orden ${orden} tiene ${ds.length} facturas (${lista(ds.map((d) => String(d.numero)))}): su IVA va a cada una${conSuIva ? ', con lo que dice cada factura' : ', en proporción a su total'}.` })
+  }
+}
+
 /**
  * R11 · Manda la factura. Cada renglón de IVA ya va redondeado (factura y tipo, como Revo); si lo
  * desglosado de una factura no da su base o su IVA de Documentos por 1 céntimo como mucho, la
@@ -358,8 +448,6 @@ export function leer(ficheros: Record<ClaseRevo, Tabla>): Lectura {
     if (mal) continue
     imps.push({ dia: dia!, orden, tipo: tipo!, base: euros(base!), cuota: euros(cuota!) })
   }
-  // R11 · Manda la factura: lo que le falte o le sobre al desglose de una factura, hasta 1 céntimo, al renglón de su tipo mayor.
-  const ajustes = ajustarAFacturas(docs, imps)
 
   // Pagos: cada uno con su línea, al día del documento de su orden.
   type Cob = LecturaDia['cobros'][number] & { dia: string }
@@ -387,6 +475,11 @@ export function leer(ficheros: Record<ClaseRevo, Tabla>): Lectura {
     if (mal) continue
     cobs.push({ dia: dia!, fila: linea, orden, forma, importe: euros(importe!) })
   }
+
+  // R12 · Una orden con varias facturas: cuenta solo la buena y cada una lleva su propio IVA.
+  porFactura(docs, imps, cobs, avisos)
+  // R11 · Manda la factura: lo que le falte o le sobre al desglose de una factura, hasta 1 céntimo, al renglón de su tipo mayor.
+  const ajustes = ajustarAFacturas(docs, imps)
 
   // Órdenes sin documento: con pagos ya salió arriba; sin pagos y con importe, aviso.
   for (const [id, o] of ordenes) {
