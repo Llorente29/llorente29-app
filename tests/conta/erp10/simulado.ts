@@ -18,6 +18,8 @@ export type EmpresaSimulada = {
   pdfs?: { Ejercicio: string; Serie: string; Documento: number; NombreArchivo: string; bytes: number }[]
   /** Para probar que no se sube: el upload contesta 500 «container does not exist», como Diez. */
   sinAlmacen?: boolean
+  /** X10d · El alta de un asiento cuya descripción lleve esto falla con un 500. */
+  fallaAsiento?: string
 }
 
 export function erp10Simulado(o: { empresas: Record<string, EmpresaSimulada>; claves?: { client_id: string; password: string } }) {
@@ -88,6 +90,20 @@ export function erp10Simulado(o: { empresas: Record<string, EmpresaSimulada>; cl
         { Cuenta: String(b.CuentaCliente), Debe: 0, Haber: Number(b.TotalFactura) },
       ] })
       return r(200, f)
+    }
+    if (u.pathname === '/api/apuntes/add' && metodo === 'POST') {
+      // X10d · Como ERP10: un asiento general (TipoAsiento 0), con su número de documento. Si se pide, falla (para probar que los demás siguen).
+      const b = cuerpo() as { Ejercicio?: string; Serie?: string; Fecha?: number; Descripcion?: string; Detalles?: { Cuenta: string; Debe?: number; Haber?: number }[] }
+      for (const k of ['Ejercicio', 'Serie', 'Fecha'] as const) if (b?.[k] == null) return r(400, { Message: `Falta ${k}` })
+      if (e.fallaAsiento && (b.Descripcion ?? '').includes(e.fallaAsiento)) return r(500, { Message: 'Error al guardar el asiento (inventado)' })
+      const falta = (b.Detalles ?? []).map((l) => l.Cuenta).find((k) => !(e.subcuentas ?? [k]).includes(k))
+      if (falta) return r(400, { Message: `No existe la subcuenta ${falta}` })
+      const d = (b.Detalles ?? []).reduce((t, l) => t + Math.round(Number(l.Debe ?? 0) * 100), 0), h = (b.Detalles ?? []).reduce((t, l) => t + Math.round(Number(l.Haber ?? 0) * 100), 0)
+      if (d !== h) return r(400, { Message: 'El asiento no cuadra' })
+      const documento = 5000 + e.apuntes.length
+      const ap = { Serie: String(b.Serie), Documento: documento, TipoAsiento: 0, Fecha: Number(b.Fecha), Detalles: (b.Detalles ?? []).map((l) => ({ Cuenta: l.Cuenta, Debe: Number(l.Debe ?? 0), Haber: Number(l.Haber ?? 0) })) }
+      e.apuntes.push(ap)
+      return r(200, { ...ap, Ejercicio: b.Ejercicio, Descripcion: b.Descripcion })
     }
     if (u.pathname === '/api/facturas/upload' && metodo === 'POST') {
       if (e.sinAlmacen) return r(500, { Message: 'The specified container does not exist.' })

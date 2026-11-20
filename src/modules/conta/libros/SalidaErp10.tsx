@@ -33,9 +33,10 @@ import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepara
 import { comparar, fechaDelSumas } from '@/modules/conta/erp10/comparar'
 import { abrirExcel, leerSumasYSaldos, reconocer, texto as textoDe, type FilaSumas } from '@/modules/conta/lib/traer'
 import { ComprobarErp10, type Subido } from '@/modules/conta/libros/ComprobarErp10'
-import { leerConexionErp10, leerEstadoEscribir, leerSaldosErp10, loQueFalta, sacarRecibidasErp10, type ParaSacar } from '@/modules/conta/services/erp10ApiService'
+import { casarFacturas, type DocumentoErp10, type EnvioErp10 } from '@/modules/conta/erp10/casar'
+import { leerConexionErp10, leerEnviosErp10, leerEstadoEscribir, leerSaldosErp10, loQueFalta, sacarAErp10, type ClaseConexion } from '@/modules/conta/services/erp10ApiService'
 import { loQueHaEntrado, queVaAEntrar } from '@/modules/conta/erp10/conexion'
-import { huellaFila, salePorLaConexion } from '@/modules/conta/erp10/ficheros'
+import { salePorLaConexion } from '@/modules/conta/erp10/ficheros'
 import { ConexionErp10Tarjeta } from '@/modules/conta/libros/ConexionErp10'
 import {
   apuntarLote, bajarPdf, carpetaDeLaSalida, leerAsientosPorSalir, leerCambiadas, leerComprobar, leerDiasTpvPorSalir, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
@@ -101,6 +102,9 @@ export function SalidaErp10() {
   // X07: mientras vuelve a comparar (al igualar, al apuntar a mano, al volver a sacar), la tabla que había se queda a la vista.
   const comprobar = useLeerConservando(paso === 3 && fecha ? () => leerComprobar(L.companyId, fecha) : null, `${L.companyId}:${fecha}:${vueltaC}:${L.vuelta}`,
     `${L.companyId}:${fecha}:${subido?.nombre ?? ''}`)
+  // X10c · Lo que salió por la conexión, casado factura a factura con lo que ERP10 tiene con su número (al comparar con ERP10).
+  const [casar, setCasar] = useState<{ envios: EnvioErp10[]; docs: DocumentoErp10[] } | null>(null)
+  const casadas = useMemo(() => (casar && comprobar.datos ? casarFacturas(casar.envios, casar.docs, comprobar.datos) : null), [casar, comprobar.datos])
   const comparacion = useMemo(() => {
     if (!subido || !comprobar.datos || !s) return null
     const porSacar = new Set([...s.ficheros.expedidas, ...s.ficheros.recibidas, ...s.ficheros.asientos, ...s.ficheros.dias].map((f) => f.entryId))
@@ -224,6 +228,7 @@ export function SalidaErp10() {
       const r = reconocer(ex)
       if (!r || r.tipo !== 'sumas_saldos') throw new Error(`${f.name} no es un sumas y saldos de ERP10. Sácalo de ERP10 en Excel y súbelo tal cual.`)
       const leido = leerSumasYSaldos(r.hoja, r.fila)
+      setCasar(null)
       const cabecera = r.hoja.filas.slice(0, r.fila).flat().map((c) => textoDe(c)).filter(Boolean)
       setSubido({ nombre: f.name, fecha: mes ? fechaDelSumas(cabecera, mes) : '', avisos: leido.avisos, cabecera, filas: leido.filas })
       setElegida(null)
@@ -239,8 +244,9 @@ export function SalidaErp10() {
     if (!mes) return
     setErrorSubir(null); setFallo(null); setDicho(null); setHaciendo('Entrando en ERP10…')
     try {
-      const base = await leerComprobar(L.companyId, hasta)
-      const r = await leerSaldosErp10(L.companyId, base.desde, hasta)
+      const [base, envios] = await Promise.all([leerComprobar(L.companyId, hasta), leerEnviosErp10(L.accountId, L.companyId)])
+      const r = await leerSaldosErp10(L.companyId, base.desde, hasta, envios.map((x) => ({ serie: x.serie, documento: x.documento })))
+      setCasar({ envios, docs: r.documentos })
       const hora = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(r.leidoEn)).replace(',', '')
       setSubido({ nombre: `ERP10, leído el ${hora}`, fecha: hasta, avisos: [], cabecera: [`hasta ${hasta.slice(8, 10)}/${hasta.slice(5, 7)}/${hasta.slice(0, 4)}`], filas: r.filas, leidoEn: hora })
       setElegida(null)
@@ -294,27 +300,39 @@ export function SalidaErp10() {
     : !comparacion ? 'Comparando…'
     : !comparacion.igualable ? 'Queda alguna diferencia sin explicar o por hacer.' : undefined
 
-  // X10b · Lo que sale por la conexión: las recibidas medidas (interior, sin retención, hasta tres IVA); la primera vez, una.
-  const porLaConexion = (s?.ficheros.recibidas ?? []).filter((f) => f.api && salePorLaConexion(f.api))
-  const nPorExcel = (s?.ficheros.recibidas.length ?? 0) - porLaConexion.length
-  const pruebaPrimero = !!escribir.datos && !escribir.datos.primera
-  const pendienteComprobar = !!escribir.datos?.primera && !escribir.datos.comprobada
-  const aSacar = pruebaPrimero ? porLaConexion.slice(0, 1) : porLaConexion
+  // X10b · Lo que sale por la conexión: las recibidas medidas (interior, sin retención, hasta tres IVA); X10c, y las emitidas
+  // (hasta tres IVA). Por clase, la primera vez una sola; las demás, después de comprobarla. El servidor arma cada factura
+  // desde la base: aquí solo se dice cuáles.
+  type PorLaConexion = { clase: ClaseConexion; entryId: string; numero: string; tercero: string; total: number }
+  const recibidasConexion: PorLaConexion[] = (s?.ficheros.recibidas ?? []).filter((f) => f.api && salePorLaConexion(f.api))
+    .map((f) => ({ clase: 'recibida', entryId: f.entryId, numero: f.api!.numero, tercero: f.api!.nombre, total: f.api!.total }))
+  const emitidasConexion: PorLaConexion[] = (s?.ficheros.expedidas ?? []).filter((f) => f.api && f.api.iva.length <= 3)
+    .map((f) => ({ clase: 'emitida', entryId: f.entryId, numero: f.api!.numero, tercero: f.api!.nombre, total: f.api!.total }))
+  // X10d · Los asientos (lo del X07), con su api; los cobros de los días del TPV no la llevan (esperan al R07).
+  const asientosConexion: PorLaConexion[] = (s?.ficheros.asientos ?? []).filter((f) => f.api)
+    .map((f) => ({ clase: 'asiento', entryId: f.entryId, numero: f.api!.numero, tercero: f.api!.apuntes.find((l) => l.concepto.trim())?.concepto ?? '', total: f.api!.apuntes.reduce((t, l) => t + l.debe, 0) }))
+  const porClase: Record<ClaseConexion, PorLaConexion[]> = { recibida: recibidasConexion, emitida: emitidasConexion, asiento: asientosConexion }
+  const nPorExcel = (s?.ficheros.recibidas.length ?? 0) - recibidasConexion.length + (s?.ficheros.expedidas.length ?? 0) - emitidasConexion.length
+  const nDias = s?.ficheros.dias.length ?? 0
+  const clases = (['recibida', 'emitida', 'asiento'] as const).filter((c) => porClase[c].length)
+  const sinPrueba = escribir.datos ? clases.find((c) => !escribir.datos![c].primera) ?? null : null
+  const pruebaPrimero = !!sinPrueba
+  const sinComprobar = escribir.datos ? clases.filter((c) => escribir.datos![c].primera && !escribir.datos![c].comprobada) : []
+  const pendienteComprobar = !pruebaPrimero && sinComprobar.length > 0 && sinComprobar.length === clases.length
+  const aSacar: PorLaConexion[] = sinPrueba ? porClase[sinPrueba].slice(0, 1)
+    : clases.filter((c) => !sinComprobar.includes(c)).flatMap((c) => porClase[c])
   const porQueNoSacar = faltaErp10
     ?? (!escribir.datos ? 'Leyendo lo que ya ha salido a ERP10…'
-      : pendienteComprobar ? 'Antes de sacar el mes, comprueba en el paso 3 la factura de prueba y dala por igualada.'
-      : !porLaConexion.length ? 'Este mes no hay ninguna recibida que pueda salir por la conexión con ERP10.' : null)
-  const avisoSacar = faltaErp10 ? `Para sacar a ERP10: ${faltaErp10}` : pendienteComprobar ? 'Antes de sacar el mes, comprueba en el paso 3 la factura de prueba y dala por igualada.' : null
+      : pendienteComprobar ? 'Antes de sacar más, comprueba en el paso 3 la factura de prueba y dala por igualada.'
+      : !aSacar.length ? 'Este mes no hay ninguna factura que pueda salir por la conexión con ERP10.' : null)
+  const avisoSacar = faltaErp10 ? `Para sacar a ERP10: ${faltaErp10}` : pendienteComprobar ? 'Antes de sacar más, comprueba en el paso 3 la factura de prueba y dala por igualada.' : null
 
   async function sacarPorLaConexion() {
     if (!s || !mes || !aSacar.length) return
     setFallo(null); setDicho(null); setHaciendo(pruebaPrimero ? 'Metiendo la factura de prueba en ERP10…' : `Metiendo en ERP10 ${aSacar.length} ${aSacar.length === 1 ? 'factura' : 'facturas'}…`)
     try {
-      const xs: ParaSacar[] = []
-      for (const f of aSacar) xs.push({ api: f.api!, huella: await huellaFila(f.fila), pdf: f.pdf ?? null })
-      const cuentas = s.listas.cuentas.map((c) => ({ codigo: c.codigoErp10, nombre: c.nombre, nif: c.nif }))
-      const r = await sacarRecibidasErp10(L.companyId, mes, xs, cuentas, L.quien, (h, de) => setHaciendo(`Metiendo en ERP10: ${h} de ${de}…`))
-      const dicho = loQueHaEntrado(r.salidas.map((x) => ({ ...x, numero: x.numero })), mesEnPalabras(mes))
+      const r = await sacarAErp10(L.companyId, mes, aSacar.map((x) => x.entryId), L.quien, (h, de) => setHaciendo(`Metiendo en ERP10: ${h} de ${de}…`))
+      const dicho = loQueHaEntrado(r.salidas, mesEnPalabras(mes))
       setConfirmar(false)
       // Pasa sola al paso 3, para comprobar que queda igual.
       setPaso(3); setSubido(null); setHecho(null)
@@ -391,11 +409,17 @@ export function SalidaErp10() {
       )}
       {paso === 1 && confirmar && mes && (
         <div className="cxe-confirmar" role="alertdialog" aria-label="Sacar a ERP10">
-          <p>{queVaAEntrar({ cuantas: aSacar.length, mes: mesEnPalabras(mes), prueba: pruebaPrimero && aSacar[0] ? { numero: aSacar[0].api!.numero, proveedor: aSacar[0].api!.nombre, total: aSacar[0].api!.total } : null })}</p>
-          {nPorExcel > 0 && <p className="cx-ayuda">{nPorExcel === 1 ? 'Una recibida sale con el Excel' : `${nPorExcel} recibidas salen con el Excel`} (retención, inversión del sujeto pasivo o intracomunitaria). Las emitidas, los asientos y los días del TPV, también con el Excel, por ahora.</p>}
+          <p>{queVaAEntrar({
+            recibidas: aSacar.filter((x) => x.clase === 'recibida').length, emitidas: aSacar.filter((x) => x.clase === 'emitida').length,
+            asientos: aSacar.filter((x) => x.clase === 'asiento').length, mes: mesEnPalabras(mes),
+            prueba: pruebaPrimero && aSacar[0] ? { clase: aSacar[0].clase, numero: aSacar[0].numero, tercero: aSacar[0].tercero, total: aSacar[0].total } : null,
+          })}</p>
+          {nPorExcel > 0 && <p className="cx-ayuda">{nPorExcel === 1 ? 'Una factura sale con el Excel' : `${nPorExcel} facturas salen con el Excel`} (retención, inversión del sujeto pasivo, intracomunitaria o más de tres tipos de IVA).</p>}
+          {nDias > 0 && <p className="cx-ayuda">{nDias === 1 ? 'El día del TPV todavía no sale por la conexión' : `Los ${nDias} días del TPV todavía no salen por la conexión`}: {nDias === 1 ? 'sigue' : 'siguen'} con el Excel.</p>}
+          {!pruebaPrimero && sinComprobar.length > 0 && <p className="cx-ayuda">{sinComprobar.map((c) => (c === 'recibida' ? 'Las facturas recibidas' : c === 'emitida' ? 'Las facturas emitidas' : 'Los asientos')).join(', ')} esperan a que compruebes en el paso 3 lo de prueba.</p>}
           <div className="cxe-confirmar-botones">
             <button type="button" className="cxe-sec" onClick={() => setConfirmar(false)} disabled={!!haciendo}>No, todavía no</button>
-            <button type="button" className="cxe-grande" onClick={() => { void sacarPorLaConexion() }} disabled={!!haciendo}>{pruebaPrimero ? 'Sacar solo esta para probar' : 'Meterlas en ERP10'}</button>
+            <button type="button" className="cxe-grande" onClick={() => { void sacarPorLaConexion() }} disabled={!!haciendo}>{pruebaPrimero ? (aSacar[0]?.clase === 'asiento' ? 'Sacar solo este para probar' : 'Sacar solo esta para probar') : 'Meterlas en ERP10'}</button>
           </div>
         </div>
       )}
@@ -551,7 +575,7 @@ export function SalidaErp10() {
 
       {s && paso === 3 && (
         <ComprobarErp10 subido={subido} base={comprobar.datos} comparacion={comparacion} error={errorSubir ?? comprobar.error}
-          elegida={elegida} elegir={setElegida} subir={(f) => { void subir(f) }} leerErp10={(h) => { void leerDeErp10(h) }} faltaErp10={conexion.datos ? faltaErp10 : null} irALaConexion={irALaConexion} aMano={(id) => { void aMano(id) }} volver={(id) => { void volverASacarla(id) }}
+          elegida={elegida} elegir={setElegida} subir={(f) => { void subir(f) }} leerErp10={(h) => { void leerDeErp10(h) }} casadas={casadas} faltaErp10={conexion.datos ? faltaErp10 : null} irALaConexion={irALaConexion} aMano={(id) => { void aMano(id) }} volver={(id) => { void volverASacarla(id) }}
           ocupado={!!haciendo} cargando={comprobar.cargando || datos.cargando} mes={mes} />
       )}
 

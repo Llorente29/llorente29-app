@@ -28,6 +28,7 @@ import { rutaAsiento, rutaMayor } from '@/config/navegacion'
 import { fechaLarga } from '@/modules/conta/lib/formato'
 import { importe } from '@/modules/conta/erp10/salida'
 import { conDiferencia, explicar, type Comparacion, type Comprobar, type CuentaComparada } from '@/modules/conta/erp10/comparar'
+import { frasesCasadas, type Casada } from '@/modules/conta/erp10/casar'
 
 export interface Subido { nombre: string; fecha: string; avisos: string[]; /** X10: leído de ERP10 ahora (día y hora), sin Excel. */ leidoEn?: string }
 
@@ -53,6 +54,8 @@ export function ComprobarErp10(p: {
   faltaErp10?: string | null
   /** X10b · Abre la tarjeta «Conexión con ERP10» de arriba. */
   irALaConexion?: () => void
+  /** X10c · Lo que salió por la conexión, casado factura a factura con su número de ERP10 (null: no se ha leído ERP10). */
+  casadas?: Casada[] | null
   aMano: (entryId: string) => void
   volver: (entryId: string) => void
   ocupado: boolean
@@ -162,6 +165,7 @@ export function ComprobarErp10(p: {
           </span>
         </div>
         {p.subido.avisos.map((a) => <p key={a} className="cxe-aviso-linea" role="note">{a}</p>)}
+        {p.casadas && p.casadas.length > 0 && <Casadas xs={p.casadas} />}
         {p.error && <p className="cxe-mal" role="alert">{p.error}</p>}
         {!c && !p.error && <div aria-busy="true" aria-label="Comparando" className="cxe-marco"><p className="cx-ayuda" style={{ padding: 12 }}>Comparando con lo de Sumied…</p></div>}
         {c && (
@@ -203,6 +207,19 @@ export function ComprobarErp10(p: {
           {elegida && <PorQue x={elegida} c={c!} ultimoLote={ultimoLote} aMano={p.aMano} volver={p.volver} ocupado={p.ocupado} />}
         </div>
       </aside>
+    </div>
+  )
+}
+
+/** X10c · Factura a factura: las que salieron por la conexión, con su número de ERP10. Las que no están igual, cada una con su porqué. */
+function Casadas({ xs }: { xs: Casada[] }) {
+  const [ver, setVer] = useState(false)
+  const f = frasesCasadas(xs)
+  return (
+    <div className={`cxe-aviso-linea cxe-casadas${f.bien ? ' cxe-casadas-bien' : ''}`} role="note" aria-label="Una a una, con su número de ERP10">
+      {f.resumen}
+      {!f.bien && <> <button type="button" className="cxe-enlace" aria-expanded={ver} onClick={() => setVer((v) => !v)}>{ver ? 'Ocultarlas' : 'Verlas'}</button></>}
+      {ver && !f.bien && <ul>{f.malas.map((x) => <li key={x.entryId}><strong>{x.numero}</strong>: {x.detalle}</li>)}</ul>}
     </div>
   )
 }
