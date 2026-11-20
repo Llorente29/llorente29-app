@@ -33,9 +33,9 @@ begin
   -- 1 · Las cuentas: la del socio, la del proveedor y la del cliente de la plataforma.
   insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source, created_at, updated_at)
   values
-    (k_cuenta, k_emp2, 'pymes', '55100001', '551', 'Cuenta corriente con socios · Socio de Prueba', 'own', 'manual', cuando, cuando),
-    (k_cuenta, k_emp2, 'pymes', '40000073', '4000', 'Plataforma de Prueba K06, S.L.', 'own', 'manual', cuando, cuando),
-    (k_cuenta, k_emp2, 'pymes', '43000091', '4300', 'Clientes · Plataforma de Prueba K06, S.L.', 'own', 'manual', cuando, cuando)
+    (k_cuenta, k_emp2, 'pymes', '55100001', '551', 'Socio de Prueba', 'own', 'manual', cuando, cuando),
+    (k_cuenta, k_emp2, 'pymes', '40000073', '4000', 'Plataforma de Prueba K06', 'own', 'manual', cuando, cuando),
+    (k_cuenta, k_emp2, 'pymes', '43000091', '4300', 'Plataforma de Prueba K06', 'own', 'manual', cuando, cuando)
   on conflict (company_id, code) do nothing;
   -- 2 · La plataforma: su canal, su contacto (proveedor y plataforma), su proveedor y sus dos subcuentas.
   insert into public.sales_channel (id, account_id, name, slug, channel_type, created_at)
