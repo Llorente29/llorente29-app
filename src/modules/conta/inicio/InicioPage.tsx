@@ -35,6 +35,8 @@
 //   · «Pendiente de ti» es la lista del «Te toca hoy» (conta_pendientes), con
 //     bancos y contactos, y su total es el de la barra de Inicio.
 //   · El IVA dice de qué trimestre habla y si está en curso.
+// X13 · Una sociedad conectada con ERP10 sin nada contabilizado del ejercicio: «Esta empresa está en ERP10.
+// Tráetela», con el botón que lleva a «Traer de ERP10» (la pantalla de un botón).
 // Sin empresa todavía, el Inicio no tiene nada que enseñar: lleva al alta
 // conversada (N1b), que es donde aterriza el cliente la primera vez.
 
@@ -42,6 +44,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { rutaAltaEmpresa, rutaAjustes, rutaApartadoEmpresa, rutaBancos, rutaCompras, rutaImpuestos, rutaLibroDiario, rutaLibros, rutaLiquidacionesVentas, rutaMayor, rutaNuevoAsiento, rutaDocumentos, rutaTerceros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import { leerConexionErp10 } from '@/modules/conta/services/erp10ApiService'
+import { tabla } from '@/modules/conta/services/bd'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu, refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { cargarIa, responderSugerencia } from '@/modules/conta/services/iaService'
@@ -112,6 +116,7 @@ export default function InicioPage() {
         </div>
       )}
       <Diez accountId={accountId} companyId={activa.id} quien={userName} />
+      <TraerDeErp10 accountId={accountId} companyId={activa.id} anio={hoy.slice(0, 4)} />
       <FacturasDePlataforma accountId={accountId} companyId={activa.id} hoy={hoy} />
       <Cifras accountId={accountId} companyId={activa.id} mes={mes} hoy={hoy} />
       <div className="cxi-cuerpo">
@@ -138,6 +143,30 @@ function Diez({ accountId, companyId, quien }: { accountId: string; companyId: s
   if (e === null || e === 'fallo') return null
   if (!verTarjetaDiez(e.listo, e.programa)) return null
   return <PasosDiez accountId={accountId} companyId={companyId} quien={quien} estado={e} recargar={recargar} />
+}
+
+// ── X13 · Una empresa que está en ERP10 y aún no tiene nada aquí ─────────────
+
+/**
+ * Con la sociedad conectada con ERP10 (claves, código y conectada) y nada contabilizado del ejercicio (ni un
+ * asiento del año, traído o apuntado), una línea con el botón a «Traer de ERP10». Lo demás, nada.
+ */
+function TraerDeErp10({ accountId, companyId, anio }: { accountId: string; companyId: string; anio: string }) {
+  const [c] = useCarga(async () => {
+    const con = await leerConexionErp10(accountId, companyId).catch(() => null)
+    if (!con || !con.conClaves || !con.codigo.trim() || con.estado !== 'connected') return false
+    const { count, error } = await tabla('journal_entry').select('id', { count: 'exact', head: true })
+      .eq('account_id', accountId).eq('company_id', companyId).gte('entry_date', `${anio}-01-01`).lte('entry_date', `${anio}-12-31`)
+    if (error) return false
+    return (count ?? 0) === 0
+  }, `${companyId}:${anio}`)
+  if (c.estado !== 'listo' || !c.v) return null
+  return (
+    <div className="cx-aviso-alta" role="status" aria-label="Traer de ERP10">
+      <span><b>Esta empresa está en ERP10.</b> Tráetela: un botón, y Sumied la lee entera.</span>
+      <Link to={rutaLibros('diario', 'traer-erp10')} className="cx-boton">Traer de ERP10</Link>
+    </div>
+  )
 }
 
 // ── D07 · La factura de comisión de la semana que no ha llegado ─────────────

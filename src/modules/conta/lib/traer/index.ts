@@ -38,6 +38,7 @@ export * from './paraLaBase'
 export * from './pantalla'
 export * from './casarPagos'
 export * from './conexion'
+export * from './unBoton'
 
 /** Cómo está cada fichero en la lista de la maqueta: «Leído», «Mira esto» o «Falta». */
 export type Estado = 'leido' | 'mira' | 'falta'
@@ -84,7 +85,7 @@ export interface Carga {
   }
   aprendido: { proveedores: Aprendido[]; pendientes: Pendiente[] }
   /** X12 · Lo traído por la conexión: cómo han venido las facturas y la comprobación de ERP10. Null sin conexión. */
-  conexion: { ejercicio: string; series: string; resumen: LeidoDeLaConexion['resumen'] } | null
+  conexion: { ejercicio: string; series: string; resumen: LeidoDeLaConexion['resumen']; sinSaber: string[] } | null
 }
 
 /** Lo que se sube: ya abierto, o un fichero que no se pudo abrir (con su porqué). */
@@ -181,7 +182,7 @@ export function leerCarga(subidos: readonly Subido[], conexion: LeidoDeLaConexio
       tercerosRaros: raros, frases,
     },
     aprendido: { proveedores: aprendidos, pendientes },
-    conexion: conexion ? { ejercicio: conexion.ejercicio, series: fraseDeLasSeries(conexion.clasificadas), resumen: conexion.resumen } : null,
+    conexion: conexion ? { ejercicio: conexion.ejercicio, series: fraseDeLasSeries(conexion.clasificadas), resumen: conexion.resumen, sinSaber: conexion.clasificadas.sinSaber.map((x) => x.porque) } : null,
   }
 }
 

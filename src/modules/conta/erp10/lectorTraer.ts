@@ -30,7 +30,8 @@ export const claveParte = (p: Parte) => `${p.que}:${p.mes ?? ''}`
 export function partesDe(ejercicio: string, hoy: string): Parte[] {
   const ultimo = hoy.slice(0, 4) === ejercicio ? Number(hoy.slice(5, 7)) : hoy.slice(0, 4) < ejercicio ? 0 : 12
   const meses = Array.from({ length: ultimo }, (_, i) => `${ejercicio}-${String(i + 1).padStart(2, '0')}`)
-  return [{ que: 'subcuentas', mes: null }, { que: 'resumen', mes: null }, ...meses.flatMap((mes) => [{ que: 'apuntes' as const, mes }, { que: 'facturas' as const, mes }])]
+  // X13 · Como la maqueta: el diario entero y después las facturas («Después del diario»).
+  return [{ que: 'subcuentas', mes: null }, { que: 'resumen', mes: null }, ...meses.map((mes) => ({ que: 'apuntes' as const, mes })), ...meses.map((mes) => ({ que: 'facturas' as const, mes }))]
 }
 
 /** Dónde se guarda lo leído (IndexedDB en el navegador; en memoria en las pruebas). */
@@ -45,6 +46,8 @@ export interface AlmacenTraer {
 export type PedirAErp10 = (p: PedirPagina) => Promise<Pagina>
 
 export type EstadoLector = 'sin_empezar' | 'leyendo' | 'cortado' | 'hecho'
+/** X13 · El «fallo» de un corte que no es fallo: lo ha parado quien trae («Pararlo»). */
+export const PARADO = 'Has dejado de traer: sigue donde se quedó cuando quieras.'
 
 /** Lo que ve la pantalla. */
 export interface VistaLector {
@@ -63,6 +66,8 @@ export interface VistaLector {
   datos: DeLaConexion
   /** Cuándo se acabó (o null). */
   acabado: string | null
+  /** X13 · Lo que queda, en ms, con lo que han tardado los meses leídos en esta sesión (null si aún no se sabe). */
+  quedaMs: number | null
 }
 
 type Meta = { hechas: string[]; paginas: Record<string, { n: number; primera: string | null }>; acabado: string | null }
@@ -107,6 +112,7 @@ export class LectorTraer {
       },
       datos: { ejercicio: this.ejercicio, subcuentas, apuntes, facturas, resumen, mesesLeidos },
       acabado: this.meta.acabado,
+      quedaMs: this.quedaMs(partes),
     }
   }
   private poner(estado: EstadoLector, enCurso: VistaLector['enCurso'] = null, fallo: string | null = null) {
@@ -155,14 +161,27 @@ export class LectorTraer {
     this.poner('sin_empezar')
   }
 
+  /** X13 · Lo que tarda cada mes leído (asientos o facturas), en esta sesión: con eso se dice lo que queda. */
+  private tiempos: { que: QueTraer; ms: number }[] = []
+  private quedaMs(partes: readonly Parte[]): number | null {
+    const faltan = partes.filter((p) => p.mes && !this.meta.hechas.includes(claveParte(p)))
+    if (!faltan.length) return 0
+    const media = (que: QueTraer) => { const t = this.tiempos.filter((x) => x.que === que); return t.length ? t.reduce((s, x) => s + x.ms, 0) / t.length : null }
+    const a = media('apuntes'), f = media('facturas')
+    if (a == null && f == null) return null
+    // Las facturas, sin medir todavía, como los asientos (en QBO pesaban algo menos en total: X11).
+    return Math.round(faltan.reduce((s, p) => s + ((p.que === 'apuntes' ? a ?? f : f ?? a) ?? 0), 0))
+  }
+
   private async correr(): Promise<void> {
     const partes = partesDe(this.ejercicio, this.o.hoy)
     for (const parte of partes) {
       const k = claveParte(parte)
       if (this.meta.hechas.includes(k)) continue
       let pagina = this.meta.paginas[k]?.n ?? 0
+      const empezo = Date.now()
       for (;;) {
-        if (this.parar) { this.poner('cortado', { parte, pagina }, 'Has dejado de traer: sigue donde se quedó cuando quieras.'); return }
+        if (this.parar) { this.poner('cortado', { parte, pagina }, PARADO); return }
         this.poner('leyendo', { parte, pagina })
         let r: Pagina
         try { r = await this.conReintentos({ que: parte.que, ejercicio: this.ejercicio, mes: parte.mes, pagina }) } catch (e) {
@@ -178,7 +197,10 @@ export class LectorTraer {
         }
         this.meta.paginas[k] = { n: pagina + 1, primera: pagina === 0 ? r.primera : primera }
         const acaba = repetida || r.ultima || r.filas.length === 0
-        if (acaba) this.meta.hechas.push(k)
+        if (acaba) {
+          this.meta.hechas.push(k)
+          if (parte.mes) this.tiempos.push({ que: parte.que, ms: Date.now() - empezo })
+        }
         await this.almacen.guardar(`${this.clave}|meta`, this.meta)
         if (acaba) break
         pagina++

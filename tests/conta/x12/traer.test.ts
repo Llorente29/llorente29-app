@@ -169,7 +169,9 @@ describe('el lector: mes a mes, y si se corta, sigue donde se quedó', () => {
     await b.traer()
     expect(b.estado.estado).toBe('hecho')
     expect(pedidas[0]).toEqual({ que: 'apuntes', ejercicio: '2025', mes: '2025-03', pagina: 1 })
-    expect(pedidas.some((p) => p.que === 'subcuentas' || p.que === 'resumen' || (p.mes ?? '') < '2025-03')).toBe(false)
+    // X13 · El diario entero y después las facturas: de las facturas no se había leído ninguna.
+    expect(pedidas.some((p) => p.que === 'subcuentas' || p.que === 'resumen' || (p.que === 'apuntes' && (p.mes ?? '') < '2025-03'))).toBe(false)
+    expect(pedidas.filter((p) => p.que === 'facturas').map((p) => p.mes)).toEqual(Array.from({ length: 12 }, (_, i) => `2025-${String(i + 1).padStart(2, '0')}`))
     expect(b.estado.cuantos).toEqual({ subcuentas: 3, proveedores: 1, clientes: 0, asientos: 451, facturas: 1 })
     expect(new Set(b.estado.datos.apuntes.map((x) => x.documento)).size).toBe(451)
     expect(antes + pedidas.length).toBe(1 + 1 + 2 * 12 + 2 + 1) // subcuentas, resumen, cada mes (asientos y facturas), las dos páginas de más de marzo, y la que falló // la que falló, y ni una más de las que hacían falta
@@ -186,7 +188,7 @@ describe('el lector: mes a mes, y si se corta, sigue donde se quedó', () => {
     const corriendo = l.traer()
     while (!parar) await new Promise((r) => setTimeout(r, 1))
     expect(comoVaLaFila(l.estado, 'diario')).toEqual({ leyendo: true, texto: 'Leyendo asientos: marzo, 3 de 12', haLeido: '0 asientos' })
-    expect(comoVaLaFila(l.estado, 'recibidas')).toEqual({ leyendo: false, texto: 'Leyendo facturas: marzo, 3 de 12', haLeido: '0 facturas' })
+    expect(comoVaLaFila(l.estado, 'recibidas')).toEqual({ leyendo: false, texto: 'En cola', haLeido: null })
     expect(comoVaLaFila(l.estado, 'plan_cuentas')).toEqual({ leyendo: false, texto: 'Leído; esperando a lo demás', haLeido: '3 cuentas' })
     expect(comoVaLaFila(l.estado, 'sumas_saldos')).toEqual({ leyendo: false, texto: 'Se calcula al acabar los asientos', haLeido: null })
     expect(comoVaLaFila(l.estado, 'proveedores')).toEqual({ leyendo: false, texto: 'Leído; esperando a lo demás', haLeido: '1 ficha' })
