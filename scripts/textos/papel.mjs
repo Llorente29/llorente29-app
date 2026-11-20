@@ -35,6 +35,7 @@ export const IMPRESO = [
   /Saldrá papel si la estación/,           // printing/PrintersSettingsPage: la impresora de la estación
   /hasta que haya papel: sin etiqueta/,    // pase/PaseBoard: la etiqueta de la bolsa
   /NO ha salido papel/,                    // pos/TpvSalePage: la comanda y el ticket del TPV
+  /Así sale en papel y en PDF/,            // nucleo/listado (Q06, maqueta nucleo_8): la hoja impresa del listado
 ]
 
 // Con un guion o un subrayado pegado es un nombre (cxt-papeles, papel_y_ficha), no una palabra.
