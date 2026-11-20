@@ -8,7 +8,9 @@
  * y los de la ficha (--kf-*). El panel de la derecha es el de la K04.
  */
 
-.cx.cxm .k-zona.cx-principal:has(.kl-listado) { padding: 0 16px 0; overflow: hidden; display: flex; flex-direction: column; }
+/* Con «:not([hidden])», como la ficha desde el K04b: si no, esta regla gana a la que esconde una pestaña y el
+   listado de una pestaña escondida sale debajo del que se mira (las dos «Abrir el asiento» de la e2e 44471618212). */
+.cx.cxm .k-zona.cx-principal:not([hidden]):has(.kl-listado) { padding: 0 16px 0; overflow: hidden; display: flex; flex-direction: column; }
 
 .kl-listado {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
