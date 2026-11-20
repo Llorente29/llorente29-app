@@ -98,13 +98,20 @@ MIGRAR_MIN=${CARRIL_MIGRAR_MIN:-15}
 CADUCA_S=${CARRIL_CADUCA_S:-60}
 LATIDO_S=${CARRIL_LATIDO_S:-15}
 CADUCA_CARRIL_S=${CARRIL_RESERVA_CADUCA_S:-300}
+# N11 (20/11) · Cada psql de un tiro, con tope: si staging se reinicia a mitad de una consulta,
+# el psql se queda esperando a una conexión muerta para siempre (PGCONNECT_TIMEOUT solo cuenta
+# al conectar). La noche del 20/11 (44713793655) staging se reinició a las 10:04 y los trozos
+# se quedaron colgados 1 h 45 min, hasta el tope del job. Las cortas (barrera, reserva), 30 s;
+# las demás (clonar, borrar), 300 s.
+PSQL_S=${CARRIL_PSQL_S:-300}
+PSQL_CORTO_S=${CARRIL_PSQL_CORTO_S:-30}
 MAX=${CARRIL_MAX:-2}
 VIEJO=${CARRIL_CERROJO_VIEJO:-1}
 : "${DB_URL:?Falta DB_URL}"
 mkdir -p "$CARRIL_DIR"
 
 # psql de un tiro contra staging, con quién es en application_name.
-q() { PGAPPNAME="e2e-carril · ${CARRIL_YO:-?}" "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 "$@"; }
+q() { PGAPPNAME="e2e-carril · ${CARRIL_YO:-?}" timeout -k 10 "${Q_TOPE:-$PSQL_S}" "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 "$@"; }
 
 numero() {
   [ -s "$CARRIL_DIR/numero" ] || { echo "::error::No hay carril cogido (falta $CARRIL_DIR/numero)." >&2; exit 1; }
@@ -156,7 +163,7 @@ quien_hay() {
 reserva() {
   local i out
   for i in 1 2 3; do
-    if out=$(q -A -t -v op="$1" -v id="$2" -v quien="$3" -v modo="$4" -v caduca="$CADUCA_S" -f "$SQL/barrera.sql" 2>&1); then
+    if out=$(Q_TOPE=$PSQL_CORTO_S q -A -t -v op="$1" -v id="$2" -v quien="$3" -v modo="$4" -v caduca="$CADUCA_S" -f "$SQL/barrera.sql" 2>&1); then
       printf '%s\n' "$out"; return 0
     fi
     [ "$i" -lt 3 ] && sleep "$i"
@@ -218,7 +225,7 @@ reserva_carril() {
   local i out id
   id=$(cat "$CARRIL_DIR/carril.reserva" 2>/dev/null || echo 00000000-0000-0000-0000-000000000000)
   for i in 1 2 3; do
-    if out=$(q -A -t -v op="$1" -v id="$id" -v numero="${2:-0}" -v quien="e2e-carril ${CARRIL_YO:-?}" -v caduca="$CADUCA_CARRIL_S" -f "$SQL/reserva_carril.sql" 2>&1); then
+    if out=$(Q_TOPE=$PSQL_CORTO_S q -A -t -v op="$1" -v id="$id" -v numero="${2:-0}" -v quien="e2e-carril ${CARRIL_YO:-?}" -v caduca="$CADUCA_CARRIL_S" -f "$SQL/reserva_carril.sql" 2>&1); then
       printf '%s\n' "$out"; return 0
     fi
     [ "$i" -lt 3 ] && sleep "$i"

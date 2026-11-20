@@ -14,7 +14,7 @@
 // Con la caducidad y el latido cortos (6 s y 1 s) para que la prueba vaya rápido.
 
 import { spawnSync } from 'node:child_process'
-import { chmodSync, chownSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { chmodSync, chownSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir, userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -150,5 +150,38 @@ describe('el carril: los tiempos de verdad', () => {
     expect(caduca).toBeGreaterThanOrEqual(180)
     expect(latido).toBeLessThan(caduca / 4)
     expect(caduca + 15).toBeLessThan(espera * 60)
+  })
+})
+
+describe('el carril: un psql que no contesta no cuelga la entera (N11, noche del 20/11)', () => {
+  it('con staging sin contestar a mitad de una consulta, barrera-entrar falla con su frase en segundos', () => {
+    // Un psql que se queda esperando para siempre, como el de una conexión muerta tras el reinicio.
+    const d = mkdtempSync(join(tmpdir(), 'carril-colgado-'))
+    carpetas.push(d)
+    const falso = join(d, 'psql')
+    writeFileSync(falso, '#!/usr/bin/env bash\nsleep 600\n')
+    chmodSync(falso, 0o755)
+    const t0 = Date.now()
+    const r = spawnSync('bash', [join(raiz, 'scripts/e2e/carril.sh'), 'barrera-entrar'], {
+      encoding: 'utf8', timeout: 60_000,
+      env: { ...process.env, DB_URL: 'postgresql://nadie@127.0.0.1:1/x', PSQL: falso, CARRIL_DIR: d, CARRIL_YO: 'run 44713793655 · trozo 1/3',
+        CARRIL_PSQL_CORTO_S: '1', CARRIL_BARRERA_MIN: '0' } })
+    expect(r.error, 'no se ha quedado colgado').toBeUndefined()
+    expect(r.status).toBe(1)
+    expect(r.stdout + r.stderr).toMatch(/Sin la barrera tras \d+ s/)
+    expect(Date.now() - t0).toBeLessThan(30_000)
+  }, 70_000)
+
+  it('cada psql de un tiro lleva tope: 30 s las cortas, 300 s las demás, y el cerrojo de antes 30 s', () => {
+    const sh = readFileSync(join(raiz, 'scripts/e2e/carril.sh'), 'utf8')
+    expect(sh).toContain('PSQL_S=${CARRIL_PSQL_S:-300}')
+    expect(sh).toContain('PSQL_CORTO_S=${CARRIL_PSQL_CORTO_S:-30}')
+    expect(sh).toMatch(/^q\(\) \{ .*timeout -k 10 "\$\{Q_TOPE:-\$PSQL_S\}" "\$PSQL"/m)
+    // Fuera de q(), solo el guardián llama a psql directamente (vive todo el job, a propósito).
+    expect(sh.split('\n').filter((l) => /"\$PSQL" "\$DB_URL"/.test(l) && !/timeout/.test(l) && !/stdbuf/.test(l))).toEqual([])
+    expect(sh).toMatch(/out=\$\(Q_TOPE=\$PSQL_CORTO_S q .*barrera\.sql/)
+    expect(sh).toMatch(/out=\$\(Q_TOPE=\$PSQL_CORTO_S q .*reserva_carril\.sql/)
+    const cerrojo = readFileSync(join(raiz, 'scripts/e2e/cerrojo.sh'), 'utf8')
+    expect(cerrojo.split('\n').filter((l) => /"\$PSQL" "\$DB_URL"/.test(l) && !/timeout -k 10 "\$\{CERROJO_PSQL_S:-30\}"/.test(l))).toEqual([])
   })
 })
