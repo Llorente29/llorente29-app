@@ -14,5 +14,5 @@ select clave, valor from (
     from public.conta_erp10_salida_partida where estado = 'salida' and creado_en < timestamptz '2026-11-21 00:00:00+01'
   union all
   select 3, 'tabla entera · conta_erp10_salida_empresa encendidas', count(*)::text
-    from public.conta_erp10_salida_empresa where encendida
+    from public.conta_erp10_salida_empresa where encendida and cambiado_en < timestamptz '2026-11-21 00:00:00+01'
 ) t order by o, clave;
