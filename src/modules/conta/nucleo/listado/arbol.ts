@@ -39,8 +39,8 @@ export interface Fila {
   nivel: number
   clase: ClaseFila
   celdas: Celda[]
-  /** Las dos primeras celdas van juntas («4 · Acreedores y deudores»). */
-  junta?: boolean
+  /** Las primeras celdas van juntas («4 · Acreedores y deudores»): cuántas (2; en el libro de IVA, las 4 de texto). */
+  junta?: number
   hijos: string[]
   /** La subcuenta de la fila (F5 abre su mayor). */
   cuenta?: string
@@ -60,8 +60,8 @@ export interface Arbol {
   total: Celda[]
   /** Cuántas cuentas (subcuentas) o facturas lista: «Cuadra. 212 cuentas». */
   cuantas: number
-  /** Debe = Haber (o el libro cuadra con el diario). */
-  cuadra: boolean
+  /** Debe = Haber (o el libro cuadra con el diario). null: no se mira (el mayor de unas cuentas no tiene por qué cuadrar). */
+  cuadra: boolean | null
   /** Lo mirado que no es de una fila (Debe ≠ Haber, el cuadre del libro con el diario). */
   avisos: string[]
 }
@@ -135,7 +135,7 @@ export function arbolSumas(filas: readonly FilaSumas[], nombres: ReadonlyMap<str
     const d = hojas.reduce((x, h) => x + c(deudorAcreedor(h.saldo)[0] ?? 0), 0) / 100
     const a = hojas.reduce((x, h) => x + c(deudorAcreedor(h.saldo)[1] ?? 0), 0) / 100
     const nombre = nombres.get(f.code)
-    const fila: Fila = { id, padre, nivel, clase: 'grupo', celdas: [nombre ? `${f.code} · ${nombre}` : f.code, '', f.debe, f.haber, d || null, a || null], junta: true, hijos: [] }
+    const fila: Fila = { id, padre, nivel, clase: 'grupo', celdas: [nombre ? `${f.code} · ${nombre}` : f.code, '', f.debe, f.haber, d || null, a || null], junta: 2, hijos: [] }
     out.set(id, fila)
     fila.hijos = f.hijos.map((h) => porId.get(h)).filter((x): x is FilaSumas => !!x).map((h) => construir(h, id, nivel + 1))
     return id
@@ -227,7 +227,7 @@ export function arbolMayor(apuntes: readonly (ApunteMayor & { concepto: string; 
     raiz.push(id)
     td += c(x.debe); th += c(x.haber)
   }
-  return { raiz, filas, columnas: COLUMNAS.mayor, total: [null, null, null, td / 100, th / 100, null, null], cuantas: raiz.length, cuadra: td === th, avisos: [] }
+  return { raiz, filas, columnas: COLUMNAS.mayor, total: [null, null, null, td / 100, th / 100, null, null], cuantas: raiz.length, cuadra: null, avisos: [] }
 }
 
 // ── El diario ─────────────────────────────────────────────────────────────
@@ -253,7 +253,7 @@ export function arbolDiario(meses: readonly MesResumido[], apuntes: readonly (Ap
     const id = `mes:${mes.mes}`
     const cuadraMes = c(mes.debe) === c(mes.haber)
     const fila: Fila = {
-      id, padre: null, nivel: 0, clase: 'mes', junta: true, hijos: [],
+      id, padre: null, nivel: 0, clase: 'mes', junta: 2, hijos: [],
       celdas: [`${nombreMes(mes.mes)} · ${mes.asientos} ${mes.asientos === 1 ? 'asiento' : 'asientos'}`, '', mes.debe, mes.haber],
       mirar: cuadraMes ? undefined : `No cuadra: ${Math.abs(mes.debe - mes.haber).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} de diferencia entre Debe y Haber. Un asiento validado siempre cuadra: avisa, es un fallo.`,
     }
@@ -294,7 +294,7 @@ export function arbolIva(anotaciones: readonly AnotacionLibro[], libro: 'issued'
     const idm = `mes:${mes}`
     let m = filas.get(idm)
     if (!m) {
-      m = { id: idm, padre: null, nivel: 0, clase: 'mes', junta: true, celdas: [nombreMes(mes), '', '', '', 0, null, 0, 0], hijos: [] }
+      m = { id: idm, padre: null, nivel: 0, clase: 'mes', junta: 4, celdas: [nombreMes(mes), '', '', '', 0, null, 0, 0], hijos: [] }
       filas.set(idm, m)
       raiz.push(idm)
     }

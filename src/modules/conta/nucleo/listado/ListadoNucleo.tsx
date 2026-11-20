@@ -36,6 +36,7 @@ import { rutaAsiento, rutaLibros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { usePestana, usePestanaActiva } from '@/modules/conta/diseno/plantillas'
+import { useConPropias } from '@/modules/conta/marco/nuevo/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { resumir } from '@/modules/conta/lib/extractos'
@@ -73,11 +74,11 @@ const GRUPO: Record<QueListado, { que: QueListado; nombre: string; ruta: string 
 
 /** El ancho de cada columna en pantalla (%), el mismo en el listado y en su total. */
 const ANCHOS: Record<QueListado, number[]> = {
-  sumas: [14, 33, 13, 13, 13.5, 13.5],
-  mayor: [10, 9, 33, 12, 12, 12, 12],
-  diario: [16, 48, 18, 18],
-  emitidas: [10, 14, 11, 25, 11, 6, 11, 12],
-  recibidas: [10, 14, 11, 25, 11, 6, 11, 12],
+  sumas: [17, 30, 13, 13, 13.5, 13.5],
+  mayor: [13, 8, 31, 12, 12, 12, 12],
+  diario: [18, 46, 18, 18],
+  emitidas: [14, 13, 11, 21, 11, 7, 11, 12],
+  recibidas: [14, 13, 11, 21, 11, 7, 11, 12],
 }
 
 const LIBROS: Record<'emitidas' | 'recibidas', Libro[]> = { emitidas: ['issued'], recibidas: ['received', 'investment'] }
@@ -95,6 +96,8 @@ export function ListadoNucleo({ que, cuentaDada }: { que: QueListado; cuentaDada
   const navegar = useNavigate()
   const [params] = useSearchParams()
   const hoy = hoyEnMadrid()
+  // Su encabezado es el suyo (el segmento de la maqueta): sin el «Ver: …» que la pestaña pone a las pantallas de hoy.
+  useConPropias()
 
   // ── El ejercicio: el de arriba (?ejercicio=), o el de hoy.
   const ejs = useLeer(accountId && activa ? () => leerEjerciciosLibros(accountId, activa.id) : null, `${accountId}:${activa?.id}`)
@@ -297,9 +300,11 @@ export function ListadoNucleo({ que, cuentaDada }: { que: QueListado; cuentaDada
         <div className="kf-segmentos kl-segmentos" role="tablist" aria-label="Listados">
           {GRUPO[que].map((x) => <button key={x.que} type="button" role="tab" aria-selected={x.que === que} onClick={() => ir(x.que)}>{x.nombre}</button>)}
         </div>
-        {a && (a.cuadra
-          ? <EstadoFicha tono="verde" fuerte="Cuadra." resto={cuantasTexto(que, a.cuantas)} />
-          : <EstadoFicha tono="ambar" fuerte="No cuadra." resto={cuantasTexto(que, a.cuantas)} />)}
+        {a && (a.cuadra === null
+          ? <EstadoFicha tono="gris" fuerte={cuantasTexto(que, a.cuantas)} resto="" />
+          : a.cuadra
+            ? <EstadoFicha tono="verde" fuerte="Cuadra." resto={cuantasTexto(que, a.cuantas)} />
+            : <EstadoFicha tono="ambar" fuerte="No cuadra." resto={cuantasTexto(que, a.cuantas)} />)}
         {a && cosas > 0 && <EstadoFicha tono="ambar" fuerte={`${cosas} ${cosas === 1 ? 'cosa' : 'cosas'} que mirar`} resto="" />}
         <div className="kl-cabecera-botones">
           <button type="button" className="kf-boton-hueco" disabled={!a} onClick={() => { setPagina(0); setImprimiendo(!imprimiendo) }}>
@@ -328,7 +333,7 @@ export function ListadoNucleo({ que, cuentaDada }: { que: QueListado; cuentaDada
                     <div className="kl-der"><strong>{hoja.titulo}</strong><span>{hoja.cabecera.subtitulo}</span></div>
                   </header>
                   <table className="kl-hoja-tabla">
-                    <colgroup>{anchosDeLaHoja(que).map((w, i) => <col key={i} style={{ width: `${w}mm` }} />)}</colgroup>
+                    <colgroup>{anchosDeLaHoja(que).map((w, i, t) => <col key={i} style={{ width: `${(100 * w) / t.reduce((x, y) => x + y, 0)}%` }} />)}</colgroup>
                     <thead><tr>{hoja.columnas.map((c) => <th key={c.titulo} className={c.cifra ? 'kl-der' : undefined}>{c.titulo}</th>)}</tr></thead>
                     <tbody>
                       {pag.lineas.map((l, i) => (
@@ -445,11 +450,12 @@ export function ListadoNucleo({ que, cuentaDada }: { que: QueListado; cuentaDada
 const primeraCifra = (cs: readonly Columna[]): number => Math.max(1, cs.findIndex((c) => c.cifra))
 
 /** Las celdas de una fila: la primera con su sangría y su flecha; las dos primeras juntas si la fila lo pide. */
-function celdasDe(celdas: readonly Celda[], cs: readonly Columna[], junta: boolean | undefined, nivel: number, conHijos: boolean, abierta: boolean, leyendo: boolean) {
+function celdasDe(celdas: readonly Celda[], cs: readonly Columna[], junta: number | undefined, nivel: number, conHijos: boolean, abierta: boolean, leyendo: boolean) {
   const flecha = conHijos ? <span className="kl-flecha" aria-hidden="true">{leyendo ? '…' : abierta ? '⌄' : '›'}</span> : <span className="kl-flecha" aria-hidden="true" />
-  const primera = <td key={0} colSpan={junta ? 2 : undefined} style={{ paddingLeft: 6 + nivel * 16 }}>{flecha}{textoCelda(celdas[0], cs[0])}</td>
-  const resto = celdas.slice(junta ? 2 : 1).map((v, k) => {
-    const col = cs[k + (junta ? 2 : 1)]
+  const juntas = junta ?? 1
+  const primera = <td key={0} colSpan={juntas > 1 ? juntas : undefined} style={{ paddingLeft: 6 + nivel * 12 }}>{flecha}{textoCelda(celdas[0], cs[0])}</td>
+  const resto = celdas.slice(juntas).map((v, k) => {
+    const col = cs[k + juntas]
     return <td key={k + 1} className={col?.cifra ? 'kl-der' : undefined}>{col ? textoCelda(v, col) : ''}</td>
   })
   return [primera, ...resto]
