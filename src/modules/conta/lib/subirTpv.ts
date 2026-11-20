@@ -190,6 +190,48 @@ export function porQueNoCuadra(l: LecturaDia): string[] {
     if (sueltas === 1) out.push(`Falta la factura ${huecos[0][0]} en la numeración.`)
     else if (sueltas > 1) out.push(`Faltan las facturas ${lista(huecos.map(([x, y]) => (x === y ? String(x) : `${x} a ${y}`)))} en la numeración.`)
   }
+  // R12 · Lo demás que mira la base al guardar (conta_tpv_dia_guardar), para decirlo ya aquí y no
+  // al guardar (regla 8). La base para en lo primero que encuentra, y la numeración y los totales
+  // van antes: si alguno de esos ya falla, se dice ése y no lo mismo con otras palabras.
+  if (!out.length) out.push(...loQueMiraLaBase(l))
+  return out
+}
+
+/**
+ * R12 · Las comprobaciones de conta_tpv_dia_guardar (R03) que la vista previa no hacía: si una de
+ * estas falla, la base no guarda el día, y la pantalla tiene que decirlo antes (regla 8).
+ */
+export function loQueMiraLaBase(l: LecturaDia): string[] {
+  const out: string[] = []
+  const docs = l.documentos
+  const ordenes = new Set(docs.map((d) => d.orden))
+  const porOrden = agrupar(docs.map((d) => [d.orden, d.numero] as const))
+  const varias = [...porOrden].filter(([, ns]) => ns.length > 1).map(([o, ns]) => `la orden ${o} tiene las facturas ${lista([...ns].sort((a, b) => a - b).map(String))}`)
+  if (varias.length) out.push(`No sé a qué factura va el IVA: ${lista(varias)}.`)
+  const sinFactura = [...new Set(l.impuestos.filter((i) => !ordenes.has(i.orden)).map((i) => i.orden))].sort()
+  if (sinFactura.length) out.push(`Hay IVA de órdenes sin factura este día: ${lista(sinFactura)}.`)
+  const dobles = [...agrupar(l.impuestos.map((i) => [`${i.orden}|${i.tipo}`, i] as const))].filter(([, xs]) => xs.length > 1)
+    .map(([, xs]) => `al ${xs[0].tipo.toLocaleString('es-ES')} % en la orden ${xs[0].orden}`)
+  if (dobles.length) out.push(`El IVA está dos veces: ${lista(dobles)}.`)
+  if (!varias.length) {
+    const desglose = new Map<string, { b: number; q: number }>()
+    for (const i of l.impuestos) { const x = desglose.get(i.orden) ?? { b: 0, q: 0 }; x.b += c(i.base); x.q += c(i.cuota); desglose.set(i.orden, x) }
+    const malas = docs.filter((d) => { const x = desglose.get(d.orden); return !x || x.b !== c(d.base) || x.q !== c(d.cuota) })
+      .map((d) => { const x = desglose.get(d.orden); return `la ${d.numero}: ${eurosExactos(d.total)} en la factura y ${eurosExactos(e(x ? x.b + x.q : 0))} en el desglose` })
+    if (malas.length) out.push(`El IVA desglosado no es el de estas facturas: ${lista(malas)}.`)
+  }
+  const pagosSueltos = l.cobros.filter((x) => !ordenes.has(x.orden)).map((x) => `la fila ${x.fila} (orden ${x.orden})`)
+  if (pagosSueltos.length) out.push(`Hay pagos de órdenes sin factura este día: ${lista(pagosSueltos)}.`)
+  const pagosDobles = [...agrupar(l.cobros.map((x) => [x.fila, x] as const))].filter(([, xs]) => xs.length > 1).map(([f]) => f).sort((a, b) => a - b).map(String)
+  if (pagosDobles.length) out.push(`El pago de la fila ${lista(pagosDobles)} está dos veces.`)
+  // La cuota de cada tipo sale de su base: como mucho, medio céntimo por factura (redondeado).
+  for (const [tipo, xs] of [...agrupar(l.impuestos.map((i) => [i.tipo, i] as const))].sort(([a], [b]) => a - b)) {
+    const b = xs.reduce((a, i) => a + c(i.base), 0), q = xs.reduce((a, i) => a + c(i.cuota), 0)
+    const deBase = Math.sign(b) * Math.round(Math.abs(b) * tipo / 100)
+    if (Math.abs(q - deBase) > Math.floor(0.55 * xs.length + 0.5)) {
+      out.push(`El IVA al ${tipo.toLocaleString('es-ES')} % (${eurosExactos(e(q))}) no sale de su base (${eurosExactos(e(b))} × ${tipo.toLocaleString('es-ES')} % = ${eurosExactos(e(deBase))}): se aleja más de medio céntimo por factura.`)
+    }
+  }
   return out
 }
 
