@@ -73,6 +73,9 @@ export const DE_QUIEN = {
   // Compras (21/10, «Compras pasa a ser tuya»): conta/compras-…, sin frente de
   // usuarios, con sus capturas en compras/…
   compras: /^docs\/conta\/capturas\/compras\//,
+  // Q07 (20/11): los listados del núcleo (conta/q0…), igual que Impuestos: sin frente de
+  // usuarios, con sus capturas en q06/, q07/… (las del Q06 y las del Q07).
+  listados: /^docs\/conta\/capturas\/q\d[^/]*\//,
   // Autoconteo (21/10): las de inventario son de la ZONA, no de un frente. Las
   // fija una rama sin frente que toque inventario (duenoDeLaRama, abajo).
   inventario: /^docs\/inventario\/capturas\//,
@@ -97,6 +100,7 @@ export function duenoDeLaRama(rama, cambiados = []) {
   if (/^conta\/i\d/.test(rama)) return 'impuestos'
   if (/^conta\/p\d/.test(rama)) return 'despacho'
   if (/^conta\/compras/.test(rama)) return 'compras'
+  if (/^conta\/q\d/.test(rama)) return 'listados'
   const frente = frenteDeLaRama(rama)
   if (frente) return frente
   const zonas = zonasDuenas(cambiados.filter((f) => !esCaptura(f))).filter((z) => z.zona in DE_QUIEN)

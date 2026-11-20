@@ -13,7 +13,7 @@ import {
   abrirHasta, arbolDiario, arbolIva, arbolMayor, arbolSumas, camino, colgar, deudorAcreedor, enRango, filasDeMovimientos, lineasDeLaHoja, mirarSaldo,
   paginar, periodosDe, queMirar, subtituloHoja, visibles,
 } from '@/modules/conta/nucleo/listado/arbol'
-import { hojaDe, textoPagina, textoSigue, LINEAS_POR_PAGINA } from '@/modules/conta/nucleo/listado/hoja'
+import { hojaDe, textoPagina, textoSigue, lineasPorPagina } from '@/modules/conta/nucleo/listado/hoja'
 import { queDeLaAccion } from '@/modules/conta/nucleo/listado/rutas'
 import { OPCIONES_POR_DEFECTO, sumasYSaldos, totales, type SaldoPartido } from '@/modules/conta/lib/sumasSaldos'
 import { extracto, resumir } from '@/modules/conta/lib/extractos'
@@ -228,7 +228,7 @@ describe('Q06 · la hoja impresa (maqueta 8)', () => {
     expect(h.cabecera.subtitulo).toBe('Del 01/01/2026 al 31/07/2026 · todas las cuentas')
     expect(textoPagina(h, h.paginas[0])).toBe('Listado del 17/11/2026 · Página 1 de 1')
     expect(textoSigue(h.paginas[0])).toBe('')
-    expect(LINEAS_POR_PAGINA('sumas')).toBe(40)
+    expect(lineasPorPagina(h.columnas)).toBe(40)
   })
   it('el mayor imprime cada cuenta con su saldo inicial, sus movimientos y su suma', () => {
     const m = arbolMayor(APUNTES, '2026-06-01', '2026-07-31', { desde: '43000012', hasta: '43000012' })

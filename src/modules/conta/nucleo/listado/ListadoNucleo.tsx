@@ -54,7 +54,7 @@ import {
   abrirHasta, arbolDiario, arbolIva, arbolMayor, arbolSumas, camino, colgar, filasDeMovimientos, periodosDe, queMirar, subtituloHoja, visibles,
   type Arbol, type Celda, type Columna, type Hasta, type QueListado,
 } from './arbol'
-import { excelDeLaHoja, hojaDe, nombreDeFichero, pdfDeLaHoja, textoCelda, textoPagina, textoSigue, anchosDeLaHoja } from './hoja'
+import { excelDeLaHoja, hojaDe, nombreDeFichero, pdfDeLaHoja, textoCelda, textoPagina, textoSigue, esApaisada } from './hoja'
 import { documentoDelAsiento } from './servicio'
 import './listado.css'
 
@@ -72,14 +72,8 @@ const GRUPO: Record<QueListado, { que: QueListado; nombre: string; ruta: string 
   return { sumas: generales, mayor: generales, diario: generales, emitidas: iva, recibidas: iva }
 })()
 
-/** El ancho de cada columna en pantalla (%), el mismo en el listado y en su total. */
-const ANCHOS: Record<QueListado, number[]> = {
-  sumas: [17, 30, 13, 13, 13.5, 13.5],
-  mayor: [13, 8, 31, 12, 12, 12, 12],
-  diario: [18, 46, 18, 18],
-  emitidas: [11, 15, 12, 20, 11, 6, 12, 13],
-  recibidas: [11, 15, 12, 20, 11, 6, 12, 13],
-}
+/** El ancho de cada columna en pantalla (%), el mismo en el listado y en su total: su peso (arbol.ts, columnasDe). */
+const anchosEnPantalla = (cs: readonly Columna[]): number[] => { const t = cs.reduce((x, y) => x + y.peso, 0); return cs.map((y) => (100 * y.peso) / t) }
 
 const LIBROS: Record<'emitidas' | 'recibidas', Libro[]> = { emitidas: ['issued'], recibidas: ['received', 'investment'] }
 const conCuentas = (q: QueListado) => q === 'sumas' || q === 'mayor'
@@ -290,7 +284,7 @@ export function ListadoNucleo({ que, cuentaDada }: { que: QueListado; cuentaDada
     navegar(`${destino.ruta}${pedido ? conEjercicio('', pedido) : ''}`)
   }
   const ponerFechas = (d: string, h: string) => { if (ejercicio) setFechas({ ejercicio: ejercicio.id, desde: d, hasta: h }) }
-  const anchos = ANCHOS[que]
+  const anchos = anchosEnPantalla(a?.columnas ?? [])
   const columnas = a?.columnas ?? []
   const cargando = !datos.datos && !datos.error
 
@@ -327,13 +321,13 @@ export function ListadoNucleo({ que, cuentaDada }: { que: QueListado; cuentaDada
                 <button type="button" className="kf-boton-hueco" onClick={bajarExcel}>Excel</button>
               </div>
               <div className="kl-mesa">
-                <article className="kl-hoja" data-apaisada={anchosDeLaHoja(que).length > 6 || undefined} aria-label={`${hoja.titulo}, página ${pag.numero}`}>
+                <article className="kl-hoja" data-apaisada={esApaisada(hoja.columnas) || undefined} aria-label={`${hoja.titulo}, página ${pag.numero}`}>
                   <header className="kl-hoja-cabecera">
                     <div><strong>{hoja.cabecera.empresa}</strong>{hoja.cabecera.nif && <span>N.I.F. {hoja.cabecera.nif}</span>}</div>
                     <div className="kl-der"><strong>{hoja.titulo}</strong><span>{hoja.cabecera.subtitulo}</span></div>
                   </header>
                   <table className="kl-hoja-tabla">
-                    <colgroup>{anchosDeLaHoja(que).map((w, i, t) => <col key={i} style={{ width: `${(100 * w) / t.reduce((x, y) => x + y, 0)}%` }} />)}</colgroup>
+                    <colgroup>{anchosEnPantalla(hoja.columnas).map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
                     <thead><tr>{hoja.columnas.map((c) => <th key={c.titulo} className={c.cifra ? 'kl-der' : undefined}>{c.titulo}</th>)}</tr></thead>
                     <tbody>
                       {pag.lineas.map((l, i) => (

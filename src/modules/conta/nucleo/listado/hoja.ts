@@ -9,28 +9,25 @@
 import { jsPDF } from 'jspdf'
 import { excelTabla, type FilaTabla } from '@/modules/conta/libros/exportar'
 import { cifra } from '../ficha/textos'
-import { columnasHoja, lineasDeLaHoja, paginar, SUMA_Y_SIGUE, TITULO_HOJA, type Arbol, type Celda, type Columna, type Pagina, type QueListado } from './arbol'
+import { columnasQueSuman, lineasDeLaHoja, paginar, TITULO_HOJA, type Arbol, type Celda, type Columna, type Pagina, type QueListado } from './arbol'
 
-/** El mayor y el libro de IVA, apaisados (más columnas); sumas y saldos y el diario, en vertical. */
-export const APAISADA: Record<QueListado, boolean> = { sumas: false, diario: false, mayor: true, emitidas: true, recibidas: true }
+/** Apaisada: con más de 6 columnas (el mayor, el libro de IVA, o sumas y saldos comparando); si no, en vertical. */
+export const esApaisada = (cs: readonly Columna[]): boolean => cs.length > 6
 
 /** Líneas por página: las mismas en la pantalla, el PDF y la impresora. */
-export const LINEAS_POR_PAGINA = (que: QueListado): number => (APAISADA[que] ? 26 : 40)
+export const lineasPorPagina = (cs: readonly Columna[]): number => (esApaisada(cs) ? 26 : 40)
 
-/** El ancho de cada columna en la hoja, en milímetros (A4 con 14 de margen). */
-const ANCHOS: Record<QueListado, number[]> = {
-  sumas: [25, 61, 24, 24, 24, 24],
-  diario: [24, 98, 30, 30],
-  mayor: [22, 22, 105, 30, 30, 30, 30],
-  emitidas: [22, 34, 26, 85, 28, 14, 28, 32],
-  recibidas: [22, 34, 26, 85, 28, 14, 28, 32],
+/** El ancho de cada columna en la hoja, en milímetros: su peso, repartido en el ancho útil de un A4 con 14 de margen. */
+export function anchosDeLaHoja(cs: readonly Columna[]): number[] {
+  const util = esApaisada(cs) ? 269 : 182
+  const total = cs.reduce((x, y) => x + y.peso, 0)
+  return cs.map((y) => (util * y.peso) / total)
 }
-export const anchosDeLaHoja = (que: QueListado): number[] => ANCHOS[que]
 
 /** Una celda como se escribe en la hoja: las cifras con dos decimales y su punto de miles. */
 export function textoCelda(v: Celda, col: Columna): string {
   if (v === null || v === undefined) return ''
-  if (typeof v === 'number') return col.titulo === '%' ? v.toLocaleString('es-ES', { maximumFractionDigits: 2 }) : cifra(v)
+  if (typeof v === 'number') return col.clave === 'tipo' ? v.toLocaleString('es-ES', { maximumFractionDigits: 2 }) : col.clave === 'pct' ? `${v.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %` : cifra(v)
   return v
 }
 
@@ -40,7 +37,7 @@ export interface Hoja { que: QueListado; columnas: Columna[]; paginas: Pagina[];
 
 /** La hoja de un listado: sus columnas y sus páginas. */
 export function hojaDe(a: Arbol, que: QueListado, cabecera: CabeceraHoja): Hoja {
-  return { que, columnas: columnasHoja(que), paginas: paginar(lineasDeLaHoja(a, que), LINEAS_POR_PAGINA(que), SUMA_Y_SIGUE[que]), cabecera, titulo: TITULO_HOJA[que] }
+  return { que, columnas: a.columnas, paginas: paginar(lineasDeLaHoja(a, que), lineasPorPagina(a.columnas), columnasQueSuman(a.columnas)), cabecera, titulo: TITULO_HOJA[que] }
 }
 
 const ddmmaaaa = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`
@@ -52,11 +49,11 @@ export const textoPagina = (h: Hoja, p: Pagina): string => `Listado del ${ddmmaa
 
 /** El PDF de la hoja, página a página como se ve. */
 export function pdfDeLaHoja(h: Hoja): jsPDF {
-  const doc = new jsPDF({ orientation: APAISADA[h.que] ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' })
+  const doc = new jsPDF({ orientation: esApaisada(h.columnas) ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' })
   const ancho = doc.internal.pageSize.getWidth()
   const alto = doc.internal.pageSize.getHeight()
   const m = 14
-  const anchos = ANCHOS[h.que]
+  const anchos = anchosDeLaHoja(h.columnas)
   h.paginas.forEach((p, i) => {
     if (i) doc.addPage()
     let y = 18
