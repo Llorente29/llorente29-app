@@ -122,7 +122,6 @@
 .kf-iva col.kf-col-base { width: 40%; }
 .kf-iva col.kf-col-tipo { width: 22%; }
 .kf-iva-cabeza .kf-titulo { white-space: nowrap; }
-.kf-iva .kf-iva-quitar { width: 18px; }
 .kf-total { padding: 10px 12px; background: var(--k-gris); border-radius: 6px; display: grid; gap: 8px; }
 .kf-total-arriba { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .kf-total-arriba span { font-weight: 700; font-size: 14px; white-space: nowrap; }
@@ -141,7 +140,8 @@
 tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opacity: 1; }
 .kf-gasto[data-una='si'] { grid-template-columns: 92px minmax(0, 1fr) 84px; }
 .kf-gasto[data-una='si'] > span:last-child { display: none; }
-.kf-iva .kf-iva-quitar { width: 14px; }
+/* El aspa de quitar una línea de IVA (18 px) en su columna, en todas las fichas (e2e 44570080751 y 44702392195: «td: «×», 18 en 14»). */
+.kf-iva .kf-iva-quitar { width: 20px; }
 .kf-sugerencias {
   position: absolute; z-index: 25; max-height: 220px; overflow-y: auto; min-width: 280px; margin: 2px 0 0; padding: 4px; list-style: none;
   background: var(--k-blanco); border: 1px solid var(--k-borde); border-radius: 6px; box-shadow: 0 6px 18px rgba(16, 24, 40, 0.14);
@@ -227,5 +227,49 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 .kf-emitida .kf-cuerpo { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
 .kf-emitida .kf-dos { grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr); }
 .kf-emitida .kf-formulario { gap: 3px; padding-top: 6px; padding-bottom: 6px; }
-/* El aspa de quitar una línea de IVA (18 px) en su columna (e2e 44570080751: «td: «×», 18 en 14»). */
-.kf-emitida .kf-iva .kf-iva-quitar { width: 20px; }
+
+/* K06 · «Cómo se paga» en la recibida: debajo de la cuenta, cuándo vence, el día del pago y el importe, cada uno con su rótulo. */
+.kf-pago-fechas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.kf-rotulo-chico { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; min-width: 0; font-size: 11px; color: var(--k-apoyo); white-space: nowrap; }
+
+/* K06 · La raya entre el formulario y el documento: fina (la del borde del panel), con el cursor de arrastrar y sin adornos.
+   La parte del documento la pone la raya (--kf-doc); el formulario no baja de su mínimo (--kf-min-form: el ancho que tiene a
+   1366 × 768 con la cinta plegada, medido, sin cortar la cuenta con su nombre ni las columnas del IVA). */
+.kf-ficha { --kf-min-form: 680px; }
+.kf-ficha.kf-emitida { --kf-min-form: 740px; }
+.kf-ficha .kf-cuerpo[data-raya='si'] { grid-template-columns: minmax(0, 1fr) clamp(240px, var(--kf-doc), calc(100% - var(--kf-min-form))); }
+.kf-panel { position: relative; }
+.kf-raya { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; z-index: 2; cursor: col-resize; touch-action: none; }
+.kf-raya:hover, .kf-raya:focus-visible { outline: none; background: linear-gradient(to right, transparent 3px, var(--k-azul, #2f6fde) 3px, var(--k-azul, #2f6fde) 5px, transparent 5px); }
+
+/* K06 · En la recibida no se corta nada, a 1456 × 816 ni a 1366 × 768 (Julio, 20/11), como la emitida del K05: el concepto
+   va en su fila (FichaRecibida); la columna × del IVA, a 20 px en todas (arriba); un poco menos de aire entre bloques; la
+   franja puede ir en dos líneas; la cuenta de gasto se lleva algo más que la del pago; y por debajo de
+   1440 px de ventana el formulario se lleva más ancho que el documento («Serie / documento» y el nombre de la cuenta de
+   gasto). A 1456 el reparto sigue siendo el de la maqueta. El mínimo del formulario es el que tiene así a 1366. */
+.kf-recibida .kf-formulario { gap: 3px; padding-top: 6px; padding-bottom: 6px; }
+.kf-recibida .kf-estado { white-space: normal; }
+.kf-recibida .kf-dos { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); }
+.kf-ficha.kf-recibida { --kf-min-form: 740px; }
+@media (max-width: 1440px) {
+  .kf-recibida .kf-cuerpo { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+}
+
+/* K06 · El nombre de una cuenta (NombreDeCuenta) no se corta: si no cabe, en dos líneas (Julio, 20/11). Una línea mide lo
+   mismo que una casilla (25 px); dos, 41. */
+.kf-ficha textarea.kf-nombre-cuenta {
+  display: block; width: 100%; min-width: 0; box-sizing: border-box; min-height: 25px; max-height: 41px; padding: 4px 6px 3px;
+  resize: none; overflow: hidden; field-sizing: content; overflow-wrap: anywhere;
+  background: #fbfcfd; border: 1px solid var(--kf-casilla-borde); border-radius: 3px; color: var(--k-tinta); font: 13px/16px var(--k-letra);
+}
+.kf-ficha textarea.kf-nombre-cuenta:focus { outline: none; }
+.kf-ficha textarea.kf-nombre-cuenta[data-duda='si'] { border: 2px solid var(--kf-ambar-borde); background: #fffaf0; padding: 3px 5px 2px; }
+
+/* K06 · La recibida cabe entera sin rodar (Julio, 16/11), con el concepto en su fila, los rótulos del pago y el nombre de la
+   cuenta en dos líneas: menos aire entre el rótulo y su casilla y en las filas del asiento. Medido en el arnés: a 1366 cabe la
+   rellenada con duda y cuatro apuntes; a 1456, esa misma pasa 9 px (dicho en el #753, con su captura). */
+.kf-recibida .kf-casilla { gap: 1px; }
+.kf-recibida .kf-rotulo { min-height: 14px; }
+.kf-recibida .kf-asiento { padding: 4px 10px; }
+.kf-recibida .kf-asiento header { margin-bottom: 1px; }
+.kf-recibida .kf-asiento td { padding: 1px 6px; }

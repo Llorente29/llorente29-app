@@ -32,7 +32,7 @@ import { ACEPTA_PAPEL, importeEs, rehacerCuota, rehacerRetencion, otroTipo, type
 import { guardarExpedidaPdf } from '@/modules/conta/services/documentosService'
 import { cambiarCuenta, leerAsiento, localesDeLaCuenta, validar } from '@/modules/conta/services/diarioService'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
-import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, Comprobaciones, Duda, EstadoFicha } from '../ficha/piezas'
+import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, Comprobaciones, Duda, EstadoFicha, NombreDeCuenta } from '../ficha/piezas'
 import { Buscador } from '../ficha/Buscador'
 import { MayorEnElPanel } from '../ficha/MayorEnElPanel'
 import { PanelDocumento } from '../ficha/PanelDocumento'
@@ -62,7 +62,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   const navegar = useNavigate()
   const pestana = usePestana()
   const seVe = useSeVe()
-  const { accountId, userName } = useCuentaConta()
+  const { accountId, userId, userName } = useCuentaConta()
   const { activa } = useEmpresas()
   const { local: ejeLocal } = useAnalitica()
   const hoy = hoyEnMadrid()
@@ -414,7 +414,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
                       : <Buscador id={`kf-venta-${i}`} etiqueta={`Cuenta de venta ${i + 1}`} cargando={!emp} valor={textoCuenta[i] ?? v.cuenta} cuenta={v.cuenta || null} duda={!!duda && i === 0}
                           ponerTexto={(t) => setTextoCuenta((x) => ({ ...x, [i]: t }))} lista={(t) => cuentasQueEncajan(t, cuentasVenta, 8)}
                           texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerVenta(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }} />}
-                    <input readOnly tabIndex={-1} aria-label={`Nombre de la cuenta de venta ${i + 1}`} value={v.cuenta ? nombreVenta(v.cuenta) : ''} data-duda={duda && i === 0 ? 'si' : undefined} />
+                    <NombreDeCuenta etiqueta={`Nombre de la cuenta de venta ${i + 1}`} valor={v.cuenta ? nombreVenta(v.cuenta) : ''} duda={!!duda && i === 0} />
                     <input className="kf-cifra" data-casilla={be.ventas.length > 1 && !soloLeer ? '' : undefined} aria-label={`Importe de la venta ${i + 1}`}
                       value={be.ventas.length === 1 ? importeEs(previa?.base ?? 0) : v.importe} readOnly={be.ventas.length === 1 || soloLeer}
                       tabIndex={be.ventas.length === 1 ? -1 : 0} onChange={(e) => ponerVenta(i, { importe: e.target.value })} />
@@ -443,7 +443,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
                         ponerTexto={(t) => { setTextoCobro(t); if (!t.trim()) ed.poner('cobroCuenta', '') }} lista={(t) => cuentasQueEncajan(t, cuentasCobro, 8)}
                         texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) }} />}
                   {/* Sin cuenta, «Pendiente de cobrar» en la casilla ancha (en la de la cuenta no cabía entero). */}
-                  <input readOnly tabIndex={-1} aria-label="Nombre de la cuenta del cobro" value={nombreDelCobro} title={nombreDelCobro || undefined} placeholder="Pendiente de cobrar" />
+                  <NombreDeCuenta etiqueta="Nombre de la cuenta del cobro" valor={nombreDelCobro} placeholder="Pendiente de cobrar" />
                 </div>
                 {(modo !== 'hecha_sola' || cobroApuntado) && (
                   <div className="kf-pareja">
@@ -468,7 +468,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
         </div>
         <AyudaTeclas teclas={TECLAS_DE_LA_EMITIDA} />
         </div>
-        <PanelDocumento documento={documento} acepta={ACEPTA_PAPEL} otraPrimero={modo !== 'a_mano'}
+        <PanelDocumento documento={documento} acepta={ACEPTA_PAPEL} otraPrimero={modo !== 'a_mano'} raya={{ usuario: userId }}
           alElegir={modo === 'hecha_sola' && doc.datos ? undefined : (file) => setFichero({ file, url: URL.createObjectURL(file) })}
           otra={{ nombre: 'El mayor del cliente', contenido: (
             <MayorEnElPanel nombre={cliente?.nombre ?? null} subcuenta={sub?.codigo ?? ''} ejercicio={ejercicio} apuntes={mayor?.apuntes ?? (sub ? null : [])} hay={!!cliente}

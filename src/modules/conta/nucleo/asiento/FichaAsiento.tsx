@@ -58,7 +58,7 @@ const DIGITOS_POR_DEFECTO = 8
 interface Base { cuentas: CuentaPlan[]; locales: LocalEmpresa[]; ejercicios: EjercicioLibro[] }
 
 export function FichaAsiento({ entryId }: { entryId?: string }) {
-  const { accountId, cargando, userName } = useCuentaConta()
+  const { accountId, cargando, userId, userName } = useCuentaConta()
   const { activa } = useEmpresas()
   const navegar = useNavigate()
   const seVe = useSeVe()
@@ -413,8 +413,9 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
         <PanelDocumento
           documento={pdf ? { url: pdf.url, foto: !!claseDeFichero(pdf.fichero.name, pdf.fichero.type)?.startsWith('image/'), titulo: pdf.fichero.name } : null}
           otra={{ nombre: 'El mayor de la cuenta', contenido: <Mayor accountId={accountId} companyId={activa?.id ?? null} cuentaId={cuentaElegida} cuenta={cuentaElegida ? porId.get(cuentaElegida) ?? null : null} ejercicio={ejercicioDelPanel} /> }}
-          alElegir={editable ? (f) => elegirPdf(f) : undefined} acepta="application/pdf,image/*"
-          textoSoltar="Un PDF o una foto. El asiento se puede guardar sin documento." />
+          alElegir={editable ? (f) => elegirPdf(f) : undefined} acepta="application/pdf,image/*" raya={{ usuario: userId }}
+          tituloSoltar="Arrastra aquí el justificante" sinDocumentoTexto="Este asiento no tiene justificante."
+          textoSoltar="Un PDF o una foto. El asiento se puede guardar sin justificante." />
       </div>
 
       {anulando && asiento && (
