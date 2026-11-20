@@ -1,0 +1,5 @@
+# R08 · la vuelta atrás, en orden inverso.
+cuenta: scripts/conta/produccion/cuentas/r08-bancos.sql
+supabase/vuelta-atras/20261119T2120_r08_cargo_no_cobrado.down.sql
+supabase/vuelta-atras/20261119T2040_r08_conciliar_valida.down.sql
+supabase/vuelta-atras/20261119T1945_r08_saldo_del_banco.down.sql

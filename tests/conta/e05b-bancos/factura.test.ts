@@ -50,8 +50,8 @@ describe('E05b · el casado con la factura, como hoy', () => {
   it('la misma llamada al motor que hoy: nucleo.confirmar(id, porqué, destino, «probable», sin regla), y lo que dice', async () => {
     const t = await casarConFactura(pago(), FACTURAS[1], 'Proveedor de Prueba Bancos')
     expect(motor.confirmar).toHaveBeenCalledWith('m1', 'Lo dijiste tú: paga la factura F-b de Proveedor de Prueba Bancos.', casadoConFactura(pago(), FACTURAS[1]).destino, 'probable', null)
-    expect(t).toBe('Casado: Pago de la factura F-b de Proveedor de Prueba Bancos (Proveedor de Prueba Bancos). La factura queda pagada.')
+    expect(t).toBe('Conciliado: Pago de la factura F-b de Proveedor de Prueba Bancos (Proveedor de Prueba Bancos) · en el diario. La factura queda pagada.')
     const t2 = await casarConFactura(pago({ importeCent: -5000 }), FACTURAS[1], 'X')
-    expect(t2).toBe('Casado: Pago de la factura F-b de Proveedor de Prueba Bancos (X). A la factura le quedan 71,00 € por pagar.')
+    expect(t2).toBe('Conciliado: Pago de la factura F-b de Proveedor de Prueba Bancos (X) · en el diario. A la factura le quedan 71,00 € por pagar.')
   })
 })

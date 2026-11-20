@@ -85,7 +85,7 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(pantalla(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
       await abierta(page, 'Bancos')
       const periodo = pantalla(page).locator('[data-prueba="periodo"]')
-      const revisar = pantalla(page).locator('[data-prueba="por-revisar"]')
+      const revisar = pantalla(page).locator('[data-prueba="por-conciliar"]')
 
       // ── 1 · El mes: octubre, Re Pág a septiembre, Av Pág de vuelta ──
       await expect(periodo).toHaveValue('2026-10')
@@ -95,7 +95,7 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(pantalla(page).getByRole('combobox', { name: 'Banco' })).toContainText(`57200`)
       // Octubre: 3 por confirmar, 3 por aclarar (el ingreso y los dos pagos) y 1 por validar (el agua casada sola).
       await expect(filas(page)).toHaveCount(7)
-      await expect(revisar).toHaveText('7 por revisar')
+      await expect(revisar).toHaveText('6 por conciliar · 1 conciliado · 0 apartados')
       await expect(pantalla(page).locator('.kf-estado')).toContainText('Banco 1.214,10')
       await fila(page, p.movs.aclarar).click()
       await page.keyboard.press('PageUp')
@@ -103,7 +103,7 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(filas(page)).toHaveCount(2, { timeout: 30_000 })
       await expect(fila(page, p.septiembre.abono)).toContainText('130,00')
       await expect(fila(page, p.septiembre.cargo)).toContainText('30,00')
-      await expect(revisar).toHaveText('2 por revisar')
+      await expect(revisar).toHaveText('2 por conciliar · 0 conciliados · 0 apartados')
       await expect(pantalla(page).locator('.kf-estado')).toContainText('Banco 1.000,00')
       await expect(page.locator('[data-prueba="saldo-a-la-fecha"]')).toContainText('25/09/2026')
       await expect(page).toHaveURL(/mes=2026-09/)
@@ -111,7 +111,7 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await page.keyboard.press('PageDown')
       await expect(periodo).toHaveValue('2026-10', { timeout: 30_000 })
       await expect(filas(page)).toHaveCount(7, { timeout: 30_000 })
-      await expect(revisar).toHaveText('7 por revisar')
+      await expect(revisar).toHaveText('6 por conciliar · 1 conciliado · 0 apartados')
       await expect(pantalla(page).locator('.kf-estado')).toContainText('Banco 1.214,10')
 
       // ── 2 · «Es otra factura», con el teclado ──
@@ -132,8 +132,8 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(page.locator('[data-prueba="confirmar-factura"]')).toBeFocused()
       if (grande) await captura(page, 'factura-elegida', ancho)
       await page.keyboard.press('Enter')
-      await expect(aviso(page)).toHaveText(`Casado: Pago de la factura ${f.numero} de Proveedor de Prueba Bancos ${lado} (Proveedor de Prueba Bancos ${lado}). La factura queda pagada.`, { timeout: 30_000 })
-      await expect(fila(page, p.pagos.nueva).locator('.kb-etiqueta')).toHaveText('Hecho', { timeout: 30_000 })
+      await expect(aviso(page)).toHaveText(`Conciliado: Pago de la factura ${f.numero} de Proveedor de Prueba Bancos ${lado} (Proveedor de Prueba Bancos ${lado}) · en el diario. La factura queda pagada.`, { timeout: 30_000 })
+      await expect(fila(page, p.pagos.nueva).locator('.kb-etiqueta')).toHaveText('Conciliado', { timeout: 30_000 })
       const nueva = await casadoDe(s, p, p.pagos.nueva, f)
 
       // ── 3 · El otro pago, desde la pantalla de hoy («Buscar factura») ──

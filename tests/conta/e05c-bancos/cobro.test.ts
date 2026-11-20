@@ -60,8 +60,8 @@ describe('E05c · el casado del cobro, como lo arma el motor', () => {
   it('la misma llamada que los pagos: nucleo.confirmar(id, porqué, destino, «probable», sin regla), y lo que dice', async () => {
     const t = await casarConEmitida(cobro(), FACTURAS[0], 'Cliente de Prueba Bancos')
     expect(motor.confirmar).toHaveBeenCalledWith('m1', 'Lo dijiste tú: cobra la factura E05C-1 de Cliente de Prueba Bancos.', cobroConFactura(cobro(), FACTURAS[0]).destino, 'probable', null)
-    expect(t).toBe('Cobrado: Cobro de la factura E05C-1 de Cliente de Prueba Bancos (Cliente de Prueba Bancos). La factura queda cobrada.')
-    expect(await casarConEmitida(cobro({ importeCent: 10000 }), FACTURAS[0], 'X')).toBe('Cobrado: Cobro de la factura E05C-1 de Cliente de Prueba Bancos (X). A la factura le quedan 142,00 € por cobrar.')
-    expect(await casarConEmitida(cobro({ importeCent: 30000 }), FACTURAS[0], 'X')).toBe('Cobrado: Cobro de la factura E05C-1 de Cliente de Prueba Bancos (X). La factura queda cobrada. Sobran 58,00 €: quedan a favor del cliente en su cuenta.')
+    expect(t).toBe('Cobrado: Cobro de la factura E05C-1 de Cliente de Prueba Bancos (Cliente de Prueba Bancos) · en el diario. La factura queda cobrada.')
+    expect(await casarConEmitida(cobro({ importeCent: 10000 }), FACTURAS[0], 'X')).toBe('Cobrado: Cobro de la factura E05C-1 de Cliente de Prueba Bancos (X) · en el diario. A la factura le quedan 142,00 € por cobrar.')
+    expect(await casarConEmitida(cobro({ importeCent: 30000 }), FACTURAS[0], 'X')).toBe('Cobrado: Cobro de la factura E05C-1 de Cliente de Prueba Bancos (X) · en el diario. La factura queda cobrada. Sobran 58,00 €: quedan a favor del cliente en su cuenta.')
   })
 })
