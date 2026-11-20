@@ -16,6 +16,11 @@
 //
 // El sumas y saldos se lee aquí, en el navegador (abrirExcel, reconocer,
 // leerSumasYSaldos): no se guarda.
+//
+// X10 (19/11): primero se compara con ERP10 leído ahora (sin Excel: «Comparar con
+// ERP10», a la fecha que se elija); «Subir un Excel» sigue como segunda opción. Lo
+// único que cambia arriba es con qué se ha comparado: «Comparado con ERP10 (leído
+// ahora, 19/11 13:40), a 30/11».
 
 import { useRef, useState, type ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
@@ -23,8 +28,9 @@ import { rutaAsiento, rutaMayor } from '@/config/navegacion'
 import { fechaLarga } from '@/modules/conta/lib/formato'
 import { importe } from '@/modules/conta/erp10/salida'
 import { conDiferencia, explicar, type Comparacion, type Comprobar, type CuentaComparada } from '@/modules/conta/erp10/comparar'
+import { frasesCasadas, type Casada } from '@/modules/conta/erp10/casar'
 
-export interface Subido { nombre: string; fecha: string; avisos: string[] }
+export interface Subido { nombre: string; fecha: string; avisos: string[]; /** X10: leído de ERP10 ahora (día y hora), sin Excel. */ leidoEn?: string }
 
 const euros = (cent: number) => importe(cent / 100)
 /** El día de Madrid de un sello de tiempo (para no decir el día de antes pasada la medianoche). */
@@ -42,6 +48,14 @@ export function ComprobarErp10(p: {
   elegida: string | null
   elegir: (cuenta: string) => void
   subir: (f: File) => void
+  /** X10 · Comparar con ERP10 leído ahora, a esa fecha (AAAA-MM-DD). */
+  leerErp10?: (hasta: string) => void
+  /** X10b · Lo que falta para comparar con ERP10 (las claves o el código de esta sociedad); null si nada. */
+  faltaErp10?: string | null
+  /** X10b · Abre la tarjeta «Conexión con ERP10» de arriba. */
+  irALaConexion?: () => void
+  /** X10c · Lo que salió por la conexión, casado factura a factura con su número de ERP10 (null: no se ha leído ERP10). */
+  casadas?: Casada[] | null
   aMano: (entryId: string) => void
   volver: (entryId: string) => void
   ocupado: boolean
@@ -51,6 +65,7 @@ export function ComprobarErp10(p: {
   mes?: string | null
 }) {
   const entrada = useRef<HTMLInputElement | null>(null)
+  const [hasta, setHasta] = useState(() => finDeMes(p.mes))
   const [abiertos, setAbiertos] = useState<{ igual: boolean; noSale: boolean }>({ igual: false, noSale: false })
   const alSubir = (e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) p.subir(f); e.target.value = '' }
   const subirBoton = (texto: string, clase: string) => (
@@ -65,10 +80,30 @@ export function ComprobarErp10(p: {
       <div className="cxe-cuerpo cxe-cuerpo-uno">
         <div className="cxe-izq">
           <div className="cxe-subir" role="note">
-            <h2 className="cxe-subir-titulo">Sube el «Sumas y saldos» de ERP10</h2>
-            <p>Sácalo de ERP10 en Excel <strong>después de importar</strong> los ficheros. Sumied lo pone al lado de lo suyo, cuenta a cuenta, y te dice qué queda igual, qué no y por qué.</p>
-            <p className="cx-ayuda">El fichero no se guarda: se lee aquí.</p>
-            <div>{subirBoton('Subir el Excel', 'cxe-grande')}</div>
+            <h2 className="cxe-subir-titulo">{p.leerErp10 ? 'Compara con ERP10' : 'Sube el «Sumas y saldos» de ERP10'}</h2>
+            {p.leerErp10 ? (
+              <>
+                <p><strong>Después de importar</strong> los ficheros, Sumied entra en ERP10, lee sus saldos y los pone al lado de los suyos, cuenta a cuenta: qué queda igual, qué no y por qué.</p>
+                {p.faltaErp10 ? (
+                  <div className="cxe-erp10-falta" role="note">
+                    <p><strong>{p.faltaErp10}</strong> Ponlo en «Conexión con ERP10», arriba, y pulsa «Probar».</p>
+                    {p.irALaConexion && <button type="button" className="cxe-grande" onClick={p.irALaConexion}>Ir a la conexión con ERP10</button>}
+                  </div>
+                ) : (
+                  <div className="cxe-erp10-fecha">
+                    <label>A fecha <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} disabled={p.ocupado} aria-label="A fecha" /></label>
+                    <button type="button" className="cxe-grande" disabled={p.ocupado || !hasta} onClick={() => p.leerErp10!(hasta)}>Comparar con ERP10</button>
+                  </div>
+                )}
+                <p className="cx-ayuda">O, si lo prefieres, sácalo de ERP10 en Excel y {subirBoton('sube el Excel', 'cxe-enlace')}. No se guarda: se lee aquí.</p>
+              </>
+            ) : (
+              <>
+                <p>Sácalo de ERP10 en Excel <strong>después de importar</strong> los ficheros. Sumied lo pone al lado de lo suyo, cuenta a cuenta, y te dice qué queda igual, qué no y por qué.</p>
+                <p className="cx-ayuda">El fichero no se guarda: se lee aquí.</p>
+                <div>{subirBoton('Subir el Excel', 'cxe-grande')}</div>
+              </>
+            )}
             {p.error && <p className="cxe-mal" role="alert">{p.error}</p>}
             {p.base?.igualado && <p className="cx-ayuda">La última vez se dio por igualado {mesYQuien(p.base.igualado)}.</p>}
           </div>
@@ -117,15 +152,20 @@ export function ComprobarErp10(p: {
     <div className="cxe-cuerpo">
       <div className="cxe-izq">
         <div className="cxe-franja">
-          <span className="cxe-chip-gris">Comparado con {p.subido.nombre} de ERP10, a {dm(p.subido.fecha)}</span>
+          <span className="cxe-chip-gris">{p.subido.leidoEn ? `Comparado con ERP10 (leído ahora, ${p.subido.leidoEn}), a ${dm(p.subido.fecha)}` : `Comparado con ${p.subido.nombre} de ERP10, a ${dm(p.subido.fecha)}`}</span>
           {c && (igualado
             ? <span className="cxe-chip-verde">Igualado el {fechaLarga(hoyDe(igualado.cuando))}{igualado.quien ? `, por ${igualado.quien}` : ''}</span>
             : pendientes
               ? <span className="cxe-chip-ambar">{conDiferencia(pendientes)}</span>
               : <span className="cxe-chip-verde">{c.noIgual.length ? 'Todas las diferencias, explicadas' : 'Todo queda igual'}</span>)}
-          <span className="cxe-franja-fin">{subirBoton('Subir otro Excel', 'cxe-enlace')}</span>
+          <span className="cxe-franja-fin">
+            {p.leerErp10 && !p.faltaErp10 && <button type="button" className="cxe-enlace" disabled={p.ocupado} onClick={() => p.leerErp10!(p.subido!.fecha)}>Leer otra vez</button>}
+            {p.leerErp10 && !p.faltaErp10 && ' · '}
+            {subirBoton(p.leerErp10 ? 'Subir un Excel' : 'Subir otro Excel', 'cxe-enlace')}
+          </span>
         </div>
         {p.subido.avisos.map((a) => <p key={a} className="cxe-aviso-linea" role="note">{a}</p>)}
+        {p.casadas && p.casadas.length > 0 && <Casadas xs={p.casadas} />}
         {p.error && <p className="cxe-mal" role="alert">{p.error}</p>}
         {!c && !p.error && <div aria-busy="true" aria-label="Comparando" className="cxe-marco"><p className="cx-ayuda" style={{ padding: 12 }}>Comparando con lo de Sumied…</p></div>}
         {c && (
@@ -171,6 +211,19 @@ export function ComprobarErp10(p: {
   )
 }
 
+/** X10c · Factura a factura: las que salieron por la conexión, con su número de ERP10. Las que no están igual, cada una con su porqué. */
+function Casadas({ xs }: { xs: Casada[] }) {
+  const [ver, setVer] = useState(false)
+  const f = frasesCasadas(xs)
+  return (
+    <div className={`cxe-aviso-linea cxe-casadas${f.bien ? ' cxe-casadas-bien' : ''}`} role="note" aria-label="Factura a factura">
+      {f.resumen}
+      {!f.bien && <> <button type="button" className="cxe-enlace" aria-expanded={ver} onClick={() => setVer((v) => !v)}>{ver ? 'Ocultarlas' : 'Verlas'}</button></>}
+      {ver && !f.bien && <ul>{f.malas.map((x) => <li key={x.entryId}><strong>{x.numero}</strong>: {x.detalle}</li>)}</ul>}
+    </div>
+  )
+}
+
 function PorQue({ x, c, ultimoLote, aMano, volver, ocupado }: {
   x: CuentaComparada; c: Comparacion; ultimoLote: string | null; aMano: (id: string) => void; volver: (id: string) => void; ocupado: boolean
 }) {
@@ -202,6 +255,13 @@ function PorQue({ x, c, ultimoLote, aMano, volver, ocupado }: {
       {notas.map((n) => <div key={n.titulo} className="cxe-nota"><p><strong>{n.titulo}</strong> {n.texto}</p></div>)}
     </>
   )
+}
+
+/** El último día del mes (AAAA-MM-01) que se compara; hoy si no hay mes. */
+function finDeMes(mes: string | null | undefined): string {
+  if (!mes) return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
+  const [a, m] = mes.split('-').map(Number)
+  return new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10)
 }
 
 function mesYQuien(g: NonNullable<Comprobar['igualado']>): string {

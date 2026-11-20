@@ -146,23 +146,24 @@ describe('el workflow de la e2e (W02)', () => {
     expect(wf).toContain('- name: Carril · esperar su turno y coger uno')
   })
 
-  // V03, respuesta 6 (26/10): «la entera, siempre en 2 trozos, también la que
+  // V03, respuesta 6 (26/10): «la entera, siempre en trozos, también la que
   // se lanza a mano con una carpeta («tests/e2e/conta»)». En uno: solo ficheros
-  // sueltos, o la zona de un push.
+  // sueltos, o la zona de un push. Desde el 19/11, 3 por defecto (en 2, el
+  // trozo mayor pasaba de 60 min).
   it('en trozos: la suite entera y cualquier carpeta; en uno, solo ficheros sueltos o la zona de un push', () => {
-    const i = wf.indexOf('N=${TROZOS_PEDIDOS:-2}')
+    const i = wf.indexOf('N=${TROZOS_PEDIDOS:-3}')
     expect(i).toBeGreaterThan(0)
     const bloque = wf.slice(i, wf.indexOf('{ echo "frente=', i))
     const correr = (pedidos: string, pruebas: string, evento = 'workflow_dispatch', entera = '0') => execFileSync('bash', ['-c', `set -e; TROZOS_PEDIDOS="$1"; PRUEBAS="$2"; GITHUB_EVENT_NAME="$3"; ENTERA="$4"\n${bloque}\nprintf %s "$N $TROZOS"`, 'x', pedidos, pruebas, evento, entera], { encoding: 'utf8' })
-    expect(correr('', '')).toBe('2 [1,2]')
+    expect(correr('', '')).toBe('3 [1,2,3]')
     expect(correr('4', '')).toBe('4 [1,2,3,4]')
-    expect(correr('', 'tests/e2e/conta')).toBe('2 [1,2]')
+    expect(correr('', 'tests/e2e/conta')).toBe('3 [1,2,3]')
     expect(correr('3', 'tests/e2e/conta/b01')).toBe('3 [1,2,3]')
     expect(correr('', 'tests/e2e/conta/b01/motor.spec.ts tests/e2e/conta/pc01/cobros-y-pagos.spec.ts')).toBe('1 [1]')
-    expect(correr('', 'tests/e2e/conta/b01/motor.spec.ts tests/e2e/conta/c04')).toBe('2 [1,2]')
+    expect(correr('', 'tests/e2e/conta/b01/motor.spec.ts tests/e2e/conta/c04')).toBe('3 [1,2,3]')
     // El push: su zona en uno (aunque lleve carpetas); la entera acotada, en trozos.
     expect(correr('', 'tests/e2e/conta/b01 tests/e2e/conta/rls.spec.ts', 'push')).toBe('1 [1]')
-    expect(correr('', 'tests/e2e/conta', 'push', '1')).toBe('2 [1,2]')
+    expect(correr('', 'tests/e2e/conta', 'push', '1')).toBe('3 [1,2,3]')
     expect(() => correr('9', '')).toThrow()
     expect(wf).toMatch(/trozo: \$\{\{ fromJSON\(needs\.plan\.outputs\.trozos\) \}\}/)
   })

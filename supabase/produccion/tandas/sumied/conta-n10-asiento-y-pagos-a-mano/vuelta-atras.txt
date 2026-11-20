@@ -1,0 +1,3 @@
+# N10 · la vuelta atrás: la 1930 (las dos funciones de Bancos desde su respaldo, como las dejó la 0800 del N09).
+cuenta: scripts/conta/produccion/cuentas/n10-bancos-todo-lo-pagado.sql
+supabase/vuelta-atras/20261119T1930_n10_bancos_todo_lo_pagado.down.sql

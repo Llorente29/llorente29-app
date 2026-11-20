@@ -1,0 +1,11 @@
+[
+ {
+  "id": "744-1",
+  "pr": 744,
+  "fecha": "2026-11-19T15:50:34Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "la conexión con ERP10 está en la propia salida, y las recibidas se sacan directamente a ERP10, con su PDF. La primera vez, una sola para probar.",
+  "ruta": null
+ }
+]

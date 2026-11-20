@@ -12,6 +12,7 @@
 import { casaNif, nifValido, AVISO_NIF_LEIDO_MAL } from '@/modules/conta/documentos/paraValidar'
 import type { UnaComprobacion, TonoEstado } from '../ficha/piezas'
 import { cifra } from '../ficha/textos'
+import { altaEnFactura } from '@/modules/conta/lib/proveedorDesdeFactura'
 
 /** «3T de 2026» de una fecha AAAA-MM-DD; '' sin fecha. */
 export function trimestreDe(fecha: string): string {
@@ -50,6 +51,10 @@ export interface DatosComprobar {
   noRepetida: boolean
   fecha: string
   calendario: Calendario | null
+  /** El número que hay en la casilla: sin él no se sabe si está repetida. */
+  numero: string
+  /** ¿Tiene proveedor (una ficha)? Sin ficha, el NIF que se comprueba es el leído (K04b). */
+  hayFicha: boolean
   nifFicha: string | null
   nifLeido: string | null
   /** El total de lo escrito y el del documento (null si no hay documento leído). */
@@ -68,14 +73,19 @@ const YA_DICHAS = new Set(['nif', 'nif_forma', 'suma', 'total'])
 export function comprobacionesDe(d: DatosComprobar): UnaComprobacion[] {
   const l: UnaComprobacion[] = []
   // 1 · Repetida: la dice duplicadaDe (la misma de la ficha de hoy), salvo que alguien ya confirmara que no lo es.
+  // Sin número no se puede saber: no se dice «bien» (K04b).
   if (d.duplicada && !d.noRepetida) l.push({ id: 'repetida', tono: 'ambar', texto: d.duplicada })
-  else l.push({ id: 'repetida', tono: 'bien', texto: 'No está repetida' })
+  else if (d.numero.trim()) l.push({ id: 'repetida', tono: 'bien', texto: 'No está repetida' })
   // 2 · El periodo.
   const p = periodoAbierto(d.fecha, d.calendario)
   if (p) l.push({ id: 'periodo', tono: p.abierto ? 'bien' : 'ambar', texto: p.texto })
-  // 3 · El NIF.
+  // 3 · El NIF. Sin ficha, el leído del PDF (K04b): nunca «su ficha» si no hay ficha.
   const casa = casaNif(d.nifFicha, d.nifLeido)
-  if (!d.nifFicha) l.push({ id: 'nif', tono: 'ambar', texto: 'Su ficha no tiene NIF' })
+  if (!d.hayFicha) {
+    if (!d.nifLeido) l.push({ id: 'nif', tono: 'ambar', texto: 'La factura no trae NIF' })
+    else if (nifValido(d.nifLeido)) l.push({ id: 'nif', tono: 'bien', texto: 'NIF correcto' })
+    else l.push({ id: 'nif', tono: 'rojo', texto: 'NIF no válido' })
+  } else if (!d.nifFicha) l.push({ id: 'nif', tono: 'ambar', texto: 'Su ficha no tiene NIF' })
   else if (casa === 'distinto') l.push({ id: 'nif', tono: 'rojo', texto: `El NIF de la factura (${d.nifLeido}) no es el de su ficha (${d.nifFicha})` })
   else if (casa === 'leido_mal') l.push({ id: 'nif', tono: 'ambar', texto: AVISO_NIF_LEIDO_MAL })
   else if (!nifValido(d.nifFicha)) l.push({ id: 'nif', tono: 'rojo', texto: `El NIF de su ficha (${d.nifFicha}) no es válido` })
@@ -83,7 +93,7 @@ export function comprobacionesDe(d: DatosComprobar): UnaComprobacion[] {
   // 4 · Bases y cuotas suman el total del documento.
   if (d.totalDocumento !== null && Math.round(d.totalDocumento * 100) !== Math.round(d.total * 100)) {
     l.push({ id: 'suma', tono: 'ambar', texto: `Base + IVA = ${cifra(d.total)}, y la factura dice ${cifra(d.totalDocumento)}` })
-  } else if (d.totalDocumento !== null || d.total > 0) l.push({ id: 'suma', tono: 'bien', texto: 'Bases y cuotas suman el total' })
+  } else if (d.total > 0) l.push({ id: 'suma', tono: 'bien', texto: 'Bases y cuotas suman el total' })
   // Las demás de la lectura que fallan, y los avisos de la propuesta (sin repetir la suma).
   for (const c of d.lectura) if (!c.ok && !YA_DICHAS.has(c.id)) l.push({ id: `lectura-${c.id}`, tono: c.grave ? 'rojo' : 'ambar', texto: c.texto.replace(/\.$/, '') })
   for (const [i, a] of d.avisos.entries()) if (!/^Base \+ IVA = /.test(a)) l.push({ id: `aviso-${i}`, tono: 'ambar', texto: a.replace(/\.$/, '') })
@@ -113,15 +123,58 @@ export function dudaDelGasto(o: { reparto: readonly RepartoGasto[]; confianza: '
   }
 }
 
-/** La pastilla de la cabecera: rellenada por Sumied (con sus dudas) o escrita por ti. */
-export function estadoDeLaFicha(o: { aMano: boolean; leida: boolean; comprobaciones: readonly UnaComprobacion[]; hayDudaGasto: boolean }): { tono: TonoEstado; fuerte: string; resto: string } {
+/**
+ * Las casillas que la ficha necesita y están vacías, dichas como en una frase
+ * («el número y la fecha»). Con alguna vacía, la franja no dice «Rellenada» ni
+ * «bien» (K04b, regla 7): dice lo que falta.
+ */
+export function casillasVacias(c: { proveedor: boolean; numero: string; fecha: string; total: number; cuentaGasto: boolean }): string[] {
+  const l: string[] = []
+  if (!c.proveedor) l.push('el proveedor')
+  if (!c.numero.trim()) l.push('el número de factura')
+  if (!c.fecha.trim()) l.push('la fecha')
+  if (!(c.total > 0)) l.push('el importe')
+  if (!c.cuentaGasto) l.push('la cuenta de gasto')
+  return l
+}
+
+/** «a», «a y b», «a, b y c». */
+const enFrase = (l: readonly string[]) => (l.length <= 1 ? l.join('') : `${l.slice(0, -1).join(', ')} y ${l[l.length - 1]}`)
+
+export interface EstadoDeLaFicha { tono: TonoEstado; fuerte: string; resto: string }
+
+/**
+ * La pastilla de la cabecera. Lo que dice tiene que ser verdad con lo que hay
+ * en la ficha (K04b): un emisor que no se conoce, «Mira esto · No conozco al
+ * que la emite»; con casillas vacías, «Mira esto · Falta …»; si no, rellenada
+ * por Sumied (con sus dudas) o escrita por ti.
+ */
+export function estadoDeLaFicha(o: { aMano: boolean; leida: boolean; comprobaciones: readonly UnaComprobacion[]; hayDudaGasto: boolean; desconocido?: boolean; vacias?: readonly string[] }): EstadoDeLaFicha {
   if (o.aMano) return { tono: 'gris', fuerte: 'La escribes tú.', resto: 'Se comprueba mientras escribes.' }
+  if (o.desconocido) return { tono: 'ambar', fuerte: 'Mira esto ·', resto: 'No conozco al que la emite' }
+  if (o.vacias?.length) return { tono: 'ambar', fuerte: 'Mira esto ·', resto: `Falta ${enFrase(o.vacias)}` }
   const bien = o.comprobaciones.filter((c) => c.tono === 'bien').length
   const dudas = o.comprobaciones.filter((c) => c.tono !== 'bien').length + (o.hayDudaGasto ? 1 : 0)
   const quien = o.leida ? 'Rellenada por Sumied' : 'Escrita a mano'
   const fuerte = dudas ? `${quien}, con ${dudas} duda${dudas === 1 ? '' : 's'}.` : `${quien}.`
   const resto = `${bien} comprobaci${bien === 1 ? 'ón' : 'ones'} bien · ${dudas ? 'mira lo ámbar y pulsa Intro.' : 'pulsa Intro.'}`
   return { tono: dudas ? 'ambar' : 'verde', fuerte, resto }
+}
+
+/**
+ * El emisor que no se reconoce (K04b): una factura leída sin proveedor. Con el
+ * NIF leído de uno que ya tienes, se ofrece ese (altaEnFactura, la misma de la
+ * ficha de hoy); si no, «Darlo de alta» y «Es uno que ya tengo». null si tiene
+ * proveedor, si es nueva o si no hay nada leído del emisor.
+ */
+export function emisorDesconocido(o: { aMano: boolean; proveedorId: string; leido: { nombre: string | null; nif: string | null } | null; proveedores: readonly { id: string; nombre: string; nif: string | null }[] }):
+  { que: 'alta'; nombre: string | null; nif: string | null } | { que: 'es_uno_tuyo'; proveedorId: string; nombre: string; nif: string | null } | null {
+  if (o.aMano || o.proveedorId) return null
+  const nombre = o.leido?.nombre?.trim() || null
+  const nif = o.leido?.nif?.trim() || null
+  const a = altaEnFactura({ proveedorId: null, soloLectura: false, nifLeido: nif, proveedores: o.proveedores })
+  if (a.que === 'es_uno_tuyo') return { que: 'es_uno_tuyo', proveedorId: a.proveedorId, nombre: a.nombre, nif }
+  return { que: 'alta', nombre, nif }
 }
 
 /** La etiqueta del asiento: «Cuadra · 357,44», lo que le falta, o «Se forma al escribir». */
@@ -134,8 +187,14 @@ export function etiquetaDelAsiento(a: { debe: number; haber: number; cuadra: boo
   return { texto: d > 0 ? `Sobran ${cifra(d)} en el debe` : `Faltan ${cifra(-d)} en el debe`, tono: 'ambar' }
 }
 
-/** El nombre de la pestaña: «Factura recibida · <proveedor>»; sin proveedor, «Factura recibida · nueva». */
-export const nombreDePestana = (proveedor: string | null | undefined): string => `Factura recibida · ${proveedor?.trim() || 'nueva'}`
+/**
+ * El nombre de la pestaña: «Factura recibida · <proveedor>»; la nueva, a mano y
+ * sin proveedor, «Factura recibida · nueva». Una que ya existe nunca se llama
+ * «nueva» (K04b): sin proveedor, el nombre leído del emisor; sin nada, «sin
+ * proveedor».
+ */
+export const nombreDePestana = (proveedor: string | null | undefined, existe = false): string =>
+  `Factura recibida · ${proveedor?.trim() || (existe ? 'sin proveedor' : 'nueva')}`
 
 /**
  * «Guardar y siguiente» se enciende siempre que quede algo por hacer: lo que no

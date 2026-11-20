@@ -19,7 +19,9 @@
 }
 
 /* La zona de una pestaña con ficha no lleva el margen de abajo: la ficha ocupa el alto. */
-.cx.cxm .k-zona.cx-principal:has(> .kf-ficha), .cx.cxm .k-zona.cx-principal:has(.kf-ficha) { padding: 0 16px 0; overflow: hidden; display: flex; flex-direction: column; }
+/* K04b · Sin «:not([hidden])» esta regla pesaba lo mismo que la que esconde una pestaña (nucleo.css) y, por ir
+   después, ganaba: la pestaña de una ficha no se escondía nunca, y salía debajo de la que se miraba. */
+.cx.cxm .k-zona.cx-principal:not([hidden]):has(.kf-ficha) { padding: 0 16px 0; overflow: hidden; display: flex; flex-direction: column; }
 
 .kf-ficha {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
