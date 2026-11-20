@@ -30,6 +30,12 @@
 //     títulos), la misma que ve quien abre el fichero.
 //   · Las formas de pago se leen como vengan: la lista no está cerrada.
 //   · Los importes, con su signo: una devolución es una factura en negativo.
+//   · R10 (20/11): los importes pueden traer hasta 3 decimales (los de verdad: «28,909»,
+//     «2,891» en Impuestos). Se leen en milésimas; los de Impuestos y Pagos se suman así por
+//     día (y tipo de IVA, en Impuestos) y se redondea a céntimos al final, repartiendo esos
+//     céntimos entre las líneas para que su suma sea la del día. En Impuestos y Documentos se
+//     reparten el IVA y el total, y la base es el total menos el IVA: base + IVA = total en cada
+//     línea y en el día.
 //   · El lector NO decide si el día cuadra (eso lo dice la base al guardar).
 //     Dice lo que no ha podido leer, sin esconder nada (regla 7): una línea con
 //     un importe, una fecha o un número que no entiende, o una orden con pagos
@@ -194,13 +200,37 @@ export function reconocer(ficheros: FicheroRevo[]): Reconocimiento {
 
 // ── 2 · Leer ────────────────────────────────────────────────────────────────
 
-/** «33,25», «-11», «1.234,56» → céntimos. Null si no es un importe así (p. ej. «12,5,0» o «12.5»). */
-export function importeRevo(bruto: string): number | null {
+/** «33,25», «-11», «1.234,56», «28,909» → milésimas de euro. Null si no es un importe así (p. ej. «12,5,0», «12.5» o «1,2345»). */
+export function milesimasRevo(bruto: string): number | null {
   const s = bruto.trim().replace(/−/g, '-')
-  const m = s.match(/^([+-]?)(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?$/)
+  const m = s.match(/^([+-]?)(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,3}))?$/)
   if (!m) return null
-  const v = Number(m[2].replace(/\./g, '')) * 100 + Number((m[3] ?? '').padEnd(2, '0') || '0')
+  const v = Number(m[2].replace(/\./g, '')) * 1000 + Number((m[3] ?? '').padEnd(3, '0') || '0')
   return m[1] === '-' ? -v : v
+}
+
+/** Milésimas → céntimos, redondeando la mitad hacia fuera del cero (28,905 → 28,91; −2,895 → −2,90). */
+export const aCentimos = (mil: number): number => Math.sign(mil) * Math.round(Math.abs(mil) / 10)
+
+/** «33,25», «-11», «1.234,56» → céntimos; con 3 decimales, redondeado («28,909» → 2891). Null si no es un importe. */
+export function importeRevo(bruto: string): number | null {
+  const v = milesimasRevo(bruto)
+  return v === null ? null : aCentimos(v)
+}
+
+/**
+ * Céntimos de unas líneas en milésimas, de modo que sumen exactamente el redondeo de su suma
+ * (el reparto de los restos mayores): «28,909» y «28,909» suman 57,818 → 57,82, y no 28,91 + 28,91.
+ */
+export function repartirCentimos(milesimas: readonly number[]): number[] {
+  const objetivo = aCentimos(milesimas.reduce((a, b) => a + b, 0))
+  const suelo = milesimas.map((m) => Math.floor(m / 10))
+  let falta = objetivo - suelo.reduce((a, b) => a + b, 0)
+  const orden = milesimas.map((m, i) => ({ i, resto: m - Math.floor(m / 10) * 10 })).sort((a, b) => b.resto - a.resto || a.i - b.i)
+  const out = [...suelo]
+  for (const { i } of orden) { if (falta <= 0) break; out[i] += 1; falta -= 1 }
+  for (const { i } of [...orden].reverse()) { if (falta >= 0) break; out[i] -= 1; falta += 1 }
+  return out
 }
 
 /** «2026-11-09 12:40:30» → el mismo texto, si es una fecha y hora de verdad. Null si no. */
@@ -221,6 +251,29 @@ export function tipoRevo(bruto: string): number | null {
 }
 
 const euros = (c: number) => c / 100
+/**
+ * R10 · Líneas con base, IVA y (si lo traen) total en milésimas → en euros con céntimos, por grupos
+ * (el día, o el día y el tipo): el IVA y el total de cada grupo, redondeados al final y repartidos
+ * entre sus líneas; la base, el total menos el IVA. Las líneas, en su orden.
+ */
+function enCentimos<T extends { base: number; cuota: number; total?: number }>(xs: readonly T[], grupoDe: (x: T) => string): T[] {
+  const out: T[] = []
+  for (const grupo of agruparPor(xs.map((x, n) => ({ x, n })), (y) => grupoDe(y.x))) {
+    const cuotas = repartirCentimos(grupo.map((y) => y.x.cuota))
+    const totales = repartirCentimos(grupo.map((y) => y.x.total ?? y.x.base + y.x.cuota))
+    grupo.forEach((y, k) => {
+      out[y.n] = { ...y.x, base: euros(totales[k] - cuotas[k]), cuota: euros(cuotas[k]), ...('total' in y.x ? { total: euros(totales[k]) } : {}) }
+    })
+  }
+  return out
+}
+
+/** Los grupos de una lista, en el orden en que aparece cada uno. */
+function agruparPor<T>(xs: readonly T[], clave: (x: T) => string): T[][] {
+  const m = new Map<string, T[]>()
+  for (const x of xs) { const k = clave(x); const g = m.get(k) ?? []; g.push(x); m.set(k, g) }
+  return [...m.values()]
+}
 const fechaDia = (f: string) => f.slice(0, 10)
 const diaTexto = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`
 const esLocal = (canal: string) => canal === '' || canal === '--'
@@ -253,6 +306,7 @@ export function leer(ficheros: Record<ClaseRevo, Tabla>): Lectura {
   // Documentos: el día de todo.
   type Doc = LecturaDia['documentos'][number] & { dia: string }
   const docs: Doc[] = []
+  const docsMil: Doc[] = []
   const diaDeOrden = new Map<string, string>()
   for (const { linea, celdas } of ficheros.documentos.filas) {
     const fechaBruta = celda('documentos', celdas, 'fecha')
@@ -261,9 +315,9 @@ export function leer(ficheros: Record<ClaseRevo, Tabla>): Lectura {
     const orden = celda('documentos', celdas, 'orden')
     const numBruto = celda('documentos', celdas, 'documento')
     const numero = /^\d+$/.test(numBruto) ? Number(numBruto) : null
-    const base = importeRevo(celda('documentos', celdas, 'subtotal'))
-    const cuota = importeRevo(celda('documentos', celdas, 'impuesto total'))
-    const total = importeRevo(celda('documentos', celdas, 'total'))
+    const base = milesimasRevo(celda('documentos', celdas, 'subtotal'))
+    const cuota = milesimasRevo(celda('documentos', celdas, 'impuesto total'))
+    const total = milesimasRevo(celda('documentos', celdas, 'total'))
     if (orden && dia && !diaDeOrden.has(orden)) diaDeOrden.set(orden, dia)
     let mal = false
     if (!fecha) { noEntiendo('documentos', linea, 'la fecha', fechaBruta, null); mal = true }
@@ -275,24 +329,27 @@ export function leer(ficheros: Record<ClaseRevo, Tabla>): Lectura {
     const o = ordenes.get(orden)
     if (!o) problemas.push({ dia, texto: `La factura ${numero} es de la orden ${orden}, que no está en el fichero de órdenes («${ficheros.ordenes.nombre}»): no sé su canal.` })
     const nif = celda('documentos', celdas, 'nif').toUpperCase().replace(/[\s.-]/g, '') || null
-    docs.push({
+    docsMil.push({
       dia: dia!, numero: numero!, contador: celda('documentos', celdas, 'contador'), fecha: fecha!, orden, canal: o?.canal ?? '',
       nif, cliente: nif ? (celda('documentos', celdas, 'cliente') || null) : null,
-      base: euros(base!), cuota: euros(cuota!), total: euros(total!),
+      base: base!, cuota: cuota!, total: total!,
     })
   }
+  // R10 · En milésimas por día; el IVA y el total, redondeados al final y repartidos; la base, total − IVA.
+  docs.push(...enCentimos(docsMil, (d) => d.dia))
 
   // Impuestos: un renglón por orden y tipo, al día del documento de su orden.
   type Imp = LecturaDia['impuestos'][number] & { dia: string }
   const imps: Imp[] = []
+  const impsMil: Imp[] = []
   for (const { linea, celdas } of ficheros.impuestos.filas) {
     const orden = celda('impuestos', celdas, 'orden')
     const propio = fechaRevo(celda('impuestos', celdas, 'fecha'))
     const dia = diaDeOrden.get(orden) ?? (propio ? fechaDia(propio) : null)
     const tipoBruto = celda('impuestos', celdas, 'impuesto')
     const tipo = tipoRevo(tipoBruto)
-    const base = importeRevo(celda('impuestos', celdas, 'subtotal'))
-    const cuota = importeRevo(celda('impuestos', celdas, 'impuesto total'))
+    const base = milesimasRevo(celda('impuestos', celdas, 'subtotal'))
+    const cuota = milesimasRevo(celda('impuestos', celdas, 'impuesto total'))
     let mal = false
     if (tipo === null) { noEntiendo('impuestos', linea, 'el impuesto', tipoBruto, dia); mal = true }
     if (base === null) { noEntiendo('impuestos', linea, 'la base', celda('impuestos', celdas, 'subtotal'), dia); mal = true }
@@ -302,12 +359,15 @@ export function leer(ficheros: Record<ClaseRevo, Tabla>): Lectura {
       mal = true
     }
     if (mal) continue
-    imps.push({ dia: dia!, orden, tipo: tipo!, base: euros(base!), cuota: euros(cuota!) })
+    impsMil.push({ dia: dia!, orden, tipo: tipo!, base: base!, cuota: cuota! })
   }
+  // R10 · Sumadas en milésimas por día y tipo, y redondeadas a céntimos al final, repartidos entre sus líneas.
+  imps.push(...enCentimos(impsMil, (i) => `${i.dia}|${i.tipo}`))
 
   // Pagos: cada uno con su línea, al día del documento de su orden.
   type Cob = LecturaDia['cobros'][number] & { dia: string }
   const cobs: Cob[] = []
+  const cobsMil: Cob[] = []
   const conPagos = new Set<string>()
   for (const { linea, celdas } of ficheros.pagos.filas) {
     const orden = celda('pagos', celdas, 'orden')
@@ -315,7 +375,7 @@ export function leer(ficheros: Record<ClaseRevo, Tabla>): Lectura {
     const dia = diaDeOrden.get(orden) ?? (propio ? fechaDia(propio) : null)
     const forma = celda('pagos', celdas, 'forma de pago')
     const importeBruto = celda('pagos', celdas, 'importe')
-    const importe = importeRevo(importeBruto)
+    const importe = milesimasRevo(importeBruto)
     if (orden) conPagos.add(orden)
     let mal = false
     if (importe === null) { noEntiendo('pagos', linea, 'el importe', importeBruto, dia); mal = true }
@@ -329,8 +389,14 @@ export function leer(ficheros: Record<ClaseRevo, Tabla>): Lectura {
     const motivo = col('pagos', 'motivo de cancelacion') >= 0 ? celda('pagos', celdas, 'motivo de cancelacion') : ''
     if (motivo) avisos.push({ dia, texto: `${donde('pagos', linea)}: tiene motivo de cancelación («${motivo}»), y se cuenta como cobrado. Mira ese pago.` })
     if (mal) continue
-    cobs.push({ dia: dia!, fila: linea, orden, forma, importe: euros(importe!) })
+    cobsMil.push({ dia: dia!, fila: linea, orden, forma, importe: importe! })
   }
+  // R10 · Lo cobrado, igual: en milésimas por día, redondeado al final.
+  for (const grupo of agruparPor(cobsMil, (x) => x.dia)) {
+    const cents = repartirCentimos(grupo.map((x) => x.importe))
+    grupo.forEach((x, k) => cobs.push({ ...x, importe: euros(cents[k]) }))
+  }
+  cobs.sort((a, b) => a.fila - b.fila)
 
   // Órdenes sin documento: con pagos ya salió arriba; sin pagos y con importe, aviso.
   for (const [id, o] of ordenes) {

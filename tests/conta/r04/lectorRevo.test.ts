@@ -38,7 +38,9 @@ describe('los títulos y los valores: cómo se lee cada celda', () => {
     expect(importeRevo(' 1.234,56 ')).toBe(123456)
     expect(importeRevo('1.234.567,8')).toBe(123456780)
     expect(importeRevo('−4,5')).toBe(-450)
-    for (const mal of ['12,5,0', '12.5', '1.23,45', 'abc', '', '12,345', '1,234.56']) expect(importeRevo(mal)).toBeNull()
+    for (const mal of ['12,5,0', '12.5', '1.23,45', 'abc', '', '12,3456', '1,234.56']) expect(importeRevo(mal)).toBeNull()
+    // R10 · Hasta 3 decimales (los ficheros de verdad): se redondea a céntimos.
+    expect(importeRevo('12,345')).toBe(1235)
   })
   it('fechas «AAAA-MM-DD hh:mm:ss» que existen; el tipo de IVA de su texto', () => {
     expect(fechaRevo('2026-11-09 12:40:30')).toBe('2026-11-09 12:40:30')
