@@ -31,7 +31,8 @@ import type { EmpresaSimulada } from '../../../conta/erp10/simulado'
 test.skip(CARRIL === null, 'Traer de ERP10 escribe en una empresa de la cuenta A (trae en prueba): necesita su carril.')
 
 const DIR = 'docs/conta/capturas/x12'
-const RUTA = '/conta/libros/diario/traer-erp10'
+// X13 · Con la empresa conectada, «Traer de ERP10» abre la pantalla de un botón: esta prueba es la de los ficheros.
+const RUTA = '/conta/libros/diario/traer-erp10?ficheros=1'
 const QUIEN = 'Prueba e2e X12'
 const TAMANOS = [{ width: 1456, height: 816 }, { width: 1366, height: 768 }] as const
 const sinToken: AlmacenToken = { leer: async () => null, guardar: async () => {}, caida: async () => {} }
@@ -158,7 +159,8 @@ for (const tam of TAMANOS) {
       await page.getByRole('button', { name: 'Seguir trayendo de ERP10' }).click()
       await expect(tabla.getByRole('row', { name: /^Diario/ })).toContainText('Todos cuadran · igual que ERP10', { timeout: 90_000 })
       const despues = pedidas.slice(antes)
-      expect(despues.filter((p) => p.que === 'subcuentas' || p.que === 'resumen' || (p.mes ?? '9999') < '2026-02'), 'al seguir, no vuelve a pedir lo leído').toEqual([])
+      // X13 · El diario entero y después las facturas: de las facturas aún no se había leído ninguna (e2e 44719689107).
+      expect(despues.filter((p) => p.que === 'subcuentas' || p.que === 'resumen' || (p.que === 'apuntes' && (p.mes ?? '9999') < '2026-02')), 'al seguir, no vuelve a pedir lo leído').toEqual([])
 
       // 4 · Lleno: como con los ficheros.
       await expect(tabla.getByRole('row', { name: /^Plan de cuentas/ })).toContainText('16 cuentas')

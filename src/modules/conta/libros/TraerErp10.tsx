@@ -22,12 +22,17 @@
 // fuera de la pantalla (erp10/lectorTraer.ts): se puede ir a otra pestaña y volver, y si se corta, sigue
 // donde se quedó. Lo leído entra por el mismo camino que los ficheros: los pasos 2 y 3 no cambian.
 //
+// X13 · Con la sociedad conectada, «Traer de ERP10» abre la pantalla de un botón (TraerPorLaConexion.tsx, la
+// maqueta del 20/11). Esta, la de los ficheros, no cambia: se llega con «¿Sin conexión con ERP10? Súbelo en
+// ficheros» (?ficheros) o sin conexión.
+//
 // Se ve igual que «Salida a ERP10» (X04): usa sus mismas piezas (las clases cxe-*, de erp10.css). Lo que
 // la salida no tiene (los modos, la zona de soltar, las etiquetas del paso 3, la confirmación) va en
 // traer-erp10.css, con clases cxt-*.
 
 import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import { TraerPorLaConexion } from '@/modules/conta/libros/TraerPorLaConexion'
 import { rutaLibros } from '@/config/navegacion'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
@@ -63,7 +68,23 @@ async function abrir(fs: FileList | File[]): Promise<Subido[]> {
   }))
 }
 
+/** X13 · Con la sociedad conectada, la pantalla de un botón; si no (o con ?ficheros), la de los ficheros. */
 export function TraerErp10() {
+  const L = useLibros()
+  const [params, setParams] = useSearchParams()
+  // Envuelto, para distinguir «todavía leyendo» (null) de «sin conexión» ({ c: null }).
+  const conexion = useLeer(() => leerConexionErp10(L.accountId, L.companyId).then((c) => ({ c }), () => ({ c: null })), `${L.companyId}:${L.vuelta}`)
+  if (!conexion.datos && !conexion.error && !params.has('ficheros')) {
+    return <div className="cx-tarjeta" aria-busy="true" aria-label="Mirando la conexión con ERP10"><Hueso alto={40} /></div>
+  }
+  const c = conexion.datos?.c ?? null
+  if (!params.has('ficheros') && c && c.conClaves && c.codigo.trim() && c.estado === 'connected') {
+    return <TraerPorLaConexion key={L.companyId} conexion={c} alFicheros={() => setParams((q) => { q.set('ficheros', '1'); return q })} />
+  }
+  return <TraerConFicheros />
+}
+
+function TraerConFicheros() {
   const L = useLibros()
   const [vuelta, setVuelta] = useState(0)
   // Envuelto, para distinguir «todavía leyendo» (null) de «no hay nada en prueba» ({ p: null }).
