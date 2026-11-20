@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { capturasEn, comentarioCapturas, esCaptura, ramaDeCapturas, tableroDe } from '../../scripts/conta/capturas.mjs'
-import { MARCA, saltarBuild } from '../../scripts/vercel/saltar-build.mjs'
+import { MARCA, REF_STAGING, saltarBuild, saltarVistaPrevia } from '../../scripts/vercel/saltar-build.mjs'
 
 const CERRAR = readFileSync('.github/workflows/capturas-al-cerrar.yml', 'utf8')
 
@@ -96,5 +96,19 @@ describe('al cerrar el PR (capturas-al-cerrar.yml)', () => {
     const paso = CERRAR.slice(CERRAR.indexOf('- name: Borrar'))
     expect(paso).toContain("if: always() && steps.hay.outputs.si == '1' && (env.FUSIONADO != 'true' || steps.main.outcome == 'success')")
     expect(paso).toContain('git push -q origin --delete "capturas/$RAMA"')
+  })
+})
+
+// 20/11 · Vercel no construye las vistas previas que no van contra staging-conta.
+describe('las vistas previas de las ramas no se construyen', () => {
+  it('producción se construye siempre; una vista previa, solo con la base de staging-conta', () => {
+    expect(saltarVistaPrevia({ entorno: 'production', urlBase: 'https://xzmpnchlguibclvxyynt.supabase.co' })).toBe(false)
+    expect(saltarVistaPrevia({ entorno: undefined, urlBase: undefined })).toBe(false)
+    expect(saltarVistaPrevia({ entorno: 'preview', urlBase: 'https://xzmpnchlguibclvxyynt.supabase.co' })).toBe(true)
+    expect(saltarVistaPrevia({ entorno: 'preview', urlBase: undefined })).toBe(true)
+    expect(saltarVistaPrevia({ entorno: 'preview', urlBase: `https://${REF_STAGING}.supabase.co` })).toBe(false)
+  })
+  it('el ref de staging es el mismo que el de la guarda de la vista previa', () => {
+    expect(readFileSync('build/guardaVistaPrevia.ts', 'utf8')).toContain(`REF_STAGING_CONTA = '${REF_STAGING}'`)
   })
 })

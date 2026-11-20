@@ -15,21 +15,36 @@
 // Mientras hay algo traído en prueba, la pantalla abre directamente en el paso 3: se da por bueno o se
 // deshace antes de traer otra cosa (la base tampoco deja traer dos a la vez).
 //
+// X12 · «Traerlo de ERP10», al lado de «Elegir ficheros» (con el mismo peso), si la sociedad tiene la
+// conexión con ERP10 probada con su código: lee el ejercicio elegido por la conexión, mes a mes, y llena
+// solas las filas (el plan, los terceros, el diario, las facturas y el sumas y saldos calculado). Mientras
+// lee, cada fila dice por dónde va en «Cómo está» («Leyendo asientos: marzo, 3 de 12»). El lector vive
+// fuera de la pantalla (erp10/lectorTraer.ts): se puede ir a otra pestaña y volver, y si se corta, sigue
+// donde se quedó. Lo leído entra por el mismo camino que los ficheros: los pasos 2 y 3 no cambian.
+//
+// X13 · Con la sociedad conectada, «Traer de ERP10» abre la pantalla de un botón (TraerPorLaConexion.tsx, la
+// maqueta del 20/11). Esta, la de los ficheros, no cambia: se llega con «¿Sin conexión con ERP10? Súbelo en
+// ficheros» (?ficheros) o sin conexión.
+//
 // Se ve igual que «Salida a ERP10» (X04): usa sus mismas piezas (las clases cxe-*, de erp10.css). Lo que
 // la salida no tiene (los modos, la zona de soltar, las etiquetas del paso 3, la confirmación) va en
 // traer-erp10.css, con clases cxt-*.
 
-import { useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { TraerPorLaConexion } from '@/modules/conta/libros/TraerPorLaConexion'
 import { rutaLibros } from '@/config/navegacion'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import {
-  frasePagado, MODOS, SIN_CUENTA_DE_GASTO, SIN_SALDOS, TODAVIA_NO, abrirExcel, avisosPaso1, avisosPaso2, comprobacionesPaso1, filasPaso1,
+  NOMBRE_CONEXION, frasePagado, leidoDeLaConexion, MODOS, SIN_CUENTA_DE_GASTO, SIN_SALDOS, TODAVIA_NO, abrirExcel, avisosPaso1, avisosPaso2, comprobacionesPaso1, filasPaso1,
   conLoDeLaTabla, filasPaso2, lineaDadoPorBueno, lineaDeshecho, filasPaso3, leerCarga, lineaEnPrueba, paraLaBase, puedeTraer, puedeVerLoQueEntra, queSeTrajoSoloCuentas, soloCuentas,
   soltadosQueNoSeTraen,
   type Aviso, type Modo, type Subido,
 } from '@/modules/conta/lib/traer'
+import { comoVaLaFila, lectorDe, type LectorTraer, type VistaLector } from '@/modules/conta/erp10/lectorTraer'
+import { almacenDelNavegador } from '@/modules/conta/erp10/almacenTraer'
+import { leerConexionErp10, traerPaginaErp10 } from '@/modules/conta/services/erp10ApiService'
 import { antesDeDarlo, asientosApuntados, darPorBueno, deshacer, diaDeInicio, leerEnPrueba, leerUltima, leerYaEnSumied, resumenPagado, traer, type Ultima } from '@/modules/conta/services/traerService'
 
 // Con el punto de los miles también en las de cuatro cifras («1.650,00», como en la maqueta): el español de serie no lo pone.
@@ -37,7 +52,14 @@ const n = (x: number | undefined) => (x ?? 0).toLocaleString('es-ES')
 const euros = (x: number) => x.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as Intl.NumberFormatOptions)
 /** «Dos cosas que decidir · 2», o «Nada que decidir». */
 const decidir = (n: number) => (n === 0 ? 'Nada que decidir' : `${n === 1 ? 'Una cosa' : n === 2 ? 'Dos cosas' : `${n} cosas`} que decidir · ${n}`)
-const ETIQUETA = { leido: ['cxe-etq-listo', 'Leído'], mira: ['cxe-etq-mira', 'Mira esto'], falta: ['cxe-etq-gris', 'Falta'] } as const
+const ETIQUETA = { leido: ['cxe-etq-listo', 'Leído'], mira: ['cxe-etq-mira', 'Mira esto'], falta: ['cxe-etq-gris', 'Falta'], leyendo: ['cxe-etq-gris', 'Leyendo'] } as const
+const hoyMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
+const SIN_LECTOR = () => () => undefined
+
+/** X12 · Lo que dice el lector de ERP10, para React (null sin conexión). */
+function useLector(l: LectorTraer | null): VistaLector | null {
+  return useSyncExternalStore(l ? (f) => l.oir(f) : SIN_LECTOR, () => l?.estado ?? null)
+}
 
 /** Abre lo que se suelta: los que no son un Excel se dicen, no se pierden. */
 async function abrir(fs: FileList | File[]): Promise<Subido[]> {
@@ -46,13 +68,33 @@ async function abrir(fs: FileList | File[]): Promise<Subido[]> {
   }))
 }
 
+/** X13 · Con la sociedad conectada, la pantalla de un botón; si no (o con ?ficheros), la de los ficheros. */
 export function TraerErp10() {
+  const L = useLibros()
+  const [params, setParams] = useSearchParams()
+  // Envuelto, para distinguir «todavía leyendo» (null) de «sin conexión» ({ c: null }).
+  const conexion = useLeer(() => leerConexionErp10(L.accountId, L.companyId).then((c) => ({ c }), () => ({ c: null })), `${L.companyId}:${L.vuelta}`)
+  if (!conexion.datos && !conexion.error && !params.has('ficheros')) {
+    return <div className="cx-tarjeta" aria-busy="true" aria-label="Mirando la conexión con ERP10"><Hueso alto={40} /></div>
+  }
+  const c = conexion.datos?.c ?? null
+  if (!params.has('ficheros') && c && c.conClaves && c.codigo.trim() && c.estado === 'connected') {
+    return <TraerPorLaConexion key={L.companyId} conexion={c} alFicheros={() => setParams((q) => { q.set('ficheros', '1'); return q })} />
+  }
+  return <TraerConFicheros />
+}
+
+function TraerConFicheros() {
   const L = useLibros()
   const [vuelta, setVuelta] = useState(0)
   // Envuelto, para distinguir «todavía leyendo» (null) de «no hay nada en prueba» ({ p: null }).
   const enPrueba = useLeer(async () => ({ p: await leerEnPrueba(L.accountId, L.companyId) }), `${L.companyId}:${vuelta}:${L.vuelta}`)
   const ultima = useLeer(() => leerUltima(L.accountId, L.companyId), `${L.companyId}:${vuelta}:${L.vuelta}`)
   const inicio = useLeer(() => diaDeInicio(L.companyId), `${L.companyId}:${vuelta}:${L.vuelta}`)
+  // X12 · La conexión con ERP10 de la sociedad: «Traerlo de ERP10» solo sale si está probada con su código.
+  const conexion = useLeer(() => leerConexionErp10(L.accountId, L.companyId).catch(() => null), `${L.companyId}:${L.vuelta}`)
+  const c = conexion.datos
+  const conexionProbada = !!c && c.conClaves && !!c.codigo.trim() && c.estado === 'connected'
 
   const [modo, setModo] = useState<Modo>('nueva')
   const [ejercicio, setEjercicio] = useState<string>(L.ejercicio.code)
@@ -67,7 +109,15 @@ export function TraerErp10() {
   const [cuenta, setCuenta] = useState<string | null>(null)
   const elegir = useRef<HTMLInputElement | null>(null)
 
-  const carga = useMemo(() => leerCarga(subidos), [subidos])
+  // X12 · El lector de la sociedad y el ejercicio elegido (vive fuera de la pantalla; uno por sociedad y ejercicio).
+  const lector = useMemo(() => (conexionProbada ? lectorDe(L.companyId, ejercicio, () => ({
+    pedir: (q) => traerPaginaErp10(L.companyId, q), almacen: almacenDelNavegador(), hoy: hoyMadrid(),
+  })) : null), [conexionProbada, L.companyId, ejercicio])
+  const vista = useLector(lector)
+  const hecho = vista?.estado === 'hecho' ? vista : null
+  const deErp10 = useMemo(() => (hecho ? leidoDeLaConexion(hecho.datos) : null), [hecho])
+  const trayendo = vista?.estado === 'leyendo'
+  const carga = useMemo(() => leerCarga(subidos, deErp10), [subidos, deErp10])
   const datos = useMemo(() => paraLaBase(carga), [carga])
   const p = enPrueba.datos?.p ?? null
   const paso: 1 | 2 | 3 = p ? 3 : pasoElegido
@@ -141,9 +191,13 @@ export function TraerErp10() {
 
   // ── Paso 1 ──
   const filas1 = filasPaso1(carga, modo)
+  // X12 · Con la conexión, los años de ERP10 que se pueden pedir: los de Sumied y los tres últimos.
+  const anioHoy = Number(hoyMadrid().slice(0, 4))
+  const anios = [...new Set([...L.ejercicios.map((x) => x.code), ...(conexionProbada ? [anioHoy, anioHoy - 1, anioHoy - 2].map(String) : [])])].sort().reverse()
   const avisos1 = avisosPaso1(carga, modo)
   const comp1 = comprobacionesPaso1(carga)
-  const ver = puedeVerLoQueEntra(carga, modo)
+  const verFicheros = puedeVerLoQueEntra(carga, modo)
+  const ver = trayendo ? { puede: false, porque: 'Espera a que acabe de traer de ERP10.' } : verFicheros
   const noSeTraen = soltadosQueNoSeTraen(carga, modo)
   const nAmbar1 = avisos1.filter((a) => a.tono === 'ambar').length
 
@@ -187,9 +241,9 @@ export function TraerErp10() {
       onDragOver={(e) => { if (paso === 1) { e.preventDefault(); setEncima(true) } }} onDragLeave={() => setEncima(false)} onDrop={(e) => { if (paso === 1) alSoltar(e) }}>
       <div className="cxe-cabeza">
         <h1 className="cxe-titulo" id="cxt-titulo">Traer de ERP10</h1>
-        <select className="cxe-mes" aria-label="Ejercicio" value={ejercicio} disabled={paso !== 1 || modo !== 'ejercicio'} onChange={(e) => setEjercicio(e.target.value)}
-          title={modo === 'nueva' ? 'Empresa nueva: se trae todo lo que lleven los ficheros' : undefined}>
-          {L.ejercicios.map((x) => <option key={x.code} value={x.code}>Ejercicio {x.code}</option>)}
+        <select className="cxe-mes" aria-label="Ejercicio" value={ejercicio} disabled={paso !== 1 || (modo !== 'ejercicio' && !conexionProbada)} onChange={(e) => setEjercicio(e.target.value)}
+          title={modo === 'nueva' ? (conexionProbada ? 'El año que se trae de ERP10' : 'Empresa nueva: se trae todo lo que lleven los ficheros') : undefined}>
+          {anios.map((x) => <option key={x} value={x}>Ejercicio {x}</option>)}
         </select>
         {pasos}
         <div className="cxe-botones">
@@ -199,7 +253,7 @@ export function TraerErp10() {
             <button type="button" className="cxe-grande" disabled={!puede2 || !!haciendo}
               onClick={() => { void hacer('Trayendo en prueba…', async () => {
                 await traer(L.companyId, ej, datos, L.quien)
-              }, () => { setSubidos([]); setPaso(1) }) }}>Traerlo</button>
+              }, () => { setSubidos([]); setPaso(1); void lector?.olvidar() }) }}>Traerlo</button>
           </>}
           {paso === 3 && <button type="button" className="cxe-grande" disabled={!a?.puede || !!haciendo} title={a && !a.puede ? fraseAntes : undefined} onClick={() => setConfirmar('dar')}>Darlo por bueno</button>}
         </div>
@@ -230,14 +284,20 @@ export function TraerErp10() {
                 <table className="cxe-tabla" aria-label="Los ficheros">
                   <thead><tr><th>Qué</th><th>Fichero</th><th className="cxe-num">Ha leído</th><th>Cómo está</th></tr></thead>
                   <tbody>
-                    {filas1.map((f) => (
-                      <tr key={f.tipo} className={f.estado === 'mira' ? 'cxt-fila-mira' : undefined}>
-                        <td><strong>{f.que}</strong>{f.siLoTiene && <span className="cxt-gris"> · si lo tiene</span>}</td>
-                        <td>{f.fichero ?? ''}</td>
-                        <td className="cxe-num cxt-leido"><strong>{f.haLeido ?? ''}</strong></td>
-                        <td><span className={`cxe-etq ${ETIQUETA[f.estado][0]}`}>{ETIQUETA[f.estado][1]}</span>{f.nota}</td>
-                      </tr>
-                    ))}
+                    {filas1.map((f) => {
+                      // X12 · Mientras se trae de ERP10, la fila dice por dónde va (y lo que lleva leído).
+                      const va = vista && f.tipo !== 'inmovilizado' ? comoVaLaFila(vista, f.tipo) : null
+                      // En ámbar, solo la que se ha cortado; las ya leídas enteras esperan en gris.
+                      const estado = va ? (va.texto.startsWith('Se ha cortado') ? 'mira' : 'leyendo') : f.estado
+                      return (
+                        <tr key={f.tipo} className={estado === 'mira' ? 'cxt-fila-mira' : undefined} aria-busy={va?.leyendo || undefined}>
+                          <td><strong>{f.que}</strong>{f.siLoTiene && <span className="cxt-gris"> · si lo tiene</span>}</td>
+                          <td>{va ? NOMBRE_CONEXION : f.fichero ?? ''}</td>
+                          <td className="cxe-num cxt-leido"><strong>{va ? va.haLeido ?? '' : f.haLeido ?? ''}</strong></td>
+                          <td><span className={`cxe-etq ${ETIQUETA[estado][0]}`}>{ETIQUETA[estado][1]}</span>{va ? va.texto : f.nota}</td>
+                        </tr>
+                      )
+                    })}
                     <tr><td colSpan={4} className="cxt-todavia">{TODAVIA_NO}{noSeTraen.length ? ` Has soltado ${noSeTraen.join(' y ')}: se lee, pero no se trae.` : ''}</td></tr>
                   </tbody>
                 </table>
@@ -245,7 +305,16 @@ export function TraerErp10() {
               <div className={`cxt-soltar${encima ? ' cxt-soltar-encima' : ''}`}>
                 <span className="cxt-soltar-icono" aria-hidden="true">↥</span>
                 <p><strong>Arrastra aquí los ficheros, todos a la vez.</strong> Sumied reconoce cuál es cada uno por lo que lleva dentro.</p>
-                <button type="button" className="cxe-sec cxt-elegir" onClick={() => elegir.current?.click()}>Elegir ficheros</button>
+                <div className="cxt-soltar-botones">
+                  <button type="button" className="cxe-sec cxt-elegir" onClick={() => elegir.current?.click()}>Elegir ficheros</button>
+                  {lector && vista && (
+                    <button type="button" className="cxe-sec cxt-elegir" disabled={trayendo}
+                      title={`Lee de ERP10 el ejercicio ${ejercicio} de esta sociedad, mes a mes. No escribe nada en ERP10.`}
+                      onClick={() => { void (vista.estado === 'hecho' ? lector.olvidar().then(() => lector.traer()) : lector.traer()) }}>
+                      {trayendo ? 'Trayendo de ERP10…' : vista.estado === 'cortado' ? 'Seguir trayendo de ERP10' : vista.estado === 'hecho' ? 'Volver a traer de ERP10' : 'Traerlo de ERP10'}
+                    </button>
+                  )}
+                </div>
                 <input ref={elegir} type="file" multiple accept=".xlsx,.xls" hidden aria-label="Elegir ficheros"
                   onChange={(e) => { void soltar(e.target.files); e.target.value = '' }} />
               </div>
@@ -269,9 +338,11 @@ export function TraerErp10() {
               <>
                 <h2 className="cxe-der-titulo" id="cxt-mirar">Qué mirar antes de traerlo · {nAmbar1}</h2>
                 <div className="cxe-der-cuerpo">
-                  {!subidos.length && <div className="cxe-nota"><p><strong>Todavía no has soltado ningún fichero.</strong> Con el plan de cuentas y los proveedores ya puedes traer las cuentas y las fichas; el diario y las facturas, cuando los tengas.</p></div>}
+                  {vista?.estado === 'cortado' && <div className="cxe-aviso" role="alert"><p><strong>Se ha cortado al traer de ERP10.</strong> {vista.fallo ? `${vista.fallo} ` : ''}«Seguir trayendo de ERP10» sigue donde se quedó, sin volver a leer lo leído.</p></div>}
+                  {trayendo && <div className="cxe-nota" role="status"><p><strong>Trayendo de ERP10 el ejercicio {vista?.ejercicio}.</strong> Tarda unos minutos: puedes seguir trabajando en otra pestaña y volver.</p></div>}
+                  {!subidos.length && !deErp10 && !trayendo && vista?.estado !== 'cortado' && <div className="cxe-nota"><p><strong>Todavía no has soltado ningún fichero.</strong> Con el plan de cuentas y los proveedores ya puedes traer las cuentas y las fichas; el diario y las facturas, cuando los tengas.</p></div>}
                   {avisos1.map(avisoCaja)}
-                  {subidos.length > 0 && nAmbar1 === 0 && <div className="cxe-nota"><p><strong>Nada que mirar.</strong> Todo lo leído cuadra.</p></div>}
+                  {(subidos.length > 0 || deErp10) && nAmbar1 === 0 && <div className="cxe-nota"><p><strong>Nada que mirar.</strong> Todo lo leído cuadra.</p></div>}
                   <p className="cxt-gris">Lo que ERP10 no saca en un fichero (la cuenta de gasto de cada proveedor, su IVA, su retención, cómo se paga) Sumied lo aprende de las facturas del año. No se rellena a mano.</p>
                 </div>
               </>
@@ -430,7 +501,7 @@ export function TraerErp10() {
 
       <div className="cxe-estado" role="status" aria-live="polite">
         {haciendo && <span>{haciendo}</span>}
-        {!haciendo && paso === 1 && !ver.puede && subidos.length > 0 && <span className="cxt-gris">{ver.porque}</span>}
+        {!haciendo && paso === 1 && !ver.puede && (subidos.length > 0 || trayendo) && <span className="cxt-gris">{ver.porque}</span>}
       </div>
       {fallo && <div className="cxe-estado cxe-mal" role="alert">{fallo}</div>}
     </section>

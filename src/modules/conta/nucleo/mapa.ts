@@ -120,15 +120,21 @@ const SALIDA_ERP10 = b('salidaErp10', 'Salida a ERP10', 'salidaErp10', `${R.libr
 const DIEZ = b('diez', 'Pendientes de Diez', 'diez', R.pendientesDiez, [R.pendientesDiez], { solo: 'diez', pestana: 'Pendientes de Diez' })
 
 const lib = (area: string, accion: string) => `${R.libros}/${area}/${accion}`
-const RESUMIDO = b('resumido', 'Diario resumido', 'diario', R.diarioResumido, [R.diarioResumido, lib('diario', 'diario-resumido')], { pestana: 'Diario resumido' })
+// Q06 · Los nombres de la cinta de Listados, los de la maqueta nucleo_7 y ERP10: Diario, Mayor, Sumas y saldos,
+// Libro de emitidas, Libro de recibidas, Retenciones, Balance y Pérdidas y ganancias. El diario, en su pestaña de
+// trabajo, sigue llamándose «Diario resumido» (Julio, 20/11: el botón dice «Diario» y la pestaña lo que es).
+const RESUMIDO = b('resumido', 'Diario', 'diario', R.diarioResumido, [R.diarioResumido, lib('diario', 'diario-resumido')], { pestana: 'Diario resumido' })
 // El índice de Libros (libros a secas) y la cuenta del plan (plan/:codigo) son del Mayor.
-const MAYOR = b('mayor', 'Libro mayor', 'mayor', lib('mayor', 'libro-mayor'), [R.libros, `${R.libros}/mayor`, lib('mayor', 'libro-mayor'), 'plan'], { pestana: 'Libro mayor' })
+const MAYOR = b('mayor', 'Mayor', 'mayor', lib('mayor', 'libro-mayor'), [R.libros, `${R.libros}/mayor`, lib('mayor', 'libro-mayor'), 'plan'], { pestana: 'Mayor' })
 const SUMAS = b('sumas', 'Sumas y saldos', 'sumas', lib('mayor', 'sumas-saldos'), undefined, { pestana: 'Sumas y saldos' })
 const ACUMULADOS = b('acumulados', 'Acumulados', 'acumulados', lib('mayor', 'acumulados'), undefined, { pestana: 'Acumulados' })
 const BALANCE = b('balance', 'Balance', 'estados', lib('balances', 'balance'), [`${R.libros}/balances`, lib('balances', 'balance')], { pestana: 'Balance de situación' })
 const PYG = b('pyg', 'Pérdidas y ganancias', 'estados', lib('balances', 'pyg'), undefined, { pestana: 'Pérdidas y ganancias' })
 const ECPN = b('ecpn', 'Patrimonio neto', 'estados', lib('balances', 'ecpn'), undefined, { pestana: 'Cambios en el patrimonio neto' })
-const IVA = b('iva', 'Libros de IVA', 'iva', lib('registro', 'expedidas'), [`${R.libros}/registro`], { pestana: 'Libros de IVA' })
+// Q06 · El libro de IVA en dos botones, como la maqueta (y ERP10: E-Facturas expedidas, R-Facturas recibidas).
+// Lo demás del registro (intracomunitarias, bienes de inversión, suplidos), del de emitidas, como antes del de IVA.
+const IVA = b('iva', 'Libro de emitidas', 'emitidas', lib('registro', 'expedidas'), [`${R.libros}/registro`], { pestana: 'Libro de emitidas' })
+const IVA_RECIBIDAS = b('ivaRecibidas', 'Libro de recibidas', 'recibidas', lib('registro', 'recibidas'), undefined, { pestana: 'Libro de recibidas' })
 const RETENCIONES = b('retenciones', 'Retenciones', 'retenciones', lib('registro', 'retenciones'), undefined, { pestana: 'Retenciones' })
 const AEAT = b('aeat', 'Formato AEAT', 'aeat', lib('registro', 'formato-aeat'), undefined, { pestana: 'Formato AEAT' })
 const ANUALES = b('anuales', 'Cuentas anuales', 'anuales', lib('anuales', 'cuentas-anuales'), [`${R.libros}/anuales`], { pestana: 'Cuentas anuales' })
@@ -214,14 +220,19 @@ export const MODULOS: Modulo[] = [
           { titulo: 'Bancos', botones: [EXTRACTO] },
           { titulo: 'Diez', botones: [DIEZ] },
           { titulo: 'ERP10', botones: [TRAER_ERP10, SALIDA_ERP10] },
+          // R08 · La quincena de Catcher, que se subía entrando por la dirección: su botón, aquí también.
+          { titulo: 'Repartidores', botones: [atajo(REPARTIDORES)] },
         ],
       },
       {
         id: 'listados', etiqueta: 'Listados', grupos: [
-          { titulo: 'Diario y mayor', botones: [RESUMIDO, MAYOR, SUMAS, ACUMULADOS] },
-          { titulo: 'Estados', botones: [BALANCE, PYG, ECPN] },
-          { titulo: 'IVA y retenciones', botones: [IVA, RETENCIONES, AEAT] },
-          { titulo: 'Cuentas anuales', botones: [ANUALES] },
+          // Q06 · Los grupos de ERP10 (Diario, Generales, Libros registro, Estados contables) en el orden de la
+          // maqueta nucleo_7. Acumulados, Formato AEAT, Patrimonio neto y Cuentas anuales tienen pantalla
+          // detrás: siguen, al final de su grupo (regla 7).
+          { titulo: 'Diario', botones: [RESUMIDO] },
+          { titulo: 'Generales', botones: [MAYOR, SUMAS, ACUMULADOS] },
+          { titulo: 'Libros registro', botones: [IVA, IVA_RECIBIDAS, RETENCIONES, AEAT] },
+          { titulo: 'Estados contables', botones: [BALANCE, PYG, ECPN, ANUALES] },
         ],
       },
       {

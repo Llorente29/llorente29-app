@@ -6,6 +6,7 @@
 // habla con ERP10 es la función conta-erp10-leer (en el servidor, con las claves en
 // el Vault): aquí nunca hay claves.
 
+import type { Pagina, PedirPagina } from '../../../../supabase/functions/_shared/erp10Traer'
 import { supabase } from '@/lib/supabase'
 import { hayBase, tabla } from '@/modules/conta/services/bd'
 import type { FilaSumas } from '@/modules/conta/lib/traer'
@@ -149,6 +150,37 @@ export async function probarErp10(companyId: string): Promise<Probado> {
     deSumied: (Array.isArray(d.deSumied) ? d.deSumied : []) as Probado['deSumied'],
     ultimoConApuntes: d.ultimoConApuntes && typeof d.ultimoConApuntes === 'object' ? d.ultimoConApuntes as Probado['ultimoConApuntes'] : null,
   }
+}
+
+/**
+ * X11 · Lo que da ERP10 de cada cosa que trae «Traer de ERP10» por fichero, medido leyendo:
+ * rutas, totales, páginas, campos y tiempos (supabase/functions/_shared/erp10Medir.ts).
+ * Sin nombres, NIF ni importes: el texto se pega tal cual en el PR.
+ */
+export interface Medido { ejercicio: string; peticiones: number; ms: number; cortada: boolean; texto: string }
+export async function medirParaTraerErp10(companyId: string, ejercicio?: string): Promise<Medido> {
+  const d = await invocar({ company_id: companyId, accion: 'medir', ...(ejercicio ? { ejercicio } : {}) })
+  const m = (d.medida ?? {}) as Fila
+  return { ejercicio: String(m.ejercicio ?? ejercicio ?? ''), peticiones: Number(m.peticiones ?? 0), ms: Number(m.ms ?? 0), cortada: m.cortada === true, texto: String(d.texto ?? '') }
+}
+
+/**
+ * X12 · Una página de lo que trae «Traer de ERP10» por la conexión (conta-erp10-leer, accion traer).
+ * Un freno (la lista, el NIF, las claves) o un permiso no se reintenta: lleva `noReintentar`.
+ */
+export async function traerPaginaErp10(companyId: string, p: PedirPagina): Promise<Pagina> {
+  if (!supabase) throw new Error('Sin conexión con la base.')
+  const { data, error } = await supabase.functions.invoke('conta-erp10-leer', { body: { company_id: companyId, accion: 'traer', ...p } })
+  if (!error) {
+    const pag = (data as Fila | null)?.pagina as Pagina | undefined
+    if (!pag || !Array.isArray(pag.filas)) throw new Error('ERP10 no ha contestado lo que se esperaba.')
+    return pag
+  }
+  const ctx = (error as { context?: Response }).context
+  const cuerpo = ctx && typeof ctx.json === 'function' ? await ctx.clone().json().catch(() => null) as Fila | null : null
+  const e = new Error(str(cuerpo?.error) ?? (ctx?.status === 404 ? 'Traer de ERP10 aún no está publicado en este entorno.' : `No se ha podido leer ERP10: ${error.message}`)) as Error & { noReintentar?: boolean }
+  if (ctx && [400, 401, 403, 404, 409].includes(ctx.status)) e.noReintentar = true
+  throw e
 }
 
 /** Los saldos de ERP10 de una sociedad entre dos días, sumados por cuenta (céntimos). */

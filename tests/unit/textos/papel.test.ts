@@ -55,9 +55,9 @@ describe('nunca «papel» en lo que se ve', () => {
     expect(textosDe(codigo, 'x.tsx').map((x) => x.texto)).toEqual(['papel', 'papeles', 'papeles', 'papel'])
   })
 
-  it('solo queda fuera el papel impreso: tres frases de impresora, y cada una sigue existiendo', () => {
-    expect(IMPRESO).toHaveLength(3)
-    const sitios = ['src/modules/printing/components/PrintersSettingsPage.tsx', 'src/modules/pase/PaseBoard.tsx', 'src/modules/pos/pages/TpvSalePage.tsx']
+  it('solo queda fuera el papel impreso: tres frases de impresora y la hoja impresa del listado (Q06), y cada una sigue existiendo', () => {
+    expect(IMPRESO).toHaveLength(4)
+    const sitios = ['src/modules/printing/components/PrintersSettingsPage.tsx', 'src/modules/pase/PaseBoard.tsx', 'src/modules/pos/pages/TpvSalePage.tsx', 'src/modules/conta/nucleo/listado/ListadoNucleo.tsx']
     for (const [i, f] of sitios.entries()) expect(IMPRESO[i].test(readFileSync(f, 'utf8').replace(/\s+/g, ' ')), f).toBe(true)
     // Un «papel» de documento en Cocina sí cuenta (la pantalla de recepciones, 21/10).
     expect(textosDe("const t = 'Total del papel'", 'x.tsx').map((x) => x.texto)).toEqual(['Total del papel'])

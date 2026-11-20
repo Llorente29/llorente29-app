@@ -31,7 +31,7 @@ const ZOOM = [50, 75, 100, 125, 150, 200] as const
 
 export interface SinDocumento { marcado: boolean; motivo: string; poner: (marcado: boolean, motivo: string) => void }
 
-export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar, tituloSoltar, sinDocumento, otraPrimero = false, sinDocumentoTexto, raya }: {
+export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar, tituloSoltar, sinDocumento, otraPrimero = false, accion, sinDocumentoTexto, raya }: {
   /** El documento: su dirección y si es una foto; null = sin documento; undefined = cargando. */
   documento: { url: string; foto: boolean; titulo: string } | null | undefined
   /** La segunda pestaña: su nombre y lo que enseña. */
@@ -46,7 +46,9 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
   otraPrimero?: boolean
   /** «Sin documento», con su motivo: sin él, una factura sin PDF no se valida (paraValidar.faltaDocumento). */
   sinDocumento?: SinDocumento
-  /** Lo que dice cuando no hay documento ni se puede soltar uno (por defecto, «Esta factura no tiene documento.»). */
+  /** Q06 · Lo que va arriba a la derecha, al lado de las pestañas (el listado: «Abrir el asiento»). */
+  accion?: ReactNode
+  /** Q06 · Lo que dice sin documento y sin zona de soltar (por defecto, «Esta factura no tiene documento.»). */
   sinDocumentoTexto?: string
   /** K06 · La raya que se arrastra, y de quién es el reparto que se recuerda (su id de usuario; null: no se recuerda). */
   raya?: { usuario: string | null }
@@ -74,6 +76,7 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
           <button type="button" role="tab" aria-selected={ver === 'documento'} onClick={() => setVer('documento')}>El documento</button>
           {!otraPrimero && <button type="button" role="tab" aria-selected={ver === 'otra'} onClick={() => setVer('otra')}>{otra.nombre}</button>}
         </div>
+        {accion && <span className="kf-panel-accion">{accion}</span>}
       </div>
       <div className="kf-panel-lupa">
         <button type="button" aria-label="Reducir" disabled={i <= 0 || ver !== 'documento'} onClick={() => setZoom(ZOOM[i - 1])}>−</button>

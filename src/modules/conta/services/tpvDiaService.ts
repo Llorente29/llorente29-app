@@ -29,7 +29,7 @@ const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16)
 const limpio = (e: unknown) => new Error((e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, ''))
 const esCarrera = (e: unknown) => /se ha validado otro asiento de la serie a la vez|vuelve a pulsar/i.test(e instanceof Error ? e.message : String(e))
 
-export interface DiaTpvValidado { numero: number; serie: number; texto: string }
+export interface DiaTpvValidado { numero: number; serie: number; texto: string; /** R07 · El número del asiento del cobro del día, si va en dos. */ cobroNumero: number | null }
 
 async function unaVez(diaId: string, quien: string | null): Promise<DiaTpvValidado> {
   const p = await rpc<ParaValidarTpv>('conta_tpv_dia_para_validar', { p_dia: diaId })
@@ -50,7 +50,7 @@ async function unaVez(diaId: string, quien: string | null): Promise<DiaTpvValida
     p_dia: diaId, p_entry: entry, p_numero: numero, p_ruta: ruta, p_nombre: nombreFicheroTpv(p.dia.dia, numero),
     p_sha256: sha, p_bytes: bytes.length, p_quien_nombre: quien,
   })
-  return { numero: Number(r.numero), serie: Number(r.serie), texto: String(r.texto ?? '') }
+  return { numero: Number(r.numero), serie: Number(r.serie), texto: String(r.texto ?? ''), cobroNumero: r.cobro_numero == null ? null : Number(r.cobro_numero) }
 }
 
 /** Proponer y validar un día del TPV con su PDF. Dice qué ha hecho (regla 8) o por qué no. */

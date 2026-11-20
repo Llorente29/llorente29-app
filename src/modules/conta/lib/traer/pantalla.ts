@@ -67,12 +67,18 @@ function notaDe(t: TipoFichero, c: Carga, estado: EstadoFila): string {
       return sin ? `${n(sin)} sin NIF` : 'Todos con NIF'
     }
     case 'plan_cuentas': return f.largos.largos.length === 1 ? `De ${f.largos.largos[0]} cifras` : ''
-    case 'diario': return c.diario && c.diario.debe === c.diario.haber ? 'Todos cuadran' : 'No cuadra'
+    case 'diario': {
+      const cuadran = c.diario && c.diario.debe === c.diario.haber ? 'Todos cuadran' : 'No cuadra'
+      // X12 · Traído por la conexión: además, si da lo mismo que el resumen de ERP10.
+      const r = c.conexion?.resumen
+      return r ? (r.cuadra ? `${cuadran} · igual que ERP10` : r.nota) : cuadran
+    }
     case 'expedidas': case 'recibidas': {
       const sin = (f.facturas?.sinCasar ?? []).filter((x) => x.libro === t).length
       return !c.diario ? 'Sin el diario, no se casan' : sin ? `${n(sin)} sin su asiento` : 'Con su asiento'
     }
     case 'sumas_saldos': {
+      if (c.ficheros.find((x) => x.tipo === 'sumas_saldos')?.origen === 'calculado') return 'Suelta su fichero para comprobarlo'
       if (!f.sumas) return 'Para comprobar al final'
       const mal = f.sumas.filter((x) => x.frase).length
       return mal ? `${n(mal)} no cuadran con el diario` : 'Cuadra con el diario'
@@ -116,6 +122,11 @@ export function avisosPaso1(c: Carga, modo: Modo): Aviso[] {
     out.push({ id: f.tipo, titulo: `${QUE[f.tipo]}: ${cuantos(f.avisos.length, 'cosa que mirar', 'cosas que mirar')}.`, texto: 'Una a una:', lista: f.avisos, tono: 'ambar' })
   }
   if (c.comprobado.largos.frase) out.push({ id: 'largos', ...partir(c.comprobado.largos.frase), lista: [], tono: 'ambar' })
+  // X12 · Lo traído por la conexión: cómo han venido las facturas (por la cuenta del tercero y la serie).
+  if (c.conexion) out.push({ id: 'series', ...partir(c.conexion.series), lista: [], tono: 'nota' })
+  if (c.ficheros.find((x) => x.tipo === 'sumas_saldos')?.origen === 'calculado') {
+    out.push({ id: 'sumas-calculado', titulo: 'El sumas y saldos sale de los asientos traídos.', texto: 'Si sueltas el de ERP10, se comprueba con él cuenta a cuenta.', lista: [], tono: 'nota' })
+  }
   if (c.diario && !c.sumas) {
     out.push({ id: 'sin-sumas', titulo: 'Falta el sumas y saldos.', texto: 'Sin él no se puede hacer el paso 3: comprobar que Sumied queda igual que ERP10, cuenta a cuenta.', lista: [], tono: 'nota' })
   }
@@ -132,6 +143,7 @@ export function comprobacionesPaso1(c: Carga): { verdes: string[]; gris: string 
   if (c.comprobado.facturas && !c.comprobado.facturas.sinCasar.length) verdes.push('Cada factura encuentra su asiento')
   if (c.comprobado.sumas && c.comprobado.sumas.every((x) => !x.frase)) verdes.push('El diario da el sumas y saldos, cuenta a cuenta')
   if (c.comprobado.iva.length && c.comprobado.iva.every((x) => x.cuadra)) verdes.push('El IVA del diario es el de los libros')
+  if (c.conexion?.resumen?.cuadra && c.conexion.resumen.lineasErp10 > 0) verdes.push('Lo traído da lo mismo que ERP10, mes a mes')
   return { verdes, gris: c.diario ? 'El IVA de cada trimestre: sin los 303 no se puede comprobar con lo presentado' : null }
 }
 

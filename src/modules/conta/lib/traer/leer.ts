@@ -36,7 +36,11 @@ export function leerPlan(h: Hoja, fila: number): PlanLeido {
 
 // ── Proveedores y clientes ───────────────────────────────────────────────────────────
 
-export interface Tercero { codigo: string; nombreFiscal: string; nombreComercial: string; nif: string | null; poblacion: string }
+export interface Tercero {
+  codigo: string; nombreFiscal: string; nombreComercial: string; nif: string | null; poblacion: string
+  /** X12 · Lo que da la conexión con ERP10 de la ficha (los listados de hoy no lo traen). */
+  direccion?: string | null; codigoPostal?: string | null; provincia?: string | null; pais?: string | null
+}
 export interface TercerosLeidos { terceros: Tercero[]; avisos: string[] }
 
 /** No todos llevan NIF (una cuenta genérica, la …0000, llega sin él); los de otro país, con su prefijo. */

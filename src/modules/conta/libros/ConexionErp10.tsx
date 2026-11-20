@@ -11,11 +11,14 @@
 //     NIF terminado en …, 1.234 líneas desde el 01/10/2026», y debajo lo que hay en ERP10
 //     por mes y tipo (el nombre que da ERP10: «Por factura», «DiezBank»…) y si los PDF se
 //     bajan. O el fallo, en palabras.
+// X11 (20/11): «Medir lo que se puede traer» lee, sin escribir nada, lo que da ERP10 de cada cosa
+// que trae «Traer de ERP10» (rutas, totales, páginas, campos y tiempos; sin nombres, NIF ni
+// importes) y deja el texto para copiarlo. Solo un administrador.
 // Empieza plegada en una línea (con lo que falta, si falta): así la salida sigue cabiendo en la ventana.
 
 import { useState } from 'react'
 import { tiposDelMes } from '@/modules/conta/erp10/conexion'
-import { guardarClavesErp10, guardarCodigoErp10, loQueFalta, probarErp10, type ConexionErp10, type Probado } from '@/modules/conta/services/erp10ApiService'
+import { guardarClavesErp10, guardarCodigoErp10, loQueFalta, medirParaTraerErp10, probarErp10, type ConexionErp10, type Medido, type Probado } from '@/modules/conta/services/erp10ApiService'
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const mesDe = (m: string) => `${MESES[Number(m.slice(5, 7)) - 1]} de ${m.slice(0, 4)}`
@@ -46,6 +49,8 @@ export function ConexionErp10Tarjeta({ accountId, companyId, quien, conexion, er
   const [haciendo, setHaciendo] = useState<string | null>(null)
   const [dicho, setDicho] = useState<{ ok: boolean; texto: string; probado?: Probado } | null>(null)
   const [cambiarClaves, setCambiarClaves] = useState(false)
+  const [medido, setMedido] = useState<Medido | null>(null)
+  const [copiado, setCopiado] = useState<string | null>(null)
 
   const falta = loQueFalta(conexion)
   const pideClaves = !!conexion && (!conexion.conClaves || cambiarClaves)
@@ -75,6 +80,25 @@ export function ConexionErp10Tarjeta({ accountId, companyId, quien, conexion, er
       setDicho({ ok: false, texto: /[.!?]$/.test(m) ? m : `${m}.` })
       cambiada()
     } finally { setHaciendo(null) }
+  }
+
+  async function medir() {
+    if (!conexion) return
+    setHaciendo('Leyendo ERP10 para medir lo que se puede traer (puede tardar dos minutos)…'); setDicho(null); setMedido(null); setCopiado(null)
+    try {
+      const m = await medirParaTraerErp10(companyId)
+      setMedido(m)
+      const seg = Math.round(m.ms / 1000)
+      setDicho({ ok: true, texto: `Medido el ejercicio ${m.ejercicio}: ${miles(m.peticiones)} lecturas en ERP10, ${miles(seg)} ${seg === 1 ? 'segundo' : 'segundos'}${m.cortada ? '; se paró antes por tiempo y lo que falta está calculado' : ''}. No se ha escrito nada.` })
+    } catch (e) {
+      const t = e instanceof Error ? e.message : 'No ha contestado.'
+      setDicho({ ok: false, texto: /[.!?]$/.test(t) ? t : `${t}.` })
+    } finally { setHaciendo(null) }
+  }
+  async function copiar() {
+    if (!medido) return
+    try { await navigator.clipboard.writeText(medido.texto); setCopiado('Copiado: pégalo tal cual, no lleva nombres, NIF ni importes.') }
+    catch { setCopiado('No se ha podido copiar: selecciona el texto de abajo y cópialo.') }
   }
 
   const estado = error ? 'No se ha podido leer'
@@ -119,12 +143,23 @@ export function ConexionErp10Tarjeta({ accountId, companyId, quien, conexion, er
                 <div className="cxe-conexion-codigo">
                   <label>Código de empresa en ERP10<input type="text" inputMode="numeric" value={codigo} onChange={(e) => setCodigo(e.target.value)} autoComplete="off" disabled={!!haciendo} /></label>
                   <button type="button" className="cxe-grande" onClick={() => { void probar() }} disabled={!!haciendo || !conexion.conClaves} title={conexion.conClaves ? undefined : 'Primero guarda las claves.'}>Probar</button>
+                  <button type="button" className="cxe-sec" onClick={() => { void medir() }} disabled={!!haciendo || !conexion.conClaves || !conexion.codigo} title={conexion.conClaves && conexion.codigo ? 'Solo lee: no escribe nada en ERP10 ni en Sumied.' : 'Primero guarda las claves y prueba el código.'}>Medir lo que se puede traer</button>
                 </div>
                 {!dicho && conexion.estado === 'down' && conexion.ultimoFallo && <p className="cxe-conexion-mal">La última vez no se pudo entrar: {conexion.ultimoFallo}</p>}
               </div>
               {haciendo && <p className="cx-ayuda" aria-busy="true">{haciendo}</p>}
               {dicho && <p className={dicho.ok ? 'cxe-conexion-bien' : 'cxe-conexion-mal'} role={dicho.ok ? 'status' : 'alert'}>{dicho.texto}</p>}
               {dicho?.probado && <LoQueHay p={dicho.probado} />}
+              {medido && (
+                <div role="group" className="cxe-conexion-hay" aria-label="Lo que se puede traer de ERP10">
+                  <h3>Lo que se puede traer de ERP10 <span className="cx-ayuda">· solo recuentos, campos y tiempos: sin nombres, NIF ni importes</span></h3>
+                  <div className="cxe-conexion-botones">
+                    <button type="button" className="cxe-sec" onClick={() => { void copiar() }}>Copiar lo medido</button>
+                    {copiado && <span className="cx-ayuda" role="status">{copiado}</span>}
+                  </div>
+                  <textarea className="cxe-conexion-medida" readOnly value={medido.texto} aria-label="Lo medido, para copiar" rows={12} />
+                </div>
+              )}
             </>
           )}
         </div>

@@ -95,7 +95,7 @@ export async function deshacerCasado(m: MovimientoBanco): Promise<string> {
  */
 export async function casarConAlternativa(m: MovimientoBanco, a: { etiqueta: string; destino: Record<string, unknown> }): Promise<string> {
   await nucleo.confirmar(m.id, `Lo dijiste tú: ${a.etiqueta}.`, a.destino as unknown as Destino, 'probable', null)
-  return `Casado: ${a.etiqueta}.`
+  return `Conciliado: ${a.etiqueta} · en el diario.`
 }
 
 /**
@@ -110,14 +110,14 @@ export async function casarConCuenta(companyId: string, m: MovimientoBanco, c: {
   await nucleo.confirmar(m.id, `Lo dijiste tú: ${nombre}.`, destino, 'probable', null)
   if (c.regla) {
     await guardarRegla(companyId, { palabras: `Cuando el concepto tenga «${c.regla}» → ${nombre}`, contiene: c.regla, cuenta: c.cuenta, signo: m.importeCent < 0 ? -1 : 1, origen: 'persona' })
-    return `Casado con ${nombre}. Y desde ahora, lo que tenga «${c.regla}» saldrá ahí: está en Reglas.`
+    return `Conciliado con ${nombre} · en el diario. Y desde ahora, lo que tenga «${c.regla}» saldrá ahí: está en Reglas.`
   }
-  return `Casado con ${nombre}.`
+  return `Conciliado con ${nombre} · en el diario.`
 }
 
 /** Lo que dice «Deshacer» al acabar (respuesta E05 · 1, punto 5): qué se ha deshecho, con lo que dice la base del asiento. */
 export const textoDeshecho = (quien: string, asiento: string): string =>
-  `Deshecho: el movimiento de ${quien} vuelve a estar sin casar${asiento ? `, y ${asiento}` : ''}.`
+  `Deshecho: el movimiento de ${quien} vuelve a estar por conciliar${asiento ? `, y ${asiento}` : ''}.`
 
 /**
  * «Es otra factura» (E05b): casa el pago con la factura elegida con la MISMA llamada que
@@ -127,7 +127,7 @@ export const textoDeshecho = (quien: string, asiento: string): string =>
 export async function casarConFactura(m: MovimientoBanco, f: FacturaPendiente, quien: string): Promise<string> {
   const c = casadoConFactura(m, f)
   await nucleo.confirmar(m.id, c.porque, c.destino, 'probable', null)
-  return `Casado: ${c.concepto} (${quien}). ${c.importeCent < f.pendienteCent ? `A la factura le quedan ${eurosExactos((f.pendienteCent - c.importeCent) / 100)} por pagar.` : 'La factura queda pagada.'}`
+  return `Conciliado: ${c.concepto} (${quien}) · en el diario. ${c.importeCent < f.pendienteCent ? `A la factura le quedan ${eurosExactos((f.pendienteCent - c.importeCent) / 100)} por pagar.` : 'La factura queda pagada.'}`
 }
 
 /** E05c · Las facturas emitidas con algo por cobrar, como las ve el motor (nucleo.cargarContexto). */
@@ -144,5 +144,39 @@ export async function casarConEmitida(m: MovimientoBanco, f: FacturaEmitidaPendi
   const c = cobroConFactura(m, f)
   await nucleo.confirmar(m.id, c.porque, c.destino, 'probable', null)
   const sobra = Math.abs(m.importeCent) - c.importeCent
-  return `Cobrado: ${c.concepto} (${quien}). ${c.importeCent < f.pendienteCent ? `A la factura le quedan ${eurosExactos((f.pendienteCent - c.importeCent) / 100)} por cobrar.` : 'La factura queda cobrada.'}${sobra > 0 ? ` Sobran ${eurosExactos(sobra / 100)}: quedan a favor del cliente en su cuenta.` : ''}`
+  return `Cobrado: ${c.concepto} (${quien}) · en el diario. ${c.importeCent < f.pendienteCent ? `A la factura le quedan ${eurosExactos((f.pendienteCent - c.importeCent) / 100)} por cobrar.` : 'La factura queda cobrada.'}${sobra > 0 ? ` Sobran ${eurosExactos(sobra / 100)}: quedan a favor del cliente en su cuenta.` : ''}`
+}
+
+/** R08 · Lo que ha hecho conciliar varios: cuántos, por cuánto, a qué cuenta, cuáles (para Ctrl Z) y lo que no, uno a uno. */
+export interface Conciliados { bien: number; importeCent: number; cuenta: string; ids: string[]; mal: string[] }
+
+/**
+ * R08 · «Conciliar los N» a una cuenta (maqueta nucleo_10): un asiento por movimiento, cada uno con
+ * su signo, con la MISMA llamada que «Otra cuenta» de uno solo (nucleo.confirmar con el destino
+ * «cuenta» por el importe sin signo). Cada asiento queda validado, en el diario (2040). Lo que falle
+ * se dice uno a uno y no para a los demás.
+ */
+export async function conciliarAUnaCuenta(ms: readonly MovimientoBanco[], c: { cuenta: string; nombre: string }, quien: (m: MovimientoBanco) => string): Promise<Conciliados> {
+  const r: Conciliados = { bien: 0, importeCent: 0, cuenta: c.cuenta, ids: [], mal: [] }
+  for (const m of ms) {
+    const destino: Destino = { tipo: 'cuenta', concepto: `${quien(m)} · ${c.nombre}`, lineas: [{ cuenta: c.cuenta, importe: Math.abs(m.importeCent) / 100 }] }
+    try { await nucleo.confirmar(m.id, `Lo dijiste tú: ${c.nombre} · ${c.cuenta}.`, destino, 'probable', null); r.bien++; r.importeCent += Math.abs(m.importeCent); r.ids.push(m.id) }
+    catch (e) { r.mal.push(`${quien(m)}: ${e instanceof Error ? e.message : String(e)}`) }
+  }
+  return r
+}
+
+/** R08 · «Conciliar los N» sin cuenta elegida: cada uno como propone Sumied (la misma llamada que Intro en uno solo). */
+export async function conciliarComoPropone(c: Contexto, ms: readonly MovimientoBanco[], quien: (m: MovimientoBanco) => string): Promise<Conciliados & { recalculado: boolean }> {
+  const lista = ms.filter(confirmable)
+  const r = { bien: 0, importeCent: 0, cuenta: '', ids: [] as string[], mal: [] as string[], recalculado: false }
+  if (lista.some((m) => m.propuesta?.motor !== MOTOR_BANCOS)) {
+    await nucleo.conciliarPendientes(c.accountId, c.companyId, c.hoy)
+    return { ...r, recalculado: true }
+  }
+  for (const m of lista) {
+    try { await confirmarPropuesta(c, m); r.bien++; r.importeCent += Math.abs(m.importeCent); r.ids.push(m.id) }
+    catch (e) { r.mal.push(`${quien(m)}: ${e instanceof Error ? e.message : String(e)}`) }
+  }
+  return r
 }

@@ -121,7 +121,8 @@
   background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-control); border-radius: var(--s-radio-campo);
   font: inherit; color: var(--s-tinta); text-align: left; cursor: pointer;
 }
-.tpv-elegir-boton > :first-child { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* R07 · Nada se corta: una cuenta larga se lee entera, en dos líneas si hace falta. */
+.tpv-elegir-boton > :first-child { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; padding: var(--s-1) 0; }
 .tpv-elegir-boton[data-falta] { border-color: var(--s-falta); color: var(--s-falta); }
 .tpv-elegir .s-hoja-buscar { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; }
 .tpv-nota { margin: 0; color: var(--s-apoyo); font-size: var(--s-t-s); }
@@ -131,6 +132,12 @@
 .tpv-asiento .tpv-cifra { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tpv-asiento tr[data-sin-cuenta] td { color: var(--s-falta); }
 .tpv-asiento tfoot td { color: var(--s-apoyo); font-size: var(--s-t-s); border-bottom: 0; background: var(--s-fondo); }
+
+/* R07 · La factura del día (maqueta 4): su sección arriba a la izquierda y, a la derecha, los dos asientos. */
+.tpv-seccion { display: flex; flex-direction: column; gap: var(--s-2); }
+.tpv-asiento-titulo { margin: 0; font-size: var(--s-t-m); font-weight: var(--s-peso-medio); }
+.tpv-asiento tr[data-contado] td:first-child { font-weight: var(--s-peso-medio); }
+.tpv-asiento td:first-child { overflow-wrap: anywhere; }
 
 @media (max-width: 900px) {
   .tpv-ventana { width: 100vw; min-width: 0; }

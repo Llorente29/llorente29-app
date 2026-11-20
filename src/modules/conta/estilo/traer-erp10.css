@@ -35,6 +35,7 @@
 .cxt-soltar-encima { border-color: var(--cx-azul); background: var(--cx-azul-suave); }
 .cxt-soltar-icono { font-size: 1.3rem; color: var(--cx-azul); }
 .cxt-elegir { height: 34px; flex-shrink: 0; }
+.cxt-soltar-botones { display: flex; gap: 8px; flex-shrink: 0; } /* X12 · «Elegir ficheros» y «Traerlo de ERP10», con el mismo peso */
 
 .cxt-pie { flex-direction: column; gap: 2px; }
 
@@ -72,3 +73,42 @@
 .cxt-confirmar-botones button { width: 100%; }
 .cxt-igual { height: 40px; }
 .cxt-hecho { display: block; }
+
+/* ── X13 · Traer de ERP10 en un botón (maqueta nucleo_11, 20/11): cxu-* ── */
+.cxu-conectada { font-size: .82rem; color: var(--cx-apoyo); white-space: nowrap; }
+.cxu-pastilla { padding: 3px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+.cxu-pastilla-azul { background: var(--cx-azul-suave); color: var(--cx-azul); }
+.cxu-pastilla-gris { background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); }
+.cxu-pastilla-verde { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxu-pastilla-ambar { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxu-izq { padding: 0; gap: 0; }
+.cxu-filas { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow: auto; }
+.cxu-fila { display: grid; grid-template-columns: 28px minmax(150px, 190px) minmax(90px, 130px) minmax(0, 1fr); align-items: center; gap: 8px;
+  padding: 0 16px; min-height: 34px; border-bottom: 1px solid var(--cx-linea); font-size: .88rem; }
+.cxu-icono { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--cx-borde-control); display: inline-flex; align-items: center;
+  justify-content: center; font-size: .7rem; font-weight: 700; line-height: 1; }
+.cxu-hecho .cxu-icono { border-color: var(--cx-verde-oscuro); color: var(--cx-verde-oscuro); }
+.cxu-mira .cxu-icono { border-color: var(--cx-ambar); color: var(--cx-ambar); }
+.cxu-leyendo .cxu-icono { border-color: var(--cx-azul); border-right-color: transparent; animation: cxu-gira 1s linear infinite; }
+@keyframes cxu-gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .cxu-leyendo .cxu-icono { animation: none; } }
+.cxu-que { font-weight: 600; }
+.cxu-cifra { white-space: nowrap; }
+.cxu-linea { color: var(--cx-apoyo); display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.cxu-mira .cxu-linea { color: var(--cx-ambar); font-weight: 600; }
+.cxu-barra { display: inline-block; width: 96px; height: 4px; border-radius: 2px; background: var(--cx-neutro-suave); overflow: hidden; }
+.cxu-barra > span { display: block; height: 100%; background: var(--cx-azul); }
+.cxu-pie { border-top: 1px solid var(--cx-linea); padding: 8px 16px; font-size: .8rem; color: var(--cx-apoyo); display: flex; flex-direction: column; gap: 6px; }
+.cxu-pie p { margin: 0; }
+.cxu-ficheros { border-top: 1px solid var(--cx-linea); padding-top: 6px; }
+.cxu-caja p + p { margin-top: 4px; }
+.cxu-verlos ul { margin: 6px 0 0; padding-left: 18px; max-height: 260px; overflow: auto; }
+.cxu { min-height: 560px; }
+/* La pastilla va detrás de los botones en el orden de la página: en una línea se pone antes (order); si no cabe,
+   baja a una segunda, debajo del título (cxu-dos-lineas, lo decide la pantalla midiendo). */
+.cxu-cabeza .cxu-pastilla { order: 3; }
+.cxu-cabeza .cxe-botones { order: 4; }
+.cxu-salto { display: none; }
+.cxu-dos-lineas { flex-wrap: wrap; row-gap: 6px; }
+.cxu-dos-lineas .cxu-salto { display: block; order: 5; flex-basis: 100%; height: 0; }
+.cxu-dos-lineas .cxu-pastilla { order: 6; }
