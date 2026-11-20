@@ -4,12 +4,12 @@
 // E05 · Bancos del núcleo, contra staging, con la cuenta del núcleo (semilla K02)
 // en su empresa general y un banco propio de cada tamaño (semilla E05:
 // e2e_e05_preparar), a 1456 × 816 y a 1366 × 768, con el navegador en español:
-//   1. la rejilla: lo que espera, los seguros marcados, «Confirmar los N», el
-//      cuadre y «Qué es» del elegido;
-//   2. con el teclado: ↓ y Intro confirman lo propuesto (1456: el probable; 1366:
-//      un seguro, y el probable desde la pantalla de hoy, para medir);
-//   3. «Confirmar los N» dice cuántos y cuánto, y lo casado se valida desde «Qué es»;
-//   4. «Deshacer» en «Qué es» de lo casado dice qué ha deshecho;
+//   1. la rejilla: el estado en una palabra (R08), el cuadre y «Qué es» del elegido;
+//   2. con el teclado: ↓ e Intro concilian lo propuesto, en el diario (1456: el
+//      probable; 1366: un seguro, y el probable desde la pantalla de hoy, para medir);
+//   3. marcar los seguros (Espacio) e Intro: cada uno a su cuenta, y dice cuántos y
+//      cuánto; lo conciliado ya está en el diario (R08: sin «Validar»);
+//   4. «Deshacer» en «Qué es» de lo conciliado dice qué ha deshecho;
 //   5. «Escribir uno a mano», entero con el teclado (F4 en la cuenta): validado;
 //   6. «El documento»: «Falta el justificante»;
 //   7. F5 abre el mayor de la cuenta en otra pestaña; Esc cierra Bancos;
@@ -91,16 +91,16 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       // ── 1 · La rejilla ──
       await expect(page.getByRole('tab', { name: 'Bancos', exact: true })).toHaveAttribute('aria-selected', 'true')
       await expect(pantalla(page).getByRole('combobox', { name: 'Banco' })).toContainText(`${p.cuenta572} · Banco E05 ${lado}`)
-      // Por confirmar (3), por aclarar (1) y por validar (el casado solo, con su asiento propuesto): la regla de la cinta.
-      await expect(pantalla(page).locator('[data-prueba="por-revisar"]')).toHaveText('5 por revisar')
-      const etiquetas: [keyof Preparado['movs'], string][] = [['seguro1', 'Seguro'], ['seguro2', 'Seguro'], ['probable', 'Mira esto'], ['aclarar', 'Sin saber'], ['casado', 'Hecho solo']]
+      // R08 · El estado, en una palabra: los cuatro sin conciliar y el que concilió Sumied solo (ya en el diario).
+      await expect(pantalla(page).locator('[data-prueba="por-conciliar"]')).toHaveText('4 por conciliar · 1 conciliado · 0 apartados')
+      const etiquetas: [keyof Preparado['movs'], string][] = [['seguro1', 'Por conciliar'], ['seguro2', 'Por conciliar'], ['probable', 'Por conciliar'], ['aclarar', 'Por conciliar'], ['casado', 'Conciliado']]
       for (const [k, t] of etiquetas) await expect(fila(page, p.movs[k]).locator('.kb-etiqueta')).toHaveText(t)
-      await expect(fila(page, p.movs.probable)).toContainText('RECIBO ELECTRICIDAD EJEMPLO')
+      await expect(fila(page, p.movs.probable)).toContainText('Electricidad Ejemplo') // R08: lo que dice el banco, limpio (maqueta)
       await expect(fila(page, p.movs.probable)).toContainText('62800000')
       await expect(fila(page, p.movs.probable)).toContainText('45,00')
       await expect(fila(page, p.movs.aclarar)).toContainText('300,00')
-      await expect(pantalla(page).getByRole('button', { name: 'Confirmar los 2' })).toBeVisible()
-      await expect(pantalla(page).locator('.kf-estado')).toContainText(/No cuadra|El saldo cuadra/)
+      await expect(pantalla(page).getByRole('checkbox', { name: 'Marcar todos' })).toBeVisible()
+      await expect(pantalla(page).locator('.kf-estado')).toContainText(/No cuadra|Cuadra\./)
       // Se abre en el primero que espera a una persona (el más reciente: el ingreso sin saber).
       await expect(fila(page, p.movs.aclarar)).toHaveAttribute('aria-selected', 'true')
       await expect(page.locator('[data-prueba="que-es"]')).toContainText('No sé qué es')
@@ -113,37 +113,39 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(fila(page, p.movs.probable)).toHaveAttribute('aria-selected', 'true')
       await expect(fila(page, p.movs.probable)).toBeFocused()
       await expect(page.locator('[data-prueba="que-es"]')).toContainText('Es la luz o el agua.')
-      await expect(page.locator('[data-prueba="que-es"]').getByRole('button', { name: /Sí, es ese pago/ })).toBeVisible()
+      await expect(page.locator('[data-prueba="que-es"]').getByRole('button', { name: /Conciliar: es ese pago/ })).toBeVisible()
       if (grande) {
         await captura(page, 'que-es-propuesta', ancho)
         await page.keyboard.press('Enter')
-        await expect(aviso(page)).toHaveText('Confirmado: Es la luz o el agua. (Electricidad Ejemplo).', { timeout: 30_000 })
-        await expect(fila(page, p.movs.probable).locator('.kb-etiqueta')).toHaveText('Hecho', { timeout: 30_000 })
+        await expect(aviso(page)).toHaveText('Conciliado: Es la luz o el agua. (Electricidad Ejemplo) · en el diario.', { timeout: 30_000 })
+        await expect(fila(page, p.movs.probable).locator('.kb-etiqueta')).toHaveText('Conciliado', { timeout: 30_000 })
       } else {
         await page.keyboard.press('ArrowDown')
         await expect(fila(page, p.movs.seguro2)).toHaveAttribute('aria-selected', 'true')
         await page.keyboard.press('Enter')
-        await expect(aviso(page)).toHaveText('Confirmado: Es una comisión del banco. (Comisión de transferencia).', { timeout: 30_000 })
-        await expect(fila(page, p.movs.seguro2).locator('.kb-etiqueta')).toHaveText('Hecho', { timeout: 30_000 })
+        await expect(aviso(page)).toHaveText('Conciliado: Es una comisión del banco. (Comisión de transferencia) · en el diario.', { timeout: 30_000 })
+        await expect(fila(page, p.movs.seguro2).locator('.kb-etiqueta')).toHaveText('Conciliado', { timeout: 30_000 })
       }
 
-      // ── 3 · Confirmar los N ──
-      const enBloque = pantalla(page).getByRole('button', { name: grande ? 'Confirmar los 2' : 'Confirmar los 1' })
-      await expect(enBloque).toBeVisible({ timeout: 30_000 })
-      await enBloque.click()
-      await expect(aviso(page)).toHaveText(grande ? 'Confirmados 2 movimientos, 20,90 €.' : 'Confirmado 1 movimiento, 12,50 €.', { timeout: 30_000 })
-      await expect(fila(page, p.movs.seguro1).locator('.kb-etiqueta')).toHaveText('Hecho', { timeout: 30_000 })
-      await expect(pantalla(page).getByRole('button', { name: /^Confirmar los/ })).toHaveCount(0)
+      // ── 3 · R08: marcar los seguros con Espacio e Intro: cada uno a su cuenta, en el diario ──
+      const seguros = grande ? [p.movs.seguro1, p.movs.seguro2] : [p.movs.seguro1]
+      for (const id of seguros) { await fila(page, id).click(); await page.keyboard.press(' ') }
+      await expect(page.locator('[data-prueba="barra-marcados"]')).toContainText(grande ? '2 marcados · 20,90' : '1 marcado · 12,50')
+      await expect(page.locator('[data-prueba="van-al-diario"]')).toContainText(grande ? 'Los 2 asientos que van al diario' : 'El asiento que va al diario')
+      await page.keyboard.press('Enter')
+      await expect(aviso(page)).toHaveText(grande ? '2 movimientos, cada uno a su cuenta · 20,90 € · en el diario.' : '1 movimiento a su cuenta · 12,50 € · en el diario.', { timeout: 30_000 })
+      await expect(fila(page, p.movs.seguro1).locator('.kb-etiqueta')).toHaveText('Conciliado', { timeout: 30_000 })
+      await expect(page.locator('[data-prueba="barra-marcados"]')).toHaveCount(0)
       if (grande) await captura(page, 'confirmados', ancho)
 
-      // ── 3b · Validar lo casado, desde «Qué es» (la misma llamada y la misma frase que «Por validar» de hoy) ──
+      // ── 3b · R08: la pantalla dice del asiento lo mismo que la base. Con la 2040 (producción, y
+      //    staging desde main) está validado, «en el diario» y sin botón; la e2e de la rama corre
+      //    contra staging sin ella (cambia una función: solo va de verdad desde main): propuesto.
       await fila(page, p.movs.seguro1).click()
-      const validar = page.locator('[data-prueba="que-es"] [data-prueba="validar"]')
-      await expect(validar).toBeVisible()
-      if (grande) await captura(page, 'casado-validar', ancho)
-      await validar.click()
-      await expect(aviso(page)).toHaveText(/^Validado: .+ es el asiento \d+\. Ya está en el libro diario\.$/, { timeout: 30_000 })
-      await expect(validar).toHaveCount(0, { timeout: 30_000 })
+      const enElDiario = (await casadoDe(s, p, p.movs.seguro1)).asiento?.estado === 'validado'
+      console.log(`[E05 · el asiento de lo conciliado] ${enElDiario ? 'validado (con la 2040)' : 'propuesto (staging sin la 2040)'}`)
+      await expect(page.locator('[data-prueba="que-es"] [data-prueba="conciliado"]')).toContainText(enElDiario ? 'Conciliado · en el diario.' : 'Conciliado, sin pasar al diario.')
+      await expect(page.locator('[data-prueba="que-es"] [data-prueba="validar"]')).toHaveCount(enElDiario ? 0 : 1)
 
       // ── 4 · Deshacer lo casado ──
       await fila(page, p.movs.casado).click()
@@ -151,7 +153,9 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(deshacer).toBeVisible()
       if (grande) await captura(page, 'casado-deshacer', ancho)
       await deshacer.click()
-      await expect(aviso(page)).toHaveText('Deshecho: el movimiento de Agua Ejemplo vuelve a estar sin casar, y su asiento propuesto se quita.', { timeout: 30_000 })
+      // R08 · Lo que está en el diario se anula con su contraasiento; lo propuesto (staging sin la 2040) se quita.
+      await expect(aviso(page)).toHaveText(enElDiario ? /^Deshecho: el movimiento de Agua Ejemplo vuelve a estar por conciliar, y su asiento \d+\/\d+ (se quita del diario|se anula con un contraasiento: .+)\.$/
+        : 'Deshecho: el movimiento de Agua Ejemplo vuelve a estar por conciliar, y su asiento propuesto se quita.', { timeout: 30_000 })
       expect((await casadoDe(s, p, p.movs.casado)).movimiento).toBe('pendiente')
 
       // ── 5 · Escribir uno a mano, con el teclado ──
@@ -232,7 +236,9 @@ test('confirma lo mismo: el probable, desde la pantalla nueva y desde la de hoy'
   console.log(`[E05 · confirma lo mismo] nueva: ${JSON.stringify(medidas.nueva)} · hoy: ${JSON.stringify(medidas.hoy)}`)
   expect(medidas.nueva).toEqual(medidas.hoy)
   expect(medidas.nueva).toMatchObject({ movimiento: 'casado', kind: 'cuenta', confianza: 'probable', quien: 'persona', creado: true,
-    asiento: { serie: 3, estado: 'propuesto', origen: 'bank', lineas: [['62800000', 45, 0], ['banco', 0, 45]] } })
+    asiento: { serie: 3, origen: 'bank', lineas: [['62800000', 45, 0], ['banco', 0, 45]] } })
+  // R08 · El mismo estado desde las dos (validado con la 2040; propuesto en staging sin ella).
+  expect((medidas.nueva as { asiento: { estado: string } }).asiento.estado).toMatch(/^(validado|propuesto)$/)
 })
 
 test('con el interruptor apagado (la cuenta A) o en el móvil, la pantalla de hoy', async ({ page }, info) => {

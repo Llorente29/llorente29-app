@@ -35,8 +35,12 @@ export type AccionDelMarco =
 export interface Tecla { key: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean; defaultPrevented?: boolean }
 
 const R = CONTA.rutas
-/** F8 · La vuelta de las tres clases de documento nuevo (la recibida a mano, la emitida, el asiento). */
-export const VUELTA_F8 = [R.recibidaAMano, R.nuevaFacturaVenta, R.nuevoAsiento] as const
+/**
+ * F8 · La vuelta de las tres clases de documento nuevo (la recibida a mano, la
+ * emitida, el asiento). K05: la emitida es la de contabilizar escrita a mano
+ * (emitidaAMano), no la de emitir de Facturación (nuevaFacturaVenta).
+ */
+export const VUELTA_F8 = [R.recibidaAMano, R.emitidaAMano, R.nuevoAsiento] as const
 
 /**
  * Qué hace el marco con una tecla. null: nada, y la tecla sigue su camino (el

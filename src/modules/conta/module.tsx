@@ -34,6 +34,7 @@ import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import LlevarACompras from '@/modules/conta/documentos/LlevarACompras'
 import RecibidaAMano from '@/modules/conta/documentos/RecibidaAMano'
 import RecibidaSegun from '@/modules/conta/nucleo/recibida/RecibidaSegun'
+import EmitidaSegun, { EmitidasPorRevisar, LlevarAlAsiento } from '@/modules/conta/nucleo/emitida/EmitidaSegun'
 import BancosSegun from '@/modules/conta/nucleo/bancos/BancosSegun'
 import FacturasPage from '@/modules/conta/ventas/FacturasPage'
 import FacturaVentaPage from '@/modules/conta/ventas/FacturaVentaPage'
@@ -202,7 +203,14 @@ export const contaModule: ModuleDefinition = {
     // V01 · Ventas › Facturas: la lista, una nueva y la ficha. Lo de antes (Facturación › Facturas emitidas) lleva aquí.
     { path: CONTA.rutas.facturasVenta, element: enMarco(<FacturasPage />, '¿Cuánto he facturado este mes?', true) },
     { path: CONTA.rutas.nuevaFacturaVenta, element: enMarco(<FacturaVentaPage />, '¿Qué IVA lleva esta factura?', true) },
-    { path: CONTA.rutas.facturaVenta, element: enMarco(<FacturaVentaPage />, '¿Cómo corrijo una factura emitida?', true) },
+    // K05 · Dentro del núcleo, la emitida de Facturación con su asiento sale en la ficha nueva («hecha sola»); la borrador y la
+    // rectificativa, y fuera del núcleo todas, con la de hoy (EmitidaSegun).
+    { path: CONTA.rutas.facturaVenta, element: enMarco(<EmitidaSegun de="factura" hoy={<FacturaVentaPage />} />, '¿Cómo corrijo una factura emitida?', true) },
+    // K05 · La emitida contable escrita a mano (fuera del núcleo, la «Nueva factura emitida» de Asientos de hoy), la de un asiento
+    // (fuera, su asiento) y Asientos › «Emitidas» (fuera, la lista).
+    { path: CONTA.rutas.emitidaAMano, element: enMarco(<EmitidaSegun de="nueva" hoy={<NuevoAsientoPage tipo="expedida" />} />, '¿A qué cuenta de venta va?', true) },
+    { path: CONTA.rutas.emitidaAsiento, element: enMarco(<EmitidaSegun de="asiento" hoy={<LlevarAlAsiento />} />, '¿A qué cuenta de venta va?', true) },
+    { path: CONTA.rutas.emitidasPorRevisar, element: enMarco(<EmitidasPorRevisar />, '¿A qué cuenta de venta va?', true) },
     // V01 · Entrega 2 · Ventas › Cierres del día (con «Vendo en hostelería») y la ficha de un cierre.
     { path: CONTA.rutas.cierres, element: enMarco(<CierresPage />, '¿Cuánto vendí ayer?', true) },
     { path: CONTA.rutas.cierre, element: enMarco(<CierrePage />, '¿Por qué este cierre no cuadra?', true) },

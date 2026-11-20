@@ -83,6 +83,9 @@ const b = (id: string, etiqueta: string, icono: IconoNucleo, ruta: string, prefi
 // N08: «Asientos», como en ERP10, abre la introducción de asientos (la ficha del asiento); se marca también en el diario y en cada asiento.
 const ASIENTOS = b('asientos', 'Asientos', 'asientos', R.nuevoAsiento, [R.nuevoAsiento, R.libroDiario], { contador: 'contabilidad.asientos', pestana: 'Asiento' })
 const EMITIDAS = b('emitidas', 'Emitidas', 'emitidas', R.facturasVenta, [R.facturasVenta], { pestana: 'Facturas emitidas' })
+// K05 · En la cinta de Asientos, «Emitidas» es la ficha (ERP10, «Introducción de facturas expedidas»): la primera por revisar o una a mano.
+// En Facturación sigue siendo la lista (EMITIDAS).
+const EMITIDAS_ASIENTOS = b('emitidas', 'Emitidas', 'emitidas', R.emitidasPorRevisar, [R.facturasVenta], { pestana: 'Facturas emitidas' })
 // «Ventas» a secas (lo de antes) lleva aquí, como en la barra de hoy.
 // R05 (decisión 9): con hostelería o con «ventas por día» encendido, como Cierres del día en la barra de hoy.
 const VENTAS_DIA = b('ventasDia', 'Ventas del día', 'ventasDia', R.cierres, [R.cierres, R.ventas], { solo: 'ventas_por_dia', pestana: 'Ventas del día' })
@@ -201,7 +204,7 @@ export const MODULOS: Modulo[] = [
       },
       {
         id: 'asientos', etiqueta: 'Asientos', grupos: [
-          { titulo: 'Asientos', botones: [ASIENTOS, EMITIDAS, VENTAS_DIA, RECIBIDAS, HECHO] },
+          { titulo: 'Asientos', botones: [ASIENTOS, EMITIDAS_ASIENTOS, VENTAS_DIA, RECIBIDAS, HECHO] },
           { titulo: 'Cierre', botones: [CIERRE, APERTURA] },
         ],
       },
@@ -217,6 +220,8 @@ export const MODULOS: Modulo[] = [
           { titulo: 'Bancos', botones: [EXTRACTO] },
           { titulo: 'Diez', botones: [DIEZ] },
           { titulo: 'ERP10', botones: [TRAER_ERP10, SALIDA_ERP10] },
+          // R08 · La quincena de Catcher, que se subía entrando por la dirección: su botón, aquí también.
+          { titulo: 'Repartidores', botones: [atajo(REPARTIDORES)] },
         ],
       },
       {
