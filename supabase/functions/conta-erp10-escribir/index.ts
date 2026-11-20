@@ -31,10 +31,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
-import { clienteErp10 } from "../_shared/erp10Despacho.ts";
 import { FrenoErp10 } from "../_shared/erp10Cliente.ts";
-import { partidasDeLoQueSale, sacarUno, type Envio, type PuertoEscribir, type Resultado } from "../_shared/erp10Escribir.ts";
-import { carpetaDe, loQueSaleDesdeLaBase, pedidasDelCuerpo } from "../_shared/erp10DesdeLaBase.ts";
+import { loQueSaleDesdeLaBase, pedidasDelCuerpo } from "../_shared/erp10DesdeLaBase.ts";
+import { leerLaBase, puertosDelServidor } from "../_shared/erp10Puerto.ts";
+import { sacarYApuntar } from "../_shared/erp10Sacar.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -56,8 +56,6 @@ const SIN_COMPROBAR: Record<Clase, string> = {
 };
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-const hoyMadrid = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(new Date());
-const huellaDe = async (t: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))].map((b) => b.toString(16).padStart(2, "0")).join("");
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -86,19 +84,9 @@ Deno.serve(async (req) => {
   if (!(await cuentaPuedeSalir(srv, co.account_id))) return json({ error: EN_LA_DEMO, demo: true }, 409);
 
   // Lo que sale ese mes, DESDE LA BASE, con la sesión de quien pulsa (las mismas funciones que la pantalla).
-  const leer = async (fn: string) => {
-    const { data, error } = await sb.rpc(fn, { p_company: companyId, p_mes: mes });
-    if (error) throw new Error(`no se ha podido leer lo que sale (${fn}): ${error.message}`);
-    return (data ?? {}) as Record<string, unknown>;
-  };
   let base;
   try {
-    const { data: sal } = await sb.from("conta_erp10_salida_empresa").select("carpeta_pdf, codigo_erp10").eq("company_id", companyId).maybeSingle();
-    const [porSalir, recibidas, emitidas, asientos, dias] = await Promise.all([
-      leer("conta_erp10_por_salir"), leer("conta_erp10_recibidas_por_salir"), leer("conta_erp10_emitidas_por_salir"),
-      leer("conta_erp10_asientos_por_salir"), leer("conta_erp10_dias_tpv_por_salir"),
-    ]);
-    base = await loQueSaleDesdeLaBase({ porSalir, recibidas, emitidas, asientos, dias, carpeta: carpetaDe(sal?.carpeta_pdf ?? null, sal?.codigo_erp10 ?? null) }, pedidas);
+    base = await loQueSaleDesdeLaBase(await leerLaBase(sb, companyId, mes), pedidas);
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
@@ -121,74 +109,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const c = await clienteErp10(srv, co.account_id, companyId, { escribir: true });
-    if (!c) return json({ error: "Esta sociedad no está conectada con ERP10: pon su código de empresa en «Conexión con ERP10»." }, 404);
-    const puerto: PuertoEscribir = {
-      hoy: hoyMadrid(),
-      tomar: async (entryId, clase) => {
-        const { data, error } = await srv.rpc("conta_erp10_envio_tomar", { p_company: companyId, p_entry: entryId, p_clase: clase, p_quien_nombre: quien });
-        if (error) throw new Error(`no se ha podido coger el asiento: ${error.message}`);
-        return data as { tomado: boolean; envio: Envio };
-      },
-      poner: async (id, cambios) => {
-        const { error } = await srv.from("conta_erp10_envio").update({ ...cambios, cambiado_en: new Date().toISOString() }).eq("id", id).eq("account_id", co.account_id);
-        if (error) throw new Error(`no se ha podido apuntar lo que ha pasado: ${error.message}`);
-      },
-      pdf: async (ruta) => {
-        const { data, error } = await srv.storage.from("conta-documentos").download(ruta);
-        if (error || !data) throw new Error(`no se ha podido leer el PDF guardado: ${error?.message ?? "vacío"}`);
-        return new Uint8Array(await data.arrayBuffer());
-      },
-      erp10: {
-        tieneSubcuenta: (k) => c.cliente.tieneSubcuenta(k),
-        crearSubcuenta: (sc) => c.cliente.crearSubcuenta(sc),
-        facturasDelMes: (m) => c.cliente.facturasDelMes(m),
-        altaFactura: (fd) => c.cliente.altaFactura(fd),
-        subirDocumento: (d) => c.cliente.subirDocumento(d),
-        apuntesDelMes: (m) => c.cliente.apuntesDelMes(m),
-        altaApunte: (ap) => c.cliente.altaApunte(ap),
-      },
-      // Los números de ERP10 que ya son de otro asiento de Sumied: un asiento no se enlaza a su gemelo.
-      // X10e: y el cobro de un día de un solo asiento, que va en la misma fila que su factura.
-      usados: async (entryId) => {
-        const { data } = await srv.from("conta_erp10_envio").select("erp10_serie, erp10_documento, cobro_serie, cobro_documento").eq("company_id", companyId).eq("account_id", co.account_id)
-          .eq("estado", "en_erp10").neq("entry_id", entryId);
-        type U = { erp10_serie: string | null; erp10_documento: number | null; cobro_serie: string | null; cobro_documento: number | null };
-        return new Set(((data ?? []) as U[]).flatMap((x) => [`${x.erp10_serie ?? ""}/${x.erp10_documento ?? ""}`, ...(x.cobro_documento ? [`${x.cobro_serie ?? ""}/${x.cobro_documento}`] : [])]));
-      },
-    };
-
-    const resultados: Resultado[] = base.noSalen.map((x) => ({ entryId: x.entryId, numero: "", estado: "no_pudo" as const, porque: x.porque }));
-    const quedan: string[] = [];
-    for (const x of base.salen) {
-      if (Date.now() - t0 > TOPE_MS) { quedan.push(x.entryId); continue; }
-      // Si uno falla, los demás siguen: cada uno dice lo suyo.
-      // X10e: un día puede dar dos (su factura y su cobro, si va aparte).
-      resultados.push(...(await sacarUno(x, base.cuentasNuevas, puerto)));
-    }
-
-    // Lo que ha entrado (o ya estaba) y no está apuntado en la salida de Sumied: un lote, con la huella de su fila (de la base).
-    const porApuntar = resultados.filter((r) => (r.estado === "en_erp10" || r.estado === "ya_estaba") && r.sinApuntar);
-    let apuntado: string | null = null;
-    if (porApuntar.length) {
-      const deLaBase = partidasDeLoQueSale(base.salen);
-      const partidas = porApuntar.map((r) => ({ entry_id: r.entryId, clase: deLaBase.get(r.entryId)!.clase, huella: deLaBase.get(r.entryId)!.huella }));
-      const { data: lote, error: eL } = await sb.rpc("conta_erp10_lote_apuntar", {
-        p_company: companyId, p_mes: mes, p_partidas: partidas, p_quien_nombre: quien,
-        p_ficheros: [{ nombre: "ERP10 (por la conexión)", filas: partidas.length, huella: await huellaDe(partidas.map((x) => x.huella).join("|")) }],
-      });
-      if (eL) {
-        apuntado = `Están en ERP10, pero no se han apuntado en la salida de Sumied (${eL.message}). Vuelve a pulsar: no se meten otra vez, solo se apuntan.`;
-      } else {
-        const loteId = String((lote as { lote: string }).lote);
-        for (const r of porApuntar) {
-          await srv.from("conta_erp10_salida_partida").update({ erp10_serie: r.serie ?? null, erp10_documento: r.documento ?? null })
-            .eq("lote_id", loteId).eq("entry_id", r.entryId).eq("account_id", co.account_id);
-          await srv.from("conta_erp10_envio").update({ lote_id: loteId, cambiado_en: new Date().toISOString() }).eq("entry_id", r.entryId).eq("account_id", co.account_id);
-          r.sinApuntar = false;
-        }
-      }
-    }
+    // X10f · La misma pieza que la cola (_shared/erp10Sacar.ts y erp10Puerto.ts): aquí, «a mano» y apuntado con la sesión de quien pulsa.
+    const puertos = await puertosDelServidor(srv, { accountId: co.account_id, companyId, quien, como: "a_mano", apuntaCon: sb });
+    if (!puertos) return json({ error: "Esta sociedad no está conectada con ERP10: pon su código de empresa en «Conexión con ERP10»." }, 404);
+    const { resultados, quedan, sinApuntar: apuntado } = await sacarYApuntar(base, puertos(mes), () => Date.now() - t0 > TOPE_MS);
     console.log(JSON.stringify({ pedidas: pedidas.length, en_erp10: resultados.filter((r) => r.estado === "en_erp10").length, no_pudo: resultados.filter((r) => r.estado === "no_pudo").length, quedan: quedan.length }));
     return json({ ok: true, resultados, quedan, sinApuntar: apuntado });
   } catch (e) {

@@ -43,6 +43,17 @@
 .kf-estado[data-tono='gris'] { background: var(--k-gris); color: var(--k-tinta); }
 .kf-estado[data-tono='verde'] { background: var(--kf-verde-fondo); color: var(--kf-verde-tinta); }
 .kf-estado strong { font-weight: 700; }
+/* X10f · La línea de ERP10, pequeña, junto al estado: el texto se acorta (entero al pasar por encima) y «Volver a intentarlo» siempre se ve. */
+.kf-erp10 { font-size: 12px; padding: 2px 9px; flex-shrink: 1; display: inline-flex; align-items: center; gap: 6px; min-width: 0; border-radius: 12px; white-space: nowrap; overflow: hidden; }
+/* Con los colores del núcleo si los hay; en el marco de siempre, los mismos, escritos aquí. */
+.kf-erp10[data-tono='verde'] { background: var(--kf-verde-fondo, #dcefe2); color: var(--kf-verde-tinta, #1d6b3d); }
+.kf-erp10[data-tono='gris'] { background: var(--k-gris, #eef1f4); color: var(--k-tinta, #1f2933); }
+.kf-erp10[data-tono='ambar'] { background: var(--kf-ambar-fondo, #fdf0d3); color: var(--kf-ambar-tinta, #6b4300); }
+.kf-erp10 .kf-estado-punto { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.kf-erp10[data-tono='ambar'] .kf-estado-punto { background: var(--k-mira, #c27c0e); }
+.kf-erp10 .kf-enlace { padding: 0; background: none; border: 0; color: var(--k-azul, #0b5281); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.kf-erp10-texto { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.kf-erp10-otra { flex-shrink: 0; font-size: 12px; }
 .kf-estado-punto { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 .kf-estado[data-tono='ambar'] .kf-estado-punto { background: var(--k-mira); }
 .kf-estado[data-tono='gris'] .kf-estado-punto { background: var(--k-apoyo); }

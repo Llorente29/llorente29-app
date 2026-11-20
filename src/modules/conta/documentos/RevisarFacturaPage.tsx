@@ -100,6 +100,8 @@ import {
   textoDelGuardado, totalesDe, type BorradorFicha,
 } from '@/modules/conta/documentos/fichaRecibida'
 import { accionPdf } from '@/modules/conta/lib/pdfDeLaRecibida'
+import { LineaErp10 } from '@/modules/conta/nucleo/ficha/LineaErp10'
+import { useLineaErp10 } from '@/modules/conta/nucleo/ficha/useLineaErp10'
 import {
   BloqueGasto, BloqueHistorial, BloqueImportesIva, BloquePago, BloqueProveedorFactura, EditarAsientoAMano, HuecoPapel,
 } from '@/modules/conta/documentos/FichaRecibidaBloques'
@@ -187,6 +189,8 @@ export default function RevisarFacturaPage() {
   const plazo = useLeer(fac?.proveedor?.id && accountId ? () => plazoDeLaFicha(accountId, fac.proveedor!.id) : null, `${accountId}:${fac?.proveedor?.id}:plazo:${vuelta}`)
   // D07a · Validada: su asiento DE VERDAD (sus apuntes), con su enlace; no solo «Ya tiene su asiento».
   const asientoReal = useLeer(fac?.asiento && accountId ? () => leerAsiento(accountId, fac.asiento!.id) : null, `${accountId}:${invoiceId}:asiento:${fac?.asiento?.id ?? '-'}:${vuelta}`)
+  // X10f · Su línea de ERP10, junto al estado del asiento.
+  const erp10 = useLineaErp10({ accountId, companyId: fac?.company_id ?? null, entryId: fac?.asiento?.id ?? null, validado: fac?.asiento?.estado === 'validado', fecha: asientoReal.datos?.fecha ?? null })
   const vista = useLeer(fac && accountId && fac.company_id && fac.fecha && !fac.asiento && localPropuesto !== undefined
     ? () => verPropuestaFactura(accountId, fac.company_id!, fac.id, fac.fecha!, localPropuesto) : null,
   `${accountId}:${invoiceId}:${fac?.company_id}:${fac?.fecha}:${fac?.asiento ? 'con' : 'sin'}-asiento:${fac?.estado}:${fac?.proveedor?.id}:${localPropuesto}:${vuelta}`)
@@ -666,6 +670,7 @@ export default function RevisarFacturaPage() {
     <>
       <Link to={rutaAsiento(fac.asiento.id)} data-prueba="ver-asiento">Ver el asiento{fac.asiento.numero ? ` ${fac.asiento.numero}` : ''}</Link>
       {` · ${fac.asiento.estado === 'validado' ? 'Validado' : mayuscula(fac.asiento.estado)}.`}
+      {erp10.linea && <> <LineaErp10 linea={erp10.linea} companyId={fac.company_id ?? null} entryId={fac.asiento.id} fecha={asientoReal.datos?.fecha ?? null} quien={userName ?? null} releer={erp10.releer} /></>}
     </>
   ) : (
     <>

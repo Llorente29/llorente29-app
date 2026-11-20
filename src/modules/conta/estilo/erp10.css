@@ -168,3 +168,14 @@
 .cxe-casadas-bien { color: var(--cx-verde-oscuro); }
 /* X11 · Lo medido, para copiar: el texto entero, en letra de máquina, sin cambiar la forma de la tarjeta. */
 .cxe-conexion-medida { width: 100%; box-sizing: border-box; margin-top: 8px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 8px; border: 1px solid var(--cx-borde-control); border-radius: 6px; background: transparent; color: inherit; resize: vertical; }
+
+/* X10f · Hoy en ERP10 (en «Qué mirar»): lo que no ha salido, arriba y en ámbar; «Cómo salió», sola o a mano. */
+.cxe-hoy-tabla { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: .85rem; table-layout: fixed; }
+.cxe-hoy-tabla th { text-align: left; font-weight: 600; color: var(--cx-apoyo); padding: 2px 4px; border-bottom: 1px solid var(--cx-linea); }
+.cxe-hoy-tabla th:nth-child(1) { width: 3.4em; }
+.cxe-hoy-tabla th:nth-child(2) { width: 4.6em; }
+.cxe-hoy-tabla th:nth-child(4) { width: 5.6em; }
+.cxe-hoy-tabla td { padding: 3px 4px; border-bottom: 1px solid var(--cx-linea); vertical-align: top; }
+.cxe-hoy-estado { overflow-wrap: anywhere; }
+.cxe-hoy-tabla tr[data-tono='ambar'] td { background: var(--cx-ambar-suave); }
+.cxe-hoy-tabla tr[data-tono='verde'] .cxe-hoy-estado { color: var(--cx-verde-oscuro); }

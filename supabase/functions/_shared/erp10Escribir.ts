@@ -138,6 +138,8 @@ export type Envio = {
   enlazada: boolean; pdf: 'subido' | 'fallo' | null; motivo: string | null; intentos: number; lote_id: string | null
   /** X10e · Es de un día del TPV; y el número del cobro de un día de un solo asiento. */
   dia?: boolean | null; cobro_serie?: string | null; cobro_documento?: number | null
+  /** X10f · Cómo salió: «sola» (la cola), «a_mano» (el botón) o «excel» (no sale por la conexión). */
+  como?: 'sola' | 'a_mano' | 'excel' | null
 }
 
 export interface PuertoEscribir {

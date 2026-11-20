@@ -31,6 +31,7 @@ import { rest } from '../api'
 import { ClienteErp10, finalDelNif, lineas, porTipo, resumenSinDatos, sumarPorCuenta, type AlmacenToken } from '../../../../supabase/functions/_shared/erp10Cliente'
 import { erp10Simulado, type EmpresaSimulada } from '../../../conta/erp10/simulado'
 import { partidasDeLoQueSale, sacarUno, type Envio, type PuertoEscribir, type Resultado } from '../../../../supabase/functions/_shared/erp10Escribir'
+import { pasadaDeLaCola, sacarYApuntar, type PuertoApuntar } from '../../../../supabase/functions/_shared/erp10Sacar'
 import { carpetaDe, loQueSaleDesdeLaBase, pedidasDelCuerpo } from '../../../../supabase/functions/_shared/erp10DesdeLaBase'
 import { medidaEnTexto, medirParaTraer } from '../../../../supabase/functions/_shared/erp10Medir'
 import { readFileSync } from 'node:fs'
@@ -205,11 +206,15 @@ async function limpiarLoDeHoy(s: Sesion, hoy: string) {
 async function prepararSalida(s: Sesion, hoy: string) {
   await api(s, 'POST', 'rpc/conta_erp10_salida_poner', { p_company: EMPRESA_A, p_encender: true, p_codigo: '0007', p_largo: 8, p_desde: hoy, p_quien_nombre: QUIEN })
   await limpiarLoDeHoy(s, hoy)
+  return (await unaRecibida(s, hoy, `X10-E2E-${Date.now() % 100000}`)).falta
+}
+
+/** Una recibida validada de hoy, con su número (el «E2E X10» de su concepto la deja limpiar a una pasada de mañana). */
+async function unaRecibida(s: Sesion, hoy: string, numero: string): Promise<{ id: string; falta: Map<string, number> }> {
   const [t21] = await api<{ id: string }[]>(s, 'GET', 'tax_rate?select=id&is_system=is.true&valid_to=is.null&code=eq.iva_general')
   const [soportado] = await api<{ code: string }[]>(s, 'GET', `company_account?select=code&company_id=eq.${EMPRESA_A}&code=like.472*&order=code&limit=1`)
   const iva = soportado?.code
     ?? (await api<{ code: string }>(s, 'POST', 'rpc/company_account_add', { p_company: EMPRESA_A, p_hoja: '472', p_nombre: 'IVA soportado inventado X10', p_quien_nombre: QUIEN })).code
-  const numero = `X10-E2E-${Date.now() % 100000}`
   const p = await api<{ id: string }>(s, 'POST', 'rpc/journal_entry_proponer', {
     p_company: EMPRESA_A,
     p_entry: { series: 2, fecha: hoy, concepto: `E2E X10 · recibida ${numero}`, source_type: 'manual', confianza: 'seguro', porque: 'Recibida de la prueba e2e del X10.', documento: numero, fecha_documento: hoy },
@@ -221,7 +226,7 @@ async function prepararSalida(s: Sesion, hoy: string) {
     p_quien_nombre: QUIEN,
   })
   await api(s, 'POST', 'rpc/journal_entry_validar', { p_entry: p.id, p_quien_nombre: QUIEN })
-  return new Map([['62300000', 4000], [iva, 840], ['41000002', -4840]])
+  return { id: p.id, falta: new Map([['62300000', 4000], [iva, 840], ['41000002', -4840]]) }
 }
 
 /** Sin código de empresa para la sociedad de la prueba (la de otra pasada se borra). */
@@ -557,5 +562,149 @@ test('X10e · 1366 × 768 y 1456 × 816: el día del TPV sale por la conexión (
     expect(abajo[0], `a ${tam.width} × ${tam.height}, la pantalla acaba dentro de la ventana`).toBeLessThanOrEqual(abajo[1])
     await page.screenshot({ path: `${DIR}/paso3-dia-${tam.width}.png` })
   }
+  expect(errores).toEqual([])
+})
+
+// ── X10f · Lo validado sale solo a ERP10 ─────────────────────────────────────────────
+
+type FilaEnvio = Envio & { clase?: string; creado_en: string; cambiado_en: string }
+
+/** Lo que sale ese mes, leído de staging con la sesión de quien está (las mismas funciones que el servidor). */
+async function baseDe(s: Sesion, mes: string) {
+  const leer = (fn: string) => api<Record<string, unknown>>(s, 'POST', `rpc/${fn}`, { p_company: EMPRESA_A, p_mes: mes })
+  const [sal] = await api<{ carpeta_pdf: string | null; codigo_erp10: string | null }[]>(s, 'GET', `conta_erp10_salida_empresa?select=carpeta_pdf,codigo_erp10&company_id=eq.${EMPRESA_A}`)
+  return {
+    porSalir: await leer('conta_erp10_por_salir'), recibidas: await leer('conta_erp10_recibidas_por_salir'), emitidas: await leer('conta_erp10_emitidas_por_salir'),
+    asientos: await leer('conta_erp10_asientos_por_salir'), dias: await leer('conta_erp10_dias_tpv_por_salir'), carpeta: carpetaDe(sal?.carpeta_pdf, sal?.codigo_erp10),
+  }
+}
+
+/**
+ * X10f · El servidor, sustituido como en el X10b: los envíos en memoria (con las reglas de conta_erp10_envio_tomar),
+ * el cliente de verdad contra el ERP10 simulado y el lote apuntado DE VERDAD en staging. La cola (conta-erp10-cola,
+ * que en producción despierta el cron cada minuto) es `pasada`: la MISMA pieza (pasadaDeLaCola) con «sola»; el botón
+ * y «Volver a intentarlo» (conta-erp10-escribir), sacarYApuntar con «a mano». La pantalla lee los envíos de aquí.
+ */
+async function erp10Sola(page: Page, s: Sesion, empresas: Record<string, EmpresaSimulada>, nif: string) {
+  const filas = new Map<string, FilaEnvio>()
+  const ahora = () => new Date().toISOString()
+  // La prueba de la empresa: su primera salida, de hace tiempo (en el paso 3 se da por igualada después).
+  filas.set('prueba', { id: 'e-prueba', entry_id: '00000000-0000-4000-8000-00000000f10f', estado: 'en_erp10', erp10_ejercicio: '2026', erp10_serie: '2', erp10_documento: 1, enlazada: false,
+    pdf: null, motivo: null, intentos: 1, lote_id: 'lote-prueba', clase: 'recibida', como: 'a_mano', creado_en: '2026-01-02T09:00:00Z', cambiado_en: '2026-01-02T09:00:00Z' })
+  const sim = erp10Simulado({ empresas })
+  const cliente = new ClienteErp10({
+    base: 'https://erp10.invalid', nombreBd: 'DESPACHO_INVENTADO', claves: { client_id: 'cliente-inventado', client_secret: 'x', username: 'x', password: 'codigo-inventado' },
+    lista: [{ companyId: EMPRESA_A, codEmpresa: '101', nif }], codEmpresa: '101', almacen: sinToken, fetch: sim.fetch, escribir: true,
+  })
+  const puerto = (mes: string, como: 'sola' | 'a_mano'): PuertoEscribir & PuertoApuntar => ({
+    hoy: hoyEnMadrid(),
+    tomar: async (id, clase) => {
+      const f = filas.get(id)
+      if (f && f.estado !== 'no_pudo') return { tomado: false, envio: f }
+      const n: FilaEnvio = { id: `e-${id}`, entry_id: id, estado: 'enviando', erp10_ejercicio: null, erp10_serie: null, erp10_documento: null, enlazada: false, pdf: null, motivo: null,
+        intentos: (f?.intentos ?? 0) + 1, lote_id: null, clase, como: f?.como ?? null, creado_en: f?.creado_en ?? ahora(), cambiado_en: ahora() }
+      filas.set(id, n)
+      return { tomado: true, envio: n }
+    },
+    poner: async (id, cambios) => { Object.assign([...filas.values()].find((x) => x.id === id)!, { como }, cambios, { cambiado_en: ahora() }) },
+    pdf: async () => new Uint8Array([37, 80, 68, 70]),
+    erp10: cliente,
+    usados: async (entryId) => new Set([...filas.values()].filter((x) => x.estado === 'en_erp10' && x.entry_id !== entryId).map((x) => `${x.erp10_serie}/${x.erp10_documento}`)),
+    apuntar: async (partidas, huella) => {
+      const r = await rest<{ lote: string }>(s, 'POST', 'rpc/conta_erp10_lote_apuntar', {
+        p_company: EMPRESA_A, p_mes: mes, p_quien_nombre: QUIEN, p_partidas: partidas, p_ficheros: [{ nombre: `ERP10 (${como === 'sola' ? 'salida sola' : 'por la conexión'})`, filas: partidas.length, huella }],
+      })
+      return r.status >= 300 ? { error: JSON.stringify(r.datos).slice(0, 300) } : { lote: String(r.datos.lote) }
+    },
+    apuntado: async (lote, r) => { const f = filas.get(r.entryId); if (f) f.lote_id = lote },
+  })
+  // conta_erp10_envio la escribe solo el servidor (aquí, el sustituto): la pantalla la lee de aquí, con sus filtros.
+  await page.route((u) => u.pathname.endsWith('/rest/v1/conta_erp10_envio'), (route: Route) => {
+    const u = new URL(route.request().url())
+    const eq = (k: string) => { const v = u.searchParams.get(k); return v?.startsWith('eq.') ? v.slice(3) : null }
+    const hoy = hoyEnMadrid()
+    let xs = [...filas.values()].filter((x) => (!eq('entry_id') || x.entry_id === eq('entry_id')) && (!eq('estado') || x.estado === eq('estado')))
+    if (u.searchParams.get('or')) xs = xs.filter((x) => x.estado === 'no_pudo' || x.cambiado_en.slice(0, 10) >= hoy)
+    if (u.searchParams.get('order')?.startsWith('creado_en.asc')) xs.sort((a, b) => a.creado_en.localeCompare(b.creado_en))
+    if (u.searchParams.get('limit')) xs = xs.slice(0, Number(u.searchParams.get('limit')))
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(xs.map((x) => ({ ...x, company_id: EMPRESA_A, account_id: CUENTA_A.id }))) })
+  })
+  await page.route('**/functions/v1/conta-erp10-escribir', async (route: Route) => {
+    const b = route.request().postDataJSON() as { company_id: string; mes: string; quien: string | null }
+    const responder = (status: number, cuerpo: unknown) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(cuerpo) })
+    try {
+      const base = await loQueSaleDesdeLaBase(await baseDe(s, b.mes), pedidasDelCuerpo(b))
+      const r = await sacarYApuntar(base, puerto(b.mes, 'a_mano'))
+      return responder(200, { ok: true, resultados: r.resultados, quedan: r.quedan, sinApuntar: r.sinApuntar })
+    } catch (e) {
+      return responder(409, { error: e instanceof Error ? e.message : String(e) })
+    }
+  })
+  return {
+    filas,
+    /** Una pasada de la cola, con lo que le toca (lo que conta_erp10_cola daría en staging, si se despertara). */
+    pasada: (pendientes: { id: string; fecha: string }[]) => pasadaDeLaCola({
+      pendientes: async () => pendientes.map((x) => ({ entry_id: x.id, account_id: CUENTA_A.id, company_id: EMPRESA_A, entry_date: x.fecha })),
+      empresa: async () => ({ base: (mes) => baseDe(s, mes), puerto: (mes) => puerto(mes, 'sola') }),
+    }),
+  }
+}
+
+test('X10f · 1456 × 816 y 1366 × 768: lo validado sale solo a ERP10, la ficha lo dice (gris, verde, ámbar) y «Volver a intentarlo» lo saca', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1440) < 768, 'En el ordenador (encargo X10f).')
+  test.setTimeout(300_000)
+  await page.setViewportSize(TAMANOS[0])
+  const s = await entrarComo(page, CUENTA_A.email)
+  const errores = vigilar(page)
+  const hoy = hoyEnMadrid()
+  const fin = finDeMes(hoy)
+  const nif = await nifDeLaSociedad(s)
+  await conCodigo(s, await conectar(s))
+  await api(s, 'POST', 'rpc/conta_erp10_salida_poner', { p_company: EMPRESA_A, p_encender: true, p_codigo: '0007', p_largo: 8, p_desde: hoy, p_quien_nombre: QUIEN })
+  await limpiarLoDeHoy(s, hoy)
+  // La prueba hecha: la primera salida de la empresa (en los envíos), igualada después en el paso 3 (de verdad, en staging).
+  await api(s, 'POST', 'rpc/conta_erp10_igualado_poner', { p_company: EMPRESA_A, p_mes: `${hoy.slice(0, 7)}-01`, p_fichero: 'ERP10, leído (e2e X10f)', p_fecha: hoy, p_cuentas: 1, p_con_diferencia: 0, p_quien_nombre: QUIEN })
+  const n = Date.now() % 100000
+  const buena = await unaRecibida(s, hoy, `X10F-E2E-${n}`)
+  const mala = await unaRecibida(s, hoy, `X10F-FALLA-${n}`)
+  const falta = new Map(buena.falta)
+  for (const [k, v] of mala.falta) falta.set(k, (falta.get(k) ?? 0) + v)
+  const empresa101 = await erp10ConLoDeSumied(s, fin, falta, nif)
+  empresa101.fallaFactura = 'X10F-FALLA'
+  const sola = await erp10Sola(page, s, { 101: empresa101 }, nif)
+  await page.route('**/functions/v1/connector-credentials', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, hasCredentials: true }) }))
+  const linea = page.getByRole('status', { name: 'ERP10' })
+
+  // 1 · Validada: en la ficha, gris, «Saliendo a ERP10…». A los dos tamaños.
+  await page.goto(`/conta/libros/diario/${buena.id}`, { waitUntil: 'load' })
+  await expect(linea).toHaveText('Saliendo a ERP10…', { timeout: 40_000 })
+  for (const tam of [TAMANOS[1], TAMANOS[0]]) { await page.setViewportSize(tam); await expect(linea).toBeInViewport(); await page.screenshot({ path: `${DIR}/x10f-gris-${tam.width}.png` }) }
+
+  // 2 · La cola (en producción, el servidor cada minuto): sin tocar la pantalla, la ficha pasa a verde con el número.
+  const r = await sola.pasada([{ id: buena.id, fecha: hoy }, { id: mala.id, fecha: hoy }])
+  expect(r).toMatchObject({ cogidos: 2, en_erp10: 1, no_pudo: 1 })
+  await expect(linea).toHaveText(/^En ERP10 · asiento \d+$/, { timeout: 30_000 })
+  expect(sola.filas.get(buena.id)).toMatchObject({ estado: 'en_erp10', como: 'sola' })
+  for (const tam of [TAMANOS[1], TAMANOS[0]]) { await page.setViewportSize(tam); await expect(linea).toBeInViewport(); await page.screenshot({ path: `${DIR}/x10f-verde-${tam.width}.png` }) }
+
+  // 3 · La que falla: ámbar, con su motivo y «Volver a intentarlo»; arreglada en ERP10, la saca (a mano).
+  await page.goto(`/conta/libros/diario/${mala.id}`, { waitUntil: 'load' })
+  await expect(linea).toContainText('No ha salido a ERP10: ', { timeout: 40_000 })
+  await expect(linea).toContainText('Error al guardar la factura (inventado)')
+  await expect(linea).toContainText('Se vuelve a intentar sola en unos minutos.')
+  for (const tam of [TAMANOS[1], TAMANOS[0]]) { await page.setViewportSize(tam); await expect(linea.getByRole('button', { name: 'Volver a intentarlo' })).toBeInViewport(); await page.screenshot({ path: `${DIR}/x10f-ambar-${tam.width}.png` }) }
+  delete empresa101.fallaFactura
+  await linea.getByRole('button', { name: 'Volver a intentarlo' }).click()
+  await expect(linea).toHaveText(/^En ERP10 · asiento \d+$/, { timeout: 30_000 })
+  expect(sola.filas.get(mala.id)).toMatchObject({ estado: 'en_erp10', como: 'a_mano', intentos: 2 })
+  expect(empresa101.facturas?.filter((f) => String(f.NumeroFactura).endsWith(String(n)))).toHaveLength(2)
+
+  // 4 · En «Salida a ERP10», lo de hoy con «Cómo salió»: la buena, sola; la mala, a mano.
+  await page.goto('/conta/libros/cierre/salida-erp10', { waitUntil: 'load' })
+  const tabla = page.getByRole('table', { name: 'Hoy en ERP10' })
+  await expect(tabla).toBeVisible({ timeout: 40_000 })
+  await expect(tabla.getByRole('row').filter({ hasText: 'Sola' })).toHaveCount(1)
+  await expect(tabla.getByRole('row').filter({ hasText: 'A mano' })).toHaveCount(1)
+  for (const tam of [TAMANOS[1], TAMANOS[0]]) { await page.setViewportSize(tam); await expect(tabla).toBeInViewport(); await page.screenshot({ path: `${DIR}/x10f-hoy-${tam.width}.png` }) }
   expect(errores).toEqual([])
 })

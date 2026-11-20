@@ -8,9 +8,10 @@
 
 import type { Pagina, PedirPagina } from '../../../../supabase/functions/_shared/erp10Traer'
 import { supabase } from '@/lib/supabase'
-import { hayBase, tabla } from '@/modules/conta/services/bd'
+import { hayBase, rpc, tabla } from '@/modules/conta/services/bd'
 import type { FilaSumas } from '@/modules/conta/lib/traer'
 import type { DocumentoErp10, EnvioErp10 } from '@/modules/conta/erp10/casar'
+import type { DatosLinea, EnvioDeUnAsiento, SalidoHoy } from '@/modules/conta/erp10/salidaSola'
 import { getConnectorCredentialsStatus, saveConnectorCredentials } from '@/modules/integrations/services/connectorCredentialsService'
 
 type Fila = Record<string, unknown>
@@ -273,4 +274,64 @@ export async function leerEnviosErp10(accountId: string, companyId: string): Pro
   return ((data ?? []) as Fila[]).filter((x) => x.erp10_documento != null)
     .map((x) => ({ entryId: String(x.entry_id), clase: x.dia === true ? 'dia' : String(x.clase), serie: String(x.erp10_serie ?? ''), documento: Number(x.erp10_documento),
       ...(x.cobro_documento != null ? { cobro: { serie: String(x.cobro_serie ?? ''), documento: Number(x.cobro_documento) } } : {}) }))
+}
+
+// ── X10f · Lo validado sale solo a ERP10: lo que dicen la ficha, la barra y la lista de hoy ──────────
+
+/** Lo que la ficha necesita para su línea de ERP10 (salidaSola.lineaErp10), menos el estado y la fecha del asiento. */
+export async function leerLineaErp10(accountId: string, companyId: string, entryId: string): Promise<Omit<DatosLinea, 'validado' | 'fecha'>> {
+  hayBase()
+  const [v, z, p, primera] = await Promise.all([
+    tabla('conta_erp10_envio').select('estado, erp10_serie, erp10_documento, motivo, intentos, como').eq('account_id', accountId).eq('entry_id', entryId).maybeSingle(),
+    tabla('conta_erp10_salida_empresa').select('encendida, desde').eq('account_id', accountId).eq('company_id', companyId).maybeSingle(),
+    tabla('conta_erp10_salida_partida').select('erp10_documento').eq('account_id', accountId).eq('entry_id', entryId).eq('estado', 'salida').maybeSingle(),
+    tabla('conta_erp10_envio').select('creado_en').eq('account_id', accountId).eq('company_id', companyId).eq('estado', 'en_erp10').order('creado_en', { ascending: true }).limit(1),
+  ])
+  for (const r of [v, z, p, primera]) if (r.error) throw new Error(`No se ha podido leer cómo va en ERP10: ${r.error.message}`)
+  const e = v.data as Fila | null
+  const desde = ((primera.data ?? []) as Fila[])[0]?.creado_en as string | undefined
+  let pruebaHecha = false
+  if (desde) {
+    const { data: g, error } = await tabla('conta_erp10_igualado').select('id').eq('account_id', accountId).eq('company_id', companyId).gt('igualado_en', desde).limit(1)
+    if (error) throw new Error(`No se ha podido leer lo igualado: ${error.message}`)
+    pruebaHecha = ((g ?? []) as Fila[]).length > 0
+  }
+  const s = z.data as Fila | null
+  const par = p.data as Fila | null
+  return {
+    envio: e ? {
+      estado: e.estado as EnvioDeUnAsiento['estado'], serie: str(e.erp10_serie) ?? null, documento: e.erp10_documento == null ? null : Number(e.erp10_documento),
+      motivo: str(e.motivo) ?? null, intentos: Number(e.intentos ?? 1), como: (e.como as EnvioDeUnAsiento['como']) ?? null,
+    } : null,
+    salida: s ? { encendida: s.encendida === true, desde: String(s.desde) } : null,
+    conElExcel: par ? { documento: par.erp10_documento == null ? null : Number(par.erp10_documento) } : null,
+    pruebaHecha,
+  }
+}
+
+/** La lista de hoy de «Salida a ERP10»: lo que ha pasado hoy por la conexión y lo que no ha salido (de cualquier día). */
+export async function leerSalidoHoy(accountId: string, companyId: string): Promise<SalidoHoy[]> {
+  hayBase()
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
+  const { data, error } = await tabla('conta_erp10_envio')
+    .select('entry_id, estado, erp10_documento, motivo, intentos, como, cambiado_en, journal_entry(series, number, concept)')
+    .eq('account_id', accountId).eq('company_id', companyId)
+    .or(`cambiado_en.gte.${hoy}T00:00:00+01:00,estado.eq.no_pudo`)
+    .order('cambiado_en', { ascending: false }).limit(200)
+  if (error) throw new Error(`No se ha podido leer lo que ha salido hoy: ${error.message}`)
+  return ((data ?? []) as Fila[]).map((x) => {
+    const je = (x.journal_entry ?? null) as Fila | null
+    return {
+      entryId: String(x.entry_id), numero: je ? `${je.series}/${je.number ?? '—'}` : '—', concepto: str(je?.concept) ?? '',
+      estado: x.estado as SalidoHoy['estado'], documento: x.erp10_documento == null ? null : Number(x.erp10_documento), motivo: str(x.motivo) ?? null,
+      intentos: Number(x.intentos ?? 1), como: (x.como as SalidoHoy['como']) ?? null, cuando: String(x.cambiado_en),
+    }
+  })
+}
+
+/** Cuántos asientos llevan más de una hora validados sin salir a ERP10 (la barra de abajo). */
+export async function leerAtascadosErp10(companyId: string): Promise<number> {
+  hayBase()
+  const d = await rpc<Fila | null>('conta_erp10_atascados', { p_company: companyId })
+  return Number(d?.sin_salir ?? 0)
 }

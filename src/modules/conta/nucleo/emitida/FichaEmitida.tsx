@@ -25,6 +25,8 @@ import { rutaAsiento, rutaEmitidaAsiento, rutaFacturasVenta, rutaNuevaFacturaVen
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
+import { LineaErp10 } from '@/modules/conta/nucleo/ficha/LineaErp10'
+import { useLineaErp10 } from '@/modules/conta/nucleo/ficha/useLineaErp10'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { useCambiosSinGuardar, useNombreDePestana, usePestana, useSeVe, useAvisoSalir } from '@/modules/conta/diseno/plantillas'
@@ -150,6 +152,8 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   const duda = reparto && modo !== 'hecha_sola' ? dudaDelGasto({ reparto, confianza: reparto.length >= 2 ? 'probable' : 'seguro', cuentaAhora: be.ventas[0]?.cuenta ?? '', decidida: decidida === `${claveFicha}:${b.clienteId}` }) : null
   const comprobaciones = modo === 'a_mano' ? [] : comprobacionesEmitida({ numero: b.numero, fecha: b.fecha, calendario, repetida, hayCliente: !!cliente, nif: cliente?.nif ?? null, iva: b.iva, total })
   const vacias = vaciasEmitida(be, total)
+  // X10f · Su línea de ERP10, junto al estado.
+  const erp10 = useLineaErp10({ accountId, companyId: empresa, entryId: entryId || null, validado: asiento?.estado === 'validado', fecha: asiento?.fecha ?? null })
   const estado = estadoDeLaEmitida({ modo, comprobaciones, hayDuda: !!duda, vacias, asiento: asiento?.numero ?? null })
   useNombreDePestana(nombreDePestanaEmitida(cliente?.nombre, de !== 'nueva'))
 
@@ -323,6 +327,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
         <h1>Factura emitida</h1>
         <span className="kf-cola">{colaTexto}</span>
         {!cargando && <EstadoFicha {...estado} />}
+        {!cargando && <LineaErp10 linea={erp10.linea} companyId={empresa} entryId={entryId || null} fecha={asiento?.fecha ?? null} quien={userName} releer={erp10.releer} />}
         <div className="kf-cabecera-botones">
           <button type="button" className="kf-flecha" aria-label="La anterior" disabled={!anterior} onClick={() => anterior && salida.pedirSalir(() => navegar(rutaEmitidaAsiento(anterior)))}>‹</button>
           <button type="button" className="kf-flecha" aria-label="La siguiente" disabled={!siguiente} onClick={() => siguiente && salida.pedirSalir(() => navegar(rutaEmitidaAsiento(siguiente)))}>›</button>

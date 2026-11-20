@@ -65,6 +65,8 @@ import type { CambiosDePestana } from '@/modules/conta/diseno/plantillas/pestana
 import { cintaVisible, modulosVisibles, MODULOS, sitioDe, type Boton, type IdModulo, type Modulo } from './mapa'
 import { conEjercicio, ejercicioAEnsenar } from './ejercicio'
 import { frasesDeEstado } from './estado'
+import { fraseAtascados } from '@/modules/conta/erp10/salidaSola'
+import { leerAtascadosErp10 } from '@/modules/conta/services/erp10ApiService'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { bancosCuadrados } from './bancos/servicio'
 import {
@@ -398,6 +400,12 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
   // E05 · «Bancos cuadrados», con la misma regla que la cabecera de Bancos; se vuelve a contar cuando cambia lo que hay por revisar.
   const cuadrados = useLeer(accountId && activa ? () => bancosCuadrados(accountId, activa.id, hoyEnMadrid()) : null, `${accountId}:${activa?.id}:${String(cuentas.bancos ?? '')}:cuadrados`).datos
   const estadoFrases = frasesDeEstado(cuentas, { recibidas: rutaConta('documentos'), bancos: rutaConta('bancos'), asientos: rutaConta('libros/diario') }, cuadrados)
+  // X10f · Lo que lleva más de una hora validado sin salir a ERP10: en ámbar, con el número (se vuelve a contar cada 5 minutos).
+  const [cincoMinutos, setCincoMinutos] = useState(0)
+  useEffect(() => { const t = setInterval(() => setCincoMinutos((x) => x + 1), 300_000); return () => clearInterval(t) }, [])
+  const atascados = useLeer(accountId && activa ? () => leerAtascadosErp10(activa.id) : null, `${accountId}:${activa?.id}:erp10-atascados:${cincoMinutos}`).datos ?? 0
+  const fraseErp10 = fraseAtascados(atascados)
+  if (fraseErp10) estadoFrases.push({ id: 'erp10', tono: 'mira', ...fraseErp10, ruta: rutaConta('libros/cierre/salida-erp10') })
   const actual = sitio?.tipo === 'cinta' ? sitio.boton.id : null
   const enFila = estado.abiertas.map((p) => ({ id: p.id, nombre: nombreDe(p.id), conCambios: !!cambios[llaveDe(empresaVista, p.id)], cerrable: p.id !== INICIO }))
   return (
