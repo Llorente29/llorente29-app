@@ -9,6 +9,8 @@
 --      o en un mes cerrado (conta_mes_cerrado);
 --   4. lo mismo para los días del TPV de Folvy (sales_day_summary) con asiento validado,
 --      que no son de conta_tpv_dia, contados por asiento.
+--   5. los cobros del día (origen sales_day_payment) en el diario: la tanda no rehace
+--      ningún día, así que tiene que dar 0 antes y después.
 -- Corte fijo: lo creado antes del 20/11/2026 a las 00:00 de Madrid.
 with d as (
   select d.account_id, d.company_id, d.dia fecha, d.entry_id,
@@ -47,4 +49,7 @@ select clave, valor from (
          || ' · con el IVA presentado ' || count(*) filter (where f.iva)
          || ' · en mes cerrado ' || count(*) filter (where f.mes) valor
     from f group by f.account_id, f.company_id, f.salido
+  union all
+  select 4, 'tabla entera · cobros del día en el diario', count(*)::text
+    from public.journal_entry e where e.source_type = 'sales_day_payment' and e.created_at < timestamptz '2026-11-20 00:00:00+01'
 ) t order by o, clave;

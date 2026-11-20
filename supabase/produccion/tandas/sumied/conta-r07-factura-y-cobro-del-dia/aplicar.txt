@@ -1,12 +1,20 @@
-# R07 · El día del TPV en dos asientos: la factura del día y su cobro (encargo R07,
-# 19/11). Rama conta/r07-factura-y-cobro-del-dia. Se ensaya y se aplica desde main
-# nombrando esta rama, antes de fusionar.
+# R07 · El día de ventas en dos asientos: la factura del día y su cobro (encargo R07,
+# 19/11; respuesta R07 · 1). Rama conta/r07-factura-y-cobro-del-dia. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
 #
 #   1405  Añade conta_tpv_factura_cuenta: a qué cuenta va la factura del día
-#         («Clientes de contado»), una por empresa. Tabla nueva, no la lee nadie aún.
+#         («Clientes de contado»), una por empresa.
+#   0900  Desde el día en que la empresa elige esa cuenta, cada día de ventas (del TPV
+#         de fuera y del de Folvy) va en dos asientos unidos: la factura del día y su
+#         cobro. Añade el origen «sales_day_payment» (el CHECK solo amplía), la columna
+#         «desde», el enlace conta_dia_cobro y su disparador en journal_entry (validar,
+#         anular o quitar uno hace lo mismo con el otro). Cambia en caliente, por trozos
+#         exactos y con respaldo, _conta_tpv_propuesta, conta_tpv_dia_para_validar,
+#         conta_tpv_dia_validar, conta_proponer_dias y conta_erp10_dias_tpv_por_salir.
 #
-# Primer paso: con este fichero solo, el ensayo mide en producción cuántos días
-# validados hay de cada clase (salidos y no salidos a ERP10), por cuenta y empresa.
-# Nada en el camino del pedido. El real lo lanza Julio.
+# Los días ya validados NO se rehacen (respuesta R07 · 1, punto 1): la cuenta lo mide
+# antes y después. Sin la cuenta elegida, Folvy sigue como hoy. Nada en el camino del
+# pedido. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/r07-dias-tpv.sql
 supabase/migrations/20261119T1405_r07_cuenta_factura_del_dia.sql
+supabase/migrations/20261120T0900_r07_factura_y_cobro_del_dia.sql
