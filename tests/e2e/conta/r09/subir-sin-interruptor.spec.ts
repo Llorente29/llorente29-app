@@ -53,7 +53,10 @@ async function irAVentasDelDia(page: Page, empresa: string) {
   await page.goto('/conta', { waitUntil: 'load' })
   await page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: 'Facturación' }).click({ timeout: 40_000 })
   await page.getByRole('tablist', { name: 'La cinta' }).getByRole('tab', { name: 'Ventas' }).click()
-  await page.locator('[data-boton="ventasDia"]').click()
+  // A 1366 la cinta guarda algunos botones en «Más» (como en el K02).
+  const boton = page.locator('[data-boton="ventasDia"]')
+  if (!(await boton.isVisible())) await page.getByRole('button', { name: 'Más', exact: true }).click()
+  await boton.click()
   await expect(page).toHaveURL(/\/conta\/ventas\/cierres/)
   await abierta(page, 'Ventas del día')
 }
