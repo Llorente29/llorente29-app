@@ -1,0 +1,4 @@
+# K07 · Cambiar el documento de una recibida contabilizada (añade journal_entry_document_anterior y
+# conta_recibida_documento_cambiar).
+supabase/migrations/20261120T2004_k07_cambiar_documento.sql
+supabase/staging/sql/20261120_k07_cambiar_documento_prueba.sql
