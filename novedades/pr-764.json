@@ -1,0 +1,20 @@
+[
+ {
+  "id": "764-1",
+  "pr": 764,
+  "fecha": "2026-11-20T20:26:22Z",
+  "producto": "sumied",
+  "apartado": "Subir las ventas del TPV",
+  "frase": "un día de Revo con una cuenta dividida, o con un ticket cambiado por factura con NIF, ya se guarda: cada factura lleva su IVA y el ticket cambiado cuenta a cero.",
+  "ruta": null
+ },
+ {
+  "id": "764-2",
+  "pr": 764,
+  "fecha": "2026-11-20T20:26:22Z",
+  "producto": "sumied",
+  "apartado": "La vista previa",
+  "frase": "dice ya lo que antes solo decía la base al guardar, con las mismas frases: si sale «Cuadra», se guarda.",
+  "ruta": null
+ }
+]
