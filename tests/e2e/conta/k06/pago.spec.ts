@@ -64,8 +64,11 @@ async function entrarEnLaGestoria(page: Page): Promise<Sesion> {
   return s
 }
 
-/** Una a mano de su proveedor, con base 100 al 21 %, a la 60000000 y sin documento (con su motivo). El pago, lo que diga la prueba. */
-async function escribirAMano(page: Page, t: number, numero: string) {
+/**
+ * Una a mano de su proveedor, con base 100 al 21 % (la línea del 10 %, quitada con su ×), a su cuenta de gasto y sin
+ * documento (con su motivo). El pago, lo que diga la prueba.
+ */
+async function escribirAMano(page: Page, t: number, numero: string, gasto: { escribir: string; cuenta: string } = { escribir: '600', cuenta: '60000000' }) {
   await page.goto('/conta/documentos/nueva', { timeout: 30_000 })
   await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
@@ -77,9 +80,10 @@ async function escribirAMano(page: Page, t: number, numero: string) {
   await ficha(page).locator('#kf-fecha').press('Tab')
   await ficha(page).getByRole('textbox', { name: 'Base 1' }).fill('100')
   await ficha(page).getByRole('combobox', { name: 'Tipo de IVA 1' }).selectOption('21')
-  await ficha(page).getByRole('textbox', { name: 'Base 2' }).fill('')
-  await ficha(page).locator('#kf-cuenta-0').fill('600')
-  await page.getByRole('option', { name: /^60000000 · / }).click()
+  await ficha(page).getByRole('button', { name: 'Quitar el tipo 10 %' }).click()
+  await expect(ficha(page).getByRole('textbox', { name: 'Base 2' })).toHaveCount(0)
+  await ficha(page).locator('#kf-cuenta-0').fill(gasto.escribir)
+  await page.getByRole('option', { name: new RegExp(`^${gasto.cuenta} · `) }).click()
   const local = ficha(page).getByRole('combobox', { name: 'Local' })
   if (await local.isEnabled()) await local.selectOption({ index: 1 })
   await ficha(page).getByRole('checkbox', { name: 'Guardarla sin documento' }).check()
@@ -127,7 +131,9 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
 
     // ── 1 · Pagada por banco: la 57200001, con su nombre, la fecha propuesta (la de la factura, sin vencimiento) y el importe. ──
     const nBanco = `K06B-${t}-${sello}`
-    await escribirAMano(page, t, nBanco)
+    // Con la 60200000, «Compras de otros aprovisionamientos» (de serie, en cualquier plan): el nombre largo, en dos líneas, entero.
+    await escribirAMano(page, t, nBanco, { escribir: '602', cuenta: '60200000' })
+    await expect(ficha(page).getByRole('textbox', { name: 'Nombre de la cuenta 1' })).toHaveValue('Compras de otros aprovisionamientos')
     await ficha(page).locator('#kf-pago').fill('5720')
     await page.getByRole('option', { name: /^57200001 · / }).click()
     await expect(ficha(page).locator('#kf-pago')).toHaveValue('57200001')

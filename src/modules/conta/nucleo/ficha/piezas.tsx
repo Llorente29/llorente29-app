@@ -151,3 +151,13 @@ export function CasillaFecha({ id, iso, poner, hoy, etiqueta, casilla = true }: 
       onBlur={() => { const f = texto !== null ? fechaEscrita(texto, hoy) : null; if (f) poner(f); else if (texto !== null && texto.trim() === '') poner(''); setTexto(null) }} />
   )
 }
+
+/**
+ * K06 · El nombre de una cuenta, de solo lectura, al lado de su código: si no cabe, en dos líneas, nunca cortado (Julio,
+ * 20/11; como el nombre de la cuenta del R07 de R). Es un textarea de solo lectura que crece con su texto (field-sizing):
+ * sigue siendo una casilla de texto, con su valor y su «Pendiente de…» cuando está vacía.
+ */
+export function NombreDeCuenta({ etiqueta, valor, placeholder, duda }: { etiqueta: string; valor: string; placeholder?: string; duda?: boolean }) {
+  return <textarea className="kf-nombre-cuenta" readOnly tabIndex={-1} rows={1} aria-label={etiqueta} value={valor} title={valor || undefined}
+    placeholder={placeholder} data-duda={duda ? 'si' : undefined} />
+}

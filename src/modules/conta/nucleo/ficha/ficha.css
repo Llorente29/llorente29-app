@@ -252,3 +252,22 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 @media (max-width: 1440px) {
   .kf-recibida .kf-cuerpo { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
 }
+
+/* K06 · El nombre de una cuenta (NombreDeCuenta) no se corta: si no cabe, en dos líneas (Julio, 20/11). Una línea mide lo
+   mismo que una casilla (25 px); dos, 41. */
+.kf-ficha textarea.kf-nombre-cuenta {
+  display: block; width: 100%; min-width: 0; box-sizing: border-box; min-height: 25px; max-height: 41px; padding: 4px 6px 3px;
+  resize: none; overflow: hidden; field-sizing: content; overflow-wrap: anywhere;
+  background: #fbfcfd; border: 1px solid var(--kf-casilla-borde); border-radius: 3px; color: var(--k-tinta); font: 13px/16px var(--k-letra);
+}
+.kf-ficha textarea.kf-nombre-cuenta:focus { outline: none; }
+.kf-ficha textarea.kf-nombre-cuenta[data-duda='si'] { border: 2px solid var(--kf-ambar-borde); background: #fffaf0; padding: 3px 5px 2px; }
+
+/* K06 · La recibida cabe entera sin rodar (Julio, 16/11), con el concepto en su fila, los rótulos del pago y el nombre de la
+   cuenta en dos líneas: menos aire entre el rótulo y su casilla y en las filas del asiento. Medido en el arnés: a 1366 cabe la
+   rellenada con duda y cuatro apuntes; a 1456, esa misma pasa 9 px (dicho en el #753, con su captura). */
+.kf-recibida .kf-casilla { gap: 1px; }
+.kf-recibida .kf-rotulo { min-height: 14px; }
+.kf-recibida .kf-asiento { padding: 4px 10px; }
+.kf-recibida .kf-asiento header { margin-bottom: 1px; }
+.kf-recibida .kf-asiento td { padding: 1px 6px; }

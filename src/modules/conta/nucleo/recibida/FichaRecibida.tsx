@@ -54,7 +54,7 @@ import {
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
-import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, Comprobaciones, Duda, EstadoFicha } from '../ficha/piezas'
+import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, Comprobaciones, Duda, EstadoFicha, NombreDeCuenta } from '../ficha/piezas'
 import { PanelDocumento } from '../ficha/PanelDocumento'
 import { cifra } from '../ficha/textos'
 import { useUltimo } from '../ficha/useUltimo'
@@ -608,7 +608,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                     <Buscador id={`kf-cuenta-${i}`} etiqueta={`Cuenta de gasto ${i + 1}`} cargando={cuentasGastoL === null} valor={textoCuenta[i] ?? g.cuenta} cuenta={g.cuenta || null} duda={!!duda && i === 0}
                       ponerTexto={(t) => setTextoCuenta((x) => ({ ...x, [i]: t }))} lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8)}
                       texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }} />
-                    <input readOnly tabIndex={-1} aria-label={`Nombre de la cuenta ${i + 1}`} value={g.cuenta ? nombreGasto(g.cuenta) : ''} data-duda={duda && i === 0 ? 'si' : undefined} />
+                    <NombreDeCuenta etiqueta={`Nombre de la cuenta ${i + 1}`} valor={g.cuenta ? nombreGasto(g.cuenta) : ''} duda={!!duda && i === 0} />
                     <input className="kf-cifra" data-casilla={b.gastos.length > 1 ? '' : undefined} aria-label={`Importe del gasto ${i + 1}`} placeholder={i === b.gastos.length - 1 ? importeEs(totales.base) : ''}
                       value={g.importe || (b.gastos.length === 1 ? importeEs(totales.base + (totales.recargo ?? 0)) : '')} readOnly={b.gastos.length === 1}
                       tabIndex={b.gastos.length === 1 ? -1 : 0} onChange={(e) => ponerGasto(i, { importe: e.target.value })} />
@@ -637,7 +637,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                   <Buscador id="kf-pago" etiqueta="La cuenta del pago" cargando={!cuentasPago} valor={textoPago ?? pagoCuenta} cuenta={pagoCuenta || null} duda={!!dudaPago}
                     ponerTexto={(t) => { setTextoPago(t); if (!t.trim()) ed.poner('pagoCuenta', '') }} lista={(t) => cuentasQueEncajan(t, cuentasPago?.lista ?? [], 8)}
                     texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ed.poner('pagoCuenta', c.codigo); setTextoPago(null) }} />
-                  <input readOnly tabIndex={-1} aria-label="Nombre de la cuenta del pago" value={nombrePago} title={nombrePago || undefined} placeholder="Pendiente de pagar" data-duda={dudaPago ? 'si' : undefined} />
+                  <NombreDeCuenta etiqueta="Nombre de la cuenta del pago" valor={nombrePago} placeholder="Pendiente de pagar" duda={!!dudaPago} />
                 </div>
                 <div className="kf-pago-fechas">
                   <label className="kf-rotulo-chico">Vence<CasillaFecha id="kf-vence" etiqueta="Vence" iso={b.vence} hoy={hoy} poner={(x) => ed.poner('vence', x)} /></label>
