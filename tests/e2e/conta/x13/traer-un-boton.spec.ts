@@ -168,7 +168,9 @@ for (const tam of TAMANOS) {
       // 4 · Darlo por bueno, con su confirmación.
       await p.getByRole('button', { name: 'Darlo por bueno' }).click()
       const dialogo = page.getByRole('dialog', { name: 'Darlo por bueno' })
-      await expect(dialogo).toContainText('Vas a dar por bueno lo traído de ERP10: 10 asientos y 5 facturas')
+      // Las facturas, las que haya traído la base: una recibida que ya está en la cuenta (de otra empresa del carril,
+      // dada por buena en otra prueba) no se trae otra vez (e2e 44721156579).
+      await expect(dialogo).toContainText(/Vas a dar por bueno lo traído de ERP10: 10 asientos y \d+ facturas?/)
       await dialogo.getByRole('button', { name: 'Darlo por bueno' }).click()
       await expect(page.getByRole('status').filter({ hasText: /^Dado por bueno el \d\d\/\d\d a las \d\d:\d\d por / })).toContainText('10 asientos de antes del', { timeout: 60_000 })
       await expect(p.locator('.cxe-botones button')).toHaveText(['Traerlo todo de ERP10'])
@@ -196,11 +198,11 @@ for (const tam of TAMANOS) {
       await expect(p.getByRole('status').filter({ hasText: '✓ Leído y cuadra con ERP10' })).toBeVisible({ timeout: 90_000 })
       await p.getByRole('button', { name: 'Descartar lo traído' }).click()
       const dialogo = page.getByRole('dialog', { name: 'Descartar lo traído' })
-      await expect(dialogo).toContainText('Vas a descartar lo traído: se quita todo lo que entró en prueba (10 asientos, 5 facturas')
+      await expect(dialogo).toContainText(/Vas a descartar lo traído: se quita todo lo que entró en prueba \(10 asientos, \d+ facturas?/)
       await expect(dialogo).toContainText('En ERP10 no cambia nada.')
       await page.screenshot({ path: `${DIR}/descartar-${tam.width}.png` })
       await dialogo.getByRole('button', { name: 'Descartar lo traído' }).click()
-      await expect(page.getByRole('status').filter({ hasText: /^Deshecho el .*: se ha quitado todo lo traído \(10 asientos, 5 facturas, .*\)\. La empresa queda como estaba antes de traerlo\.$/ })).toBeVisible({ timeout: 60_000 })
+      await expect(page.getByRole('status').filter({ hasText: /^Deshecho el .*: se ha quitado todo lo traído \(10 asientos, \d+ facturas?, .*\)\. La empresa queda como estaba antes de traerlo\.$/ })).toBeVisible({ timeout: 60_000 })
       await expect(fila(page, 'Diario')).toContainText('todos los asientos del ejercicio')
       // Y la de los ficheros sigue ahí, igual.
       await p.getByRole('button', { name: 'Súbelo en ficheros' }).click()
