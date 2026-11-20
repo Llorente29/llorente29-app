@@ -6,3 +6,7 @@ supabase/staging/sql/20261120_k06_pagar_con_cuenta_prueba.sql
 # liquidación y una factura de comisión ligada a ella por tamaño. Solo añade, con ids y fechas fijos:
 # se puede aplicar dos veces igual (W07), y va de verdad desde la rama (W05).
 supabase/seeds/conta/seed_k06_cuenta_de_pago_staging.sql
+# K06b · La factura de comisión de la e2e, a nombre de la gestoría (la de la K06 no traía el NIF del
+# destinatario y la base no la valida: e2e a mano 44715124011), y la cuenta de gasto de la plataforma.
+# Solo añade, con ids y fechas fijos (W07), y va de verdad desde la rama (W05).
+supabase/seeds/conta/seed_k06b_plataforma_a_nombre_staging.sql

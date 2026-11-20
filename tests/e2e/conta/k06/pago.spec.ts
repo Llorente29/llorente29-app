@@ -12,7 +12,7 @@
 //      31): esa misma, pagada después por Pagos (conta_pago_a_mano, lo que hace
 //      su «Ya la he pagado»), queda igual que la de la ficha, y Bancos las
 //      propone igual para casar;
-//   3. por la 430: la de comisión de la plataforma, ligada a su liquidación,
+//   3. por la 430: la de comisión de la plataforma (semilla K06b), ligada a su liquidación,
 //      propone su 43000091 «de su liquidación» y al validarla queda pagada por
 //      compensación;
 //   4. la raya: se arrastra, se recuerda al volver y no pasa del mínimo del
@@ -31,7 +31,8 @@ test.use({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
 const DIR = 'docs/conta/capturas/k06'
 const EMPRESA = () => enCarril('c0e20000-0000-4000-8000-0000000000e3')
 const BANCO = () => enCarril('c0e20000-0000-4000-8000-0000000000b0')
-const PLATAFORMA = (t: number) => enCarril(`c0e60000-0000-4000-8000-0000000000b${t}`)
+// La de seed_k06b (a nombre de la gestoría: la de seed_k06 no traía el NIF del destinatario y la base no la valida, e2e 44715124011).
+const PLATAFORMA = (t: number) => enCarril(`c0e60000-0000-4000-8000-0000000001b${t}`)
 const PROVEEDOR = (t: number) => (t === 1 ? 'Proveedor de Prueba Ficha Uno, S.L.' : 'Proveedor de Prueba Ficha Dos, S.L.')
 const FICHA = '[data-prueba="ficha-recibida-nucleo"]'
 const ficha = (page: Page) => page.locator(`.k-zona[data-activa="si"] ${FICHA}`)
@@ -226,7 +227,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     // Validada: pagada por compensación con su liquidación.
     await ficha(page).locator('[data-guardar-y-siguiente]').click()
     await expect(page.getByText(/Se paga con su liquidación: la 43000091 de Plataforma de Prueba K06 la descuenta/).first()).toBeVisible({ timeout: 60_000 })
-    const plat = await idDe(s, `K06P-${t}-1`)
+    const plat = await idDe(s, `K06P-${t}-2`)
     expect([plat.status, plat.paid_method]).toEqual(['pagada', 'compensation'])
 
     // ── 5 · El asiento: lo suyo, sin documento. ──
