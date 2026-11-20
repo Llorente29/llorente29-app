@@ -2,14 +2,14 @@
 //
 // R06 · Ajustes › Ventas por día: desde aquí se abre siempre «A qué cuenta va
 // cada forma de pago» (la misma ventana que sale desde Cierres del día), con
-// lo que hay en una frase.
+// lo que hay en una frase. Al guardar, la lista se vuelve a leer sin quitar la ventana de en medio.
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CONTA, rutaConta } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
-import { useLeer } from '@/modules/conta/libros/contexto'
+import { useLeerConservando } from '@/modules/conta/libros/contexto'
 import { Boton } from '@/modules/conta/diseno'
 import { TarjetaApartado } from '@/modules/conta/empresa/campos'
 import { TarjetaCargando } from '@/modules/conta/ui/piezas'
@@ -23,7 +23,9 @@ export function VentasPorDiaAjustes() {
   const movil = useIsMobile()
   const [vuelta, setVuelta] = useState(0)
   const [abierta, setAbierta] = useState(false)
-  const datos = useLeer(accountId && activa ? () => leerFormas(activa.id) : null, `${activa?.id}:${vuelta}:formas-tpv`)
+  // R07 · Al guardar, se vuelve a leer sin vaciar la página: con useLeer, la página volvía a «cargando», la
+  // ventana se desmontaba y su confirmación se perdía («Guardar» callaba; e2e 44707061711, regla 8).
+  const datos = useLeerConservando(accountId && activa ? () => leerFormas(activa.id) : null, `${activa?.id}:${vuelta}:formas-tpv`, `${activa?.id}:formas-tpv`)
   if (!activa) return null
   if (!datos.datos && !datos.error) return <TarjetaCargando />
   const formas = datos.datos?.formas ?? []

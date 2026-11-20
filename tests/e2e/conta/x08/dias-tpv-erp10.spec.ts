@@ -7,7 +7,9 @@
 // hostelería, con la sesión del administrador:
 //   0. Por la API: a qué cuenta va cada forma de pago (como la e2e del R05), la cuenta
 //      «Clientes de contado» de la sociedad (una 430 que lo dice) y DOS días del ejemplo
-//      INVENTADO de Revo (el 09/11 tal cual; el 10/11, el mismo con las facturas 5101 a 5148),
+//      INVENTADO de Revo, movido a dos días que no usa ninguna otra prueba de esta empresa del
+//      carril (R07 · 2: el R05, el R06 y el R07 suben el 09, el 10 y el 11/11): el 18/11, con las
+//      facturas 5801 a 5848, y el 19/11, con las 5901 a 5948,
 //      leídos con el lector del R04 y guardados con conta_tpv_dia_guardar.
 //   1. Cierres del día: «Validar los N listos» los valida con su PDF y su asiento (si no lo
 //      estaban ya en este carril).
@@ -59,11 +61,16 @@ function vigilar(page: Page): string[] {
   return errores
 }
 
-/** El ejemplo de Revo de un día: el 09/11 tal cual, o movido a otro día con sus facturas 51xx (para que no se repitan). */
+/** Los días del X08, solo suyos en la empresa del carril, y sus facturas (el ejemplo del 09/11 movido, con su centena). */
+const DIAS = [{ dia: '2026-11-18', centena: '58' }, { dia: '2026-11-19', centena: '59' }] as const
+const rango = (d: (typeof DIAS)[number]) => [`${d.centena}01`, `${d.centena}48`] as const
+
+/** El ejemplo de Revo del 09/11, movido a uno de los días del X08 con sus facturas (para que no se repitan). */
 function ejemplo(dia: string) {
   return ['Ordenes', 'Documentos', 'Impuestos', 'Pagos'].map((n) => {
     let t = readFileSync(resolve(EJEMPLO, `${n}_2026-11-09.csv`), 'utf8')
-    if (dia !== '2026-11-09') t = t.replaceAll('2026-11-09', dia).replace(/\b50(\d\d)\b/g, '51$1')
+    const centena = DIAS.find((d) => d.dia === dia)!.centena
+    t = t.replaceAll('2026-11-09', dia).replace(/\b50(\d\d)\b/g, `${centena}$1`)
     return { nombre: `${n}_${dia}.csv`, contenido: new TextEncoder().encode(t) }
   })
 }
@@ -84,7 +91,7 @@ async function preparar(s: Sesion): Promise<{ contado: string; caja: string; pla
     ?? (await api<{ code: string }>(s, 'POST', 'rpc/company_account_add', { p_company: EMPRESA_A, p_hoja: '4300', p_nombre: 'Clientes de contado', p_quien_nombre: QUIEN })).code
   // R07 · Desde la 0900, sin la cuenta de la factura del día no se valida: la de «contado» de arriba.
   await asegurarFacturaDelDia(s, EMPRESA_A)
-  for (const dia of ['2026-11-09', '2026-11-10']) {
+  for (const { dia } of DIAS) {
     const ya = await rpc<{ dia: string }[]>(s, 'conta_tpv_dias', { p_company: EMPRESA_A, p_desde: dia, p_hasta: dia })
     if (ya.length) continue
     const l = leerRevo(ejemplo(dia))
@@ -120,7 +127,7 @@ test('X08 · contra staging: dos días del TPV validados salen como una factura 
   const hecho = await preparar(s)
 
   // 1 · Validar los dos días en Cierres del día (con su PDF y su asiento), si no lo estaban.
-  const estados = await rpc<{ dia: string; estado: string }[]>(s, 'conta_tpv_dias', { p_company: EMPRESA_A, p_desde: '2026-11-09', p_hasta: '2026-11-10' })
+  const estados = await rpc<{ dia: string; estado: string }[]>(s, 'conta_tpv_dias', { p_company: EMPRESA_A, p_desde: DIAS[0].dia, p_hasta: DIAS[1].dia })
   if (estados.some((d) => d.estado !== 'validado')) {
     await page.goto('/conta/ventas/cierres?ver=todos', { waitUntil: 'load' })
     await expect(page.getByRole('heading', { level: 1, name: 'Cierres del día' })).toBeVisible({ timeout: 30_000 })
@@ -130,12 +137,12 @@ test('X08 · contra staging: dos días del TPV validados salen como una factura 
     await boton.click()
     await page.getByRole('dialog').getByRole('button', { name: /^Validar \d+ cierres?$/ }).click()
     const resultado = page.locator('[data-prueba="resultado-validar"]')
-    // Solo los que no lo estaban: en el mismo run, el R05 puede haber validado ya el 09/11 (la misma empresa del carril).
+    // Solo los que no lo estaban (si una pasada anterior validó alguno).
     const faltaban = estados.filter((d) => d.estado !== 'validado').map((d) => Number(d.dia.slice(8, 10)))
     for (const [i, d] of faltaban.entries())
       await expect(resultado.getByText(new RegExp(`^✓ TPV · Revo · ${d} nov: validado`))).toBeVisible({ timeout: i ? 60_000 : 300_000 })
   }
-  const validados = await rpc<{ dia: string; estado: string }[]>(s, 'conta_tpv_dias', { p_company: EMPRESA_A, p_desde: '2026-11-09', p_hasta: '2026-11-10' })
+  const validados = await rpc<{ dia: string; estado: string }[]>(s, 'conta_tpv_dias', { p_company: EMPRESA_A, p_desde: DIAS[0].dia, p_hasta: DIAS[1].dia })
   expect(validados.map((d) => d.estado), 'los dos días, validados').toEqual(['validado', 'validado'])
 
   // 2 · La salida, desde el día 1 del mes. Paso 1: la fila de los días y su lista.
@@ -150,8 +157,7 @@ test('X08 · contra staging: dos días del TPV validados salen como una factura 
   await expect(fila).toContainText(/\d+ facturas del TPV, una factura por día/)
   await fila.click()
   const lista = page.getByRole('table', { name: 'Días de ventas del TPV' })
-  await expect(lista.getByRole('row').filter({ hasText: '5001–5048' })).toContainText('48')
-  await expect(lista.getByRole('row').filter({ hasText: '5101–5148' })).toContainText('48')
+  for (const d of DIAS) await expect(lista.getByRole('row').filter({ hasText: rango(d).join('–') })).toContainText('48')
   const abajo = await page.evaluate(() => [document.querySelector('.cxe')?.getBoundingClientRect().bottom ?? 9999, window.innerHeight])
   expect(abajo[0], 'la pantalla acaba dentro de la ventana').toBeLessThanOrEqual(abajo[1])
   await page.screenshot({ path: `${DIR}/paso1-dias.png` })
@@ -172,7 +178,7 @@ test('X08 · contra staging: dos días del TPV validados salen como una factura 
   }
   const dias = await hoja('dias-tpv.xlsx')
   const filaDe = (primero: string) => Array.from({ length: dias.filas }, (_, k) => k + 1).find((r) => String(dias.ws[`AK${r}`]?.v) === primero)
-  for (const [primero, ultimo] of [['5001', '5048'], ['5101', '5148']]) {
+  for (const [primero, ultimo] of DIAS.map(rango)) {
     const r = filaDe(primero)
     expect(r, `la fila del día con la ${primero}`).toBeDefined()
     expect(dias.ws[`E${r}`].t, 'la fecha, como fecha').toBe('d')
@@ -185,10 +191,12 @@ test('X08 · contra staging: dos días del TPV validados salen como una factura 
     expect(dias.ws[`Z${r}`], 'sin PDF').toBeUndefined()
   }
   const as = await hoja('asientos.xlsx')
-  const filas = Array.from({ length: as.filas }, (_, k) => k + 1).map((r) => ({ a: as.ws[`A${r}`]?.v as number, debe: as.ws[`C${r}`]?.v as string | undefined, haber: as.ws[`G${r}`]?.v as string | undefined,
+  const fechaDe = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '').slice(0, 10))
+  const filas = Array.from({ length: as.filas }, (_, k) => k + 1).map((r) => ({ a: as.ws[`A${r}`]?.v as number, fecha: fechaDe(as.ws[`B${r}`]?.v), debe: as.ws[`C${r}`]?.v as string | undefined, haber: as.ws[`G${r}`]?.v as string | undefined,
     f: as.ws[`F${r}`]?.v as number | undefined, j: as.ws[`J${r}`]?.v as number | undefined }))
-  // Los cobros: los asientos cuyo haber es «Clientes de contado» por 1.100, uno por día; cada uno cuadra.
-  const cobros = [...new Set(filas.filter((x) => x.haber === hecho.contado && x.j === 1100).map((x) => x.a))]
+  // Los cobros de los días del X08: los asientos de ese día cuyo haber es «Clientes de contado» por 1.100, uno por día; cada uno cuadra.
+  // (Del mismo mes pueden salir también los días de otras pruebas de esta empresa: no cuentan aquí.)
+  const cobros = [...new Set(filas.filter((x) => x.haber === hecho.contado && x.j === 1100 && DIAS.some((d) => d.dia === x.fecha)).map((x) => x.a))]
   expect(cobros, 'un cobro por día').toHaveLength(2)
   for (const n of cobros) {
     const g = filas.filter((x) => x.a === n)
