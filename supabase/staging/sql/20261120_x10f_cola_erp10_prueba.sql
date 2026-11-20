@@ -13,6 +13,8 @@
 --      la de la 2010 quita lo añadido.
 --
 -- Sin datos reales (T11): no crea ni lee filas de nadie.
+-- sin usuario: mira permisos y formas; la guarda del lote se prueba con las claims de alguien ajeno (request.jwt.claims)
+-- y sin sesión (el servidor), que es justo lo que cambia la 2011.
 
 begin;
 do $$ begin
