@@ -1,8 +1,8 @@
 -- supabase/staging/sql/20261120_r07_factura_y_cobro_prueba.sql
 --
--- SOLO STAGING. Prueba del R07 (20261119T1405_r07_cuenta_factura_del_dia y
--- 20261120T0900_r07_factura_y_cobro_del_dia), que el ensayo de staging pone
--- delante en la misma sesión. Todo en una transacción con ROLLBACK: staging no
+-- SOLO STAGING. Prueba del R07 (20261119T1405_r07_cuenta_factura_del_dia,
+-- 20261120T0810_r07_factura_del_dia_anade y 20261120T0900_r07_factura_y_cobro_del_dia),
+-- que el ensayo de staging pone delante en la misma sesión. Todo en una transacción con ROLLBACK: staging no
 -- cambia.
 -- Nombra lo que cambia: public.journal_entry (el CHECK del origen y el
 -- disparador nuevo trg_journal_entry_dia_cobro_junto), public._conta_tpv_propuesta,
@@ -42,7 +42,7 @@
 --      proponer).
 --  10. Las vueltas atrás: la de la 0900 para si hay cobros del día; sin ellos,
 --      las cinco funciones vuelven byte a byte (_restaurar_funcion compara la
---      huella) y se va lo nuevo; después, la de la 1405.
+--      huella) y se va el disparador; después, la de la 0810 y la de la 1405.
 --
 -- Como el cliente: u en request.jwt.claims, con el rol authenticated.
 
@@ -311,7 +311,7 @@ do $$ begin
     raise exception 'PRUEBA R07 · 1: falta el enlace, la columna desde, el disparador o el origen sales_day_payment.';
   end if;
   if has_function_privilege('anon', 'public.conta_tpv_factura_guardar(uuid, text, text)', 'execute')
-     or has_function_privilege('anon', 'public.conta_tpv_factura_de(uuid)', 'execute')
+     or has_function_privilege('anon', 'public.conta_tpv_factura_de(uuid, date)', 'execute')
      or has_function_privilege('authenticated', 'public._conta_dia_proponer(uuid, jsonb, text)', 'execute')
      or has_function_privilege('authenticated', 'public._conta_dia_partir(jsonb, text)', 'execute')
      or has_table_privilege('authenticated', 'public.conta_dia_cobro', 'insert') then
@@ -354,6 +354,21 @@ begin
   exception when check_violation then get stacked diagnostics v_msg = message_text;
   end;
   raise notice '3 OK: en espera: «%» · al validar: «%»', r -> 0 ->> 'motivo', v_msg;
+  -- La ventana: los dos asientos de ejemplo, sin la cuenta y con la que se está eligiendo, sin guardar nada.
+  r := public.conta_tpv_dia_ejemplo(v_dia, '[]'::jsonb, null);
+  if r ->> 'motivo' is not null or r -> 'factura' -> 'lineas' -> 0 ->> 'forma' <> 'Clientes de contado' or not (r -> 'factura' -> 'lineas' -> 0 ->> 'sin_cuenta')::boolean
+     or (r ->> 'sin_cuenta')::int <> 2 then
+    raise exception 'PRUEBA R07 · 3: sin la cuenta, el ejemplo no dice «Clientes de contado · sin cuenta»: %', r;
+  end if;
+  r := public.conta_tpv_dia_ejemplo(v_dia, '[]'::jsonb, (select id from public.company_account where company_id = t and code = '43000099'));
+  if (select string_agg(l ->> 'cuenta' || ' ' || to_char((l ->> 'debe')::numeric, 'FM999990.00') || '/' || to_char((l ->> 'haber')::numeric, 'FM999990.00'), ' · ') from jsonb_array_elements(r -> 'factura' -> 'lineas') l)
+       <> '43000099 1100.00/0.00 · 47700000 0.00/100.01 · 70000000 0.00/999.99'
+     or (r -> 'cobro' ->> 'debe')::numeric <> 1100 or r -> 'cobro' -> 'lineas' -> -1 ->> 'cuenta' <> '43000099' or (r ->> 'sin_cuenta')::int <> 0
+     or r ->> 'primero' <> '5001' or r ->> 'ultimo' <> '5048'
+     or exists (select 1 from public.conta_tpv_factura_cuenta where company_id = t) then
+    raise exception 'PRUEBA R07 · 3: con la cuenta que se elige, el ejemplo no da los dos asientos, o ha guardado algo: %', r;
+  end if;
+  raise notice '3 OK: el ejemplo de la ventana da la factura (1.100,00 a Clientes de contado) y su cobro, sin guardar nada.';
   r := public.conta_tpv_factura_guardar(t, '43000099', 'Prueba R07');
   if r ->> 'texto' not like 'La factura del día va a la 43000099 · Clientes de contado. Desde el %, cada día va en dos asientos: la factura del día y su cobro.' then
     raise exception 'PRUEBA R07 · 3: guardar la cuenta no dice desde cuándo: %', r;
@@ -582,23 +597,27 @@ delete from public.journal_entry_document where account_id = 'ae070000-0000-4000
 delete from public.journal_line where account_id = 'ae070000-0000-4000-8000-000000000010';
 delete from public.journal_entry where account_id = 'ae070000-0000-4000-8000-000000000010';
 delete from public.conta_tpv_dia where account_id = 'ae070000-0000-4000-8000-000000000010';
+delete from public.conta_dia_cobro where account_id = 'ae070000-0000-4000-8000-000000000010';
 set local session_replication_role = origin;
 set constraints all immediate;
 \i supabase/vuelta-atras/20261120T0900_r07_factura_y_cobro_del_dia.down.sql
 do $$ begin
-  if to_regclass('public.conta_dia_cobro') is not null or to_regprocedure('public._conta_dia_proponer(uuid, jsonb, text)') is not null or to_regprocedure('public._conta_dia_concepto(text, text)') is not null
-     or exists (select 1 from pg_trigger where tgrelid = 'public.journal_entry'::regclass and tgname = 'trg_journal_entry_dia_cobro_junto')
-     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_tpv_factura_cuenta' and column_name = 'desde')
+  if exists (select 1 from pg_trigger where tgrelid = 'public.journal_entry'::regclass and tgname = 'trg_journal_entry_dia_cobro_junto')
      or strpos(pg_get_functiondef('public._conta_tpv_propuesta(uuid)'::regprocedure), 'R07') > 0
      or strpos(pg_get_functiondef('public.conta_proponer_dias(uuid,timestamptz,text)'::regprocedure), 'R07') > 0
      or strpos(pg_get_functiondef('public.conta_erp10_dias_tpv_por_salir(uuid,date)'::regprocedure), 'R07') > 0 then
     raise exception 'PRUEBA R07 · 10: la vuelta atrás de la 0900 dejó algo.';
   end if;
 end $$;
+\i supabase/vuelta-atras/20261120T0810_r07_factura_del_dia_anade.down.sql
 \i supabase/vuelta-atras/20261119T1405_r07_cuenta_factura_del_dia.down.sql
 do $$ begin
   if to_regclass('public.conta_tpv_factura_cuenta') is not null then raise exception 'PRUEBA R07 · 10: la vuelta atrás de la 1405 dejó la tabla.'; end if;
-  raise notice '10 OK: las dos vueltas atrás: las cinco funciones vuelven byte a byte y se va lo nuevo.';
+  if to_regclass('public.conta_dia_cobro') is not null or to_regprocedure('public._conta_dia_proponer(uuid, jsonb, text)') is not null
+     or to_regprocedure('public.conta_tpv_dia_ejemplo(uuid, jsonb, uuid)') is not null then
+    raise exception 'PRUEBA R07 · 10: la vuelta atrás de la 0810 dejó algo.';
+  end if;
+  raise notice '10 OK: las tres vueltas atrás: las cinco funciones vuelven byte a byte y se va lo nuevo.';
   raise notice 'PRUEBA R07: 10 de 10 bien.';
 end $$;
 

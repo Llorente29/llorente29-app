@@ -2,6 +2,8 @@
 # 1405 (añade la cuenta de la factura del día, por empresa).
 supabase/migrations/20261119T1405_r07_cuenta_factura_del_dia.sql
 supabase/staging/sql/20261119_r07_cuenta_factura_del_dia_prueba.sql
+# 0810 (solo añade: desde la rama, de verdad).
+supabase/migrations/20261120T0810_r07_factura_del_dia_anade.sql
 # 0900 (cambia: el día en dos asientos; desde la rama, solo en ROLLBACK).
 supabase/migrations/20261120T0900_r07_factura_y_cobro_del_dia.sql
 supabase/staging/sql/20261120_r07_factura_y_cobro_prueba.sql

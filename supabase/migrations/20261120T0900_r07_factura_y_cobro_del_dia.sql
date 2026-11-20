@@ -10,23 +10,17 @@
 --      queda a cero.
 -- Los días ya validados NO se rehacen (respuesta R07 · 1, punto 1: ya están en ERP10 por Diez).
 --
+-- Lo que solo añade (el enlace, la columna «desde», partir y proponer el día, y lo de la pantalla) va
+-- antes, en la 0810. Esta cambia:
 --   1. journal_entry admite el origen «sales_day_payment» (el cobro del día): el CHECK solo amplía.
---   2. conta_tpv_factura_cuenta.desde (nueva columna): desde qué día va la forma nueva.
---   3. conta_dia_cobro (nueva): qué cobro va con qué factura. Sin claves ajenas a propósito: las borra
---      el disparador de abajo (una clave ajena borraría el enlace antes de que el disparador lo lea).
---   4. _conta_dia_partir (nueva): de las líneas de siempre, la factura y el cobro. Lado del cobro: lo que
---      no es 6, 7 ni 477 (caja, banco, la 430 de una plataforma…).
---   5. _conta_dia_concepto y _conta_dia_proponer (nuevas): propone por el embudo de siempre (_journal_entry_proponer) la factura
---      y, si la empresa tiene la cuenta y el día es de su «desde» en adelante, su cobro, y los une.
---   6. _conta_dia_cobro_junto (nueva) y su disparador en journal_entry: validar, anular o quitar uno de
+--   2. _conta_dia_cobro_junto (nueva) y su disparador en journal_entry: validar, anular o quitar uno de
 --      los dos hace lo mismo con el otro.
---   7. Por trozos exactos (si un trozo no está una sola vez, PARA sin tocar nada; con respaldo):
+--   3. Por trozos exactos (si un trozo no está una sola vez, PARA sin tocar nada; con respaldo):
 --      _conta_tpv_propuesta, conta_tpv_dia_para_validar y conta_tpv_dia_validar (el TPV de fuera: sin la
 --      cuenta no se propone, «Falta la cuenta de la factura del día»; al validar, los dos);
 --      conta_proponer_dias (el cierre del día de Folvy: por _conta_dia_proponer);
 --      conta_erp10_dias_tpv_por_salir («Clientes de contado» es la cuenta elegida, si la hay; y cada día
 --      dice su cobro, «cobroId», para que salgan juntos).
---   8. conta_tpv_factura_de y conta_tpv_factura_guardar (nuevas): para la pantalla.
 -- No retira asientos al aplicarse.
 -- sin hueco: el fichero no retira nada al aplicarse. El «delete from journal_entry» del disparador quita
 -- el cobro sin validar cuando se descarta o se quita su factura sin validar (y al revés).
@@ -50,56 +44,7 @@ do $$ begin
   end if;
 end $$;
 
--- ── 2 y 3 · Desde cuándo, y el enlace ───────────────────────────────────────
-alter table public.conta_tpv_factura_cuenta add column if not exists desde date not null default current_date;
-comment on column public.conta_tpv_factura_cuenta.desde is 'R07: desde qué día va cada día de ventas en dos asientos (la factura del día y su cobro). Los de antes, como estaban.';
-
-create table if not exists public.conta_dia_cobro (
-  id               uuid primary key default gen_random_uuid(),
-  account_id       uuid not null,
-  company_id       uuid not null,
-  factura_entry_id uuid not null unique,
-  cobro_entry_id   uuid not null unique,
-  created_at       timestamptz not null default now()
-);
-comment on table public.conta_dia_cobro is
-  'R07: el cobro del día que va con cada factura del día. Se validan, se anulan y se quitan juntos (_conta_dia_cobro_junto). Sin claves ajenas a propósito: el enlace lo borra el disparador.';
-alter table public.conta_dia_cobro enable row level security;
-revoke all on public.conta_dia_cobro from public, anon, authenticated;
-grant all on public.conta_dia_cobro to service_role;
-grant select on public.conta_dia_cobro to authenticated;
-drop policy if exists conta_dia_cobro_select on public.conta_dia_cobro;
-create policy conta_dia_cobro_select on public.conta_dia_cobro for select using (account_id = any ((select public.current_user_account_ids())::uuid[]));
-
--- ── 4 · Partir el día ───────────────────────────────────────────────────────
-create or replace function public._conta_dia_partir(p_lineas jsonb, p_contado text)
-returns jsonb language plpgsql immutable set search_path = public as $f$
-declare v_l jsonb; v_neto numeric := 0; v_fact jsonb := '[]'; v_cob jsonb := '[]'; v_base jsonb;
-begin
-  if p_contado is null or p_lineas is null then return null; end if;
-  for v_l in select * from jsonb_array_elements(p_lineas) loop
-    if coalesce(v_l->>'cuenta', '') ~ '^(6|7|477)' then
-      v_fact := v_fact || v_l;
-    else
-      v_cob := v_cob || v_l;
-      v_neto := v_neto + coalesce((v_l->>'debe')::numeric, 0) - coalesce((v_l->>'haber')::numeric, 0);
-      if v_base is null then v_base := v_l - array['cuenta', 'debe', 'haber', 'concepto', 'forma', 'canal', 'iva', 'tercero_id']; end if;
-    end if;
-  end loop;
-  if jsonb_array_length(v_cob) = 0 then return null; end if;
-  -- La factura: «Clientes de contado» por lo que se cobra, en lugar de cada forma de pago.
-  v_fact := jsonb_build_array(coalesce(v_base, '{}') || jsonb_build_object('cuenta', p_contado, 'debe', greatest(v_neto, 0), 'haber', greatest(-v_neto, 0),
-                                                                      'concepto', 'La factura del día · Clientes de contado')) || v_fact;
-  -- El cobro: cada forma de pago, contra «Clientes de contado», que queda a cero.
-  v_cob := v_cob || jsonb_build_array(coalesce(v_base, '{}') || jsonb_build_object('cuenta', p_contado, 'debe', greatest(-v_neto, 0), 'haber', greatest(v_neto, 0),
-                                                                      'concepto', 'El cobro del día · Clientes de contado'));
-  return jsonb_build_object('factura', v_fact, 'cobro', v_cob);
-end $f$;
-comment on function public._conta_dia_partir(jsonb, text) is
-  'R07: de las líneas de un día de ventas, la factura del día (Clientes de contado por lo cobrado, contra ventas e IVA) y su cobro (lo cobrado contra Clientes de contado). null si no hay nada que cobrar.';
-revoke all on function public._conta_dia_partir(jsonb, text) from public, anon, authenticated;
-
--- ── 6 · Los dos, juntos ─────────────────────────────────────────────────────
+-- ── 2 · Los dos, juntos ─────────────────────────────────────────────────────
 create or replace function public._conta_dia_cobro_junto()
 returns trigger language plpgsql security definer set search_path = public as $f$
 declare v_otro uuid; v_o public.journal_entry;
@@ -135,50 +80,7 @@ drop trigger if exists trg_journal_entry_dia_cobro_junto on public.journal_entry
 create trigger trg_journal_entry_dia_cobro_junto after update of status or delete on public.journal_entry
   for each row execute function public._conta_dia_cobro_junto();
 
--- ── 5 · Proponer por el embudo de siempre ───────────────────────────────────
--- El concepto: «Ventas del día · Alcalá» pasa a «Factura del día · Alcalá» y «Cobro del día · Alcalá».
-create or replace function public._conta_dia_concepto(p_que text, p_concepto text)
-returns text language sql immutable set search_path = public as $f$
-  select case when coalesce(p_concepto, '') ~ '^Ventas del día' then regexp_replace(p_concepto, '^Ventas del día', p_que)
-              else p_que || coalesce(' · ' || nullif(p_concepto, ''), '') end
-$f$;
-revoke all on function public._conta_dia_concepto(text, text) from public, anon, authenticated;
-
-create or replace function public._conta_dia_proponer(p_company uuid, p_prop jsonb, p_quien text)
-returns jsonb language plpgsql security definer set search_path = public as $f$
-declare v_contado text; v_desde date; v_partido jsonb; v_r jsonb; v_c jsonb; v_cuenta uuid;
-begin
-  select account_id into v_cuenta from public.company where id = p_company;
-  select a.code, f.desde into v_contado, v_desde from public.conta_tpv_factura_cuenta f
-    join public.company_account a on a.id = f.company_account_id and a.company_id = f.company_id
-   where f.company_id = p_company and f.account_id = v_cuenta and a.status is distinct from 'cerrada';
-  if v_contado is not null and (p_prop->'entrada'->>'fecha')::date >= v_desde then
-    v_partido := public._conta_dia_partir(p_prop->'lineas', v_contado);
-  end if;
-  if v_partido is null then
-    return public._journal_entry_proponer(p_company, p_prop->'entrada', p_prop->'lineas', p_prop->'resumen', p_quien, null);
-  end if;
-  v_r := public._journal_entry_proponer(p_company,
-           jsonb_set(p_prop->'entrada', '{concepto}', to_jsonb(public._conta_dia_concepto('Factura del día', p_prop->'entrada'->>'concepto'))),
-           v_partido->'factura', p_prop->'resumen', p_quien, null);
-  -- El cobro, solo con una factura nueva (una de antes, ya propuesta de un asiento, se queda como está).
-  if not coalesce((v_r->>'existente')::boolean, false) and not coalesce((v_r->>'descartada')::boolean, false) and v_r->>'id' is not null then
-    v_c := public._journal_entry_proponer(p_company,
-             jsonb_build_object('series', p_prop->'entrada'->'series', 'fecha', p_prop->'entrada'->'fecha',
-               'concepto', public._conta_dia_concepto('Cobro del día', p_prop->'entrada'->>'concepto'), 'source_type', 'sales_day_payment', 'source_id', v_r->>'id',
-               'confianza', coalesce(p_prop->'entrada'->>'confianza', 'seguro'), 'porque', 'Lo cobrado el día contra «Clientes de contado»: la deja a cero.',
-               'razones', '[]'::jsonb, 'party_id', null, 'documento', p_prop->'entrada'->'documento'),
-             v_partido->'cobro', '{}'::jsonb, p_quien, null);
-    insert into public.conta_dia_cobro (account_id, company_id, factura_entry_id, cobro_entry_id)
-    values (v_cuenta, p_company, (v_r->>'id')::uuid, (v_c->>'id')::uuid) on conflict do nothing;
-  end if;
-  return v_r;
-end $f$;
-comment on function public._conta_dia_proponer(uuid, jsonb, text) is
-  'R07: propone un día de ventas por el embudo de siempre; con la cuenta de la factura del día y desde su «desde», en dos asientos unidos (la factura y su cobro).';
-revoke all on function public._conta_dia_proponer(uuid, jsonb, text) from public, anon, authenticated;
-
--- ── 7 · Por trozos exactos ──────────────────────────────────────────────────
+-- ── 3 · Por trozos exactos ──────────────────────────────────────────────────
 do $g$
 begin
   if to_regprocedure('public._respaldar_funcion(text,text)') is null then raise exception 'R07 · 0900: falta _respaldar_funcion.'; end if;
@@ -332,47 +234,3 @@ $n$;
     execute v_def;
   end if;
 end $do$;
-
--- ── 8 · Para la pantalla ────────────────────────────────────────────────────
-create or replace function public.conta_tpv_factura_de(p_company uuid)
-returns jsonb language plpgsql stable security definer set search_path = public as $f$
-declare v_acc uuid; v jsonb;
-begin
-  select account_id into v_acc from public.company where id = p_company;
-  if v_acc is null or not public.belongs_to_account(v_acc) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
-  select jsonb_build_object('cuenta', a.code, 'nombre', coalesce(a.plain_name, a.name), 'desde', f.desde,
-           'mes', coalesce((select sum(l.debit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
-                             where l.company_account_id = a.id and e.status = 'validado' and e.source_type = 'sales_day'
-                               and e.entry_date >= date_trunc('month', current_date)::date), 0))
-    into v from public.conta_tpv_factura_cuenta f join public.company_account a on a.id = f.company_account_id
-   where f.company_id = p_company and f.account_id = v_acc;
-  return jsonb_build_object('factura', v,
-    -- Lo que propone Sumied si no hay ninguna: una 430 que ya se llame «contado».
-    'propuesta', (select jsonb_build_object('cuenta', a.code, 'nombre', coalesce(a.plain_name, a.name)) from public.company_account a
-                   where a.company_id = p_company and a.account_id = v_acc and a.code like '430%' and length(a.code) >= 8
-                     and (a.name ilike '%contado%' or a.plain_name ilike '%contado%') and a.status is distinct from 'cerrada'
-                   order by a.code limit 1));
-end $f$;
-revoke all on function public.conta_tpv_factura_de(uuid) from public, anon;
-grant execute on function public.conta_tpv_factura_de(uuid) to authenticated;
-
-create or replace function public.conta_tpv_factura_guardar(p_company uuid, p_cuenta text, p_quien_nombre text default null)
-returns jsonb language plpgsql security definer set search_path = public as $f$
-declare v_acc uuid; v_a public.company_account; v_desde date;
-begin
-  select account_id into v_acc from public.company where id = p_company;
-  if v_acc is null or not public.belongs_to_account(v_acc) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
-  if not public.current_user_is_admin_or_manager_of(v_acc) then raise exception 'Solo un administrador o un encargado de la cuenta elige la cuenta de la factura del día.' using errcode = '42501'; end if;
-  select * into v_a from public.company_account where company_id = p_company and account_id = v_acc and code = p_cuenta and status is distinct from 'cerrada';
-  if v_a.id is null then raise exception 'La cuenta % no está en el plan de la empresa.', p_cuenta using errcode = '23514'; end if;
-  if length(v_a.code) < 8 then raise exception 'La % es una cuenta de grupo: elige una subcuenta.', v_a.code using errcode = '23514'; end if;
-  insert into public.conta_tpv_factura_cuenta (account_id, company_id, company_account_id, created_by_name)
-  values (v_acc, p_company, v_a.id, coalesce(p_quien_nombre, public.conta_nombre_actor()))
-  on conflict (company_id) do update set company_account_id = excluded.company_account_id, created_by_name = excluded.created_by_name
-  returning desde into v_desde;
-  return jsonb_build_object('cuenta', v_a.code, 'nombre', coalesce(v_a.plain_name, v_a.name), 'desde', v_desde,
-    'texto', format('La factura del día va a la %s · %s. Desde el %s, cada día va en dos asientos: la factura del día y su cobro.',
-                    v_a.code, coalesce(v_a.plain_name, v_a.name), to_char(v_desde, 'DD/MM/YYYY')));
-end $f$;
-revoke all on function public.conta_tpv_factura_guardar(uuid, text, text) from public, anon;
-grant execute on function public.conta_tpv_factura_guardar(uuid, text, text) to authenticated;
