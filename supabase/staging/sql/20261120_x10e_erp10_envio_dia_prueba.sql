@@ -4,7 +4,7 @@
 -- pone delante en la misma sesión. Todo en una transacción con ROLLBACK: staging no cambia.
 -- Nombra el objeto: public.conta_erp10_envio (solo se le añaden tres columnas que admiten nulos).
 --
---   0. La forma: las tres columnas, que admiten nulos, y la comprobación del número del cobro.
+--   0. La forma: las tres columnas, que admiten nulos, sin ninguna comprobación nueva sobre la tabla.
 --   1. Lo de antes no cambia: el índice único por asiento sigue, y conta_erp10_envio_tomar también.
 --   2. La vuelta atrás (el fichero de verdad, con \i), sin días escritos, quita las tres columnas.
 --
@@ -25,8 +25,7 @@ do $$ begin
        and column_name in ('dia', 'cobro_serie', 'cobro_documento') and is_nullable = 'YES') <> 3 then
     raise exception 'PRUEBA X10e · 0: faltan las tres columnas (que admiten nulos)';
   end if;
-  if not exists (select 1 from pg_constraint where conname = 'conta_erp10_envio_cobro_documento_ck') then raise exception 'PRUEBA X10e · 0: falta la comprobación del número del cobro'; end if;
-  raise notice 'PRUEBA X10e · 0: las tres columnas, que admiten nulos, y la comprobación del número del cobro.';
+  raise notice 'PRUEBA X10e · 0: las tres columnas, que admiten nulos, sin ninguna comprobación nueva sobre la tabla.';
 end $$;
 
 -- 1 · Lo de antes no cambia -----------------------------------------------------------------------

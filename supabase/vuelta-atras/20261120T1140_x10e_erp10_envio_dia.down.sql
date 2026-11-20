@@ -6,7 +6,6 @@ begin
     raise exception 'conta_erp10_envio tiene días del TPV escritos en ERP10: no se quitan sus columnas sin mirarlos antes';
   end if;
 end $$;
-alter table public.conta_erp10_envio drop constraint if exists conta_erp10_envio_cobro_documento_ck;
 alter table public.conta_erp10_envio drop column if exists cobro_documento;
 alter table public.conta_erp10_envio drop column if exists cobro_serie;
 alter table public.conta_erp10_envio drop column if exists dia;
