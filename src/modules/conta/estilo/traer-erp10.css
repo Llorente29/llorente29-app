@@ -104,3 +104,11 @@
 .cxu-caja p + p { margin-top: 4px; }
 .cxu-verlos ul { margin: 6px 0 0; padding-left: 18px; max-height: 260px; overflow: auto; }
 .cxu { min-height: 560px; }
+/* La pastilla va detrás de los botones en el orden de la página: en una línea se pone antes (order); si no cabe,
+   baja a una segunda, debajo del título (cxu-dos-lineas, lo decide la pantalla midiendo). */
+.cxu-cabeza .cxu-pastilla { order: 3; }
+.cxu-cabeza .cxe-botones { order: 4; }
+.cxu-salto { display: none; }
+.cxu-dos-lineas { flex-wrap: wrap; row-gap: 6px; }
+.cxu-dos-lineas .cxu-salto { display: block; order: 5; flex-basis: 100%; height: 0; }
+.cxu-dos-lineas .cxu-pastilla { order: 6; }

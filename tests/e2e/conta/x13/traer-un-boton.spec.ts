@@ -158,6 +158,16 @@ for (const tam of TAMANOS) {
       await expect(fila(page, 'Sumas y saldos')).toContainText('Cuadra', { timeout: 30_000 })
       await expect(fila(page, 'Proveedores y acreedores')).toContainText('1 sin NIF')
       await expect(p.locator('.cxe-botones button')).toHaveText(['Descartar lo traído', 'Darlo por bueno'])
+      // Nada cortado ni escondido: la pastilla y los botones, dentro de la pantalla; si no caben en una línea (a 1366),
+      // la pastilla baja a una segunda, debajo del título (Julio, 20/11).
+      const marco = (await p.boundingBox())!
+      for (const que of [p.getByRole('button', { name: 'Darlo por bueno' }), p.getByRole('status').filter({ hasText: '✓ Leído y cuadra con ERP10' })]) {
+        const b = (await que.boundingBox())!
+        expect(b.x + b.width, 'dentro de la pantalla, sin cortar').toBeLessThanOrEqual(marco.x + marco.width)
+      }
+      const titulo = (await p.locator('h1#cxu-titulo').boundingBox())!
+      const pastillaCaja = (await p.getByRole('status').filter({ hasText: '✓ Leído y cuadra con ERP10' }).boundingBox())!
+      if (tam.width === 1366) expect(pastillaCaja.y, 'a 1366, la pastilla debajo del título').toBeGreaterThan(titulo.y + titulo.height - 2)
       await fila(page, 'Proveedores y acreedores').getByRole('button', { name: 'Verlos' }).click()
       const verlos = p.getByRole('region', { name: 'Lo que hay que mirar' })
       await expect(verlos).toContainText('40000000 · Proveedores varios')

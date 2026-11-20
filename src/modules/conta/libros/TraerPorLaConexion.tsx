@@ -16,7 +16,7 @@
 // Lo que decide cada estado está en lib/traer/unBoton.ts (puro, con sus pruebas). Las palabras dicen lo que
 // hace la base, no lo que decía la maqueta: entra en prueba, y hasta darlo por bueno se deshace entero.
 
-import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import {
@@ -58,6 +58,27 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
   const [confirmar, setConfirmar] = useState<'dar' | 'descartar' | null>(null)
   const [haciendo, setHaciendo] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
+  // Julio (20/11): si la cabecera no cabe en una línea (a 1366), la pastilla baja a una segunda, debajo del título.
+  // Nada cortado ni escondido. Se mide lo que pide cada pieza en una sola línea, quepa o no.
+  const cabeza = useRef<HTMLDivElement | null>(null)
+  const [dosLineas, setDosLineas] = useState(false)
+  useLayoutEffect(() => {
+    const el = cabeza.current
+    if (!el) return
+    const medir = () => {
+      const c = getComputedStyle(el)
+      const piezas = [...el.children].filter((x) => !x.classList.contains('cxu-salto')) as HTMLElement[]
+      const gap = parseFloat(c.columnGap) || 0
+      const pide = piezas.reduce((t, x) => t + Math.max(x.scrollWidth, x.offsetWidth), 0) + gap * Math.max(0, piezas.length - 1)
+        + (parseFloat(c.paddingLeft) || 0) + (parseFloat(c.paddingRight) || 0)
+      const no = pide > el.clientWidth
+      setDosLineas((d) => (d === no ? d : no))
+    }
+    medir()
+    const ro = new ResizeObserver(medir)
+    ro.observe(el)
+    return () => ro.disconnect()
+  })
 
   // Al acabar de leer, lo leído entra en prueba solo (una vez por lectura). Si la base no lo deja, se dice su frase.
   const clave = hecho ? `${lector.clave}|${hecho.acabado ?? ''}` : null
@@ -131,14 +152,15 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
 
   return (
     <section className="cxe cxt cxu" aria-labelledby="cxu-titulo">
-      <div className="cxe-cabeza">
+      <div className={`cxe-cabeza cxu-cabeza${dosLineas ? ' cxu-dos-lineas' : ''}`} ref={cabeza}>
         <h1 className="cxe-titulo" id="cxu-titulo">Traer de ERP10</h1>
         <select className="cxe-mes" aria-label="Ejercicio" value={ejercicio} disabled={estado !== 'antes'} onChange={(e) => setEjercicio(e.target.value)}>
           {anios.map((x) => <option key={x} value={x}>Ejercicio {x}</option>)}
         </select>
         <span className="cxu-conectada">Conectada con ERP10 · empresa {conexion.codigo}</span>
-        {pastilla && <span className={`cxu-pastilla cxu-pastilla-${pastilla.tono}`} role="status">{pastilla.texto}</span>}
         {botones}
+        {pastilla && <span className="cxu-salto" aria-hidden="true" />}
+        {pastilla && <span className={`cxu-pastilla cxu-pastilla-${pastilla.tono}`} role="status">{pastilla.texto}</span>}
       </div>
 
       {estado === 'antes' && ultima.datos && <LoUltimo u={ultima.datos} />}
