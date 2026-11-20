@@ -130,7 +130,8 @@ for (const tam of TAMANOS) {
       await expect(traerlo).toBeVisible({ timeout: 30_000 })
       const elegir = page.getByRole('button', { name: 'Elegir ficheros' })
       expect((await traerlo.getAttribute('class')), 'el mismo peso que «Elegir ficheros»').toBe(await elegir.getAttribute('class'))
-      await expect(page.getByRole('combobox', { name: 'Ejercicio' })).toHaveValue('2026')
+      // El de la pantalla de Traer: la cabecera de Sumied lleva otro «Ejercicio» (e2e 44706072179).
+      await expect(page.getByRole('region', { name: 'Traer de ERP10' }).getByRole('combobox', { name: 'Ejercicio' })).toHaveValue('2026')
       await traerlo.click()
 
       // 2 · Mientras lee, cada fila dice por dónde va.
