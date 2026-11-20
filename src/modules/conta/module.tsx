@@ -33,6 +33,7 @@ import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import LlevarACompras from '@/modules/conta/documentos/LlevarACompras'
 import RecibidaAMano from '@/modules/conta/documentos/RecibidaAMano'
 import RecibidaSegun from '@/modules/conta/nucleo/recibida/RecibidaSegun'
+import EmitidaSegun, { EmitidasPorRevisar, LlevarAlAsiento } from '@/modules/conta/nucleo/emitida/EmitidaSegun'
 import BancosSegun from '@/modules/conta/nucleo/bancos/BancosSegun'
 import FacturasPage from '@/modules/conta/ventas/FacturasPage'
 import FacturaVentaPage from '@/modules/conta/ventas/FacturaVentaPage'
@@ -42,6 +43,7 @@ import LiquidacionesPage from '@/modules/conta/compras/LiquidacionesPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
 import { AsientoSegun } from '@/modules/conta/nucleo/asiento/AsientoSegun'
+import { LibroDelDiarioSegun } from '@/modules/conta/nucleo/asiento/LibroDelDiarioSegun'
 import ComprasPage from '@/modules/conta/compras/ComprasPage'
 import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
 import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
@@ -198,7 +200,14 @@ export const contaModule: ModuleDefinition = {
     // V01 · Ventas › Facturas: la lista, una nueva y la ficha. Lo de antes (Facturación › Facturas emitidas) lleva aquí.
     { path: CONTA.rutas.facturasVenta, element: enMarco(<FacturasPage />, '¿Cuánto he facturado este mes?', true) },
     { path: CONTA.rutas.nuevaFacturaVenta, element: enMarco(<FacturaVentaPage />, '¿Qué IVA lleva esta factura?', true) },
-    { path: CONTA.rutas.facturaVenta, element: enMarco(<FacturaVentaPage />, '¿Cómo corrijo una factura emitida?', true) },
+    // K05 · Dentro del núcleo, la emitida de Facturación con su asiento sale en la ficha nueva («hecha sola»); la borrador y la
+    // rectificativa, y fuera del núcleo todas, con la de hoy (EmitidaSegun).
+    { path: CONTA.rutas.facturaVenta, element: enMarco(<EmitidaSegun de="factura" hoy={<FacturaVentaPage />} />, '¿Cómo corrijo una factura emitida?', true) },
+    // K05 · La emitida contable escrita a mano (fuera del núcleo, la «Nueva factura emitida» de Asientos de hoy), la de un asiento
+    // (fuera, su asiento) y Asientos › «Emitidas» (fuera, la lista).
+    { path: CONTA.rutas.emitidaAMano, element: enMarco(<EmitidaSegun de="nueva" hoy={<NuevoAsientoPage tipo="expedida" />} />, '¿A qué cuenta de venta va?', true) },
+    { path: CONTA.rutas.emitidaAsiento, element: enMarco(<EmitidaSegun de="asiento" hoy={<LlevarAlAsiento />} />, '¿A qué cuenta de venta va?', true) },
+    { path: CONTA.rutas.emitidasPorRevisar, element: enMarco(<EmitidasPorRevisar />, '¿A qué cuenta de venta va?', true) },
     // V01 · Entrega 2 · Ventas › Cierres del día (con «Vendo en hostelería») y la ficha de un cierre.
     { path: CONTA.rutas.cierres, element: enMarco(<CierresPage />, '¿Cuánto vendí ayer?', true) },
     { path: CONTA.rutas.cierre, element: enMarco(<CierrePage />, '¿Por qué este cierre no cuadra?', true) },
@@ -211,6 +220,9 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.liquidacionFicha, element: enMarco(<LiquidacionFichaPage />, '¿Qué me paga esta liquidación?', true) },
     { path: CONTA.rutas.facturasEmitidas, element: <LlevarAVentas a={CONTA.rutas.facturasVenta} /> },
     { path: CONTA.rutas.nuevaEmitida, element: <LlevarAVentas a={CONTA.rutas.nuevaFacturaVenta} /> },
+    // N10 · Libros › Diario por su área y su acción: con el núcleo, a su pantalla; sin él, lo de hoy (la ruta del asiento).
+    { path: `${CONTA.rutas.libroDiario}/libro-diario`, element: enMarco(<LibroDelDiarioSegun a={CONTA.rutas.libroDiario} hoy={<AsientoSegun hoy={<AsientoPage />} />} />, '¿Por qué la comisión lleva IVA?', true) },
+    { path: `${CONTA.rutas.libroDiario}/diario-resumido`, element: enMarco(<LibroDelDiarioSegun a={CONTA.rutas.diarioResumido} hoy={<AsientoSegun hoy={<AsientoPage />} />} />, '¿Por qué la comisión lleva IVA?', true) },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoSegun hoy={<AsientoPage />} />, '¿Por qué la comisión lleva IVA?', true) },
     // S02 · La muestra del patrón único: las seis plantillas (datos inventados), solo fuera de
     // producción. Sustituye a las dos de antes (las piezas del M01 y el sistema de diseño del S01).

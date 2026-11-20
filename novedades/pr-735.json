@@ -1,0 +1,20 @@
+[
+ {
+  "id": "735-1",
+  "pr": 735,
+  "fecha": "2026-11-19T16:41:55Z",
+  "producto": "sumied",
+  "apartado": "Traer de ERP10",
+  "frase": "cada factura entra con lo que de verdad le queda, casando cada pago con su factura; lo que no se puede casar se dice en el paso 3.",
+  "ruta": null
+ },
+ {
+  "id": "735-2",
+  "pr": 735,
+  "fecha": "2026-11-19T16:41:55Z",
+  "producto": "sumied",
+  "apartado": "Pagos y Bancos",
+  "frase": "una factura traída con pago parcial sale con lo que le queda, no con su total.",
+  "ruta": null
+ }
+]

@@ -31,6 +31,10 @@ describe('K03 · de qué pestaña es cada dirección', () => {
     expect(claveDe('/conta/libros/diario/traer-erp10')).toBe('boton:traerErp10')
     expect(nombrePorDefecto({ id: 'boton:traerErp10', url: '/conta/libros/diario/traer-erp10' })).toBe('Traer de ERP10')
     expect(claveDe('/conta/libros/cierre/salida-erp10')).toBe('boton:salidaErp10')
+    // N10 · Libros › Diario por su área y su acción no son asientos: el Libro diario y el Diario resumido.
+    expect(claveDe('/conta/libros/diario/libro-diario')).toBe('boton:asientos')
+    expect(claveDe('/conta/libros/diario/diario-resumido')).toBe('boton:resumido')
+    expect(nombrePorDefecto({ id: 'boton:resumido', url: '/conta/libros/diario/diario-resumido' })).toBe('Diario resumido')
   })
   it('el mayor de cada cuenta, en la suya (F5 abre «el mayor de la cuenta en otra pestaña»)', () => {
     expect(claveDe('/conta/plan/40000007')).toBe('mayor:40000007')
@@ -158,8 +162,9 @@ describe('K03 · el teclado común', () => {
     expect(teclaDelMarco({ key: 'F4', defaultPrevented: true }, ctx)).toBeNull()
   })
   it('F8 da la vuelta a las tres clases de documento nuevo; fuera de ellas, nada', () => {
-    expect(VUELTA_F8).toEqual(['documentos/nueva', 'ventas/facturas/nueva', 'libros/diario/nuevo'])
-    expect(teclaDelMarco({ key: 'F8' }, { ...ctx, pathname: '/conta/documentos/nueva' })).toEqual({ que: 'clase', a: 'ventas/facturas/nueva' })
+    // K05: la emitida de F8 es la de contabilizar a mano (ventas/facturas/a-mano), no la de emitir de Facturación.
+    expect(VUELTA_F8).toEqual(['documentos/nueva', 'ventas/facturas/a-mano', 'libros/diario/nuevo'])
+    expect(teclaDelMarco({ key: 'F8' }, { ...ctx, pathname: '/conta/documentos/nueva' })).toEqual({ que: 'clase', a: 'ventas/facturas/a-mano' })
     expect(teclaDelMarco({ key: 'F8' }, { ...ctx, pathname: '/conta/libros/diario/nuevo' })).toEqual({ que: 'clase', a: 'documentos/nueva' })
     expect(teclaDelMarco({ key: 'F8' }, ctx)).toBeNull()
   })

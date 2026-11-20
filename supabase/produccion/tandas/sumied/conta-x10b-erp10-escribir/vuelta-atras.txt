@@ -1,0 +1,3 @@
+# X10b · la vuelta atrás: quita la tabla y la función nuevas si la tabla está vacía.
+cuenta: scripts/conta/produccion/cuentas/x10b-erp10-envio.sql
+supabase/vuelta-atras/20261119T1433_x10b_erp10_envio.down.sql

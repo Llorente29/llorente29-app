@@ -1,0 +1,11 @@
+# X10b · ERP10 en Sumied y escribir en ERP10 (respuesta X10 · 2, 19/11). Rama conta/x10b-erp10-escribir.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1433  Añade conta_erp10_envio (lo que Sumied escribe en ERP10, asiento a asiento: la
+#         intención antes de escribir y el número que da ERP10) y conta_erp10_envio_tomar
+#         (coger un asiento para escribirlo, en una sola sentencia; solo la clave de
+#         servicio). No cambia ninguna tabla ni función que exista.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x10b-erp10-envio.sql
+supabase/migrations/20261119T1433_x10b_erp10_envio.sql

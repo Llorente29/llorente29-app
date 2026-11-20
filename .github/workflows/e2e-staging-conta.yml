@@ -37,7 +37,7 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && (github.event.schedule 
 # LA ENTERA, EN TROZOS A LA VEZ (W02, paso 1c)
 # Con «pruebas» vacío, con una carpeta (también «tests/e2e/conta»: V03,
 # respuesta 6, 26/10) y en un push con la etiqueta «e2e-entera», la suite se reparte
-# en 2 trozos (4 a mano con «trozos»: la Micro de staging no los aguanta) (scripts/e2e/trozos.mjs: fichero a fichero, del más lento al más
+# en 3 trozos (19/11: en 2, el mayor pasaba de 60 min; 4 a mano con «trozos»: la Micro de staging no los aguanta) (scripts/e2e/trozos.mjs: fichero a fichero, del más lento al más
 # rápido, al trozo que menos lleva), cada uno en su runner y en su carril. El
 # job «entera» los junta: comprueba que entre todos están TODOS los ficheros,
 # una vez cada uno, y que todos han salido en verde en este commit. Solo así el
@@ -68,7 +68,7 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && (github.event.schedule 
 #
 # LA ENTERA DE LA NOCHE (Julio, 21/10): a las 03:00 de Madrid, en verano y en
 # invierno (dos disparos UTC, 01:00 y 02:00, y el plan deja correr solo el que
-# toca, como cumplimiento-nocturno-conta.yml). Sobre main, en 2 trozos.
+# toca, como cumplimiento-nocturno-conta.yml). Sobre main, en 3 trozos.
 # El job «aviso» lee el informe JSON (scripts/e2e/noche.mjs) y:
 #   · verde: si había una incidencia «e2e de la noche en rojo», lo dice y la cierra;
 #   · si todo lo que falló parece de staging (no poder entrar, un 520, una
@@ -169,11 +169,13 @@ on:
         type: string
         required: false
         default: ''
-      # W02 (1c): en cuántos trozos a la vez va la suite entera. 2 por defecto:
+      # W02 (1c): en cuántos trozos va la suite entera. 3 por defecto desde el
+      # 19/11: en 2, el trozo mayor pasaba de 60 min (tests/unit/e2e/trozos.test.ts).
+      # Con el tope de carriles (2) el tercero espera turno: la Micro nunca ve más de 2.
       # con 4, la Micro de staging no aguanta (medido el 16/10: las mismas
       # pruebas ×1,20 y 6-8 que no llegan a pintar en 15 s por run).
       trozos:
-        description: 'En cuántos trozos a la vez va la suite entera (1 a 4). Vacío = 2'
+        description: 'En cuántos trozos a la vez va la suite entera (1 a 4). Vacío = 3'
         type: string
         required: false
         default: ''
@@ -351,7 +353,7 @@ jobs:
           # ficheros sueltos (.spec.ts), o la zona de un push: con una carpeta
           # —también «tests/e2e/conta»— va en N (V03, respuesta 6, 26/10: la
           # entera con carpeta fue en uno y tardó 1,3 h).
-          N=${TROZOS_PEDIDOS:-2}
+          N=${TROZOS_PEDIDOS:-3}
           case "$N" in 1|2|3|4) ;; *) echo "::error::«trozos» tiene que ser 1, 2, 3 o 4 (o nada)."; exit 1 ;; esac
           SUELTOS=1
           for p in ${PRUEBAS:-}; do [[ "$p" == *.spec.ts ]] || SUELTOS=0; done

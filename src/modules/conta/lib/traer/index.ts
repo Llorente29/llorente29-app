@@ -24,7 +24,8 @@ import {
   casarFacturas, compararConSumas, cuentasQueFaltan, ivaPorTrimestre, largoDeLasCuentas, sumarPorSubcuenta, tercerosRaros,
   type Casado, type CuentaComparada, type IvaTrimestre, type Largos, type TerceroRaro,
 } from './comprobar'
-import { aprenderProveedores, pendientesPorSaldo, type Aprendido, type Pendiente } from './aprender'
+import { aprenderProveedores, type Aprendido, type Pendiente } from './aprender'
+import { pendientesPorPagos } from './casarPagos'
 
 export * from './excel'
 export * from './reconocer'
@@ -33,6 +34,7 @@ export * from './comprobar'
 export * from './aprender'
 export * from './paraLaBase'
 export * from './pantalla'
+export * from './casarPagos'
 
 /** Cómo está cada fichero en la lista de la maqueta: «Leído», «Mira esto» o «Falta». */
 export type Estado = 'leido' | 'mira' | 'falta'
@@ -130,9 +132,10 @@ export function leerCarga(subidos: readonly Subido[]): Carga {
 
   // ── Lo aprendido ──
   const aprendidos = diario && proveedores ? aprenderProveedores(diario, proveedores.terceros, facturas?.casadas ?? []) : []
+  // N09 · Lo pendiente de cada factura, casando cada pago con su factura (antes, repartiendo el saldo).
   const pendientes = diario
-    ? pendientesPorSaldo(diario, [...(proveedores?.terceros ?? []).map((t) => ({ t, clase: 'proveedor' as const })), ...(clientes?.terceros ?? []).map((t) => ({ t, clase: 'cliente' as const }))],
-      [...(recibidas?.facturas ?? []), ...(expedidas?.facturas ?? [])])
+    ? pendientesPorPagos(diario, [...(proveedores?.terceros ?? []).map((t) => ({ t, clase: 'proveedor' as const })), ...(clientes?.terceros ?? []).map((t) => ({ t, clase: 'cliente' as const }))],
+      [...(recibidas?.facturas ?? []), ...(expedidas?.facturas ?? [])], sumas ?? null)
     : []
 
   const ficheros: FicheroDeLaCarga[] = TIPOS.map(({ tipo, nombre }) => {

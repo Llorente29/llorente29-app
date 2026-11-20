@@ -92,8 +92,8 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       await expect(page.locator('[data-prueba="confirmar-factura"]')).toBeFocused()
       if (grande) await captura(page, 'cobro-factura-elegida', ancho)
       await page.keyboard.press('Enter')
-      await expect(aviso(page)).toHaveText(`Cobrado: Cobro de la factura ${f.numero} de ${cliente} (${cliente}). La factura queda cobrada.`, { timeout: 30_000 })
-      await expect(fila(page, p.cobro).locator('.kb-etiqueta')).toHaveText('Hecho', { timeout: 30_000 })
+      await expect(aviso(page)).toHaveText(`Cobrado: Cobro de la factura ${f.numero} de ${cliente} (${cliente}) · en el diario. La factura queda cobrada.`, { timeout: 30_000 })
+      await expect(fila(page, p.cobro).locator('.kb-etiqueta')).toHaveText('Conciliado', { timeout: 30_000 })
       await expect(fila(page, p.cobro)).toContainText(p.cuentaCliente, { timeout: 30_000 })
 
       // ── 2 · La factura, cobrada ──
@@ -102,11 +102,17 @@ for (const [lado, ancho, alto] of [['ancho', 1456, 816], ['estrecho', 1366, 768]
       if (grande) await captura(page, 'cobro-cobrado', ancho)
 
       // ── 3 · Deshacerlo ──
+      // R08 · El estado de su asiento, por la API: validado con la 2040; propuesto en staging sin ella.
+      const vivo = await rest<{ bank_match: { status: string; journal_entry: { status: string } | null }[] }[]>(s, 'GET', `bank_movement?select=bank_match(status,journal_entry(status))&account_id=eq.${p.cuenta}&id=eq.${p.cobro}`)
+      const enElDiario = vivo.datos[0]?.bank_match.find((b) => b.status === 'vivo')?.journal_entry?.status === 'validado'
+      console.log(`[E05c · el asiento del cobro] ${enElDiario ? 'validado (con la 2040)' : 'propuesto (staging sin la 2040)'}`)
       await fila(page, p.cobro).click()
       const deshacer = queEs.locator('[data-prueba="deshacer"]')
       await expect(deshacer).toBeVisible()
       await deshacer.click()
-      await expect(aviso(page)).toHaveText(`Deshecho: el movimiento de ${cliente} vuelve a estar sin casar, y su asiento propuesto se quita.`, { timeout: 30_000 })
+      // R08 · Lo que está en el diario se anula con su contraasiento; lo propuesto (staging sin la 2040) se quita.
+      await expect(aviso(page)).toHaveText(enElDiario ? new RegExp(`^Deshecho: el movimiento de ${cliente} vuelve a estar por conciliar, y su asiento \\d+/\\d+ (se quita del diario|se anula con un contraasiento: .+)\\.$`)
+        : `Deshecho: el movimiento de ${cliente} vuelve a estar por conciliar, y su asiento propuesto se quita.`, { timeout: 30_000 })
       expect(await cobroDe(s, p, f)).toEqual({ estado: 'por_cobrar', pendiente: 242, cobros: [] })
       expect(errores, 'errores de la página').toEqual([])
     } catch (e) { await contarPantalla(page, `cobro ${ancho}`); throw e }

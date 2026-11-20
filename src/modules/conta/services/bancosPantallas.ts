@@ -75,7 +75,7 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
     bancos.bancosDeLaEmpresa(accountId, companyId),
     leer(tabla('bank_card').select('id, treasury_account_id, last4, holder_name, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true).order('created_at', { ascending: true }), 'las tarjetas'),
     leer(tabla('bank_statement').select('id, treasury_account_id, file_name, format, period_from, period_to, opening_balance, closing_balance, movements_count, new_count, repeated_count, balanced, unchecked_reason, continuity, continuity_gap, imported_at, imported_by_name')
-      .eq('account_id', accountId).eq('company_id', companyId).order('period_to', { ascending: false }).limit(200), 'los extractos'),
+      .eq('account_id', accountId).eq('company_id', companyId).order('period_to', { ascending: false }).order('imported_at', { ascending: false }).limit(200), 'los extractos'),
     leer(tabla('locations').select('id, name').eq('account_id', accountId).order('name'), 'los locales'),
     leer(tabla('company_account').select('code, name, plain_name').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
     leer(tabla('bank_movement').select('op_date').eq('account_id', accountId).eq('company_id', companyId).order('op_date', { ascending: true }).limit(1), 'el primer movimiento'),

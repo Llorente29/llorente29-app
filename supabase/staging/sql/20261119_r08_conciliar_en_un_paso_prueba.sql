@@ -1,0 +1,315 @@
+-- supabase/staging/sql/20261119_r08_conciliar_en_un_paso_prueba.sql
+--
+-- SOLO STAGING. R08 · Bancos: conciliar en un paso, por sus CAMINOS (regla 10), en una
+-- transacción que acaba en ROLLBACK: staging no cambia. Con la sesión de la persona de la
+-- cuenta del núcleo y lo que monta la semilla R08 (e2e_r08_preparar, delante en el manifiesto):
+--   1945 · el saldo del banco es el cierre del último extracto de la cadena (tres el 19/11: el
+--          último que llegó) y el de Sumied cuenta solo lo que está en el diario;
+--   2040 · conciliar a una cuenta deja el asiento VALIDADO; cinco a la vez, cinco validados;
+--          deshacer el último lo QUITA del diario (sin hueco); uno con otros detrás, con ERP10 o con el
+--          IVA presentado, contraasiento y el porqué (respuesta R08 · 1, punto 3);
+--          casar con una factura recibida, validado y la factura pagada; lo que concilia Sumied
+--          solo, validado; dos traspasos entre bancos, validados con los dos lados; deshacer cada
+--          uno (un contraasiento) y volver a conciliarlo; un
+--          asiento que ya salió a ERP10 no se deshace y lo dice;
+--   2120 · el recibo que el banco no cobró se aparta solo (por la cadena); conciliarlo apartado
+--          lo dice en palabras; volver a abrirlo y conciliarlo;
+--   y las vueltas atrás de las tres.
+-- Después de cada paso: el estado del asiento, el del movimiento, el de la factura y el saldo.
+
+begin;
+do $$ begin
+  if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
+    raise exception 'PRUEBA R08: esta base tiene cuentas de producción. No se toca nada.';
+  end if;
+end $$;
+set local statement_timeout = '180s';
+
+-- 1945, 2040 y 2120 los pone el manifiesto delante, en esta misma transacción (no se cargan otra
+-- vez: la guarda de la 2040 y la de la 2120 paran si la función ya no es la medida).
+do $$ begin
+  if to_regprocedure('public.bank_apartar_no_cobrados(uuid)') is null or to_regprocedure('public.bank_saldo_extracto(uuid, date)') is null then
+    raise exception 'PRUEBA R08: faltan 1945 y 2120 delante (el manifiesto de staging de la rama).';
+  end if;
+end $$;
+
+create temp table _p (k text primary key, v text) on commit drop;
+grant all on _p to authenticated;
+create function pg_temp.p(k text) returns text language sql as $$ select v from _p where _p.k = $1 $$;
+-- El estado del asiento del casado vivo de un movimiento, y el del movimiento.
+create function pg_temp.asiento(m uuid) returns text language sql as $$
+  select coalesce((select e.status from public.bank_match b join public.journal_entry e on e.id = b.journal_entry_id where b.movement_id = m and b.status = 'vivo'), 'sin asiento') $$;
+create function pg_temp.mov(m uuid) returns text language sql as $$ select status from public.bank_movement where id = m $$;
+create function pg_temp.saldo() returns numeric language sql as $$ select public.bank_saldo_diario(pg_temp.p('e')::uuid, date '2026-12-31', pg_temp.p('c572')) $$;
+create function pg_temp.cuenta(m uuid, c text, imp numeric) returns jsonb language sql as $$
+  select jsonb_build_object('tipo', 'cuenta', 'concepto', 'Prueba R08', 'lineas', jsonb_build_array(jsonb_build_object('cuenta', c, 'importe', imp))) $$;
+grant execute on all functions in schema pg_temp to authenticated;
+
+select set_config('request.jwt.claims', json_build_object('sub', 'c0e20000-0000-4000-8000-0000000000e1', 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$
+declare r jsonb; f jsonb;
+begin
+  r := public.e2e_r08_preparar('r08p', '2026-11-12.1');
+  insert into _p values ('e', r->>'empresa'), ('banco', r->>'banco'), ('c572', r->>'cuenta572'), ('nov', (r->'noviembre')::text), ('nominas', (r->'nominas')::text);
+  f := public.e2e_e05b_preparar('r08f', '2026-11-12.1');
+  insert into _p values ('fact', f->'facturas'->'hoy'->>'id'), ('pago', f->'pagos'->>'hoy'), ('prov', f->>'proveedor'), ('c400', f->>'cuentaProveedor'),
+    ('sep', f->'septiembre'->>'cargo');
+end $$;
+create function pg_temp.n(caso text) returns uuid language sql as $$ select (pg_temp.p('nov')::jsonb->>caso)::uuid $$;
+grant execute on all functions in schema pg_temp to authenticated;
+
+-- 1 · El saldo del banco: el del último de los tres extractos del 19/11.
+do $$
+declare x record;
+begin
+  select * into x from public.bank_saldo_extracto(pg_temp.p('banco')::uuid, date '2026-11-30');
+  if x.saldo <> 1094.39 then raise exception 'PRUEBA R08 · 1: el saldo del banco sale % y es 1.094,39 (el último que llegó).', x.saldo; end if;
+  raise notice '1 OK: el saldo del banco, el del último extracto del 19/11 (llegó a las %): %.', to_char(x.llego at time zone 'Europe/Madrid', 'HH24:MI'), x.saldo;
+end $$;
+
+-- 2 · Conciliar a una cuenta: el asiento, validado.
+do $$
+declare s0 numeric := pg_temp.saldo(); m uuid := pg_temp.n('gasto1');
+begin
+  perform public.bank_casar(m, pg_temp.cuenta(m, '62800000', 18.87), 'probable', 'Lo dijiste tú: papelería.', '[]'::jsonb, 'persona', null);
+  if pg_temp.asiento(m) <> 'validado' or pg_temp.mov(m) <> 'casado' then raise exception 'PRUEBA R08 · 2: asiento %, movimiento %.', pg_temp.asiento(m), pg_temp.mov(m); end if;
+  if pg_temp.saldo() <> s0 - 18.87 then raise exception 'PRUEBA R08 · 2: el saldo pasa de % a %.', s0, pg_temp.saldo(); end if;
+  raise notice '2 OK: a una cuenta: asiento validado, movimiento conciliado; la 572 pasa de % a %.', s0, pg_temp.saldo();
+end $$;
+
+-- 3 · Cinco nóminas a la vez, a la misma cuenta: cinco asientos validados.
+do $$
+declare s0 numeric := pg_temp.saldo(); m uuid; imp numeric; n int := 0; t numeric := 0;
+begin
+  for m in select (jsonb_array_elements_text(pg_temp.p('nominas')::jsonb))::uuid loop
+    select -amount into imp from public.bank_movement where id = m;
+    perform public.bank_casar(m, pg_temp.cuenta(m, '46500000', imp), 'probable', 'Lo dijiste tú: nómina.', '[]'::jsonb, 'persona', null);
+    if pg_temp.asiento(m) <> 'validado' then raise exception 'PRUEBA R08 · 3: una nómina queda %.', pg_temp.asiento(m); end if;
+    n := n + 1; t := t + imp;
+  end loop;
+  if n <> 5 or t <> 6119.71 or pg_temp.saldo() <> s0 - 6119.71 then raise exception 'PRUEBA R08 · 3: % nóminas por %; la 572 de % a %.', n, t, s0, pg_temp.saldo(); end if;
+  raise notice '3 OK: % nóminas a la 46500000, % €, cinco asientos validados; la 572 pasa de % a %.', n, t, s0, pg_temp.saldo();
+end $$;
+
+-- 4 · Casar con una factura recibida: el asiento validado y la factura pagada.
+do $$
+declare m uuid := pg_temp.p('pago')::uuid;
+begin
+  perform public.bank_casar(m, jsonb_build_object('tipo', 'factura_recibida', 'facturas', jsonb_build_array(jsonb_build_object('id', pg_temp.p('fact'), 'importe', 60.50)),
+    'cuenta_tercero', pg_temp.p('c400'), 'concepto', 'Pago de la factura'), 'probable', 'Lo dijiste tú: paga la factura.', '[]'::jsonb, 'persona', null);
+  if pg_temp.asiento(m) <> 'validado' then raise exception 'PRUEBA R08 · 4: el asiento queda %.', pg_temp.asiento(m); end if;
+  if (select status from public.supplier_invoice where id = pg_temp.p('fact')::uuid) <> 'pagada' then raise exception 'PRUEBA R08 · 4: la factura no queda pagada.'; end if;
+  raise notice '4 OK: con su factura recibida: asiento validado y la factura, pagada.';
+end $$;
+
+-- 5 · Lo que concilia Sumied solo: también validado.
+do $$
+declare m uuid := pg_temp.n('gasto2');
+begin
+  perform public.bank_casar(m, pg_temp.cuenta(m, '62600000', 0.30), 'seguro', 'Mismo texto que las comisiones de siempre.', '[]'::jsonb, 'folvy', null);
+  if pg_temp.asiento(m) <> 'validado' then raise exception 'PRUEBA R08 · 5: el asiento de Sumied solo queda %.', pg_temp.asiento(m); end if;
+  raise notice '5 OK: lo que concilia Sumied solo, validado (antes, solo con el ajuste encendido).';
+end $$;
+
+-- 5b · Dos traspasos entre bancos (el 19/11 de Julio): el otro banco, de la misma empresa
+--      (semilla E05); los movimientos los crea la propietaria, como los trae un extracto.
+reset role;
+do $$
+declare r jsonb; a uuid := pg_temp.p('banco')::uuid; b uuid; i int; m1 uuid; m2 uuid;
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', 'c0e20000-0000-4000-8000-0000000000e1', 'role', 'authenticated')::text, true);
+  r := public.e2e_e05_preparar('r08q', '2026-11-12.1');
+  b := (r->>'banco')::uuid;
+  insert into _p values ('banco2', b);
+  for i in 1..2 loop
+    insert into public.bank_movement (account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount, bank_concept, clean_concept, fingerprint, soft_fingerprint, status, reason)
+    select t.account_id, t.company_id, t.id, (select id from public.bank_statement where treasury_account_id = t.id order by period_to desc, imported_at desc limit 1),
+           date '2026-11-19', date '2026-11-19', case when i = 1 then -500 else 200 end, 'TRASPASO A OTRA CUENTA', 'Traspaso entre cuentas', 'r08-tr-a-' || i || '-' || gen_random_uuid(), 'r08-tr-a-' || i, 'por_aclarar', 'Prueba.'
+      from public.treasury_account t where t.id = a returning id into m1;
+    insert into public.bank_movement (account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount, bank_concept, clean_concept, fingerprint, soft_fingerprint, status, reason)
+    select t.account_id, t.company_id, t.id, (select id from public.bank_statement where treasury_account_id = t.id order by period_to desc, imported_at desc limit 1),
+           date '2026-11-19', date '2026-11-19', case when i = 1 then 500 else -200 end, 'TRASPASO DESDE OTRA CUENTA', 'Traspaso entre cuentas', 'r08-tr-b-' || i || '-' || gen_random_uuid(), 'r08-tr-b-' || i, 'por_aclarar', 'Prueba.'
+      from public.treasury_account t where t.id = b returning id into m2;
+    insert into _p values ('tra' || i, m1), ('trb' || i, m2);
+  end loop;
+end $$;
+set local role authenticated;
+do $$
+declare i int; a uuid; b uuid;
+begin
+  for i in 1..2 loop
+    a := pg_temp.p('tra' || i)::uuid; b := pg_temp.p('trb' || i)::uuid;
+    perform public.bank_casar(a, jsonb_build_object('tipo', 'traspaso', 'otro_movimiento_id', b, 'concepto', 'Traspaso entre cuentas'), 'probable', 'Lo dijiste tú: traspaso.', '[]'::jsonb, 'persona', null);
+    if pg_temp.asiento(a) <> 'validado' or pg_temp.asiento(b) <> 'validado' or pg_temp.mov(b) <> 'casado' then
+      raise exception 'PRUEBA R08 · 5b: traspaso %: asiento % / %, el otro lado %.', i, pg_temp.asiento(a), pg_temp.asiento(b), pg_temp.mov(b);
+    end if;
+  end loop;
+  -- Deshacer uno: los dos lados vuelven a por conciliar.
+  perform public.bank_deshacer((select id from public.bank_match where movement_id = pg_temp.p('tra1')::uuid and status = 'vivo'), 'Prueba R08: deshacer el traspaso');
+  if pg_temp.mov(pg_temp.p('tra1')::uuid) <> 'pendiente' or pg_temp.mov(pg_temp.p('trb1')::uuid) <> 'pendiente' then raise exception 'PRUEBA R08 · 5b: deshecho, los lados quedan % y %.', pg_temp.mov(pg_temp.p('tra1')::uuid), pg_temp.mov(pg_temp.p('trb1')::uuid); end if;
+  perform public.bank_casar(pg_temp.p('tra1')::uuid, jsonb_build_object('tipo', 'traspaso', 'otro_movimiento_id', pg_temp.p('trb1'), 'concepto', 'Traspaso entre cuentas'), 'probable', 'Lo dijiste tú: traspaso.', '[]'::jsonb, 'persona', null);
+  if pg_temp.asiento(pg_temp.p('tra1')::uuid) <> 'validado' then raise exception 'PRUEBA R08 · 5b: reconciliado, queda %.', pg_temp.asiento(pg_temp.p('tra1')::uuid); end if;
+  raise notice '5b OK: dos traspasos entre bancos, cada uno un asiento validado con los dos lados conciliados; deshecho uno, los dos lados por conciliar; otra vez conciliado.';
+end $$;
+
+-- 6 · Deshacer cada uno y volver a conciliarlo.
+do $$
+declare m uuid; b uuid; r jsonb; s0 numeric; e uuid; vivos int; imp numeric;
+begin
+  -- Una nómina del grupo: las otras cuatro siguen.
+  m := (pg_temp.p('nominas')::jsonb->>0)::uuid;
+  select -amount into imp from public.bank_movement where id = m;
+  select id, journal_entry_id into b, e from public.bank_match where movement_id = m and status = 'vivo';
+  s0 := pg_temp.saldo();
+  r := public.bank_deshacer(b, 'Prueba R08: me equivoqué de cuenta');
+  -- Detrás ya hay otros asientos: quitarlo dejaría un hueco en la serie; se anula con su contraasiento y lo dice.
+  if pg_temp.mov(m) <> 'pendiente' or (select status from public.journal_entry where id = e) <> 'anulado'
+     or r->>'asiento' not like '%se anula con un contraasiento: detrás ya hay otros asientos en el diario, y quitarlo dejaría un hueco en la numeración' then
+    raise exception 'PRUEBA R08 · 6: deshecho, movimiento %, asiento %, dice «%».', pg_temp.mov(m), (select status from public.journal_entry where id = e), r->>'asiento';
+  end if;
+  select count(*) into vivos from public.bank_match where status = 'vivo' and movement_id in (select (jsonb_array_elements_text(pg_temp.p('nominas')::jsonb))::uuid);
+  if vivos <> 4 then raise exception 'PRUEBA R08 · 6: quedan % nóminas conciliadas y son 4.', vivos; end if;
+  if pg_temp.saldo() <> s0 + imp then raise exception 'PRUEBA R08 · 6: la 572 pasa de % a %.', s0, pg_temp.saldo(); end if;
+  raise notice '6a OK: deshecha una nómina («%»): por conciliar; su asiento, anulado con su contraasiento; las otras 4 siguen; la 572 vuelve a %.', r->>'asiento', pg_temp.saldo();
+  perform public.bank_casar(m, pg_temp.cuenta(m, '46500000', imp), 'probable', 'Lo dijiste tú: nómina.', '[]'::jsonb, 'persona', null);
+  if pg_temp.asiento(m) <> 'validado' then raise exception 'PRUEBA R08 · 6: reconciliada, queda %.', pg_temp.asiento(m); end if;
+  -- La de la factura: vuelve a pendiente, y otra vez pagada.
+  m := pg_temp.p('pago')::uuid;
+  select id into b from public.bank_match where movement_id = m and status = 'vivo';
+  perform public.bank_deshacer(b, 'Prueba R08: deshacer');
+  if (select status from public.supplier_invoice where id = pg_temp.p('fact')::uuid) = 'pagada' then raise exception 'PRUEBA R08 · 6: deshecho, la factura sigue pagada.'; end if;
+  perform public.bank_casar(m, jsonb_build_object('tipo', 'factura_recibida', 'facturas', jsonb_build_array(jsonb_build_object('id', pg_temp.p('fact'), 'importe', 60.50)),
+    'cuenta_tercero', pg_temp.p('c400'), 'concepto', 'Pago de la factura'), 'probable', 'Lo dijiste tú: paga la factura.', '[]'::jsonb, 'persona', null);
+  if (select status from public.supplier_invoice where id = pg_temp.p('fact')::uuid) <> 'pagada' or pg_temp.asiento(m) <> 'validado' then raise exception 'PRUEBA R08 · 6: la factura no vuelve a pagada.'; end if;
+  -- La de Sumied solo y la de la cuenta.
+  foreach m in array array[pg_temp.n('gasto2'), pg_temp.n('gasto1')] loop
+    select id into b from public.bank_match where movement_id = m and status = 'vivo';
+    perform public.bank_deshacer(b, 'Prueba R08: deshacer');
+    if pg_temp.mov(m) <> 'pendiente' then raise exception 'PRUEBA R08 · 6: deshecho, queda %.', pg_temp.mov(m); end if;
+    perform public.bank_casar(m, pg_temp.cuenta(m, case when m = pg_temp.n('gasto2') then '62600000' else '62800000' end, abs((select amount from public.bank_movement where id = m))),
+      'probable', 'Lo dijiste tú.', '[]'::jsonb, 'persona', null);
+    if pg_temp.asiento(m) <> 'validado' then raise exception 'PRUEBA R08 · 6: reconciliado, queda %.', pg_temp.asiento(m); end if;
+  end loop;
+  raise notice '6 OK: cada uno, deshecho y conciliado otra vez: la nómina, la factura (pendiente y pagada otra vez), la de Sumied solo y la de la cuenta.';
+end $$;
+
+-- 7 · Lo que ya salió a ERP10 se anula con su contraasiento, y lo dice.
+reset role;
+do $$
+declare m uuid := pg_temp.n('gasto1'); v_l uuid;
+begin
+  insert into public.conta_erp10_salida_lote (account_id, company_id, mes, ficheros)
+  select account_id, company_id, date '2026-11-01', '["asientos.xlsx"]'::jsonb from public.bank_movement where id = m returning id into v_l;
+  insert into public.conta_erp10_salida_partida (account_id, company_id, lote_id, entry_id, clase, huella)
+  select b.account_id, b.company_id, v_l, b.journal_entry_id, 'asiento', 'prueba-r08' from public.bank_match b where b.movement_id = m and b.status = 'vivo';
+end $$;
+set local role authenticated;
+do $$
+declare r jsonb; e uuid;
+begin
+  select journal_entry_id into e from public.bank_match where movement_id = pg_temp.n('gasto1') and status = 'vivo';
+  r := public.bank_deshacer((select id from public.bank_match where movement_id = pg_temp.n('gasto1') and status = 'vivo'), 'Prueba R08');
+  if (select status from public.journal_entry where id = e) <> 'anulado' or r->>'asiento' not like '%se anula con un contraasiento: ya salió a ERP10' then
+    raise exception 'PRUEBA R08 · 7: el asiento queda % y dice «%».', (select status from public.journal_entry where id = e), r->>'asiento';
+  end if;
+  raise notice '7 OK: uno que ya salió a ERP10 no se quita: «%».', r->>'asiento';
+end $$;
+
+-- 7b · Conciliar y deshacer al momento (el último de su serie y de la cadena): no queda NADA en el diario.
+do $$
+declare m uuid := pg_temp.n('gasto1'); r jsonb; e uuid; n0 int; n1 int; vivos int;
+begin
+  select coalesce(max(number), 0) into n0 from public.journal_entry where company_id = pg_temp.p('e')::uuid and series = 3 and status in ('validado', 'anulado');
+  perform public.bank_casar(m, pg_temp.cuenta(m, '62800000', 18.87), 'probable', 'Lo dijiste tú.', '[]'::jsonb, 'persona', null);
+  select journal_entry_id into e from public.bank_match where movement_id = m and status = 'vivo';
+  if (select number from public.journal_entry where id = e) <> n0 + 1 then raise exception 'PRUEBA R08 · 7b: el asiento lleva el número %, y es el %.', (select number from public.journal_entry where id = e), n0 + 1; end if;
+  r := public.bank_deshacer((select id from public.bank_match where movement_id = m and status = 'vivo'), 'Prueba R08: me equivoqué');
+  if exists (select 1 from public.journal_entry where id = e) or exists (select 1 from public.journal_line where entry_id = e) then raise exception 'PRUEBA R08 · 7b: el asiento sigue en el diario.'; end if;
+  if exists (select 1 from public.journal_entry where reverses_entry_id = e) then raise exception 'PRUEBA R08 · 7b: ha hecho un contraasiento.'; end if;
+  if pg_temp.mov(m) <> 'pendiente' or r->>'asiento' not like '%se quita del diario' then raise exception 'PRUEBA R08 · 7b: movimiento %, dice «%».', pg_temp.mov(m), r->>'asiento'; end if;
+  select coalesce(max(number), 0) into n1 from public.journal_entry where company_id = pg_temp.p('e')::uuid and series = 3 and status in ('validado', 'anulado');
+  if n1 <> n0 then raise exception 'PRUEBA R08 · 7b: la serie llega a % y llegaba a %.', n1, n0; end if;
+  -- El siguiente que se valida coge el mismo número: no queda hueco.
+  perform public.bank_casar(m, pg_temp.cuenta(m, '62800000', 18.87), 'probable', 'Lo dijiste tú.', '[]'::jsonb, 'persona', null);
+  if (select e2.number from public.bank_match b join public.journal_entry e2 on e2.id = b.journal_entry_id where b.movement_id = m and b.status = 'vivo') <> n0 + 1 then
+    raise exception 'PRUEBA R08 · 7b: al volver a conciliar, el número no es el %.', n0 + 1;
+  end if;
+  raise notice '7b OK: conciliar y deshacer al momento: el asiento 3/% sale del diario (sin contraasiento, «%»); el siguiente coge el mismo número: sin hueco.', n0 + 1, r->>'asiento';
+end $$;
+
+-- 7c · Lo mismo con el IVA presentado. Un asiento que crea Bancos al conciliar no lleva IVA (las líneas
+--      de una «cuenta» no traen base, tipo ni libro: sin ellos la 472 no se valida), así que el caso no sale
+--      conciliando. Se prueba la guarda con uno de Bancos que sí lo lleva, hecho como propietaria: del
+--      15/09, con su 472 del 21 %; el 303 del 3T, presentado; y lo que dice al deshacer.
+reset role;
+do $$
+declare v jsonb; e uuid; t uuid; v_msg text;
+begin
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
+  select account_id, id, 'pymes', '47200000', '472', 'Hacienda Pública, IVA soportado', 'template', 'serie' from public.company
+   where id = pg_temp.p('e')::uuid and not exists (select 1 from public.company_account a where a.company_id = pg_temp.p('e')::uuid and a.code = '47200000');
+  select id into t from public.tax_rate where name = 'IVA general' and rate = 21 and treatment = 'taxed' limit 1;
+  v := public._journal_entry_proponer(pg_temp.p('e')::uuid,
+    jsonb_build_object('fecha', '2026-09-15', 'series', 3, 'concepto', 'Prueba R08 · con IVA', 'source_type', 'bank', 'confianza', 'seguro', 'porque', 'Prueba R08.', 'razones', '[]'::jsonb),
+    jsonb_build_array(
+      jsonb_build_object('cuenta', '62800000', 'debe', 100, 'haber', 0),
+      jsonb_build_object('cuenta', '47200000', 'debe', 21, 'haber', 0, 'iva', jsonb_build_object('tipo_id', t, 'base', 100, 'libro', 'received')),
+      jsonb_build_object('cuenta', pg_temp.p('c572'), 'debe', 0, 'haber', 121)),
+    '{}'::jsonb, 'Prueba R08', null);
+  e := (v->>'id')::uuid;
+  perform public._journal_entry_validar(e, 'Prueba R08');
+  if public._bank_asiento_razon_contra(e) is distinct from 'detrás ya hay otros asientos en el diario, y quitarlo dejaría un hueco en la numeración'
+     and public._bank_asiento_razon_contra(e) is not null and public._bank_asiento_razon_contra(e) not like 'tiene su libro%' then
+    raise exception 'PRUEBA R08 · 7c: antes de presentar, dice «%».', public._bank_asiento_razon_contra(e);
+  end if;
+  insert into public.tax_return (account_id, company_id, form_code, fiscal_year, cadence, period, due_date, status, filed_at, filed_via, aeat_csv, result_kind, amount)
+  select account_id, id, '303', 2026, 'quarterly', '3T', date '2026-10-20', 'filed', timestamptz '2026-10-15 10:00+02', 'outside', 'PRUEBAR08', 'zero', 0
+    from public.company where id = pg_temp.p('e')::uuid;
+  v_msg := public._bank_asiento_razon_contra(e);
+  if v_msg <> 'lleva IVA y el trimestre del 15/09/2026 ya está presentado' then raise exception 'PRUEBA R08 · 7c: con el 3T presentado, dice «%».', v_msg; end if;
+  raise notice '7c OK: uno de Bancos con IVA y el 3T presentado no se quita: se anula con un contraasiento, porque «%».', v_msg;
+end $$;
+set local role authenticated;
+
+-- 8 · El recibo que el banco no cobró: se aparta solo; conciliarlo apartado lo dice en palabras;
+--     volver a abrirlo y conciliarlo.
+do $$
+declare r jsonb; m uuid := pg_temp.n('telefonia'); v_msg text;
+begin
+  -- La semilla lo deja apartado (para la e2e); aquí se reabre para que lo aparte el detector.
+  perform public.bank_desapartar(m);
+  r := public.bank_apartar_no_cobrados(pg_temp.p('e')::uuid);
+  if pg_temp.mov(m) <> 'ignorado' or jsonb_array_length(r) <> 1 or (r->0->>'importe')::numeric <> -31.50 then
+    raise exception 'PRUEBA R08 · 8: el recibo queda % y se ha apartado %.', pg_temp.mov(m), r;
+  end if;
+  begin
+    perform public.bank_casar(m, pg_temp.cuenta(m, '62800000', 31.50), 'probable', 'Prueba.', '[]'::jsonb, 'persona', null);
+    raise exception 'PRUEBA R08 · 8: ha dejado conciliar uno apartado.';
+  exception when check_violation then get stacked diagnostics v_msg = message_text;
+  end;
+  if v_msg <> 'Este movimiento está apartado: el banco no lo cobró. Vuelve a abrirlo para conciliarlo.' then raise exception 'PRUEBA R08 · 8: dice «%».', v_msg; end if;
+  perform public.bank_desapartar(m);
+  perform public.bank_casar(m, pg_temp.cuenta(m, '62800000', 31.50), 'probable', 'Lo dijiste tú.', '[]'::jsonb, 'persona', null);
+  if pg_temp.asiento(m) <> 'validado' then raise exception 'PRUEBA R08 · 8: reabierto y conciliado, queda %.', pg_temp.asiento(m); end if;
+  raise notice '8 OK: el recibo de 31,50 que el banco no cobró se aparta solo; conciliarlo apartado dice «%»; reabierto, se concilia validado.', v_msg;
+end $$;
+reset role;
+
+-- 9 · Las vueltas atrás, en orden inverso: las funciones vuelven a las de antes.
+\i supabase/vuelta-atras/20261119T2120_r08_cargo_no_cobrado.down.sql
+\i supabase/vuelta-atras/20261119T2040_r08_conciliar_valida.down.sql
+\i supabase/vuelta-atras/20261119T1945_r08_saldo_del_banco.down.sql
+do $$ begin
+  if strpos(pg_get_functiondef('public._bank_casar_nucleo(uuid,jsonb,text,text,jsonb,text,uuid)'::regprocedure), 'R08 · conciliar es el último paso') > 0
+     or md5(pg_get_functiondef('public.bank_deshacer(uuid,text)'::regprocedure)) <> '2bd4986001f368ade6dd483b9b23dc54'
+     or strpos(pg_get_functiondef('public.journal_entry_inalterable()'::regprocedure), 'folvy.asiento_quitar') > 0
+     or md5(pg_get_functiondef('public._bank_cargos_anulados(uuid)'::regprocedure)) <> '5f152fbae949adbb4f09190aae710171'
+     or to_regprocedure('public.bank_apartar_no_cobrados(uuid)') is not null or to_regprocedure('public.bank_saldo_extracto(uuid, date)') is not null then
+    raise exception 'PRUEBA R08 · 9: las vueltas atrás no dejan las funciones como estaban.';
+  end if;
+  raise notice '9 OK: las vueltas atrás dejan las funciones de antes, byte a byte.';
+end $$;
+
+do $$ begin raise notice 'PRUEBA R08: 12 de 12 bien.'; end $$;
+rollback;

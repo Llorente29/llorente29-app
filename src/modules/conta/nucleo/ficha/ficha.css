@@ -19,7 +19,9 @@
 }
 
 /* La zona de una pestaña con ficha no lleva el margen de abajo: la ficha ocupa el alto. */
-.cx.cxm .k-zona.cx-principal:has(> .kf-ficha), .cx.cxm .k-zona.cx-principal:has(.kf-ficha) { padding: 0 16px 0; overflow: hidden; display: flex; flex-direction: column; }
+/* K04b · Sin «:not([hidden])» esta regla pesaba lo mismo que la que esconde una pestaña (nucleo.css) y, por ir
+   después, ganaba: la pestaña de una ficha no se escondía nunca, y salía debajo de la que se miraba. */
+.cx.cxm .k-zona.cx-principal:not([hidden]):has(.kf-ficha) { padding: 0 16px 0; overflow: hidden; display: flex; flex-direction: column; }
 
 .kf-ficha {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
@@ -205,3 +207,23 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 /* «Guardarla sin documento», debajo de la zona de soltar. */
 .kf-sin-documento { max-width: 420px; margin: 14px auto 0; display: grid; gap: 6px; color: var(--k-tinta); }
 .kf-sin-documento label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+
+/* K05 · El mayor en el panel, como la maqueta de la emitida: en su tarjeta, con el saldo y esta factura en azul claro. */
+.kf-mayor-caja { background: var(--k-blanco); border-radius: 6px; padding: 14px 18px; box-shadow: 0 1px 2px rgb(0 0 0 / 6%); }
+.kf-mayor-titulo { margin: 0 0 10px; color: var(--k-apoyo); font-size: 13px; line-height: 1.5; }
+.kf-mayor-titulo strong { color: var(--k-tinta); }
+.kf-mayor tr[data-esta='si'] td { background: var(--k-azul-claro); font-weight: 600; }
+
+/* K05 · «Cómo se cobra»: la cuenta y su nombre, sin columna de importe al lado (el importe va debajo, con la fecha): el nombre entero. */
+.kf-cobro { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 6px; }
+.kf-titulo .kf-titulo-derecha.kf-origen { font-weight: 400; font-size: 11px; }
+
+/* K05 · En la emitida no se corta nada, a 1456 × 816 ni a 1366 × 768 (Julio, 19/11), medido en Chromium con este CSS y los
+   textos más largos de la e2e: la franja puede ir en dos líneas; el formulario se lleva más ancho que el documento; la venta
+   más que el cobro; y un poco menos de aire entre bloques, para que la fila del concepto quepa sin que el formulario ruede. */
+.kf-emitida .kf-estado { white-space: normal; }
+.kf-emitida .kf-cuerpo { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+.kf-emitida .kf-dos { grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr); }
+.kf-emitida .kf-formulario { gap: 3px; padding-top: 6px; padding-bottom: 6px; }
+/* El aspa de quitar una línea de IVA (18 px) en su columna (e2e 44570080751: «td: «×», 18 en 14»). */
+.kf-emitida .kf-iva .kf-iva-quitar { width: 20px; }
