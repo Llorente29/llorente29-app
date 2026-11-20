@@ -23,11 +23,11 @@
 //   4. El PDF, después: si no se sube, la factura sigue en ERP10 y se dice.
 
 import { descripcionRecibida, textoDiez } from './diezTexto.ts'
-import type { AsientoParaApi, EmitidaParaApi, RecibidaParaApi } from './erp10Ficheros.ts'
+import type { AsientoParaApi, DiaParaApi, EmitidaParaApi, RecibidaParaApi } from './erp10Ficheros.ts'
 
 // X10c: la recibida y la emitida, como las lee la salida a ERP10 (erp10Ficheros.ts), con las cuentas
 // de ERP10 y los importes en céntimos. Las arma el servidor desde la base (erp10DesdeLaBase.ts).
-export type { AsientoParaApi, EmitidaParaApi, RecibidaParaApi }
+export type { AsientoParaApi, DiaParaApi, EmitidaParaApi, RecibidaParaApi }
 
 /** Una cuenta que la salida da por nueva (ERP10 no la tiene): se da de alta si falta. */
 export type CuentaNueva = { codigo: string; nombre: string; nif: string | null }
@@ -136,6 +136,8 @@ export type Envio = {
   id: string; entry_id: string; estado: 'enviando' | 'en_erp10' | 'no_pudo'
   erp10_ejercicio: string | null; erp10_serie: string | null; erp10_documento: number | null
   enlazada: boolean; pdf: 'subido' | 'fallo' | null; motivo: string | null; intentos: number; lote_id: string | null
+  /** X10e · Es de un día del TPV; y el número del cobro de un día de un solo asiento. */
+  dia?: boolean | null; cobro_serie?: string | null; cobro_documento?: number | null
 }
 
 export interface PuertoEscribir {
@@ -162,8 +164,12 @@ export interface PuertoEscribir {
 
 export type Resultado = {
   entryId: string; numero: string
-  /** X10c; X10d, también asiento. */
-  clase?: 'recibida' | 'emitida' | 'asiento'
+  /** X10c; X10d, también asiento; X10e, el día del TPV. */
+  clase?: 'recibida' | 'emitida' | 'asiento' | 'dia'
+  /** X10e · El cobro del día (en un día de un solo asiento, en la misma fila). */
+  cobro?: { serie: string; documento: number; enlazado: boolean }
+  /** X10e · Es el cobro (aparte) del día con este entryId: la pantalla lo cuenta con su día, no como un asiento más. */
+  cobroDe?: string
   /** en_erp10: ha entrado ahora (o se ha enlazado); ya_estaba: entró antes; en_marcha: otro envío la tiene; no_pudo: con su porqué. */
   estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'
   ejercicio?: string; serie?: string; documento?: number; enlazada?: boolean
@@ -213,31 +219,12 @@ async function sacarFactura(x: Pedida, cuentasNuevas: readonly CuentaNueva[], pd
   }
 
   const fd = hecha.factura
-  let ejercicio = String(fd.Ejercicio), serie = String(fd.Serie), documento: number, enlazada = false
+  let ejercicio: string, serie: string, documento: number, enlazada: boolean
   try {
     // 2 · Las cuentas que ERP10 no tiene, antes de la factura que las usa.
-    const usa = new Set(x.usa)
-    for (const c of cuentasNuevas.filter((k) => usa.has(k.codigo))) {
-      if (!(await p.erp10.tieneSubcuenta(c.codigo))) await p.erp10.crearSubcuenta({ Codigo: c.codigo, Descripcion: c.nombre, NIF: c.nif })
-    }
-    // 3 · ¿Ya está en ERP10? Por su número y su proveedor, desde el mes del asiento hasta hoy.
-    const meses = mesesDeBusqueda(x.fechaAsiento, p.hoy)
-    if (meses.length > MESES_BUSQUEDA) throw new Error(`Es de hace más de ${MESES_BUSQUEDA - 1} meses: no sale sola, mírala a mano en ERP10.`)
-    const vistas = new Map<string, Record<string, unknown>>()
-    for (const m of meses) {
-      for (const f of await p.erp10.facturasDelMes(m)) {
-        if (numeroComparable(f.NumeroFactura) !== numeroComparable(fd.NumeroFactura) || String(f.CuentaCliente ?? '') !== String(fd.CuentaCliente) || (f.Serie != null && String(f.Serie) !== String(fd.Serie))) continue
-        vistas.set(`${f.Ejercicio ?? ''}|${f.Serie ?? ''}|${f.Documento ?? ''}`, f)
-      }
-    }
-    const ya = [...vistas.values()]
-    if (ya.length > 1) throw new Error(`Hay ${ya.length} facturas ${x.numero} de este ${x.clase === 'recibida' ? 'proveedor' : 'cliente'} en ERP10: no se toca nada. Míralo en ERP10.`)
-    if (ya.length === 1) {
-      ejercicio = String(ya[0].Ejercicio ?? ejercicio); serie = String(ya[0].Serie ?? serie); documento = Number(ya[0].Documento); enlazada = true
-    } else {
-      const creada = await p.erp10.altaFactura(fd)
-      ejercicio = String(creada.Ejercicio ?? ejercicio); serie = String(creada.Serie ?? serie); documento = Number(creada.Documento)
-    }
+    await altasDeCuentas(x.usa, cuentasNuevas, p)
+    // 3 · ¿Ya está en ERP10? La enlaza; si no, la escribe.
+    ;({ ejercicio, serie, documento, enlazada } = await facturaEnErp10(fd, x, p))
   } catch (err) {
     const porque = mensaje(err)
     await p.poner(v.id, { estado: 'no_pudo', motivo: porque })
@@ -259,6 +246,34 @@ async function sacarFactura(x: Pedida, cuentasNuevas: readonly CuentaNueva[], pd
     await p.poner(v.id, { pdf: estadoPdf, motivo: motivoPdf })
   }
   return { ...base, estado: 'en_erp10', ejercicio, serie, documento, enlazada, pdf: estadoPdf, sinApuntar: true, ...(motivoPdf ? { porque: motivoPdf } : {}) }
+}
+
+/** Las cuentas que ERP10 no tiene, de las que usa lo que va a entrar, antes de escribirlo. */
+async function altasDeCuentas(usa: Iterable<string>, cuentasNuevas: readonly CuentaNueva[], p: PuertoEscribir): Promise<void> {
+  const u = new Set(usa)
+  for (const c of cuentasNuevas.filter((k) => u.has(k.codigo))) {
+    if (!(await p.erp10.tieneSubcuenta(c.codigo))) await p.erp10.crearSubcuenta({ Codigo: c.codigo, Descripcion: c.nombre, NIF: c.nif })
+  }
+}
+
+type EnErp10 = { ejercicio: string; serie: string; documento: number; enlazada: boolean }
+
+/** ¿Ya está la factura en ERP10? Por su número y su tercero, desde el mes del asiento hasta hoy: la enlaza. Si no, la escribe. */
+async function facturaEnErp10(fd: Record<string, unknown>, x: { clase: 'recibida' | 'emitida'; numero: string; fechaAsiento: string }, p: PuertoEscribir): Promise<EnErp10> {
+  const meses = mesesDeBusqueda(x.fechaAsiento, p.hoy)
+  if (meses.length > MESES_BUSQUEDA) throw new Error(`Es de hace más de ${MESES_BUSQUEDA - 1} meses: no sale sola, mírala a mano en ERP10.`)
+  const vistas = new Map<string, Record<string, unknown>>()
+  for (const m of meses) {
+    for (const f of await p.erp10.facturasDelMes(m)) {
+      if (numeroComparable(f.NumeroFactura) !== numeroComparable(fd.NumeroFactura) || String(f.CuentaCliente ?? '') !== String(fd.CuentaCliente) || (f.Serie != null && String(f.Serie) !== String(fd.Serie))) continue
+      vistas.set(`${f.Ejercicio ?? ''}|${f.Serie ?? ''}|${f.Documento ?? ''}`, f)
+    }
+  }
+  const ya = [...vistas.values()]
+  if (ya.length > 1) throw new Error(`Hay ${ya.length} facturas ${x.numero} de este ${x.clase === 'recibida' ? 'proveedor' : 'cliente'} en ERP10: no se toca nada. Míralo en ERP10.`)
+  if (ya.length === 1) return { ejercicio: String(ya[0].Ejercicio ?? fd.Ejercicio), serie: String(ya[0].Serie ?? fd.Serie), documento: Number(ya[0].Documento), enlazada: true }
+  const creada = await p.erp10.altaFactura(fd)
+  return { ejercicio: String(creada.Ejercicio ?? fd.Ejercicio), serie: String(creada.Serie ?? fd.Serie), documento: Number(creada.Documento), enlazada: false }
 }
 
 // ── X10d · Los asientos ─────────────────────────────────────────────────────────────
@@ -298,7 +313,7 @@ export function asientoErp10(x: AsientoParaApi): { apunte: Record<string, unknow
  * falten, busca en ERP10 uno general del mismo día con las mismas líneas (sin los que ya son de otro
  * asiento de Sumied: los gemelos) y lo enlaza, o lo escribe; su número se apunta en el acto.
  */
-export async function sacarAsiento(x: AsientoParaApi, cuentasNuevas: readonly CuentaNueva[], p: PuertoEscribir): Promise<Resultado> {
+export async function sacarAsiento(x: AsientoParaApi, cuentasNuevas: readonly CuentaNueva[], p: PuertoEscribir, extra?: Partial<Envio>): Promise<Resultado> {
   const base = { entryId: x.entryId, numero: x.numero, clase: 'asiento' as const }
   const hecho = asientoErp10(x)
   if ('porque' in hecho) return { ...base, estado: 'no_pudo', porque: hecho.porque }
@@ -311,33 +326,129 @@ export async function sacarAsiento(x: AsientoParaApi, cuentasNuevas: readonly Cu
   }
   const ap = hecho.apunte
   const detalles = ap.Detalles as { Cuenta: string; Debe: number; Haber: number }[]
-  let ejercicio = String(ap.Ejercicio), serie = String(ap.Serie), documento: number, enlazada = false
+  let ejercicio: string, serie: string, documento: number, enlazada: boolean
   try {
-    const usa = new Set(detalles.map((l) => l.Cuenta))
-    for (const c of cuentasNuevas.filter((k) => usa.has(k.codigo))) {
-      if (!(await p.erp10.tieneSubcuenta(c.codigo))) await p.erp10.crearSubcuenta({ Codigo: c.codigo, Descripcion: c.nombre, NIF: c.nif })
-    }
-    const usados = p.usados ? await p.usados(x.entryId) : new Set<string>()
-    const f = firma(detalles)
-    const vistos = new Map<string, { Ejercicio?: string; Serie?: string; Documento?: number }>()
-    for (const d of await p.erp10.apuntesDelMes(x.fecha.slice(0, 7))) {
-      if (Number(d.TipoAsiento ?? 0) !== 0 || Number(d.Fecha) !== Number(ap.Fecha) || firma(d.Detalles ?? []) !== f) continue
-      const k = `${d.Serie ?? ''}/${d.Documento ?? ''}`
-      if (!usados.has(k)) vistos.set(`${d.Ejercicio ?? ''}|${k}`, d)
-    }
-    const ya = [...vistos.values()]
-    if (ya.length > 1) throw new Error(`Hay ${ya.length} asientos iguales del mismo día en ERP10: no se toca nada. Míralo en ERP10.`)
-    if (ya.length === 1) {
-      ejercicio = String(ya[0].Ejercicio ?? ejercicio); serie = String(ya[0].Serie ?? serie); documento = Number(ya[0].Documento); enlazada = true
-    } else {
-      const creado = await p.erp10.altaApunte(ap)
-      ejercicio = String(creado.Ejercicio ?? ejercicio); serie = String(creado.Serie ?? serie); documento = Number(creado.Documento)
-    }
+    await altasDeCuentas(detalles.map((l) => l.Cuenta), cuentasNuevas, p)
+    ;({ ejercicio, serie, documento, enlazada } = await apunteEnErp10(ap, x.entryId, p))
   } catch (err) {
     const porque = mensaje(err)
-    await p.poner(v.id, { estado: 'no_pudo', motivo: porque })
+    await p.poner(v.id, { estado: 'no_pudo', motivo: porque, ...(extra ?? {}) })
     return { ...base, estado: 'no_pudo', porque }
   }
-  await p.poner(v.id, { estado: 'en_erp10', erp10_ejercicio: ejercicio, erp10_serie: serie, erp10_documento: documento, enlazada, motivo: null })
+  await p.poner(v.id, { estado: 'en_erp10', erp10_ejercicio: ejercicio, erp10_serie: serie, erp10_documento: documento, enlazada, motivo: null, ...(extra ?? {}) })
   return { ...base, estado: 'en_erp10', ejercicio, serie, documento, enlazada, pdf: null, sinApuntar: true }
+}
+
+/**
+ * ¿Ya está el asiento en ERP10? Uno general del mismo día con las mismas líneas, sin los números que ya son de otro
+ * asiento de Sumied (los gemelos): lo enlaza. Si no, lo escribe.
+ */
+async function apunteEnErp10(ap: Record<string, unknown>, entryId: string, p: PuertoEscribir): Promise<EnErp10> {
+  if (!p.erp10.apuntesDelMes || !p.erp10.altaApunte) throw new Error('Esta conexión no sabe escribir asientos.')
+  const detalles = ap.Detalles as { Cuenta: string; Debe: number; Haber: number }[]
+  const usados = p.usados ? await p.usados(entryId) : new Set<string>()
+  const f = firma(detalles)
+  const fecha = String(ap.Fecha)
+  const vistos = new Map<string, { Ejercicio?: string; Serie?: string; Documento?: number }>()
+  for (const d of await p.erp10.apuntesDelMes(`${fecha.slice(0, 4)}-${fecha.slice(4, 6)}`)) {
+    if (Number(d.TipoAsiento ?? 0) !== 0 || Number(d.Fecha) !== Number(ap.Fecha) || firma(d.Detalles ?? []) !== f) continue
+    const k = `${d.Serie ?? ''}/${d.Documento ?? ''}`
+    if (!usados.has(k)) vistos.set(`${d.Ejercicio ?? ''}|${k}`, d)
+  }
+  const ya = [...vistos.values()]
+  if (ya.length > 1) throw new Error(`Hay ${ya.length} asientos iguales del mismo día en ERP10: no se toca nada. Míralo en ERP10.`)
+  if (ya.length === 1) return { ejercicio: String(ya[0].Ejercicio ?? ap.Ejercicio), serie: String(ya[0].Serie ?? ap.Serie), documento: Number(ya[0].Documento), enlazada: true }
+  const creado = await p.erp10.altaApunte(ap)
+  return { ejercicio: String(creado.Ejercicio ?? ap.Ejercicio), serie: String(creado.Serie ?? ap.Serie), documento: Number(creado.Documento), enlazada: false }
+}
+
+// ── X10e · Los días del TPV ─────────────────────────────────────────────────────────
+
+/**
+ * La factura del día para ERP10: la emitida (POST /api/facturas/add) con «Clientes de contado» y, además, el resumen
+ * de facturas del día: NumeroFacturasIncluidas340, PrimerNumeroFactura340 y UltimoNumeroFactura340 (las columnas 069,
+ * 070 y 071 del Excel). O por qué no sale por aquí.
+ */
+export function facturaDiaErp10(x: DiaParaApi, o: { hoy: string }): { factura: Record<string, unknown> } | { porque: string } {
+  if (!x.facturas || !x.primero.trim() || !x.ultimo.trim()) return { porque: 'Le falta el rango de facturas del día.' }
+  const h = facturaEmitidaErp10(x, o)
+  if ('porque' in h) return h
+  return { factura: { ...h.factura, NumeroFacturasIncluidas340: x.facturas, PrimerNumeroFactura340: x.primero.trim(), UltimoNumeroFactura340: x.ultimo.trim() } }
+}
+
+/**
+ * X10e · Saca un día del TPV a ERP10: su factura del día y su cobro, con las mismas protecciones.
+ *   · Un día de UN solo asiento (los de antes del R07): un solo envío para los dos. Se coge el asiento, se busca o se
+ *     escribe la factura, después el cobro, y solo entonces queda «en ERP10» con los dos números (el del cobro, en
+ *     cobro_serie y cobro_documento). Otro clic a la vez lo ve «en marcha»; si se corta a la mitad, al volver la
+ *     búsqueda enlaza lo que ya entró, sin escribirlo otra vez.
+ *   · Un día de DOS asientos (R07): la factura con su envío y, solo si ha entrado, el cobro con el suyo (sacarAsiento).
+ * Los dos envíos, con la marca del día: «el primer día de cada sociedad sale solo» va aparte de emitidas y asientos.
+ */
+export async function sacarDia(x: DiaParaApi, cobro: { api: AsientoParaApi; aparte: boolean }, cuentasNuevas: readonly CuentaNueva[], p: PuertoEscribir): Promise<Resultado[]> {
+  const base = { entryId: x.entryId, numero: x.numero, clase: 'dia' as const }
+  const hf = facturaDiaErp10(x, { hoy: p.hoy })
+  if ('porque' in hf) return [{ ...base, estado: 'no_pudo', porque: hf.porque }]
+  const hc = asientoErp10(cobro.api)
+  if ('porque' in hc) return [{ ...base, estado: 'no_pudo', porque: `Su cobro: ${hc.porque}` }]
+  if (!p.erp10.apuntesDelMes || !p.erp10.altaApunte) return [{ ...base, estado: 'no_pudo', porque: 'Esta conexión no sabe escribir asientos, y el cobro del día es uno.' }]
+  const conCobro = (r: Resultado) => (cobro.aparte && (r.estado === 'en_erp10' || r.estado === 'ya_estaba')
+    ? sacarAsiento(cobro.api, cuentasNuevas, p, { dia: true }).then((c) => [r, { ...c, cobroDe: x.entryId, ...(c.porque && c.estado !== 'en_erp10' ? { porque: `Su cobro: ${c.porque}` } : {}) }])
+    : Promise.resolve([r]))
+
+  const t = await p.tomar(x.entryId, 'emitida')
+  const v = t.envio
+  if (!t.tomado) {
+    if (v.estado === 'en_erp10') {
+      return conCobro({ ...base, estado: 'ya_estaba', ejercicio: v.erp10_ejercicio ?? undefined, serie: v.erp10_serie ?? undefined, documento: v.erp10_documento ?? undefined, enlazada: v.enlazada, pdf: null, sinApuntar: !v.lote_id,
+        ...(v.cobro_documento ? { cobro: { serie: v.cobro_serie ?? '', documento: v.cobro_documento, enlazado: false } } : {}) })
+    }
+    return [{ ...base, estado: 'en_marcha', porque: 'Otro envío lo está metiendo en ERP10 ahora mismo (otra pestaña u otro clic). Espera un momento y vuelve a mirar.' }]
+  }
+  const detallesCobro = hc.apunte.Detalles as { Cuenta: string }[]
+  let f: EnErp10, c: EnErp10 | null = null
+  try {
+    await altasDeCuentas([x.cliente, ...x.ingresos.map((g) => g.cuenta), ...(cobro.aparte ? [] : detallesCobro.map((l) => l.Cuenta))], cuentasNuevas, p)
+    f = await facturaEnErp10(hf.factura, { clase: 'emitida', numero: x.numero, fechaAsiento: x.fechaAsiento }, p)
+    if (!cobro.aparte) c = await apunteEnErp10(hc.apunte, x.entryId, p)
+  } catch (err) {
+    const porque = mensaje(err)
+    await p.poner(v.id, { estado: 'no_pudo', motivo: porque, dia: true })
+    return [{ ...base, estado: 'no_pudo', porque }]
+  }
+  await p.poner(v.id, { estado: 'en_erp10', erp10_ejercicio: f.ejercicio, erp10_serie: f.serie, erp10_documento: f.documento, enlazada: f.enlazada, motivo: null, dia: true,
+    ...(c ? { cobro_serie: c.serie, cobro_documento: c.documento } : {}) })
+  return conCobro({ ...base, estado: 'en_erp10', ejercicio: f.ejercicio, serie: f.serie, documento: f.documento, enlazada: f.enlazada, pdf: null, sinApuntar: true,
+    ...(c ? { cobro: { serie: c.serie, documento: c.documento, enlazado: c.enlazada } } : {}) })
+}
+
+// ── X10e · Uno de lo que sale, sea lo que sea, y su partida del lote ────────────────
+
+/** Lo que sale, tal como lo arma erp10DesdeLaBase (sin importar el tipo, para no cruzar las dos piezas). */
+export type UnoQueSale =
+  | { clase: 'recibida'; entryId: string; api: RecibidaParaApi; huella: string; pdf: { ruta: string; nombre: string } | null }
+  | { clase: 'emitida'; entryId: string; api: EmitidaParaApi; huella: string; pdf: { ruta: string; nombre: string } | null }
+  | { clase: 'asiento'; entryId: string; api: AsientoParaApi; huella: string; pdf: null }
+  | { clase: 'dia'; entryId: string; api: DiaParaApi; huella: string; pdf: null; cobro: { entryId: string; api: AsientoParaApi; aparte: boolean; huella: string } }
+
+/** Saca uno a ERP10 (el servidor y el simulado de las pruebas, la misma pieza). Un día puede dar dos resultados: su factura y su cobro. */
+export async function sacarUno(x: UnoQueSale, cuentasNuevas: readonly CuentaNueva[], p: PuertoEscribir): Promise<Resultado[]> {
+  if (x.clase === 'recibida') return [await sacarRecibida(x.api, cuentasNuevas, x.pdf, p)]
+  if (x.clase === 'emitida') return [await sacarEmitida(x.api, cuentasNuevas, x.pdf, p)]
+  if (x.clase === 'asiento') return [await sacarAsiento(x.api, cuentasNuevas, p)]
+  return sacarDia(x.api, x.cobro, cuentasNuevas, p)
+}
+
+/**
+ * Cómo se apunta cada resultado en la salida de Sumied: la misma partida que deja el Excel. La factura del día va
+ * como «emitida» con la huella de su fila (y la del cobro, si va en el mismo asiento); el cobro aparte, como «asiento».
+ */
+export function partidasDeLoQueSale(salen: readonly UnoQueSale[]): Map<string, { clase: 'recibida' | 'emitida' | 'asiento'; huella: string }> {
+  const m = new Map<string, { clase: 'recibida' | 'emitida' | 'asiento'; huella: string }>()
+  for (const x of salen) {
+    if (x.clase !== 'dia') { m.set(x.entryId, { clase: x.clase, huella: x.huella }); continue }
+    m.set(x.entryId, { clase: 'emitida', huella: x.huella })
+    if (x.cobro.aparte) m.set(x.cobro.entryId, { clase: 'asiento', huella: x.cobro.huella })
+  }
+  return m
 }

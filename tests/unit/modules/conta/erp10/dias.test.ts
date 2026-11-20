@@ -242,7 +242,7 @@ describe('R07 · El día en dos asientos: la factura del día y su cobro', () =>
     const antes = salida([dia(1)], [])
     const ahora = salida([factura()], [cobro()])
     expect(ahora.noPuedenSalir).toEqual([])
-    expect(ahora.ficheros.dias).toEqual([{ entryId: id(1), fila: antes.ficheros.dias[0].fila, cobroId: COBRO }])
+    expect(ahora.ficheros.dias).toMatchObject([{ entryId: id(1), fila: antes.ficheros.dias[0].fila, cobroId: COBRO }])
     expect(ahora.ficheros.asientos.map((a) => a.entryId)).toEqual([COBRO])
     const apuntes = (x: typeof ahora) => x.ficheros.asientos[0].filas.map(celdas).map((f) => [f[letraA('005')] ?? null, f[letraA('008')] ?? null, f[letraA('010')] ?? null, f[letraA('013')] ?? null])
     expect(apuntes(ahora)).toEqual(apuntes(antes))

@@ -53,3 +53,21 @@ describe('después', () => {
       .toBe('Han entrado en ERP10 1 factura recibida de octubre de 2026 (2/100). El PDF de la F-1 no ha subido (ERP10 no ha guardado el PDF (500): x): súbelo a mano en ERP10.')
   })
 })
+
+// X10e · Los días del TPV: lo que se dice antes (con cuántos, y el de prueba) y después (el cobro aparte cuenta con su día).
+describe('X10e · los días del TPV por la conexión', () => {
+  it('antes: cuántos, y el primero de prueba con su fecha y su rango', () => {
+    expect(queVaAEntrar({ recibidas: 0, emitidas: 1, dias: 3, mes: 'octubre de 2026' })).toBe('Van a entrar en ERP10: 1 factura emitida y 3 días del TPV de octubre de 2026. Si algo sale mal, se corrige a mano en ERP10: Sumied no puede borrarlo.')
+    expect(queVaAEntrar({ recibidas: 0, emitidas: 0, mes: 'octubre de 2026', prueba: { clase: 'dia', numero: '5001-5048', tercero: 'el día 05/10', total: 55000 } }))
+      .toBe('Va a entrar en ERP10 un solo día del TPV de octubre de 2026, para probar: el día 05/10, las facturas 5001-5048 (550,00 €), con su factura del día y su cobro. Si algo sale mal, se corrige a mano en ERP10: Sumied no puede borrarlo.')
+  })
+  it('después: un día de un asiento (con los dos números) y uno de dos (su cobro, con su día); el cobro que falla, con su porqué', () => {
+    expect(loQueHaEntrado([
+      { numero: '5001-5048', clase: 'dia', estado: 'en_erp10', serie: '1', documento: 1000, cobro: { serie: '1', documento: 5000 } },
+      { numero: '6001-6040', clase: 'dia', estado: 'en_erp10', serie: '1', documento: 1001 },
+      { numero: '1/92', clase: 'asiento', cobroDe: 'd-2', estado: 'en_erp10', serie: '1', documento: 5001 },
+    ], 'octubre de 2026')).toEqual({ bien: true, texto: 'Han entrado en ERP10 2 días del TPV de octubre de 2026 (1/1000 a 1/5001).' })
+    expect(loQueHaEntrado([{ numero: '1/92', clase: 'asiento', cobroDe: 'd-2', estado: 'no_pudo', porque: 'Su cobro: ERP10 no ha dado de alta el asiento (500): x' }], 'octubre de 2026').texto)
+      .toBe('1 no ha podido: 1/92, Su cobro: ERP10 no ha dado de alta el asiento (500): x.')
+  })
+})

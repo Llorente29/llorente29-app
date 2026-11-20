@@ -203,11 +203,12 @@ export interface EstadoClase {
   /** Un «Darlo por igualado» posterior a la primera: ya se pueden sacar las demás. */
   comprobada: boolean
 }
-export type ClaseConexion = 'recibida' | 'emitida' | 'asiento'
+/** X10e · y el día del TPV (sus envíos llevan la marca del día: no cuentan como emitidas ni como asientos). */
+export type ClaseConexion = 'recibida' | 'emitida' | 'asiento' | 'dia'
 export type EstadoEscribir = Record<ClaseConexion, EstadoClase>
 export async function leerEstadoEscribir(accountId: string, companyId: string): Promise<EstadoEscribir> {
   hayBase()
-  const { data: e, error } = await tabla('conta_erp10_envio').select('clase, creado_en').eq('account_id', accountId).eq('company_id', companyId)
+  const { data: e, error } = await tabla('conta_erp10_envio').select('clase, dia, creado_en').eq('account_id', accountId).eq('company_id', companyId)
     .eq('estado', 'en_erp10').order('creado_en', { ascending: true })
   if (error) throw new Error(`No se ha podido leer lo que ha salido a ERP10: ${error.message}`)
   const filas = (e ?? []) as Fila[]
@@ -216,10 +217,10 @@ export async function leerEstadoEscribir(accountId: string, companyId: string): 
   if (e2) throw new Error(`No se ha podido leer lo igualado: ${e2.message}`)
   const ultimoIgualado = ((g ?? []) as Fila[])[0]?.igualado_en as string | undefined
   const de = (c: ClaseConexion): EstadoClase => {
-    const primera = (filas.find((x) => x.clase === c)?.creado_en as string | undefined) ?? null
+    const primera = (filas.find((x) => (c === 'dia' ? x.dia === true && x.clase === 'emitida' : x.dia !== true && x.clase === c))?.creado_en as string | undefined) ?? null
     return { primera, comprobada: !!primera && !!ultimoIgualado && ultimoIgualado > primera }
   }
-  return { recibida: de('recibida'), emitida: de('emitida'), asiento: de('asiento') }
+  return { recibida: de('recibida'), emitida: de('emitida'), asiento: de('asiento'), dia: de('dia') }
 }
 
 /** Lo que dice el servidor de cada factura. */
@@ -227,6 +228,8 @@ export interface Salido {
   entryId: string; numero: string; clase?: ClaseConexion
   estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'
   serie?: string; documento?: number; enlazada?: boolean; pdf?: 'subido' | 'fallo' | null; porque?: string
+  /** X10e · El cobro del día (de un solo asiento) y, si es el cobro aparte de un día, de cuál. */
+  cobro?: { serie: string; documento: number; enlazado: boolean }; cobroDe?: string
 }
 
 /**
@@ -263,9 +266,11 @@ async function invocarEscribir(body: Fila): Promise<Fila> {
 /** X10c · Lo que salió por la conexión (en ERP10, con su número): para casarlo en el paso 3. */
 export async function leerEnviosErp10(accountId: string, companyId: string): Promise<EnvioErp10[]> {
   hayBase()
-  const { data, error } = await tabla('conta_erp10_envio').select('entry_id, clase, erp10_serie, erp10_documento').eq('account_id', accountId).eq('company_id', companyId)
+  const { data, error } = await tabla('conta_erp10_envio').select('entry_id, clase, dia, erp10_serie, erp10_documento, cobro_serie, cobro_documento').eq('account_id', accountId).eq('company_id', companyId)
     .eq('estado', 'en_erp10')
   if (error) throw new Error(`No se ha podido leer lo que salió por la conexión: ${error.message}`)
+  // X10e · Un día del TPV (su factura, o su cobro aparte) se casa como día; el de un solo asiento, con los dos números.
   return ((data ?? []) as Fila[]).filter((x) => x.erp10_documento != null)
-    .map((x) => ({ entryId: String(x.entry_id), clase: String(x.clase), serie: String(x.erp10_serie ?? ''), documento: Number(x.erp10_documento) }))
+    .map((x) => ({ entryId: String(x.entry_id), clase: x.dia === true ? 'dia' : String(x.clase), serie: String(x.erp10_serie ?? ''), documento: Number(x.erp10_documento),
+      ...(x.cobro_documento != null ? { cobro: { serie: String(x.cobro_serie ?? ''), documento: Number(x.cobro_documento) } } : {}) }))
 }

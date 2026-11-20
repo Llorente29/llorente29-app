@@ -33,7 +33,7 @@ import { armarSalida, comprimirPdfs, importe, mesEnPalabras, mesesDesde, prepara
 import { comparar, fechaDelSumas } from '@/modules/conta/erp10/comparar'
 import { abrirExcel, leerSumasYSaldos, reconocer, texto as textoDe, type FilaSumas } from '@/modules/conta/lib/traer'
 import { ComprobarErp10, type Subido } from '@/modules/conta/libros/ComprobarErp10'
-import { casarFacturas, type DocumentoErp10, type EnvioErp10 } from '@/modules/conta/erp10/casar'
+import { casarFacturas, documentosACasar, type DocumentoErp10, type EnvioErp10 } from '@/modules/conta/erp10/casar'
 import { leerConexionErp10, leerEnviosErp10, leerEstadoEscribir, leerSaldosErp10, loQueFalta, sacarAErp10, type ClaseConexion } from '@/modules/conta/services/erp10ApiService'
 import { loQueHaEntrado, queVaAEntrar } from '@/modules/conta/erp10/conexion'
 import { salePorLaConexion } from '@/modules/conta/erp10/ficheros'
@@ -245,7 +245,7 @@ export function SalidaErp10() {
     setErrorSubir(null); setFallo(null); setDicho(null); setHaciendo('Entrando en ERP10…')
     try {
       const [base, envios] = await Promise.all([leerComprobar(L.companyId, hasta), leerEnviosErp10(L.accountId, L.companyId)])
-      const r = await leerSaldosErp10(L.companyId, base.desde, hasta, envios.map((x) => ({ serie: x.serie, documento: x.documento })))
+      const r = await leerSaldosErp10(L.companyId, base.desde, hasta, documentosACasar(envios))
       setCasar({ envios, docs: r.documentos })
       const hora = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(r.leidoEn)).replace(',', '')
       setSubido({ nombre: `ERP10, leído el ${hora}`, fecha: hasta, avisos: [], cabecera: [`hasta ${hasta.slice(8, 10)}/${hasta.slice(5, 7)}/${hasta.slice(0, 4)}`], filas: r.filas, leidoEn: hora })
@@ -308,13 +308,18 @@ export function SalidaErp10() {
     .map((f) => ({ clase: 'recibida', entryId: f.entryId, numero: f.api!.numero, tercero: f.api!.nombre, total: f.api!.total }))
   const emitidasConexion: PorLaConexion[] = (s?.ficheros.expedidas ?? []).filter((f) => f.api && f.api.iva.length <= 3)
     .map((f) => ({ clase: 'emitida', entryId: f.entryId, numero: f.api!.numero, tercero: f.api!.nombre, total: f.api!.total }))
-  // X10d · Los asientos (lo del X07), con su api; los cobros de los días del TPV no la llevan (esperan al R07).
+  // X10d · Los asientos (lo del X07), con su api; los cobros de los días del TPV no la llevan: salen con su día.
   const asientosConexion: PorLaConexion[] = (s?.ficheros.asientos ?? []).filter((f) => f.api)
     .map((f) => ({ clase: 'asiento', entryId: f.entryId, numero: f.api!.numero, tercero: f.api!.apuntes.find((l) => l.concepto.trim())?.concepto ?? '', total: f.api!.apuntes.reduce((t, l) => t + l.debe, 0) }))
-  const porClase: Record<ClaseConexion, PorLaConexion[]> = { recibida: recibidasConexion, emitida: emitidasConexion, asiento: asientosConexion }
+  // X10e · Los días del TPV: su factura del día y su cobro (el servidor los arma con la misma pieza que el Excel).
+  const diasConexion: PorLaConexion[] = (s?.ficheros.dias ?? []).filter((d) => d.api && d.cobro)
+    .map((d) => ({ clase: 'dia', entryId: d.entryId, numero: d.api!.numero, tercero: `el día ${d.api!.fechaFactura.slice(8, 10)}/${d.api!.fechaFactura.slice(5, 7)}`, total: d.api!.total }))
+  const porClase: Record<ClaseConexion, PorLaConexion[]> = { recibida: recibidasConexion, emitida: emitidasConexion, asiento: asientosConexion, dia: diasConexion }
   const nPorExcel = (s?.ficheros.recibidas.length ?? 0) - recibidasConexion.length + (s?.ficheros.expedidas.length ?? 0) - emitidasConexion.length
-  const nDias = s?.ficheros.dias.length ?? 0
-  const clases = (['recibida', 'emitida', 'asiento'] as const).filter((c) => porClase[c].length)
+  // Regla 7 · Un día que sale en el Excel pero no por la conexión (no debería: lo arma la misma pieza) y los días que no salen de ninguna forma, dichos.
+  const nDiasPorExcel = (s?.ficheros.dias.length ?? 0) - diasConexion.length
+  const diasQueNoSalen = (s?.noPuedenSalir ?? []).filter((x) => x.clase === 'dia')
+  const clases = (['recibida', 'emitida', 'asiento', 'dia'] as const).filter((c) => porClase[c].length)
   const sinPrueba = escribir.datos ? clases.find((c) => !escribir.datos![c].primera) ?? null : null
   const pruebaPrimero = !!sinPrueba
   const sinComprobar = escribir.datos ? clases.filter((c) => escribir.datos![c].primera && !escribir.datos![c].comprobada) : []
@@ -329,7 +334,7 @@ export function SalidaErp10() {
 
   async function sacarPorLaConexion() {
     if (!s || !mes || !aSacar.length) return
-    setFallo(null); setDicho(null); setHaciendo(pruebaPrimero ? 'Metiendo la factura de prueba en ERP10…' : `Metiendo en ERP10 ${aSacar.length} ${aSacar.length === 1 ? 'factura' : 'facturas'}…`)
+    setFallo(null); setDicho(null); setHaciendo(pruebaPrimero ? (aSacar[0]?.clase === 'dia' ? 'Metiendo el día de prueba en ERP10…' : 'Metiendo la factura de prueba en ERP10…') : `Metiendo en ERP10 ${aSacar.length} ${aSacar.length === 1 ? 'factura' : 'facturas'}…`)
     try {
       const r = await sacarAErp10(L.companyId, mes, aSacar.map((x) => x.entryId), L.quien, (h, de) => setHaciendo(`Metiendo en ERP10: ${h} de ${de}…`))
       const dicho = loQueHaEntrado(r.salidas, mesEnPalabras(mes))
@@ -411,15 +416,16 @@ export function SalidaErp10() {
         <div className="cxe-confirmar" role="alertdialog" aria-label="Sacar a ERP10">
           <p>{queVaAEntrar({
             recibidas: aSacar.filter((x) => x.clase === 'recibida').length, emitidas: aSacar.filter((x) => x.clase === 'emitida').length,
-            asientos: aSacar.filter((x) => x.clase === 'asiento').length, mes: mesEnPalabras(mes),
+            asientos: aSacar.filter((x) => x.clase === 'asiento').length, dias: aSacar.filter((x) => x.clase === 'dia').length, mes: mesEnPalabras(mes),
             prueba: pruebaPrimero && aSacar[0] ? { clase: aSacar[0].clase, numero: aSacar[0].numero, tercero: aSacar[0].tercero, total: aSacar[0].total } : null,
           })}</p>
           {nPorExcel > 0 && <p className="cx-ayuda">{nPorExcel === 1 ? 'Una factura sale con el Excel' : `${nPorExcel} facturas salen con el Excel`} (retención, inversión del sujeto pasivo, intracomunitaria o más de tres tipos de IVA).</p>}
-          {nDias > 0 && <p className="cx-ayuda">{nDias === 1 ? 'El día del TPV todavía no sale por la conexión' : `Los ${nDias} días del TPV todavía no salen por la conexión`}: {nDias === 1 ? 'sigue' : 'siguen'} con el Excel.</p>}
-          {!pruebaPrimero && sinComprobar.length > 0 && <p className="cx-ayuda">{sinComprobar.map((c) => (c === 'recibida' ? 'Las facturas recibidas' : c === 'emitida' ? 'Las facturas emitidas' : 'Los asientos')).join(', ')} esperan a que compruebes en el paso 3 lo de prueba.</p>}
+          {nDiasPorExcel > 0 && <p className="cx-ayuda">{nDiasPorExcel === 1 ? 'Un día del TPV sale con el Excel' : `${nDiasPorExcel} días del TPV salen con el Excel`}: no se ha podido armar su factura o su cobro.</p>}
+          {diasQueNoSalen.length > 0 && <p className="cx-ayuda">{diasQueNoSalen.length === 1 ? 'Un día del TPV no sale' : `${diasQueNoSalen.length} días del TPV no salen`}, ni por la conexión ni con el Excel: {diasQueNoSalen.slice(0, 3).map((x) => `${x.quien}, ${x.fecha.slice(8, 10)}/${x.fecha.slice(5, 7)} (${x.porque.replace(/\.$/, '')})`).join('; ')}{diasQueNoSalen.length > 3 ? `; y ${diasQueNoSalen.length - 3} más, en «Lo que hay que mirar»` : ''}.</p>}
+          {!pruebaPrimero && sinComprobar.length > 0 && <p className="cx-ayuda">{sinComprobar.map((c) => (c === 'recibida' ? 'Las facturas recibidas' : c === 'emitida' ? 'Las facturas emitidas' : c === 'dia' ? 'Los días del TPV' : 'Los asientos')).join(', ')} esperan a que compruebes en el paso 3 lo de prueba.</p>}
           <div className="cxe-confirmar-botones">
             <button type="button" className="cxe-sec" onClick={() => setConfirmar(false)} disabled={!!haciendo}>No, todavía no</button>
-            <button type="button" className="cxe-grande" onClick={() => { void sacarPorLaConexion() }} disabled={!!haciendo}>{pruebaPrimero ? (aSacar[0]?.clase === 'asiento' ? 'Sacar solo este para probar' : 'Sacar solo esta para probar') : 'Meterlas en ERP10'}</button>
+            <button type="button" className="cxe-grande" onClick={() => { void sacarPorLaConexion() }} disabled={!!haciendo}>{pruebaPrimero ? (aSacar[0]?.clase === 'asiento' || aSacar[0]?.clase === 'dia' ? 'Sacar solo este para probar' : 'Sacar solo esta para probar') : 'Meterlas en ERP10'}</button>
           </div>
         </div>
       )}

@@ -30,9 +30,13 @@ import { CARRIL, CUENTA_A, enCarril, entrarComo, type Sesion } from '../sesion'
 import { rest } from '../api'
 import { ClienteErp10, finalDelNif, lineas, porTipo, resumenSinDatos, sumarPorCuenta, type AlmacenToken } from '../../../../supabase/functions/_shared/erp10Cliente'
 import { erp10Simulado, type EmpresaSimulada } from '../../../conta/erp10/simulado'
-import { sacarAsiento, sacarEmitida, sacarRecibida, type Envio, type PuertoEscribir, type Resultado } from '../../../../supabase/functions/_shared/erp10Escribir'
+import { partidasDeLoQueSale, sacarUno, type Envio, type PuertoEscribir, type Resultado } from '../../../../supabase/functions/_shared/erp10Escribir'
 import { carpetaDe, loQueSaleDesdeLaBase, pedidasDelCuerpo } from '../../../../supabase/functions/_shared/erp10DesdeLaBase'
 import { medidaEnTexto, medirParaTraer } from '../../../../supabase/functions/_shared/erp10Medir'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { asegurarFacturaDelDia } from '../r07/facturaDelDia'
+import { leerRevo } from '../../../../src/modules/conta/lib/lectorRevo'
 
 test.skip(CARRIL === null, 'El X10 escribe en la cuenta A (la conexión con ERP10, la salida, una recibida): necesita su carril.')
 
@@ -159,17 +163,14 @@ async function erp10Escribe(page: Page, s: Sesion, empresas: Record<string, Empr
         poner: async (id, cambios) => { Object.assign([...filas.values()].find((x) => x.id === id)!, cambios) },
         pdf: async () => new Uint8Array([37, 80, 68, 70]),
         erp10: c,
-        usados: async (entryId) => new Set([...filas.values()].filter((x) => x.estado === 'en_erp10' && x.entry_id !== entryId).map((x) => `${x.erp10_serie}/${x.erp10_documento}`)),
+        usados: async (entryId) => new Set([...filas.values()].filter((x) => x.estado === 'en_erp10' && x.entry_id !== entryId)
+          .flatMap((x) => [`${x.erp10_serie}/${x.erp10_documento}`, ...(x.cobro_documento ? [`${x.cobro_serie}/${x.cobro_documento}`] : [])])),
       }
       const resultados: Resultado[] = []
-      for (const x of base.salen) {
-        resultados.push(x.clase === 'recibida' ? await sacarRecibida(x.api, base.cuentasNuevas, x.pdf, p)
-          : x.clase === 'emitida' ? await sacarEmitida(x.api, base.cuentasNuevas, x.pdf, p)
-          : await sacarAsiento(x.api, base.cuentasNuevas, p))
-      }
+      for (const x of base.salen) resultados.push(...(await sacarUno(x, base.cuentasNuevas, p)))
       const porApuntar = resultados.filter((x) => x.estado === 'en_erp10' && x.sinApuntar)
       if (porApuntar.length) {
-        const deLaBase = new Map(base.salen.map((x) => [x.entryId, x]))
+        const deLaBase = partidasDeLoQueSale(base.salen)
         await api(s, 'POST', 'rpc/conta_erp10_lote_apuntar', {
           p_company: b.company_id, p_mes: b.mes, p_quien_nombre: b.quien,
           p_partidas: porApuntar.map((x) => ({ entry_id: x.entryId, clase: deLaBase.get(x.entryId)!.clase, huella: deLaBase.get(x.entryId)!.huella })),
@@ -415,3 +416,126 @@ for (const tam of TAMANOS) {
     expect(errores).toEqual([])
   })
 }
+
+// ── X10e · Los días del TPV por la conexión ─────────────────────────────────────────
+
+const EJEMPLO = resolve('tests/conta/r04/revo_ejemplo')
+
+/** El ejemplo de Revo del 09/11 (el del R04), movido a hoy, con su centena de facturas (60 + el día: no choca con las del X08). */
+function revoDeHoy(dia: string) {
+  const centena = String(60 + Number(dia.slice(8, 10)))
+  return ['Ordenes', 'Documentos', 'Impuestos', 'Pagos'].map((n) => {
+    const t = readFileSync(resolve(EJEMPLO, `${n}_2026-11-09.csv`), 'utf8').replaceAll('2026-11-09', dia).replace(/\b50(\d\d)\b/g, `${centena}$1`)
+    return { nombre: `${n}_${dia}.csv`, contenido: new TextEncoder().encode(t) }
+  })
+}
+
+/**
+ * El día del TPV de hoy, validado (como el X08: las formas de pago, «Clientes de contado», la factura del día del R07 y el
+ * día guardado; se valida en Cierres del día). Si ya salió (otra pasada de hoy), vuelve a lo que sale. Sus asientos: la
+ * factura del día y, desde el R07, su cobro.
+ */
+async function diaDeHoy(page: Page, s: Sesion, hoy: string): Promise<string[]> {
+  const ctas = await api<{ id: string; code: string; name: string }[]>(s, 'GET', `company_account?select=id,code,name&company_id=eq.${EMPRESA_A}&status=neq.cerrada&order=code`)
+  const de = (pref: string) => ctas.find((c) => c.code.startsWith(pref))
+  const caja = de('570') ?? de('572'), banco = de('572') ?? de('570'), plataforma = ctas.find((c) => c.code.startsWith('430') && !/contado/i.test(c.name))
+  if (!caja || !banco || !plataforma) throw new Error(`El plan de la empresa no tiene caja, banco o una 430 (${ctas.length} cuentas).`)
+  const formas = await api<{ id: string }[]>(s, 'GET', `conta_tpv_forma_cuenta?select=id&company_id=eq.${EMPRESA_A}`)
+  if (!formas.length) {
+    const fs = [['Efectivo', null, caja.id], ['Tarjeta', null, banco.id], ['Deliverect', 'Glovo', plataforma.id], ['Deliverect', 'UberEats', plataforma.id]] as const
+    await api(s, 'POST', 'conta_tpv_forma_cuenta', fs.map(([forma, canal, cta]) => ({ account_id: CUENTA_A.id, company_id: EMPRESA_A, forma, canal, company_account_id: cta, created_by_name: QUIEN })))
+  }
+  if (!ctas.some((c) => c.code.startsWith('430') && /contado/i.test(c.name))) await api(s, 'POST', 'rpc/company_account_add', { p_company: EMPRESA_A, p_hoja: '4300', p_nombre: 'Clientes de contado', p_quien_nombre: QUIEN })
+  await asegurarFacturaDelDia(s, EMPRESA_A)
+  const estado = async () => (await api<{ dia: string; estado: string }[]>(s, 'POST', 'rpc/conta_tpv_dias', { p_company: EMPRESA_A, p_desde: hoy, p_hasta: hoy }))[0]?.estado ?? null
+  if (!(await estado())) {
+    const l = leerRevo(revoDeHoy(hoy))
+    if (!l.ok) throw new Error(l.problemas.join(' | '))
+    await api(s, 'POST', 'rpc/conta_tpv_dia_guardar', { p_company: EMPRESA_A, p_dia: hoy, p_programa: 'revo', p_lectura: l.lectura.dias[0].lectura, p_quien_nombre: QUIEN })
+  }
+  if ((await estado()) !== 'validado') {
+    await page.goto('/conta/ventas/cierres?ver=todos', { waitUntil: 'load' })
+    await expect(page.getByRole('heading', { level: 1, name: 'Cierres del día' })).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('.s-lista-cargando')).toHaveCount(0, { timeout: 30_000 })
+    const boton = page.getByRole('button', { name: /^Validar los \d+ listos/ }).first()
+    await expect(boton).toBeEnabled({ timeout: 30_000 })
+    await boton.click()
+    await page.getByRole('dialog').getByRole('button', { name: /^Validar \d+ cierres?$/ }).click()
+    await expect.poll(estado, { timeout: 300_000, intervals: [5_000] }).toBe('validado')
+  }
+  const asientos = await api<{ id: string }[]>(s, 'GET', `journal_entry?select=id&company_id=eq.${EMPRESA_A}&entry_date=eq.${hoy}&status=eq.validado&source_type=in.(sales_day,sales_day_payment)`)
+  // Otra pasada de hoy ya lo sacó: vuelve a lo que sale (como «Volver a sacar solo esa»).
+  for (const a of asientos) await rest(s, 'POST', 'rpc/conta_erp10_volver_a_sacar', { p_company: EMPRESA_A, p_entry: a.id, p_quien_nombre: QUIEN })
+  return asientos.map((a) => a.id)
+}
+
+test('X10e · 1366 × 768 y 1456 × 816: el día del TPV sale por la conexión (su factura del día y su cobro), el primero solo, y el paso 3 lo casa día a día', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1440) < 768, 'En el ordenador (encargo X10e).')
+  test.setTimeout(480_000)
+  await page.setViewportSize(TAMANOS[0])
+  const s = await entrarComo(page, CUENTA_A.email)
+  const errores = vigilar(page)
+  const hoy = hoyEnMadrid()
+  const fin = finDeMes(hoy)
+  const mesTexto = `${['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][Number(hoy.slice(5, 7)) - 1]} de ${hoy.slice(0, 4)}`
+  const nif = await nifDeLaSociedad(s)
+  await conCodigo(s, await conectar(s))
+  const asientos = await diaDeHoy(page, s, hoy)
+  await api(s, 'POST', 'rpc/conta_erp10_salida_poner', { p_company: EMPRESA_A, p_encender: true, p_codigo: '0007', p_largo: 8, p_desde: hoy, p_quien_nombre: QUIEN })
+
+  // Lo que el día y su cobro dejan en Sumied: lo que a ERP10 le falta (y la 477 del día, la que ERP10 tiene para el IVA repercutido).
+  const leer = (fn: string) => api<{ dias?: { entryId: string; lineas: { cuenta: string; debe: number; haber: number; tipoIva: number | null }[] }[]; asientos?: { entryId: string; lineas: { cuenta: string; debe: number; haber: number }[] }[] }>(s, 'POST', `rpc/${fn}`, { p_company: EMPRESA_A, p_mes: `${hoy.slice(0, 7)}-01` })
+  const [ds, as] = [await leer('conta_erp10_dias_tpv_por_salir'), await leer('conta_erp10_asientos_por_salir')]
+  const lineasDia = [...(ds.dias ?? []), ...(as.asientos ?? [])].filter((x) => asientos.includes(x.entryId)).flatMap((x) => x.lineas)
+  expect(lineasDia.length, 'el día del TPV de hoy está para salir').toBeGreaterThan(0)
+  const falta = new Map<string, number>()
+  for (const l of lineasDia) falta.set(l.cuenta, (falta.get(l.cuenta) ?? 0) + Math.round(Number(l.debe) * 100) - Math.round(Number(l.haber) * 100))
+  const empresa101 = await erp10ConLoDeSumied(s, fin, falta, nif)
+  const c = await api<{ saldos: { codigo: string; erp: string | null }[] }>(s, 'POST', 'rpc/conta_erp10_comprobar', { p_company: EMPRESA_A, p_fecha: fin })
+  const iva = (ds.dias ?? []).flatMap((d) => d.lineas).find((l) => l.tipoIva != null)?.cuenta
+  empresa101.ivaRepercutido = c.saldos.find((x) => x.codigo === iva)?.erp ?? iva
+  const empresas = { 101: empresa101 }
+  const pedidas: string[] = []
+  await erp10DeMentira(page, s, empresas, nif)
+  await erp10Escribe(page, s, empresas, nif, pedidas)
+  await page.route('**/functions/v1/connector-credentials', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, hasCredentials: true }) }))
+
+  // 1 · La primera vez, un solo día, para probar: cuál, con su rango, y que no se puede borrar. A los dos tamaños.
+  const prueba = new RegExp(`^Va a entrar en ERP10 un solo día del TPV de ${mesTexto}, para probar: el día ${dm(hoy).replace('/', '\\/')}, las facturas \\d+-\\d+ \\([\\d.]+,\\d\\d €\\), con su factura del día y su cobro\\. Si algo sale mal, se corrige a mano en ERP10: Sumied no puede borrarlo\\.`)
+  await page.goto('/conta/libros/cierre/salida-erp10', { waitUntil: 'load' })
+  await expect(page.getByRole('heading', { name: 'Salida a ERP10', level: 1 })).toBeVisible({ timeout: 40_000 })
+  const aviso = page.getByRole('alertdialog', { name: 'Sacar a ERP10' })
+  for (const tam of [TAMANOS[1], TAMANOS[0]]) {
+    await page.setViewportSize(tam)
+    const sacar = page.getByRole('button', { name: 'Sacar una para probar' })
+    await expect(sacar).toBeEnabled({ timeout: 30_000 })
+    await sacar.click()
+    await expect(aviso).toContainText(prueba)
+    await expect(aviso).not.toContainText(/todavía no salen? por la conexión|siguen? con el Excel/)
+    await page.screenshot({ path: `${DIR}/paso1-dia-${tam.width}.png` })
+    if (tam === TAMANOS[1]) await aviso.getByRole('button', { name: 'No, todavía no' }).click()
+  }
+  await aviso.getByRole('button', { name: 'Sacar solo este para probar' }).click()
+  await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('.cxe-hecho')).toHaveText(new RegExp(`^Han entrado en ERP10 1 día del TPV de ${mesTexto} \\(1/\\d+, 1/\\d+\\)\\.$`))
+  expect(pedidas).toHaveLength(1)
+  expect(empresa101.facturas ?? []).toHaveLength(1)
+  expect(empresa101.facturas![0]).toMatchObject({ Serie: '1', NombreCliente: expect.stringMatching(/contado/i), NumeroFacturasIncluidas340: expect.any(Number), PrimerNumeroFactura340: expect.stringMatching(/^\d+$/) })
+  expect(empresa101.apuntes.filter((a) => a.TipoAsiento === 0)).toHaveLength(1)
+
+  // 2 · El paso 3: el día casado con los números que le dio ERP10 (su factura y su cobro), y sus cuentas igual. A los dos tamaños.
+  await page.getByRole('button', { name: 'Comparar con ERP10' }).click()
+  await expect(page.locator('.cxe-marco[aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 })
+  await expect(page.getByRole('note', { name: 'Una a una, con su número de ERP10' }))
+    .toHaveText(/^Día a día: (el que salió|los 2 que salieron) por la conexión (está|están) en ERP10 con su número, igual\.$/, { timeout: 30_000 })
+  const tabla = page.getByRole('table', { name: 'Cuenta a cuenta' })
+  for (const k of falta.keys()) await expect(tabla.getByRole('row').filter({ hasText: k }).locator('.cxe-dif')).toHaveText('', { timeout: 30_000 })
+  for (const tam of TAMANOS) {
+    await page.setViewportSize(tam)
+    await page.evaluate(() => window.scrollTo(0, 0))
+    const abajo = await page.evaluate(() => [document.querySelector('.cxe')?.getBoundingClientRect().bottom ?? 9999, window.innerHeight])
+    expect(abajo[0], `a ${tam.width} × ${tam.height}, la pantalla acaba dentro de la ventana`).toBeLessThanOrEqual(abajo[1])
+    await page.screenshot({ path: `${DIR}/paso3-dia-${tam.width}.png` })
+  }
+  expect(errores).toEqual([])
+})

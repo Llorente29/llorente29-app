@@ -884,12 +884,27 @@ export function cobroDia(x: DiaLeido): AsientoParaErp10 {
   }
 }
 
+/**
+ * X10e · La factura del día para la conexión con ERP10: una emitida (EmitidaParaApi) con «Clientes de
+ * contado» de cliente y, además, el resumen de facturas del día (cuántas, la primera y la última), que
+ * en el Excel son las columnas 069, 070 y 071. Su número, el rango («5001-5048»): ERP10 busca por él.
+ */
+export type DiaParaApi = EmitidaParaApi & { facturas: number; primero: string; ultimo: string }
+export function diaParaApi(x: DiaLeido, erp: ReadonlyMap<string, string>): DiaParaApi {
+  const a = (k: string) => erp.get(k) ?? k
+  return {
+    entryId: x.entryId, numero: x.primero === x.ultimo ? x.primero : `${x.primero}-${x.ultimo}`, fechaFactura: x.fecha, fechaAsiento: x.fecha,
+    nif: '', nombre: x.contado.nombre, cliente: a(x.contado.codigo), ingresos: x.ingresos.map((g) => ({ cuenta: a(g.cuenta), importe: g.importe })),
+    iva: x.iva, total: x.total, facturas: x.facturas, primero: x.primero, ultimo: x.ultimo,
+  }
+}
+
 export type SalidaDias = {
   /**
    * En orden de fecha. Cada día, su fila de expedidas y su asiento de cobro: armado del asiento
    * del día (`cobro`), o, con el día en dos asientos (R07), el del cobro del día (`cobroId`).
    */
-  dias: { entryId: string; numero: string; fecha: string; local: string | null; facturas: number; total: number; fila: Fila; cobro: AsientoParaErp10 | null; cobroId: string | null; usa: string[] }[]
+  dias: { entryId: string; numero: string; fecha: string; local: string | null; facturas: number; total: number; fila: Fila; cobro: AsientoParaErp10 | null; cobroId: string | null; usa: string[]; api: DiaParaApi }[]
   noSalen: NoSale[]
 }
 
@@ -923,7 +938,7 @@ export function prepararDiasTpv(lista: readonly DiaParaErp10[], contado: readonl
     const numero = rangoDe(x)
     if (mala) { noSalen.push({ entryId: x.entryId, numero, porque: (conv.noCaben.get(mala) ?? o.noCaben!.get(mala))! }); continue }
     dias.push({ entryId: x.entryId, numero, fecha: x.fecha, local: x.local, facturas: x.facturas, total: e(x.total), fila: filaDia(x, conv.erp, xml),
-      cobro: x.cobroId ? null : cobroDia(x), cobroId: x.cobroId, usa })
+      cobro: x.cobroId ? null : cobroDia(x), cobroId: x.cobroId, usa, api: diaParaApi(x, conv.erp) })
   }
   return { dias, noSalen }
 }

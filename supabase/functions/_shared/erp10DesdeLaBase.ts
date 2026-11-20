@@ -10,11 +10,13 @@
 // cuentas ya convertidas y la huella de su fila.
 //
 // Lo prueba tests/conta/erp10/desdeLaBase.test.ts: un importe distinto en el cuerpo no entra.
-// X10d: y los asientos (lo del X07), con la huella de sus filas; los días del TPV, no.
+// X10d: y los asientos (lo del X07), con la huella de sus filas.
+// X10e: y los días del TPV: su factura del día y su cobro (el asiento armado, en un día de un solo
+// asiento; o el asiento del cobro del día, si va en dos), con la misma huella que apunta el Excel.
 
 import { armarSalida } from './erp10Salida.ts'
 import { aAsientos, aDias, aEmitidas, aPorSalir, aRecibidas } from './erp10Lectura.ts'
-import { huellaFila, type AsientoParaApi, type EmitidaParaApi, type RecibidaParaApi } from './erp10Ficheros.ts'
+import { huellaFila, type AsientoParaApi, type DiaParaApi, type EmitidaParaApi, type RecibidaParaApi } from './erp10Ficheros.ts'
 
 /** Lo que devuelven las cinco funciones de la base, tal cual, y la carpeta de los PDF de la salida. */
 export type BaseCruda = {
@@ -29,8 +31,14 @@ export type BaseCruda = {
 export type ParaEscribir =
   | { clase: 'recibida'; entryId: string; numero: string; api: RecibidaParaApi; huella: string; pdf: { ruta: string; nombre: string } | null }
   | { clase: 'emitida'; entryId: string; numero: string; api: EmitidaParaApi; huella: string; pdf: { ruta: string; nombre: string } | null }
-  /** X10d · Un asiento (lo del X07). Los días del TPV no: esperan al R07. */
+  /** X10d · Un asiento (lo del X07). */
   | { clase: 'asiento'; entryId: string; numero: string; api: AsientoParaApi; huella: string; pdf: null }
+  /**
+   * X10e · Un día del TPV: su factura del día y su cobro. `cobro.aparte`: el día va en dos asientos
+   * (R07) y el cobro es otro asiento, con su huella; si no, el cobro sale del mismo asiento del día.
+   */
+  | { clase: 'dia'; entryId: string; numero: string; api: DiaParaApi; huella: string; pdf: null
+      cobro: { entryId: string; api: AsientoParaApi; aparte: boolean; huella: string } }
 
 /** La carpeta de los PDF de la salida (la misma regla que la pantalla). */
 export const carpetaDe = (carpeta: string | null | undefined, codigo: string | null | undefined) => carpeta ?? `C:\\Sumied\\${codigo ?? ''}\\`
@@ -56,16 +64,32 @@ export async function loQueSaleDesdeLaBase(b: BaseCruda, pedidas: readonly strin
   const rec = new Map(s.ficheros.recibidas.map((f) => [f.entryId, f]))
   const emi = new Map(s.ficheros.expedidas.map((f) => [f.entryId, f]))
   const asi = new Map(s.ficheros.asientos.map((f) => [f.entryId, f]))
-  const dias = new Set(s.ficheros.dias.map((d) => d.entryId))
+  const dias = new Map(s.ficheros.dias.map((d) => [d.entryId, d]))
+  // El cobro de un día en dos asientos sale con su día, no suelto.
+  const cobroDe = new Map(s.ficheros.dias.flatMap((d) => (d.cobroId ? [[d.cobroId, d.entryId] as const] : [])))
   const porque = new Map(s.noPuedenSalir.map((x) => [x.entryId, x.porque]))
   const salen: ParaEscribir[] = []
   const noSalen: { entryId: string; porque: string }[] = []
-  for (const id of pedidas) {
+  // Pedir el cobro de un día de dos asientos es pedir su día (sale con él, una sola vez).
+  const vistas = new Set<string>()
+  for (const pedida of pedidas) {
+    const id = cobroDe.get(pedida) ?? pedida
+    if (vistas.has(id)) continue
+    vistas.add(id)
     const r = rec.get(id)
     if (r?.api) { salen.push({ clase: 'recibida', entryId: id, numero: r.api.numero, api: r.api, huella: await huellaFila(r.fila), pdf: r.pdf ?? null }); continue }
     const e = emi.get(id)
     if (e?.api) { salen.push({ clase: 'emitida', entryId: id, numero: e.api.numero, api: e.api, huella: await huellaFila(e.fila), pdf: e.pdf ?? null }); continue }
-    if (dias.has(id)) { noSalen.push({ entryId: id, porque: 'Es un día del TPV, y todavía no sale por la conexión: sigue con el Excel.' }); continue }
+    const d = dias.get(id)
+    if (d) {
+      if (!d.api || !d.cobro) { noSalen.push({ entryId: id, porque: 'Es un día del TPV y no se ha podido armar su factura o su cobro: sale con el Excel.' }); continue }
+      const aparte = d.cobro.entryId !== id
+      // La huella, la misma que apunta el Excel: la fila del día y, en un día de un asiento, la de su cobro.
+      const huella = await huellaFila([...d.fila, ...(aparte ? [] : d.cobro.filas.flat())])
+      salen.push({ clase: 'dia', entryId: id, numero: d.api.numero, api: d.api, huella, pdf: null,
+        cobro: { entryId: d.cobro.entryId, api: d.cobro.api, aparte, huella: aparte ? await huellaFila(d.cobro.filas.flat()) : huella } })
+      continue
+    }
     const a = asi.get(id)
     if (a?.api) { salen.push({ clase: 'asiento', entryId: id, numero: a.api.numero, api: a.api, huella: await huellaFila(a.filas.flat()), pdf: null }); continue }
     noSalen.push({ entryId: id, porque: porque.get(id) ?? 'No está en lo que sale este mes: ya salió, o no sale por aquí.' })
