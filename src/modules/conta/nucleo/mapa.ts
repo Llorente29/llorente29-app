@@ -118,8 +118,9 @@ const DIEZ = b('diez', 'Pendientes de Diez', 'diez', R.pendientesDiez, [R.pendie
 
 const lib = (area: string, accion: string) => `${R.libros}/${area}/${accion}`
 // Q06 · Los nombres de la cinta de Listados, los de la maqueta nucleo_7 y ERP10: Diario, Mayor, Sumas y saldos,
-// Libro de emitidas, Libro de recibidas, Retenciones, Balance y Pérdidas y ganancias.
-const RESUMIDO = b('resumido', 'Diario', 'diario', R.diarioResumido, [R.diarioResumido, lib('diario', 'diario-resumido')], { pestana: 'Diario' })
+// Libro de emitidas, Libro de recibidas, Retenciones, Balance y Pérdidas y ganancias. El diario, en su pestaña de
+// trabajo, sigue llamándose «Diario resumido» (Julio, 20/11: el botón dice «Diario» y la pestaña lo que es).
+const RESUMIDO = b('resumido', 'Diario', 'diario', R.diarioResumido, [R.diarioResumido, lib('diario', 'diario-resumido')], { pestana: 'Diario resumido' })
 // El índice de Libros (libros a secas) y la cuenta del plan (plan/:codigo) son del Mayor.
 const MAYOR = b('mayor', 'Mayor', 'mayor', lib('mayor', 'libro-mayor'), [R.libros, `${R.libros}/mayor`, lib('mayor', 'libro-mayor'), 'plan'], { pestana: 'Mayor' })
 const SUMAS = b('sumas', 'Sumas y saldos', 'sumas', lib('mayor', 'sumas-saldos'), undefined, { pestana: 'Sumas y saldos' })
