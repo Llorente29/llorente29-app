@@ -44,7 +44,7 @@ import { duplicadaDe } from '@/modules/conta/documentos/paraValidarService'
 import { faltaDocumento } from '@/modules/conta/documentos/paraValidar'
 import { esAbono } from '@/modules/conta/documentos/abono'
 import {
-  ACEPTA_PAPEL, ETIQUETAS, FORMAS_PAGO, TIPOS_RETENCION, asientoVistaPrevia, borradorDe, cambiosParaLaBase, comprobarAMano, cuentasDeLaPropuesta, formatoCampo,
+  ACEPTA_PAPEL, ETIQUETAS, TIPOS_RETENCION, asientoVistaPrevia, borradorDe, cambiosParaLaBase, comprobarAMano, cuentasDeLaPropuesta, formatoCampo,
   importeEs, rehacerCuota, rehacerRetencion, totalesDe, desdeElTotal, type BorradorFicha, type LineaIva,
 } from '@/modules/conta/documentos/fichaRecibida'
 import {
@@ -63,14 +63,24 @@ import { cuentasQueEncajan, queHaceIntro, type CuentaDelPlan } from '../ficha/te
 import { origenes } from './origen'
 import { casillasVacias, comprobacionesDe, dondeVaElFoco, dudaDelGasto, emisorDesconocido, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
 import { calendarioDe, cuentasAMano, delProveedor, gastoAprendido, marcaDeLaFactura, mayorDelProveedor, textoOperacion } from './servicio'
+import { fechaDelPago, propuestaDelPago, queHaceElPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
+import { apuntarPago, cuentasDePago, hayLiquidacion, pagoDelProveedor } from './pagoServicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import { AltaDesdeFactura } from '@/modules/conta/documentos/ProveedorDesdeFactura'
 import { fraseAltaEnFactura } from '@/modules/conta/lib/altaProveedor'
 
+/**
+ * K06 · El borrador de esta ficha: el de la ficha de hoy y la cuenta del pago con su fecha. null = lo que
+ * se propone (la 430 de su liquidación, la del último pago, o vacía); '' = pendiente de pagar.
+ */
+type BorradorNucleo = BorradorFicha & { pagoCuenta: string | null; pagoFecha: string | null }
 /** Los nombres de los cambios sin guardar, con los rótulos de esta ficha (K04b: «N.º de factura», como la casilla). */
-const ETIQUETAS_NUCLEO = { ...ETIQUETAS, numero: 'N.º de factura' }
-const VACIO: BorradorFicha = borradorDe({ proveedorId: null, numero: null, fecha: null, vence: null, retencion: null, recargo: null, gasto: null, local: null, formaPago: null, pagada: false, tipos: [], lineas: [], base: null, cuota: null })
-const vacioAMano = (hoy: string): BorradorFicha => ({ ...VACIO, fecha: hoy, iva: [{ base: '', tipo: '21', cuota: '' }, { base: '', tipo: '10', cuota: '' }] })
+const ETIQUETAS_NUCLEO = { ...ETIQUETAS, numero: 'N.º de factura', pagoCuenta: 'La cuenta del pago', pagoFecha: 'La fecha del pago' }
+const SIN_PAGO = { pagoCuenta: null, pagoFecha: null }
+const VACIO: BorradorNucleo = { ...borradorDe({ proveedorId: null, numero: null, fecha: null, vence: null, retencion: null, recargo: null, gasto: null, local: null, formaPago: null, pagada: false, tipos: [], lineas: [], base: null, cuota: null }), ...SIN_PAGO }
+const vacioAMano = (hoy: string): BorradorNucleo => ({ ...VACIO, fecha: hoy, iva: [{ base: '', tipo: '21', cuota: '' }, { base: '', tipo: '10', cuota: '' }] })
+/** Lo que no guarda conta_recibida_guardar: la cuenta del pago va al validar (K06). */
+const NO_SE_GUARDA = new Set(['documento', 'sinPdf', 'motivoSinPdf', 'estadoPago', 'pagoCuenta', 'pagoFecha'])
 const num = (x: string): number | null => { const n = Number(x.replace(/\./g, '').replace(',', '.')); return x.trim() && Number.isFinite(n) ? n : null }
 
 type Aviso = { tono: 'ok' | 'falta' | 'mal'; texto: string }
@@ -141,22 +151,26 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const gastoPropuesto = lineaGasto?.cuenta ?? fac?.proveedor?.gasto?.cuenta ?? null
   const venceFicha = fac?.fecha && plazo && plazo.dias !== null ? calcularVencimiento(fac.fecha, plazo.dias, plazo.fijos) : null
   const guardado = ficha?.guardado ?? null
-  const original = useMemo<BorradorFicha>(() => {
+  const original = useMemo<BorradorNucleo>(() => {
     if (aMano) return vacioAMano(hoy)
     if (!fac) return VACIO
-    return borradorDe({
+    return { ...SIN_PAGO, ...borradorDe({
       proveedorId: fac.proveedor?.id ?? null, numero: fac.numero, fecha: fac.fecha, vence: fac.vence ?? venceFicha,
       retencion: fac.retencion, recargo: fac.recargo, gasto: gastoPropuesto, local: localPropuesto ?? null,
       formaPago: guardado?.formaPago ?? extra?.comoPagada ?? ficha?.formaPagoFicha ?? null, pagada: !!extra?.pagada,
       tipos: fac.tipos, lineas: fac.lineas, base: fac.base, cuota: fac.cuota,
       reparto: guardado?.reparto.length ? guardado.reparto.map((g) => ({ cuenta: g.cuenta, local: g.comun ? null : g.local, importe: g.importe })) : null,
       sinPdf: guardado?.sinPdf ? { motivo: guardado.sinPdf.motivo } : null,
-    })
+    }) }
   }, [aMano, hoy, fac, venceFicha, gastoPropuesto, localPropuesto, extra, ficha, guardado])
   const nombreProveedor = useCallback((pid: string) => proveedores.find((p) => p.id === pid)?.nombre ?? (fac?.proveedor?.id === pid ? fac.proveedor.nombre : 'otro proveedor'), [proveedores, fac])
   const nombreLocal = useCallback((lid: string) => locales.find((l) => l.id === lid)?.nombre ?? null, [locales])
-  const formato = useMemo(() => formatoCampo(nombreProveedor, nombreLocal), [nombreProveedor, nombreLocal])
-  const ed = useCambiosSinGuardar<BorradorFicha>(original, ETIQUETAS_NUCLEO, formato)
+  const formato = useMemo(() => {
+    const f = formatoCampo(nombreProveedor, nombreLocal)
+    return (campo: string, v: unknown): string => campo === 'pagoCuenta' ? (v ? String(v) : 'Pendiente de pagar')
+      : campo === 'pagoFecha' ? (v ? String(v).split('-').reverse().join('/') : '—') : f(campo, v)
+  }, [nombreProveedor, nombreLocal])
+  const ed = useCambiosSinGuardar<BorradorNucleo>(original, ETIQUETAS_NUCLEO, formato)
   const b = ed.valor
   const { reiniciar } = ed
   const deFactura = useRef(`${aMano}:${invoiceId}`)
@@ -176,6 +190,23 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const sinPropuesta = aMano || propuesta === null
   // Una vez por empresa: la subcuenta del proveedor sale de delProveedor (ya leído), no de volver a leer el contexto entero.
   const aManoCuentas = useLeer(accountId && empresa && sinPropuesta ? () => cuentasAMano(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-a-mano`).datos ?? null
+
+  // ── K06 · Cómo se paga: la cuenta del pago, propuesta (la 430 de su liquidación, la del último pago) o vacía ──
+  const cuentasPago = useUltimo(useLeer(accountId && empresa ? () => cuentasDePago(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-pago`).datos, empresa ?? '')
+  const subProvCodigo = delProv?.subcuenta?.codigo ?? null
+  const pagoProv = useUltimo(useLeer(accountId && empresa && provId && delProv ? () => pagoDelProveedor(accountId, empresa, provId, subProvCodigo) : null, `${accountId}:${empresa}:${provId}:${subProvCodigo}:pago:${vuelta}`).datos, `${id}:${provId}`)
+  const conLiquidacion = useLeer(id && pagoProv?.plataforma ? () => hayLiquidacion(id) : null, `${id}:${pagoProv?.plataforma ? 'p' : '-'}:liquidacion:${vuelta}`).datos ?? false
+  const plataforma = pagoProv?.plataforma ? { ...pagoProv.plataforma, hayLiquidacion: conLiquidacion } : null
+  const propuestaPago = pagoProv ? propuestaDelPago({ plataforma, ultimas: pagoProv.ultimas }) : null
+  const pagoCuenta = b.pagoCuenta ?? propuestaPago?.cuenta ?? ''
+  const pagoFecha = b.pagoFecha ?? fechaDelPago(b.fecha, b.vence)
+  const origenPago = b.pagoCuenta === null ? propuestaPago?.origen ?? null : null
+  const dudaPago = b.pagoCuenta === null && propuestaPago?.duda ? propuestaPago.duda : null
+  const nombrePago = pagoCuenta ? cuentasPago?.nombres.get(pagoCuenta) ?? 'Cuenta' : ''
+  // Lo que se escribe en la casilla del pago, de ESTA factura (al pasar a otra, se vuelve a lo suyo).
+  const [escrito, setEscrito] = useState<{ de: string; texto: string | null }>({ de: '', texto: null })
+  const textoPago = escrito.de === `${aMano}:${invoiceId}` ? escrito.texto : null
+  const setTextoPago = (texto: string | null) => setEscrito({ de: `${aMano}:${invoiceId}`, texto })
 
   // ── El asiento que sale ──
   const cuentasPlan: CuentaDelPlan[] = useMemo(() => cuentasGasto.map((c) => ({ codigo: c.codigo, nombre: c.nombre })), [cuentasGasto])
@@ -209,7 +240,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     : fac?.propuesto ? { nombre: fac.propuesto.nombre, nif: fac.propuesto.nif } : null
   const emisor = fac ? emisorDesconocido({ aMano, proveedorId: provId, leido: leidoEmisor, proveedores }) : null
   const vacias = aMano ? [] : casillasVacias({ proveedor: !!provId, numero: b.numero, fecha: b.fecha, total: totales.total, cuentaGasto: b.gastos.some((g) => g.cuenta.trim() !== '') })
-  const estado = estadoDeLaFicha({ aMano, leida: !!fac?.lectura, comprobaciones, hayDudaGasto: !!duda, desconocido: emisor?.que === 'alta', vacias })
+  const estado = estadoDeLaFicha({ aMano, leida: !!fac?.lectura, comprobaciones, hayDudaGasto: !!duda || !!dudaPago, desconocido: emisor?.que === 'alta', vacias })
   const [altaAbierta, setAltaAbierta] = useState<string | null>(null)
   const [abrirProveedor, setAbrirProveedor] = useState(0)
   useNombreDePestana(nombreDePestana(aMano ? prov?.nombre : prov?.nombre ?? fac?.proveedor?.nombre ?? emisor?.nombre, !aMano))
@@ -231,14 +262,30 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const [guardando, setGuardando] = useState(false)
   useEffect(() => () => { if (fichero) URL.revokeObjectURL(fichero.url) }, [fichero])
 
+  // K06 · Qué hace al validar la cuenta del pago que hay en la casilla, y hacerlo (siempre una frase, regla 8).
+  const importePago = Math.round(totales.total * 100) / 100
+  const queElPago = (): QueHaceElPago => queHaceElPago({ cuenta: pagoCuenta, fecha: pagoFecha, hoy, importe: importePago,
+    tesorerias: cuentasPago?.tesorerias ?? new Map<string, string>(), plataforma, cuentaProveedor: subProvCodigo })
+  async function elPago(facturaId: string, empresaId: string): Promise<string> {
+    const q = queElPago()
+    if (q.que === 'pendiente') return textoPendiente(q.porque)
+    if (q.que === 'liquidacion') return `Se paga con su liquidación: la ${q.cuenta}${plataforma ? ` de ${plataforma.nombre}` : ''} la descuenta, no pasa por el banco.`
+    try { return await apuntarPago({ companyId: empresaId, facturaId, pago: q, quien: userName }) }
+    catch (e) { return `El pago no se ha apuntado (${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}): queda pendiente de pagar.` }
+  }
+
   /** Guarda lo cambiado (sin validar). true si todo; si no, el porqué. */
   async function guardarCambios(): Promise<true | string> {
     if (!fac) return true
-    const campos = ed.cambios.map((c) => c.campo).filter((c) => c !== 'documento' && c !== 'sinPdf' && c !== 'motivoSinPdf' && c !== 'estadoPago')
+    const campos = ed.cambios.map((c) => c.campo).filter((c) => !NO_SE_GUARDA.has(c))
+    // K06 · Con la 430 de su liquidación, la forma de pago es «Compensación con la liquidación» (la de la 0790): al validarla la paga la base.
+    const conLiq = queElPago().que === 'liquidacion' && b.formaPago !== 'compensation'
+    const bb: BorradorNucleo = conLiq ? { ...b, formaPago: 'compensation' } : b
+    if (conLiq && !campos.includes('formaPago')) campos.push('formaPago')
     const partes: string[] = []
     if (campos.length) {
-      const prev = cuentasAsiento ? asientoVistaPrevia(b, cuentasAsiento, () => 'Cuenta', () => null).lineas : undefined
-      const r = await guardarCambiosRecibida(fac, cambiosParaLaBase(b, campos, { previa: prev, comun: '', retencionTipoId: b.retencion && original.retencion && b.retencion.tipo === original.retencion.tipo ? ficha?.retencionId ?? null : null }),
+      const prev = cuentasAsiento ? asientoVistaPrevia(bb, cuentasAsiento, () => 'Cuenta', () => null).lineas : undefined
+      const r = await guardarCambiosRecibida(fac, cambiosParaLaBase(bb, campos as (keyof BorradorFicha)[], { previa: prev, comun: '', retencionTipoId: b.retencion && original.retencion && b.retencion.tipo === original.retencion.tipo ? ficha?.retencionId ?? null : null }),
         { quien: userName, nombres: { proveedor: nombreProveedor(b.proveedorId) }, localPropuesto: localPropuesto ?? null })
       if (r.fallos.length) return `No se ha guardado: ${r.fallos.map((x) => `${x.etiqueta}, ${x.porque.replace(/\.$/, '')}`).join(' · ')}.`
       if (!r.conTanda) return 'No se ha guardado: la base aún no tiene la función que guarda la ficha (0790).'
@@ -281,7 +328,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       const r = await apuntarFactura(fresca, userName, userId, localPropuesto ?? null)
       refrescarCuentasMenu()
       if (!r.validado) { setAviso({ tono: 'falta', texto: `Guardada, sin validar: ${r.texto.replace(/^Apuntada y validada\.\s*/, '')} No paso a la siguiente.` }); setVuelta((v) => v + 1); return }
-      const texto = `${r.texto}${siguiente ? '' : ' No quedan más por revisar en esta lista.'}`
+      const pago = await elPago(fac.id, fac.company_id ?? empresa ?? '')
+      const texto = `${r.texto} ${pago}${siguiente ? '' : ' No quedan más por revisar en esta lista.'}`
       if (siguiente) { ir(siguiente, texto); return }
       setAviso({ tono: 'ok', texto }); setVuelta((v) => v + 1)
     } catch (e) {
@@ -321,8 +369,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     if (!v.validado) {
       navegar(`${rutaRevisarFactura(r.id)}?ver=por-revisar`, { state: { aviso: `${dicho.join(' ')} Sin validar: ${v.texto}` } }); return
     }
+    const pago = await elPago(r.id, activa.id)
     ed.reiniciar(vacioAMano(hoy))
-    setAviso({ tono: 'ok', texto: `${dicho.join(' ')} ${v.texto} Escribe la siguiente.` })
+    setAviso({ tono: 'ok', texto: `${dicho.join(' ')} ${v.texto} ${pago} Escribe la siguiente.` })
     focoPuesto.current = ''; tocada.current = ''
     setTimeout(() => document.getElementById('kf-proveedor')?.focus(), 0)
   }
@@ -576,13 +625,21 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 </div>
               </div>
               <div className="kf-bloque">
-                <h2 className="kf-titulo">Cómo se paga</h2>
-                <select aria-label="Forma de pago" data-casilla value={b.formaPago} onChange={(e) => ed.poner('formaPago', e.target.value)}>
-                  {FORMAS_PAGO.map((x) => <option key={x.valor} value={x.valor}>{x.texto}{x.valor && x.valor === ficha?.formaPagoFicha ? ' (su ficha)' : ''}</option>)}
-                </select>
-                <div className="kf-pareja">
-                  <CasillaFecha id="kf-vence" etiqueta="Vence" iso={b.vence} hoy={hoy} poner={(x) => ed.poner('vence', x)} />
-                  <input className="kf-cifra" readOnly tabIndex={-1} aria-label="Importe del pago" value={cifra(totales.total - (totales.retencion ?? 0) * 0)} />
+                {/* K06 · «Cómo se paga» (Julio, 19/11): la cuenta del pago con su nombre, como «Cómo se cobra» en la emitida. Vacía
+                    quiere decir pendiente de pagar. Debajo, con su rótulo, cuándo vence, el día del pago y lo que se paga. */}
+                <h2 className="kf-titulo">Cómo se paga
+                  {origenPago && <span className="kf-titulo-derecha kf-origen" data-prueba="origen-pago">{origenPago}</span>}
+                </h2>
+                <div className="kf-cobro">
+                  <Buscador id="kf-pago" etiqueta="La cuenta del pago" cargando={!cuentasPago} valor={textoPago ?? pagoCuenta} cuenta={pagoCuenta || null} duda={!!dudaPago}
+                    ponerTexto={(t) => { setTextoPago(t); if (!t.trim()) ed.poner('pagoCuenta', '') }} lista={(t) => cuentasQueEncajan(t, cuentasPago?.lista ?? [], 8)}
+                    texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ed.poner('pagoCuenta', c.codigo); setTextoPago(null) }} />
+                  <input readOnly tabIndex={-1} aria-label="Nombre de la cuenta del pago" value={nombrePago} title={nombrePago || undefined} placeholder="Pendiente de pagar" data-duda={dudaPago ? 'si' : undefined} />
+                </div>
+                <div className="kf-pago-fechas">
+                  <label className="kf-rotulo-chico">Vence<CasillaFecha id="kf-vence" etiqueta="Vence" iso={b.vence} hoy={hoy} poner={(x) => ed.poner('vence', x)} /></label>
+                  <label className="kf-rotulo-chico">Fecha del pago<CasillaFecha id="kf-pago-fecha" etiqueta="La fecha del pago" iso={pagoCuenta ? pagoFecha : ''} hoy={hoy} poner={(x) => ed.poner('pagoFecha', x)} /></label>
+                  <label className="kf-rotulo-chico">Importe<input className="kf-cifra" readOnly tabIndex={-1} aria-label="Importe del pago" value={cifra(importePago)} /></label>
                 </div>
               </div>
             </div>
@@ -593,13 +650,19 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 secundario={{ texto: `Cambiar a ${duda.cambiar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.cambiar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }} />
             )}
 
+            {dudaPago && (
+              <Duda texto={textoDudaPago(dudaPago, (c) => cuentasPago?.nombres.get(c) ?? '').texto}
+                principal={{ texto: `Dejar ${dudaPago.cuentas[0]}`, hacer: () => ed.poner('pagoCuenta', dudaPago.cuentas[0]) }}
+                secundario={{ texto: `Cambiar a ${dudaPago.cuentas[1]}`, hacer: () => ed.poner('pagoCuenta', dudaPago.cuentas[1]) }} />
+            )}
+
             <AsientoQueSale lineas={previa && totales.total !== 0 ? previa.lineas : []} etiqueta={etiqueta}
               editar={!aMano && id ? { texto: 'Editar el asiento', hacer: () => setCompleta(true) } : null} />
           </>}
         </div>
         <AyudaTeclas />
         </div>
-        <PanelDocumento documento={documento} acepta={ACEPTA_PAPEL}
+        <PanelDocumento documento={documento} acepta={ACEPTA_PAPEL} raya={{ usuario: userId }}
           sinDocumento={{ marcado: b.sinPdf, motivo: b.motivoSinPdf, poner: (m, motivo) => { ed.poner('sinPdf', m); ed.poner('motivoSinPdf', m ? motivo : '') } }}
           alElegir={(file) => { setFichero({ file, url: URL.createObjectURL(file) }); ed.poner('documento', file.name) }}
           otra={{ nombre: 'El mayor del proveedor', contenido: <MayorDelProveedor apuntes={mayor?.apuntes ?? null} subcuenta={subcuenta} hay={!!provId} /> }} />

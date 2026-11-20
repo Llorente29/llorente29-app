@@ -62,7 +62,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   const navegar = useNavigate()
   const pestana = usePestana()
   const seVe = useSeVe()
-  const { accountId, userName } = useCuentaConta()
+  const { accountId, userId, userName } = useCuentaConta()
   const { activa } = useEmpresas()
   const { local: ejeLocal } = useAnalitica()
   const hoy = hoyEnMadrid()
@@ -468,7 +468,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
         </div>
         <AyudaTeclas teclas={TECLAS_DE_LA_EMITIDA} />
         </div>
-        <PanelDocumento documento={documento} acepta={ACEPTA_PAPEL} otraPrimero={modo !== 'a_mano'}
+        <PanelDocumento documento={documento} acepta={ACEPTA_PAPEL} otraPrimero={modo !== 'a_mano'} raya={{ usuario: userId }}
           alElegir={modo === 'hecha_sola' && doc.datos ? undefined : (file) => setFichero({ file, url: URL.createObjectURL(file) })}
           otra={{ nombre: 'El mayor del cliente', contenido: (
             <MayorEnElPanel nombre={cliente?.nombre ?? null} subcuenta={sub?.codigo ?? ''} ejercicio={ejercicio} apuntes={mayor?.apuntes ?? (sub ? null : [])} hay={!!cliente}

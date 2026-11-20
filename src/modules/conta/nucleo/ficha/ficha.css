@@ -227,3 +227,17 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 .kf-emitida .kf-formulario { gap: 3px; padding-top: 6px; padding-bottom: 6px; }
 /* El aspa de quitar una línea de IVA (18 px) en su columna (e2e 44570080751: «td: «×», 18 en 14»). */
 .kf-emitida .kf-iva .kf-iva-quitar { width: 20px; }
+
+/* K06 · «Cómo se paga» en la recibida: debajo de la cuenta, cuándo vence, el día del pago y el importe, cada uno con su rótulo. */
+.kf-pago-fechas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.kf-rotulo-chico { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; min-width: 0; font-size: 11px; color: var(--k-apoyo); white-space: nowrap; }
+
+/* K06 · La raya entre el formulario y el documento: fina (la del borde del panel), con el cursor de arrastrar y sin adornos.
+   La parte del documento la pone la raya (--kf-doc); el formulario no baja de su mínimo (--kf-min-form: el ancho que tiene a
+   1366 × 768 con la cinta plegada, medido, sin cortar la cuenta con su nombre ni las columnas del IVA). */
+.kf-ficha { --kf-min-form: 680px; }
+.kf-ficha.kf-emitida { --kf-min-form: 740px; }
+.kf-cuerpo[data-raya='si'] { grid-template-columns: minmax(0, 1fr) clamp(240px, var(--kf-doc), calc(100% - var(--kf-min-form))); }
+.kf-panel { position: relative; }
+.kf-raya { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; z-index: 2; cursor: col-resize; touch-action: none; }
+.kf-raya:hover, .kf-raya:focus-visible { outline: none; background: linear-gradient(to right, transparent 3px, var(--k-azul, #2f6fde) 3px, var(--k-azul, #2f6fde) 5px, transparent 5px); }
