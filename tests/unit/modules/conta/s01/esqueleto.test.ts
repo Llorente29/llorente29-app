@@ -218,7 +218,9 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(pestanasVisibles(a, { ...NADA, solo: true, demo: true }).map((t) => t.id)).toContain('cuenta')
     // R06 (17/11): Ventas › Ventas por día, solo con «ventas por día» encendido (no basta con ser de hostelería).
     expect(pestanasVisibles(a, { ...NADA, solo: true, ventasPorDia: true }).map((t) => t.id)).toContain('ventas-por-dia')
-    expect(pestanasVisibles(a, { ...NADA, solo: true, hosteleria: true }).map((t) => t.id)).not.toContain('ventas-por-dia')
+    // R09 (20/11): una empresa de hostelería tiene «Ventas por día» sin interruptor.
+    expect(pestanasVisibles(a, { ...NADA, solo: true, hosteleria: true }).map((t) => t.id)).toContain('ventas-por-dia')
+    expect(pestanasVisibles(a, { ...NADA, solo: true }).map((t) => t.id)).not.toContain('ventas-por-dia')
     expect(de('/conta/ajustes')).toBe('ajustes.empresa')
     expect(de('/conta/ajustes/plan')).toBe('contabilidad.definiciones')
     expect(de('/conta/ajustes/tablas/numeracion')).toBe('contabilidad.definiciones')

@@ -313,6 +313,17 @@ export const PRODUCTOS: Producto[] = [
   { id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: R.empresa, prefijos: [R.alta], abajo: true, pestanas: PAGINAS_AJUSTES },
 ]
 
+/**
+ * R09 · ¿La empresa tiene las ventas del TPV (Cierres del día, «Subir las ventas del TPV» y
+ * Ajustes › Ventas por día)? Una de hostelería, siempre, sin interruptor; fuera de hostelería,
+ * si tiene «ventas por día» encendido (company_tax_profile.ventas_por_dia). La única regla: la
+ * usan la condición «tpv» y «ventas_por_dia» de abajo y useVentasPorDiaEncendido (el botón y
+ * el índice de Ajustes).
+ */
+export function conVentasTpv(ctx: { hosteleria?: boolean | null; ventasPorDia?: boolean | null }): boolean {
+  return ctx.hosteleria === true || ctx.ventasPorDia === true
+}
+
 /** ¿La empresa tiene lo que pide la condición? La única cuenta de este tipo: el menú, el buscador y Favoritos la usan. */
 export function cumple(c: Condicion | undefined, ctx: Contexto): boolean {
   if (!c) return true
@@ -323,9 +334,9 @@ export function cumple(c: Condicion | undefined, ctx: Contexto): boolean {
     case 'asesoria': return ctx.asesoria === true
     case 'demo': return ctx.demo === true
     // R05 (decisión 9): Cierres del día, si es de hostelería o tiene «ventas por día» encendido.
-    case 'ventas_por_dia': return ctx.hosteleria || ctx.ventasPorDia === true
-    // R06 · Ajustes › Ventas por día: solo con el interruptor encendido (sube las ventas de un TPV de fuera).
-    case 'tpv': return ctx.ventasPorDia === true
+    case 'ventas_por_dia': return conVentasTpv(ctx)
+    // R06 · Ajustes › Ventas por día. R09: también sin interruptor en hostelería (la misma regla).
+    case 'tpv': return conVentasTpv(ctx)
     case 'erp10': return ctx.erp10 === true
   }
 }

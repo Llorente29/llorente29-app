@@ -13,7 +13,7 @@
 
 import { createContext, useContext, useEffect, useRef } from 'react'
 import type { Densidad, Nivel } from '@/modules/conta/esqueleto/preferencias'
-import type { Analitica, EjeVista } from '@/modules/conta/esqueleto/productos'
+import { conVentasTpv, type Analitica, type EjeVista } from '@/modules/conta/esqueleto/productos'
 import type { GrupoDeAcciones } from '@/modules/conta/marco/acciones'
 import type { Ejercicio } from '@/modules/conta/marco/periodo'
 
@@ -186,13 +186,17 @@ export function useHosteleria(): boolean {
  */
 export function useVentasPorDia(): boolean {
   const marco = useContext(MarcoContexto)
-  return marco ? marco.hosteleria === true || marco.ventasPorDia === true : true
+  return marco ? conVentasTpv(marco) : true
 }
 
-/** R06 · ¿La empresa activa tiene «ventas por día» encendido (sube las ventas de un TPV de fuera)? */
+/**
+ * R06 · ¿La empresa activa sube las ventas de un TPV de fuera («Subir las ventas del TPV» y
+ * Ajustes › Ventas por día)? R09: una de hostelería, siempre; si no, con «ventas por día»
+ * encendido. La regla es conVentasTpv, la misma de la condición «tpv» del menú.
+ */
 export function useVentasPorDiaEncendido(): boolean {
   const marco = useContext(MarcoContexto)
-  return marco?.ventasPorDia === true
+  return marco ? conVentasTpv(marco) : false
 }
 
 /**
