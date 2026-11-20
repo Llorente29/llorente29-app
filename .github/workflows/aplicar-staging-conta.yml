@@ -455,6 +455,10 @@ jobs:
           # definiciones (no tienen .down.sql: compara.sh no las deshace).
           scripts/e2e/carril.sh migrar-coger
           scripts/e2e/cerrojo.sh coger
+          # N11 · Con el cerrojo ya cogido (esperarlo también lleva tiempo): si después de este commit
+          # ha habido otro push en la rama, este run es viejo y no aplica nada; lo aplica el del commit
+          # nuevo (19/11: el de un commit anterior acabó 82 s después y dejó la semilla vieja).
+          if ! RAMA="$GITHUB_REF_NAME" COMMIT="$GITHUB_SHA" node scripts/ci/commit-de-la-rama.mjs vigente; then exit 0; fi
           if [ -s /tmp/anaden.txt ]; then
             PSQL="$PSQL" bash scripts/conta/staging/de-verdad.sh "$GITHUB_REF_NAME" $(cat /tmp/anaden.txt)
             while IFS= read -r f; do
@@ -539,6 +543,8 @@ jobs:
           export PSQL=/usr/lib/postgresql/17/bin/psql
           export PGAPPNAME="gha-staging-conta-${MODO}-${GITHUB_RUN_ID}"
           export INFORME="$GITHUB_STEP_SUMMARY"
+          # N11 · Desde una rama, solo si su commit sigue siendo el último (un run viejo no pisa uno nuevo).
+          if [ "$GITHUB_REF_NAME" != main ] && ! RAMA="$GITHUB_REF_NAME" COMMIT="$GITHUB_SHA" node scripts/ci/commit-de-la-rama.mjs vigente; then exit 0; fi
           bash scripts/conta/produccion/real-en-staging.sh "$MODO"
 
       # W06 · La prueba del comparador: la misma tanda con una vuelta atrás buena
