@@ -9,6 +9,15 @@
 //     y el resumen de ERP10 sin importes ni nombres), cuántas facturas, si sus PDF
 //     se bajan (getfile, solo mirando) y lo que salió de Sumied esos meses, para
 //     ver si hay cosas metidas a mano en ERP10. Solo un administrador.
+//   · { company_id, accion: 'medir', ejercicio? }: X11 (20/11) · lo que da la API de
+//     cada cosa que trae «Traer de ERP10» por fichero (_shared/erp10Medir.ts): rutas,
+//     totales, páginas, campos y tiempos. Solo recuentos, sin nombres, NIF ni
+//     importes; solo GET. El ejercicio, por defecto el anterior. Solo un administrador.
+//   · { company_id, accion: 'traer', que, ejercicio, mes?, pagina? }: X12 (20/11) · UNA página de
+//     lo que trae «Traer de ERP10» (_shared/erp10Traer.ts): las subcuentas (y los terceros), los
+//     asientos o las facturas de un mes, o el resumen del ejercicio. La pantalla las pide una a una:
+//     ninguna llamada pasa de un minuto (si ERP10 tarda más de 55 s, 504 y se vuelve a pedir esa).
+//     Solo GET. Solo un administrador.
 //   · { company_id, accion: 'saldos', desde, hasta }: las líneas de los apuntes
 //     entre los dos días, sumadas por cuenta (el sumas y saldos del paso 3, sin
 //     Excel). Cualquiera que vea la sociedad.
@@ -23,6 +32,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { clienteErp10 } from "../_shared/erp10Despacho.ts";
+import { medidaEnTexto, medirParaTraer } from "../_shared/erp10Medir.ts";
+import { FalloAlTraer, pedidaDelCuerpo, traerUnaPagina } from "../_shared/erp10Traer.ts";
 import { finalDelNif, FrenoErp10, lineas, porTipo, resumenSinDatos, sumarPorCuenta, type ClienteErp10 } from "../_shared/erp10Cliente.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -55,19 +66,25 @@ Deno.serve(async (req) => {
   const { data: u } = await sb.auth.getUser();
   if (!u?.user) return json({ error: "no autenticado" }, 401);
 
-  let b: { company_id?: unknown; accion?: unknown; desde?: unknown; hasta?: unknown; documentos?: unknown } = {};
+  let b: { company_id?: unknown; accion?: unknown; desde?: unknown; hasta?: unknown; documentos?: unknown; ejercicio?: unknown; que?: unknown; mes?: unknown; pagina?: unknown } = {};
   try { b = await req.json(); } catch { /* vacío */ }
   const companyId = typeof b.company_id === "string" && /^[0-9a-f-]{36}$/i.test(b.company_id) ? b.company_id : "";
-  const accion = b.accion === "probar" || b.accion === "saldos" ? b.accion : "";
-  if (!companyId || !accion) return json({ error: "faltan company_id o accion (probar o saldos)" }, 400);
+  const accion = b.accion === "probar" || b.accion === "saldos" || b.accion === "medir" || b.accion === "traer" ? b.accion : "";
+  if (!companyId || !accion) return json({ error: "faltan company_id o accion (probar, medir, traer o saldos)" }, 400);
+  const pedida = accion === "traer" ? pedidaDelCuerpo(b as Record<string, unknown>) : null;
+  if (typeof pedida === "string") return json({ error: pedida }, 400);
 
   // La sociedad, con los permisos de quien llama: si no es de su cuenta, no está.
   const { data: co, error: e0 } = await sb.from("company").select("id, account_id").eq("id", companyId).maybeSingle();
   if (e0) return json({ error: `no se ha podido leer la sociedad: ${e0.message}` }, 500);
   if (!co) return json({ error: "Esa sociedad no es de tu cuenta." }, 403);
-  if (accion === "probar") {
+  if (accion === "probar" || accion === "medir" || accion === "traer") {
     const { data: admin } = await sb.rpc("current_user_is_admin_of", { p_account_id: co.account_id });
-    if (admin !== true) return json({ error: "Solo un administrador de la cuenta prueba la conexión con ERP10." }, 403);
+    if (admin !== true) {
+      return json({ error: accion === "probar" ? "Solo un administrador de la cuenta prueba la conexión con ERP10."
+        : accion === "medir" ? "Solo un administrador de la cuenta mide lo que se puede traer de ERP10."
+        : "Solo un administrador de la cuenta trae de ERP10." }, 403);
+    }
   }
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
   if (!(await cuentaPuedeSalir(srv, co.account_id))) return json({ error: EN_LA_DEMO, demo: true }, 409);
@@ -76,6 +93,20 @@ Deno.serve(async (req) => {
     const c = await clienteErp10(srv, co.account_id, companyId);
     if (!c) return json({ error: "Esta sociedad no está conectada con ERP10: pon su código de empresa en Integraciones › ERP10 (despacho)." }, 404);
     if (accion === "probar") return json(await probar(srv, c.cliente, co.account_id, companyId));
+    if (accion === "traer" && pedida) {
+      // Ninguna llamada pasa de un minuto: si ERP10 no ha contestado en 55 s, se dice y la pantalla vuelve a pedir esa misma página.
+      let reloj: ReturnType<typeof setTimeout> | undefined;
+      const tope = new Promise<"tarde">((r) => { reloj = setTimeout(() => r("tarde"), 55_000); });
+      const pag = await Promise.race([traerUnaPagina((r) => c.cliente.get(r), pedida), tope]).finally(() => clearTimeout(reloj));
+      if (pag === "tarde") return json({ error: "ERP10 tarda más de un minuto en contestar: se vuelve a pedir lo mismo.", tarde: true }, 504);
+      return json({ ok: true, pagina: pag });
+    }
+    if (accion === "medir") {
+      const ej = typeof b.ejercicio === "string" && /^\d{4}$/.test(b.ejercicio) ? b.ejercicio : String(Number(hoyMadrid().slice(0, 4)) - 1);
+      await c.cliente.probar();
+      const m = await medirParaTraer({ get: (r) => c.cliente.get(r), ahora: () => Date.now() }, { ejercicio: ej, codEmpresa: c.cliente.codEmpresa });
+      return json({ ok: true, medida: m, texto: medidaEnTexto(m) });
+    }
     const desde = dia(b.desde), hasta = dia(b.hasta);
     if (!desde || !hasta || desde > hasta) return json({ error: "faltan desde y hasta (AAAA-MM-DD)" }, 400);
     const apuntes = await c.cliente.apuntesEntre(desde, hasta);
@@ -91,7 +122,7 @@ Deno.serve(async (req) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.log(JSON.stringify({ accion, fallo: e instanceof FrenoErp10 ? "freno" : "erp10" }));
-    return json({ error: msg }, e instanceof FrenoErp10 ? 409 : 502);
+    return json({ error: msg }, e instanceof FrenoErp10 ? 409 : e instanceof FalloAlTraer && e.status === 400 ? 409 : 502);
   }
 });
 

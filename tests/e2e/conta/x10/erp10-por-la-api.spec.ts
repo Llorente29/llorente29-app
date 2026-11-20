@@ -20,6 +20,9 @@
 //      Sumied menos una recibida que le falta): «Comparado con ERP10 (leído ahora, …), a …»
 //      y las tres cuentas de la factura.
 //   4. «ERP10 (despacho)» no sale en el Marketplace de Folvy.
+//   X11 · En la tarjeta, «Medir lo que se puede traer» (la medida de verdad, _shared/erp10Medir.ts,
+//   contra el ERP10 simulado): la frase con cuántas lecturas y «No se ha escrito nada», y el texto
+//   para copiar, sin el NIF.
 // Datos inventados y que se ven inventados (T11).
 
 import { test, expect, type Page, type Route } from '@playwright/test'
@@ -29,6 +32,7 @@ import { ClienteErp10, finalDelNif, lineas, porTipo, resumenSinDatos, sumarPorCu
 import { erp10Simulado, type EmpresaSimulada } from '../../../conta/erp10/simulado'
 import { sacarAsiento, sacarEmitida, sacarRecibida, type Envio, type PuertoEscribir, type Resultado } from '../../../../supabase/functions/_shared/erp10Escribir'
 import { carpetaDe, loQueSaleDesdeLaBase, pedidasDelCuerpo } from '../../../../supabase/functions/_shared/erp10DesdeLaBase'
+import { medidaEnTexto, medirParaTraer } from '../../../../supabase/functions/_shared/erp10Medir'
 
 test.skip(CARRIL === null, 'El X10 escribe en la cuenta A (la conexión con ERP10, la salida, una recibida): necesita su carril.')
 
@@ -82,6 +86,11 @@ async function erp10DeMentira(page: Page, s: Sesion, empresas: Record<string, Em
         lista: filas.map((f) => ({ companyId: f.company_id, codEmpresa: String(f.external_account_id ?? ''), nif: f.company_id === EMPRESA_A ? nif : null })),
         codEmpresa: String(esta.external_account_id ?? ''), almacen: sinToken, fetch: sim.fetch,
       })
+      if (b.accion === 'medir') {
+        await c.probar()
+        const m = await medirParaTraer({ get: (r) => c.get(r), ahora: () => Date.now() }, { ejercicio: '2025', codEmpresa: c.codEmpresa })
+        return responder(200, { ok: true, medida: m, texto: medidaEnTexto(m) })
+      }
       if (b.accion === 'probar') {
         const visto = await c.probar()
         const ap = await c.apuntesEntre('2026-10-01', hoyEnMadrid())
@@ -292,6 +301,21 @@ for (const tam of TAMANOS) {
     await expect(tarjeta).toContainText('Código de empresa 101')
     await tarjeta.scrollIntoViewIfNeeded()
     await page.screenshot({ path: `${DIR}/conexion-${tam.width}.png` })
+
+    // X11 · Medir lo que se puede traer: solo lee, y deja el texto para copiar (sin nombres, NIF ni importes).
+    const medir = tarjeta.getByRole('button', { name: 'Medir lo que se puede traer' })
+    await expect(medir).toBeEnabled({ timeout: 30_000 })
+    await medir.click()
+    await expect(tarjeta.getByRole('status').filter({ hasText: 'Medido el ejercicio 2025' })).toHaveText(/^Medido el ejercicio 2025: \d+ lecturas en ERP10, \d+ segundos?\. No se ha escrito nada\.$/, { timeout: 60_000 })
+    const medida = tarjeta.getByRole('group', { name: 'Lo que se puede traer de ERP10' })
+    const texto = medida.getByRole('textbox', { name: 'Lo medido, para copiar' })
+    await expect(texto).toHaveValue(/## ERP10 por la conexión · lo que se puede traer \(ejercicio 2025\)/)
+    await expect(texto).toHaveValue(/\| Diario \(asientos de 2025\) \| `\/api\/apuntes` \| 200 \|/)
+    expect(await texto.inputValue()).not.toContain(nif)
+    await expect(medida.getByRole('button', { name: 'Copiar lo medido' })).toBeVisible()
+    await expect(tarjeta).not.toContainText(/token|API|endpoint/)
+    await medida.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: `${DIR}/medir-${tam.width}.png` })
     await tarjeta.getByRole('button', { name: 'Plegar' }).click()
 
     // 3 · La primera vez, una sola, para probar: lo que va a entrar y que no se puede borrar.
