@@ -18,6 +18,7 @@
 //     número con la clave de la base; misma fecha).
 //   · Concepto del asiento «Sumied»: el de la propuesta del asiento, si nadie
 //     lo ha tocado a mano.
+//   · Sin proveedor (K04b): el NIF y el nombre leídos, «PDF».
 //   · Se deduce en y Serie / documento: nada (salen de la fecha y del libro,
 //     no de un sitio que se pueda nombrar).
 
@@ -29,7 +30,7 @@ export type CasillaConOrigen = 'proveedor' | 'nif' | 'nombre' | 'tipoOperacion' 
 
 export interface DatosOrigen {
   /** Lo leído del PDF de la propia factura (supplier_invoice.reading), o null. */
-  leido: { nif: string | null; numero: string | null; fecha: string | null } | null
+  leido: { nif: string | null; numero: string | null; fecha: string | null; nombre?: string | null } | null
   /** ¿La lectura es la de su recepción (la factura salió de un albarán)? */
   deRecepcion: boolean
   /** El proveedor que tiene la factura (su ficha), o null. */
@@ -51,6 +52,9 @@ export function origenes(d: DatosOrigen): Partial<Record<CasillaConOrigen, Orige
   if (p && !d.proveedorCambiado && nifCasa && !d.deRecepcion) o.proveedor = 'por NIF'
   if (p && nifCasa) o.nif = 'PDF'
   if (p) o.nombre = 'de su ficha'
+  // K04b · Sin proveedor, el NIF y el nombre que se ven son los leídos del PDF.
+  if (!p && d.leido?.nif) o.nif = 'PDF'
+  if (!p && d.leido?.nombre) o.nombre = 'PDF'
   if (p?.regimen) o.tipoOperacion = 'de su ficha'
   if (d.leido?.numero && claveNumero(d.leido.numero) !== null && claveNumero(d.leido.numero) === claveNumero(d.numero)) o.numero = 'PDF'
   if (d.leido?.fecha && d.leido.fecha.slice(0, 10) === d.fecha) o.fecha = 'PDF'

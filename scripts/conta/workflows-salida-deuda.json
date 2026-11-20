@@ -1,7 +1,7 @@
 {
   "nota": "D01 R2 (13/10). Lo que estos workflows ya escribían en el registro y el resumen antes de la regla, contado por scripts/conta/workflows-salida.mjs. No es un permiso: es la deuda escrita. Si se toca uno, su número solo puede BAJAR (la lista falla si sube) y, al llegar a 0, se quita de aquí. Lo que se ha arreglado ya y lo que queda, en docs/conta/d01/T6_informe.md §1.",
   "deuda": {
-    ".github/workflows/aplicar-produccion-conta.yml": 46,
+    ".github/workflows/aplicar-produccion-conta.yml": 52,
     ".github/workflows/build-apk.yml": 9,
     ".github/workflows/cumplimiento-produccion-conta.yml": 16,
     ".github/workflows/deploy-edge-functions.yml": 23,
@@ -14,5 +14,6 @@
   },
   "_w09": "W09 (28/10): cumplimiento-produccion-conta 14→16, diez-lectura 8→9 y diez-conexion (sin tope)→4 son lo que ya tenían en main (medido con revisar() sobre origin/main, igual que en la rama): el W09 los toca solo para poner límites a psql, y no sube ninguno.",
   "_b01": "B01 (03/11): desplegar-funciones-staging-conta (sin tope)→11 es lo que ya tenía en main (medido con revisar() sobre origin/main y sobre la rama: 11 y 11). El B01 lo toca solo para fijar la versión de la CLI y poner --yes, y no sube ninguna. Escribe en staging, pero usa SUPABASE_ACCESS_TOKEN, que alcanza también producción.",
-  "_g01c": "G01c (07/11): recuento-bitrix-conta (sin tope)→21 es lo que ya tenía en main (medido con revisar() sobre origin/main: 21). Escribe en el resumen las etiquetas de los campos y los números del recuento, que Julio lee ahí. Apuntado como deuda por Julio, sin tocarlo; el reparto de los contactos con la regla de la lectura (G01c) se añadirá a su resumen cuando se arregle."
+  "_g01c": "G01c (07/11): recuento-bitrix-conta (sin tope)→21 es lo que ya tenía en main (medido con revisar() sobre origin/main: 21). Escribe en el resumen las etiquetas de los campos y los números del recuento, que Julio lee ahí. Apuntado como deuda por Julio, sin tocarlo; el reparto de los contactos con la regla de la lectura (G01c) se añadirá a su resumen cuando se arregle.",
+  "_x09": "X09 (19/11): aplicar-produccion-conta 46→52 es lo que ya tenía en main (medido con workflows-salida.mjs sobre origin/main, ff166887: 52). El X09 añade dos líneas, las frases del commit y del ensayo que no se encuentra (scripts/ci/commit-de-la-rama.mjs: solo el nombre de la rama, commits y títulos de runs; ningún dato de producción ni de Diez, y en un job sin secretos), y quita dos echo con variables que ya decía el job «commit»: no sube."
 }

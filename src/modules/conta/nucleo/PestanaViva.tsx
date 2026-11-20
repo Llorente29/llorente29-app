@@ -14,6 +14,10 @@
 // PESTAÑA: los huecos del periodo y de sus acciones, lo que pone en la cinta y
 // si pinta su propio encabezado. Lo demás (la empresa, el nivel, la densidad)
 // es del marco y se comparte.
+//
+// K05 · 0b · La empresa es DE LA PESTAÑA: la de con la que se abrió, en el
+// contexto de empresas (activa) de su pantalla. Así una pestaña aparcada de
+// otra empresa no lee ni guarda con la que se ve arriba.
 
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { UNSAFE_RouteContext, useRoutes, type Location } from 'react-router-dom'
@@ -27,6 +31,7 @@ import { cintaDe } from '@/modules/conta/esqueleto/ordenes'
 import { AccionesDePagina } from '@/modules/conta/marco/AccionesDePagina'
 import { resolverGrupos } from '@/modules/conta/marco/resolverGrupos'
 import { PestanaContexto, type CambiosDePestana, type PestanaDeTrabajo } from '@/modules/conta/diseno/plantillas/pestana'
+import { EmpresasContexto, useEmpresas, type EmpresaResumen } from '@/modules/conta/empresa/contexto'
 import { rutasDelNucleo } from './rutas'
 import { claveDe, INICIO } from './pestanas'
 
@@ -38,6 +43,10 @@ function Pantalla({ ubicacion }: { ubicacion: Location }) {
 
 export interface PropsPestanaViva {
   id: string
+  /** K05 · 0b · Su empresa y su clave: la que usa el marco para su nombre, sus cambios y cerrarla. */
+  llave: string
+  /** Su empresa (la de con la que se abrió); null mientras no se sabe. */
+  empresa: EmpresaResumen | null
   ubicacion: Location
   activa: boolean
   /** Lo del marco que se comparte (sin lo de la pestaña). */
@@ -53,7 +62,9 @@ export interface PropsPestanaViva {
   nombre: string
 }
 
-function PestanaVivaSinMemo({ id, ubicacion, activa, base, ctx, cuentas, abrirBuscador, ponerNombre, ponerCambios, cerrar, nombre }: PropsPestanaViva) {
+function PestanaVivaSinMemo({ id, llave, empresa, ubicacion, activa, base, ctx, cuentas, abrirBuscador, ponerNombre, ponerCambios, cerrar, nombre }: PropsPestanaViva) {
+  const empresas = useEmpresas()
+  const deSuEmpresa = useMemo(() => (empresa ? { ...empresas, activa: empresa } : empresas), [empresas, empresa])
   const [huecoAcciones, setHuecoAcciones] = useState<HTMLDivElement | null>(null)
   const [huecoPeriodo, setHuecoPeriodo] = useState<HTMLDivElement | null>(null)
   const [datosCinta, setDatosCinta] = useState<DatosCinta | null>(null)
@@ -62,7 +73,7 @@ function PestanaVivaSinMemo({ id, ubicacion, activa, base, ctx, cuentas, abrirBu
 
   const { pathname, search } = ubicacion
   const donde = dondeEsta(pathname, undefined, search)
-  const catalogo = donde?.producto && donde.pestana ? cintaDe(donde.producto.id, donde.pestana.id, ctx) : []
+  const catalogo = donde?.producto && donde.pestana ? cintaDe(donde.producto.id, donde.pestana.id, ctx, { pathname, search }) : []
   const grupos = resolverGrupos(catalogo, { datos: datosCinta, entradas: entradasCinta, pathname, search, abrirBuscador })
   const clave = JSON.stringify(grupos.map((g) => [g.titulo, g.acciones.map((a) => [a.id, a.numero, a.aviso, a.actual])]))
   const marco: ValorMarco = useMemo(() => ({
@@ -79,11 +90,11 @@ function PestanaVivaSinMemo({ id, ubicacion, activa, base, ctx, cuentas, abrirBu
   const pestana: PestanaDeTrabajo = useMemo(() => ({
     id,
     activa,
-    ponerNombre: (n) => ponerNombre(id, n),
-    ponerCambios: (c) => ponerCambios(id, c),
+    ponerNombre: (n) => ponerNombre(llave, n),
+    ponerCambios: (c) => ponerCambios(llave, c),
     esDeEstaPestana: (destino) => claveDe(destino) === id,
-    cerrar: () => cerrar(id),
-  }), [id, activa, ponerNombre, ponerCambios, cerrar])
+    cerrar: () => cerrar(llave),
+  }), [id, llave, activa, ponerNombre, ponerCambios, cerrar])
 
   // Dónde estaba la rueda y el foco, para volver a encontrarlo todo como se dejó.
   const zona = useRef<HTMLElement | null>(null)
@@ -99,9 +110,10 @@ function PestanaVivaSinMemo({ id, ubicacion, activa, base, ctx, cuentas, abrirBu
   }, [activa])
 
   return (
+    <EmpresasContexto.Provider value={deSuEmpresa}>
     <PestanaContexto.Provider value={pestana}>
       <MarcoContexto.Provider value={marco}>
-        <main ref={zona} tabIndex={-1} className="cx-principal cxm-principal s-principal k-zona" hidden={!activa} data-pestana={id}
+        <main ref={zona} tabIndex={-1} className="cx-principal cxm-principal s-principal k-zona" hidden={!activa} data-pestana={id} data-llave={llave}
           data-activa={activa ? 'si' : 'no'} onScroll={alRodar} onFocus={alEnfocar} aria-label={nombre}>
           <FranjaDemo />
           <div className="k-periodo" ref={setHuecoPeriodo} />
@@ -115,6 +127,7 @@ function PestanaVivaSinMemo({ id, ubicacion, activa, base, ctx, cuentas, abrirBu
         </main>
       </MarcoContexto.Provider>
     </PestanaContexto.Provider>
+    </EmpresasContexto.Provider>
   )
 }
 

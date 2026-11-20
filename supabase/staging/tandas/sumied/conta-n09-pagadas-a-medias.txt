@@ -1,0 +1,6 @@
+# N09 · Pagos y Bancos leen lo pagado en el programa de antes: 0800. Su prueba (ROLLBACK, cuenta A, el ejemplo
+# inventado de ERP10 con un pago parcial a la B-7): Pagos, Bancos (casar y pendientes), el pago a mano y Cobros con
+# la versión nueva, con la de antes (la vuelta atrás) y otra vez con la nueva; la recibida de hoy y todas las no
+# traídas, iguales; la B-7 241,00 (antes 341,00) y el alquiler 1.020,00 (antes 1.210,00).
+supabase/migrations/20261119T0800_n09_pagos_lee_lo_traido.sql
+supabase/staging/sql/20261119_n09_pagos_lee_lo_traido_prueba.sql

@@ -178,3 +178,22 @@ describe('K03 · el menú de la persona trae todo Ajustes de hoy (respuesta K02 
     expect(sin).not.toContain('Certificados y accesos')
   })
 })
+
+describe('N09a · ERP10 en Importaciones (regla 7: existían y no tenían botón)', () => {
+  const conta = MODULOS[0]
+  const deImportaciones = (ctx: Contexto) => cintaVisible(conta, ctx).find((p) => p.id === 'importaciones')?.grupos.find((g) => g.titulo === 'ERP10')?.botones.map((x) => x.etiqueta)
+  const base: Contexto = { hosteleria: false, diez: false, interruptores: new Set() }
+
+  it('«Traer de ERP10» sale siempre; «Salida a ERP10», solo con la salida encendida en la empresa', () => {
+    expect(deImportaciones(base)).toEqual(['Traer de ERP10'])
+    expect(deImportaciones({ ...base, erp10: true })).toEqual(['Traer de ERP10', 'Salida a ERP10'])
+  })
+
+  it('sus direcciones son de estos botones, con su pestaña (no del Diario ni del Cierre)', () => {
+    for (const [dir, id, pestana] of [[R.traerErp10, 'traerErp10', 'Traer de ERP10'], ['libros/cierre/salida-erp10', 'salidaErp10', 'Salida a ERP10']]) {
+      const s = sitioDe(dir)
+      expect(s?.tipo === 'cinta' && [s.modulo.id, s.pestana.id, s.boton.id]).toEqual(['contabilidad', 'importaciones', id])
+      expect(nombreDePestana(s)).toBe(pestana)
+    }
+  })
+})

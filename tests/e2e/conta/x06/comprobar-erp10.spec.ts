@@ -19,6 +19,8 @@
 //      enciende y lo confirma con contenido.
 // Navegador en español (playwright.config.ts). Capturas a 1456 × 816: con las tres
 // diferencias y una elegida, y ya igualado.
+// X10b: arriba va la tarjeta «Conexión con ERP10» (plegada) y el Excel pasa a «Descargar los ficheros
+// (Excel)», enlace al lado de «Sacar a ERP10»: esta prueba sigue sacando por el Excel.
 // Datos inventados y que se ven inventados (T11).
 
 import { test, expect, type Page } from '@playwright/test'
@@ -102,7 +104,7 @@ test('X06 · contra staging: sacar, subir el sumas y saldos de ERP10, ver la fac
   await page.getByRole('button', { name: 'Descargar los ficheros' }).click()
   await expect(page.locator('.cxe-hecho')).toContainText('Queda apuntado.', { timeout: 60_000 })
   await page.getByRole('button', { name: 'Ya lo he importado' }).click()
-  await expect(page.getByRole('heading', { name: 'Sube el «Sumas y saldos» de ERP10' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Darlo por igualado/ })).toBeDisabled()
 
   // 2 · El sumas y saldos de ERP10, al que le falta la factura.
@@ -141,7 +143,8 @@ test('X06 · contra staging: sacar, subir el sumas y saldos de ERP10, ver la fac
   await expect(page.locator('.cxe-hecho')).toHaveText(new RegExp(`^Igualado: ${mes} de ${hoy.slice(0, 4)} queda igual en Sumied y en ERP10 \\(sumas_y_saldos\\.xlsx, a ${dm(fin).replace('/', '\\/')}; \\d+ cuentas\\)\\. Lo dio por igualado .+ el \\d\\d/\\d\\d/\\d{4} a las \\d\\d:\\d\\d\\.$`), { timeout: 30_000 })
   // X07 · La captura, con la pantalla acabada: la tabla con sus filas (no «Comparando…»), el chip verde y el panel que lo dice.
   await expect(page.getByText(/^Igualado el \d\d\/\d\d\/\d{4}/)).toBeVisible({ timeout: 30_000 })
-  await expect(porque).toContainText('Igualado: no queda nada por mirar.')
+  // X08 · Ya igualado, el panel se titula «Igualado».
+  await expect(page.getByRole('complementary', { name: 'Igualado' })).toContainText('Igualado: no queda nada por mirar.')
   await expect(tabla.getByRole('row').filter({ hasText: '41000002' })).toBeVisible()
   await expect(page.getByText('3 cuentas tienen la diferencia explicada', { exact: true })).toBeVisible()
   await expect(page.locator('.cxe-fila-filo')).toHaveCount(0)

@@ -55,7 +55,7 @@ const FICHAS: { clave: string; casa: (rel: string) => boolean }[] = [
   { clave: 'ficha:emitida', casa: (r) => r.startsWith(`${R.facturasVenta}/`) },
   {
     clave: 'ficha:asiento',
-    casa: (r) => r.startsWith(`${R.libroDiario}/`) && ![R.diarioResumido, R.pendientesDiez].some((x) => r === x || r.startsWith(`${x}/`)),
+    casa: (r) => r.startsWith(`${R.libroDiario}/`) && ![R.diarioResumido, R.pendientesDiez, R.traerErp10, `${R.libroDiario}/libro-diario`, `${R.libroDiario}/diario-resumido`].some((x) => r === x || r.startsWith(`${x}/`)),
   },
 ]
 
@@ -164,4 +164,81 @@ export function cuantasCaben(anchos: readonly number[], disponible: number, siti
     enFila.push(activa)
   }
   return { enFila, enMenu: todas.filter((i) => !enFila.includes(i)) }
+}
+
+// ── K05 · 0b · Las pestañas son de su empresa (Julio, 19/11) ──────────────
+//
+// Cada pestaña es de la empresa con la que se abrió. Al cambiar de empresa
+// arriba, solo se ven las de la nueva; las de la otra se APARCAN tal cual
+// (siguen montadas, con lo escrito y sin guardar) y vuelven al volver a ella.
+// Si la nueva no tiene ninguna, sale su Inicio. Lo que lee y guarda cada
+// pestaña con su empresa lo pone el marco (PestanaViva, con la empresa de la
+// pestaña en el contexto); aquí, sin React, qué se ve y a dónde se va.
+
+export interface PestanasDeEmpresas {
+  /** La empresa de las pestañas que se ven (null mientras no se sabe cuál es la activa). */
+  empresa: string | null
+  /** Las pestañas que se ven: las de `empresa`. */
+  estado: EstadoPestanas
+  /** Las de las demás empresas, aparcadas tal cual. */
+  aparcadas: Record<string, EstadoPestanas>
+}
+
+/** La llave de una pestaña entre todas las empresas: su empresa y su clave. */
+export const llaveDe = (empresa: string | null, id: string): string => `${empresa ?? ''}|${id}`
+
+/**
+ * La empresa de arriba es `nueva`. Si es la de las pestañas que se ven, nada.
+ * La primera vez que se sabe (al cargar), las que se ven pasan a ser suyas. Si
+ * no, las de ahora se aparcan con su empresa y se ven las de la nueva (o su
+ * Inicio): `ir` es la dirección de la que queda activa, para navegar a ella.
+ */
+export function cambiarDeEmpresa(t: PestanasDeEmpresas, nueva: string, ahora: number): { t: PestanasDeEmpresas; ir: string | null } {
+  if (t.empresa === nueva) return { t, ir: null }
+  if (t.empresa === null) {
+    const aparcadas = { ...t.aparcadas }
+    delete aparcadas[nueva]
+    return { t: { empresa: nueva, estado: t.estado, aparcadas }, ir: null }
+  }
+  const aparcadas = { ...t.aparcadas, [t.empresa]: t.estado }
+  const suyas = aparcadas[nueva] ?? estadoInicial(ahora)
+  delete aparcadas[nueva]
+  const estado: EstadoPestanas = { ...suyas, abiertas: suyas.abiertas.map((p) => (p.id === suyas.activa ? { ...p, montada: true, uso: ahora } : p)) }
+  const activa = estado.abiertas.find((p) => p.id === estado.activa) ?? estado.abiertas[0]
+  return { t: { empresa: nueva, estado, aparcadas }, ir: activa.url }
+}
+
+/** Las otras empresas con algo abierto (además de su Inicio): cuántas pestañas tiene cada una, para la línea de abajo. */
+export function abiertasEnOtras(t: PestanasDeEmpresas): { empresa: string; n: number }[] {
+  return Object.entries(t.aparcadas)
+    .map(([empresa, e]) => ({ empresa, n: e.abiertas.filter((p) => p.id !== INICIO).length }))
+    .filter((x) => x.n > 0)
+}
+
+/** «1 pestaña abierta en X», «3 pestañas abiertas en X». */
+export const fraseAbiertasEn = (n: number, empresa: string): string => `${n} pestaña${n === 1 ? '' : 's'} abierta${n === 1 ? '' : 's'} en ${empresa}`
+
+// Recargar: lo que se guarda, con la empresa y las aparcadas.
+export interface GuardadasPorEmpresa extends Guardadas { empresa: string | null; aparcadas: Record<string, Guardadas> }
+
+export const aGuardarPorEmpresa = (t: PestanasDeEmpresas): GuardadasPorEmpresa => ({
+  ...aGuardar(t.estado), empresa: t.empresa,
+  aparcadas: Object.fromEntries(Object.entries(t.aparcadas).map(([k, e]) => [k, aGuardar(e)])),
+})
+
+/** Lo guardado antes de recargar: las que se veían, con la dirección de ahora, y las aparcadas, dormidas. */
+export function pestanasDeEmpresasGuardadas(g: unknown, urlAhora: string, ahora: number): PestanasDeEmpresas {
+  const estado = pestanasGuardadas(g, urlAhora, ahora)
+  const x = (g && typeof g === 'object' ? g : {}) as Partial<GuardadasPorEmpresa>
+  const empresa = typeof x.empresa === 'string' && x.empresa ? x.empresa : null
+  const aparcadas: Record<string, EstadoPestanas> = {}
+  if (x.aparcadas && typeof x.aparcadas === 'object') {
+    for (const [k, v] of Object.entries(x.aparcadas)) {
+      if (!k || k === empresa || !v || !Array.isArray((v as Guardadas).abiertas)) continue
+      const activa = (v as Guardadas).abiertas.find((p) => p && p.id === (v as Guardadas).activa)
+      const e = pestanasGuardadas(v, typeof activa?.url === 'string' ? activa.url : urlDeInicio, 0)
+      aparcadas[k] = { ...e, abiertas: e.abiertas.map((p) => ({ ...p, montada: false })) }
+    }
+  }
+  return { empresa, estado, aparcadas }
 }

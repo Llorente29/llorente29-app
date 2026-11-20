@@ -27,6 +27,14 @@ describe('K03 · de qué pestaña es cada dirección', () => {
     expect(claveDe('/conta/libros/diario/123')).toBe('ficha:asiento')
     expect(claveDe('/conta/libros/diario')).toBe('boton:asientos')
     expect(claveDe('/conta/libros/diario/resumido')).toBe('boton:resumido')
+    // N09a · Traer de ERP10 vive bajo libros/diario/, pero no es un asiento: su pestaña es la suya (e2e 1548: se abría como «Asiento»).
+    expect(claveDe('/conta/libros/diario/traer-erp10')).toBe('boton:traerErp10')
+    expect(nombrePorDefecto({ id: 'boton:traerErp10', url: '/conta/libros/diario/traer-erp10' })).toBe('Traer de ERP10')
+    expect(claveDe('/conta/libros/cierre/salida-erp10')).toBe('boton:salidaErp10')
+    // N10 · Libros › Diario por su área y su acción no son asientos: el Libro diario y el Diario resumido.
+    expect(claveDe('/conta/libros/diario/libro-diario')).toBe('boton:asientos')
+    expect(claveDe('/conta/libros/diario/diario-resumido')).toBe('boton:resumido')
+    expect(nombrePorDefecto({ id: 'boton:resumido', url: '/conta/libros/diario/diario-resumido' })).toBe('Diario resumido')
   })
   it('el mayor de cada cuenta, en la suya (F5 abre «el mayor de la cuenta en otra pestaña»)', () => {
     expect(claveDe('/conta/plan/40000007')).toBe('mayor:40000007')

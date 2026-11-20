@@ -24,6 +24,8 @@
 // Navegador en español (playwright.config.ts: locale es-ES y --lang=es-ES); la
 // fecha de la ficha es el campo de Sumied, dd/mm/aaaa, sea cual sea el idioma.
 // Capturas del paso 1 (con la fila de emitidas pulsada) y del paso 2, a 1456 × 816.
+// X10b: arriba va la tarjeta «Conexión con ERP10» (plegada) y el Excel pasa a «Descargar los ficheros
+// (Excel)», enlace al lado de «Sacar a ERP10»: esta prueba sigue sacando por el Excel.
 // Datos inventados y que se ven inventados (T11): NIF B00000000.
 
 import { test, expect, type Page, type Download } from '@playwright/test'
@@ -153,7 +155,8 @@ test('X05 · contra staging: encender, mirar las emitidas y las recibidas, desca
   await expect(tabla.getByRole('row')).toHaveCount(7, { timeout: 40_000 })
   const fila = (que: string) => tabla.getByRole('row').filter({ hasText: que })
   await expect(fila('Facturas emitidas')).not.toContainText('Todavía no sale por aquí')
-  await expect(fila('Días de ventas del TPV')).toContainText('Todavía no sale por aquí')
+  // X08: los días del TPV ya salen (como factura del día); la fila ya no dice «Todavía no sale por aquí».
+  await expect(fila('Días de ventas del TPV')).not.toContainText('Todavía no sale por aquí')
   // La de las recibidas, con la suya.
   await fila('Facturas recibidas').click()
   await expect(page.getByRole('table', { name: 'Facturas recibidas' }).getByRole('link', { name: hecho.recibida })).toBeVisible()
@@ -227,7 +230,7 @@ test('X05 · contra staging: encender, mirar las emitidas y las recibidas, desca
 
   // «Ya lo he importado»: al paso 3 (X06); de ahí, al paso 1, sin lo salido.
   await page.getByRole('button', { name: 'Ya lo he importado' }).click()
-  await expect(page.getByRole('heading', { name: 'Sube el «Sumas y saldos» de ERP10' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible()
   await page.getByRole('button', { name: 'Mira lo que sale' }).click()
   await expect(tabla.getByRole('row')).toHaveCount(7, { timeout: 40_000 })
   await fila('Facturas emitidas').click()

@@ -8,7 +8,7 @@
 
 import {
   BadgeCheck, BookOpen, BriefcaseBusiness, Building2, Calculator, Calendar, ChartColumn, CircleCheck, Clock, FileDown, FileSpreadsheet,
-  FileText, FileUp, FolderInput, HandCoins, Handshake, Inbox, Landmark, Layers, ListChecks, Lock, LockOpen, Mail, Network, Palette,
+  FileInput, FileOutput, FileText, FileUp, FolderInput, HandCoins, Handshake, Inbox, Landmark, Layers, ListChecks, Lock, LockOpen, Mail, Network, Palette,
   Percent, ReceiptText, Scale, ScrollText, Search, Store, Table, Truck, Upload, UserRound, Users, Wallet, Wrench,
 } from 'lucide-react'
 
@@ -41,6 +41,8 @@ export const ICONOS_NUCLEO = {
   esperas: Mail,
   extracto: Upload,
   diez: FolderInput,
+  traerErp10: FileInput,
+  salidaErp10: FileOutput,
   diario: ScrollText,
   mayor: BookOpen,
   sumas: Scale,

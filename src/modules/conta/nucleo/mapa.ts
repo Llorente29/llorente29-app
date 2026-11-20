@@ -109,6 +109,11 @@ const SOCIOS = b('socios', 'Socios de marca', 'clientes', `${R.terceros}?ver=soc
 const DOCUMENTOS = b('documentos', 'Documentos', 'documentos', R.puerta, [R.puerta], { pestana: 'Documentos' })
 const ESPERAS = b('esperas', 'Qué esperas cada mes', 'esperas', R.queEsperas, [R.queEsperas], { pestana: 'Qué esperas cada mes' })
 const EXTRACTO = b('extracto', 'Traer el extracto', 'extracto', `${R.bancos}/subir`, [`${R.bancos}/subir`], { pestana: 'Traer el extracto' })
+// N09a · ERP10, como su «Importación desde fichero»: traer de ERP10 (N07) y la salida a ERP10 (X04). Las
+// dos direcciones son de estos botones, no del Diario ni del Cierre: al entrar por la dirección se marca
+// su botón. La salida, solo con la salida encendida en la empresa (la misma condición que en Libros).
+const TRAER_ERP10 = b('traerErp10', 'Traer de ERP10', 'traerErp10', R.traerErp10, [R.traerErp10], { pestana: 'Traer de ERP10' })
+const SALIDA_ERP10 = b('salidaErp10', 'Salida a ERP10', 'salidaErp10', `${R.libros}/cierre/salida-erp10`, [`${R.libros}/cierre/salida-erp10`], { solo: 'erp10', pestana: 'Salida a ERP10' })
 const DIEZ = b('diez', 'Pendientes de Diez', 'diez', R.pendientesDiez, [R.pendientesDiez], { solo: 'diez', pestana: 'Pendientes de Diez' })
 
 const lib = (area: string, accion: string) => `${R.libros}/${area}/${accion}`
@@ -210,6 +215,7 @@ export const MODULOS: Modulo[] = [
           { titulo: 'Documentos', botones: [DOCUMENTOS, ESPERAS] },
           { titulo: 'Bancos', botones: [EXTRACTO] },
           { titulo: 'Diez', botones: [DIEZ] },
+          { titulo: 'ERP10', botones: [TRAER_ERP10, SALIDA_ERP10] },
         ],
       },
       {

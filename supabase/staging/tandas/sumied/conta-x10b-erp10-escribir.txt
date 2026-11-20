@@ -1,0 +1,3 @@
+# X10b · Lo que Sumied escribe en ERP10, asiento a asiento (solo añade una tabla y una función).
+supabase/migrations/20261119T1433_x10b_erp10_envio.sql
+supabase/staging/sql/20261119_x10b_erp10_envio_prueba.sql
