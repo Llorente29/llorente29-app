@@ -229,7 +229,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
     await expect(ficha(page).locator('#kf-pago')).toHaveValue('43000091', { timeout: 30_000 })
     await ficha(page).locator('[data-guardar-y-siguiente]').click()
-    await expect(page.getByText(/Se paga con su liquidación: la 43000091 de Plataforma de Prueba K06 la descuenta/).first()).toBeVisible({ timeout: 60_000 })
+    await expect(page.getByText(/Se paga con su liquidación: la 43000091 de Plataforma de Prueba K06, S\.L\. la descuenta/).first()).toBeVisible({ timeout: 60_000 })
     const plat = await idDe(s, `K06P-${t}-2`)
     expect([plat.status, plat.paid_method]).toEqual(['pagada', 'compensation'])
 

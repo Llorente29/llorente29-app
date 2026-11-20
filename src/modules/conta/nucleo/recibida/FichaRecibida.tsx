@@ -195,7 +195,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const cuentasPago = useUltimo(useLeer(accountId && empresa ? () => cuentasDePago(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-pago`).datos, empresa ?? '')
   const subProvCodigo = delProv?.subcuenta?.codigo ?? null
   const leePagoProv = !!(accountId && empresa && provId && delProv)
-  const pagoProvLeido = useLeer(accountId && empresa && provId && delProv ? () => pagoDelProveedor(accountId, empresa, provId, subProvCodigo) : null, `${accountId}:${empresa}:${provId}:${subProvCodigo}:pago:${vuelta}`)
+  const pagoProvLeido = useLeer(accountId && empresa && provId && delProv ? () => pagoDelProveedor(accountId, empresa, provId, subProvCodigo) : null, `${accountId}:${empresa}:${provId}:${delProv ? 'leido' : 'leyendo'}:${subProvCodigo}:pago:${vuelta}`)
   const pagoProv = useUltimo(pagoProvLeido.datos, `${id}:${provId}`)
   const liquidacionLeida = useLeer(id && pagoProv?.plataforma ? () => hayLiquidacion(id) : null, `${id}:${pagoProv?.plataforma ? 'p' : '-'}:liquidacion:${vuelta}`)
   const conLiquidacion = liquidacionLeida.datos ?? false
