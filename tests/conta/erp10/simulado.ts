@@ -4,6 +4,10 @@
 //   · sin cod_empresa el token sale, y cada lectura da 500 «Error al comprobar … empresa …»;
 //   · GET /api/parametros: la Empresa abierta, con su CIF;
 //   · GET /api/apuntes paginado ($top, $skip por página) con ResultadosTotales.
+// X12 (con lo medido en QBO Integrity el 20/11, X11):
+//   · GET /api/subcuentas paginado (las fichas, si las tiene; si no, solo el código);
+//   · /api/clientes y /api/proveedores: 400 «endpoint de Estimaciones/Autónomos» (en una sociedad);
+//   · pasarse del final devuelve la primera página otra vez, sin avisar (como Diez).
 // Todo inventado (T11): NIF de ceros, códigos 101…, importes redondos.
 
 /** X10b · Los nombres de tipo que da ERP10 en su resumen (los del 19/11). */
@@ -11,7 +15,9 @@ export const NOMBRES_DE_TIPO: Record<number, string> = { 1: 'Por factura', 2: 'D
 
 export type EmpresaSimulada = {
   cif: string
-  apuntes: { Serie: string; Documento: number; TipoAsiento: number; Fecha: number; Detalles: { Cuenta: string; Debe: number; Haber: number }[] }[]
+  apuntes: { Serie: string; Documento: number; TipoAsiento: number; Fecha: number; Descripcion?: string; Detalles: { Cuenta: string; Debe: number; Haber: number; Descripcion?: string }[] }[]
+  /** X12 · Las fichas de las subcuentas (Codigo, Descripcion, NIF…), para el listado. */
+  fichas?: Record<string, unknown>[]
   /** X10b · Lo que se escribe: las subcuentas que tiene, las facturas y los PDF subidos. */
   subcuentas?: string[]
   facturas?: Record<string, unknown>[]
@@ -26,6 +32,12 @@ export function erp10Simulado(o: { empresas: Record<string, EmpresaSimulada>; cl
   const claves = o.claves ?? { client_id: 'cliente-inventado', password: 'codigo-inventado' }
   const tokens = new Map<string, string | null>() // token → cod_empresa (null: sin empresa)
   const vistas: { metodo: string; ruta: string; cuerpo: string | null; tipo: string | null }[] = []
+  /** Una página como ERP10: 200 como mucho; $skip cuenta páginas; pasado el final, la primera otra vez. */
+  const pagina = (filas: unknown[], u: URL) => {
+    const top = Math.min(200, Number(u.searchParams.get('$top') ?? 200)), pag = Number(u.searchParams.get('$skip') ?? 0)
+    const d = filas.slice(pag * top, pag * top + top)
+    return { Datos: d.length ? d : filas.slice(0, top), ResultadosTotales: filas.length, ElementosPorPagina: top, PaginaActual: pag + 1 }
+  }
   const r = (status: number, body: unknown) => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
   const f = (async (url: string | URL, init?: RequestInit) => {
     const u = new URL(String(url))
@@ -52,7 +64,16 @@ export function erp10Simulado(o: { empresas: Record<string, EmpresaSimulada>; cl
       const m = /Fecha ge (\d+) and Fecha le (\d+)/.exec(u.searchParams.get('$filter') ?? '')
       const filas = e.apuntes.filter((a) => !m || (a.Fecha >= Number(m[1]) && a.Fecha <= Number(m[2])))
       const top = Number(u.searchParams.get('$top') ?? 200), pag = Number(u.searchParams.get('$skip') ?? 0)
+      if (filas.length && pag * top >= filas.length) return r(200, pagina(filas, u))
       return r(200, { Datos: filas.slice(pag * top, pag * top + top), ResultadosTotales: filas.length })
+    }
+    // X12 · El listado de subcuentas (en una sociedad, también los terceros) y los 400 de clientes y proveedores.
+    if (u.pathname === '/api/subcuentas' && metodo === 'GET') {
+      const filas = e.fichas ?? (e.subcuentas ?? []).map((Codigo) => ({ Codigo, Descripcion: 'inventada' }))
+      return r(200, filas.length ? pagina(filas, u) : { Datos: [], ResultadosTotales: 0 })
+    }
+    if (u.pathname === '/api/clientes' || u.pathname === '/api/proveedores') {
+      return r(400, { Message: 'Ha intentado acceder a un endpoint de Estimaciones/Autónomos para una empresa Estándar/Sociedades' })
     }
     // X10b · Escribir.
     const cuerpo = () => JSON.parse(String(init?.body ?? 'null')) as Record<string, unknown>
@@ -70,6 +91,7 @@ export function erp10Simulado(o: { empresas: Record<string, EmpresaSimulada>; cl
       const m = /Fecha ge (\d+) and Fecha le (\d+)/.exec(u.searchParams.get('$filter') ?? '')
       const filas = (e.facturas ?? []).filter((f) => !m || (Number(f.Fecha) >= Number(m[1]) && Number(f.Fecha) <= Number(m[2])))
       const top = Number(u.searchParams.get('$top') ?? 200), pag = Number(u.searchParams.get('$skip') ?? 0)
+      if (filas.length && pag * top >= filas.length) return r(200, pagina(filas, u))
       return r(200, { Datos: filas.slice(pag * top, pag * top + top), ResultadosTotales: filas.length })
     }
     if (u.pathname === '/api/facturas/add' && metodo === 'POST') {

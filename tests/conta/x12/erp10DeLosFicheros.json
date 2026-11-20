@@ -1,0 +1,439 @@
+{
+ "apuntes": [
+  {
+   "Serie": "3",
+   "Documento": 1,
+   "TipoAsiento": 0,
+   "Fecha": 20260102,
+   "Descripcion": "Aportación inicial",
+   "Detalles": [
+    {
+     "Cuenta": "57200001",
+     "Debe": 5000,
+     "Haber": 0,
+     "Descripcion": "Aportación inicial"
+    },
+    {
+     "Cuenta": "10000000",
+     "Debe": 0,
+     "Haber": 5000,
+     "Descripcion": "Aportación inicial"
+    }
+   ]
+  },
+  {
+   "Serie": "3",
+   "Documento": 2,
+   "TipoAsiento": 0,
+   "Fecha": 20260105,
+   "Descripcion": "Compra de mobiliario",
+   "Detalles": [
+    {
+     "Cuenta": "21600000",
+     "Debe": 1200,
+     "Haber": 0,
+     "Descripcion": "Compra de mobiliario"
+    },
+    {
+     "Cuenta": "57200001",
+     "Debe": 0,
+     "Haber": 1200,
+     "Descripcion": "Compra de mobiliario"
+    }
+   ]
+  },
+  {
+   "Serie": "1",
+   "Documento": 1,
+   "TipoAsiento": 1,
+   "Fecha": 20260115,
+   "Descripcion": "F-1-Cliente Ejemplo Uno",
+   "Detalles": [
+    {
+     "Cuenta": "43000001",
+     "Debe": 1100,
+     "Haber": 0,
+     "Descripcion": "F-1-Cliente Ejemplo Uno"
+    },
+    {
+     "Cuenta": "70000000",
+     "Debe": 0,
+     "Haber": 1000,
+     "Descripcion": "F-1-Cliente Ejemplo Uno"
+    },
+    {
+     "Cuenta": "47700000",
+     "Debe": 0,
+     "Haber": 100,
+     "Descripcion": "F-1-Cliente Ejemplo Uno"
+    }
+   ]
+  },
+  {
+   "Serie": "2",
+   "Documento": 1,
+   "TipoAsiento": 1,
+   "Fecha": 20260120,
+   "Descripcion": "A-10-Proveedor Ejemplo Uno",
+   "Detalles": [
+    {
+     "Cuenta": "60000000",
+     "Debe": 400,
+     "Haber": 0,
+     "Descripcion": "A-10-Proveedor Ejemplo Uno"
+    },
+    {
+     "Cuenta": "47200000",
+     "Debe": 84,
+     "Haber": 0,
+     "Descripcion": "A-10-Proveedor Ejemplo Uno"
+    },
+    {
+     "Cuenta": "40000001",
+     "Debe": 0,
+     "Haber": 484,
+     "Descripcion": "A-10-Proveedor Ejemplo Uno"
+    }
+   ]
+  },
+  {
+   "Serie": "3",
+   "Documento": 3,
+   "TipoAsiento": 0,
+   "Fecha": 20260131,
+   "Descripcion": "Cobro F-1",
+   "Detalles": [
+    {
+     "Cuenta": "57200001",
+     "Debe": 1100,
+     "Haber": 0,
+     "Descripcion": "Cobro F-1"
+    },
+    {
+     "Cuenta": "43000001",
+     "Debe": 0,
+     "Haber": 1100,
+     "Descripcion": "Cobro F-1"
+    }
+   ]
+  },
+  {
+   "Serie": "2",
+   "Documento": 2,
+   "TipoAsiento": 1,
+   "Fecha": 20260205,
+   "Descripcion": "B-7-Proveedor Ejemplo Dos",
+   "Detalles": [
+    {
+     "Cuenta": "60000000",
+     "Debe": 300,
+     "Haber": 0,
+     "Descripcion": "B-7-Proveedor Ejemplo Dos"
+    },
+    {
+     "Cuenta": "47200000",
+     "Debe": 41,
+     "Haber": 0,
+     "Descripcion": "B-7-Proveedor Ejemplo Dos"
+    },
+    {
+     "Cuenta": "40000002",
+     "Debe": 0,
+     "Haber": 341,
+     "Descripcion": "B-7-Proveedor Ejemplo Dos"
+    }
+   ]
+  },
+  {
+   "Serie": "1",
+   "Documento": 2,
+   "TipoAsiento": 1,
+   "Fecha": 20260210,
+   "Descripcion": "F-2-Cliente Ejemplo Uno",
+   "Detalles": [
+    {
+     "Cuenta": "43000001",
+     "Debe": 550,
+     "Haber": 0,
+     "Descripcion": "F-2-Cliente Ejemplo Uno"
+    },
+    {
+     "Cuenta": "70000000",
+     "Debe": 0,
+     "Haber": 500,
+     "Descripcion": "F-2-Cliente Ejemplo Uno"
+    },
+    {
+     "Cuenta": "47700000",
+     "Debe": 0,
+     "Haber": 50,
+     "Descripcion": "F-2-Cliente Ejemplo Uno"
+    }
+   ]
+  },
+  {
+   "Serie": "3",
+   "Documento": 4,
+   "TipoAsiento": 0,
+   "Fecha": 20260228,
+   "Descripcion": "Pago A-10",
+   "Detalles": [
+    {
+     "Cuenta": "40000001",
+     "Debe": 484,
+     "Haber": 0,
+     "Descripcion": "Pago A-10"
+    },
+    {
+     "Cuenta": "57200001",
+     "Debe": 0,
+     "Haber": 484,
+     "Descripcion": "Pago A-10"
+    }
+   ]
+  },
+  {
+   "Serie": "2",
+   "Documento": 3,
+   "TipoAsiento": 1,
+   "Fecha": 20260301,
+   "Descripcion": "ALQ-3-Arrendador Ejemplo",
+   "Detalles": [
+    {
+     "Cuenta": "62100000",
+     "Debe": 1000,
+     "Haber": 0,
+     "Descripcion": "ALQ-3-Arrendador Ejemplo"
+    },
+    {
+     "Cuenta": "47200000",
+     "Debe": 210,
+     "Haber": 0,
+     "Descripcion": "ALQ-3-Arrendador Ejemplo"
+    },
+    {
+     "Cuenta": "47510000",
+     "Debe": 0,
+     "Haber": 190,
+     "Descripcion": "ALQ-3-Arrendador Ejemplo"
+    },
+    {
+     "Cuenta": "41000001",
+     "Debe": 0,
+     "Haber": 1020,
+     "Descripcion": "ALQ-3-Arrendador Ejemplo"
+    }
+   ]
+  },
+  {
+   "Serie": "3",
+   "Documento": 5,
+   "TipoAsiento": 0,
+   "Fecha": 20260331,
+   "Descripcion": "Amortización del trimestre",
+   "Detalles": [
+    {
+     "Cuenta": "68100000",
+     "Debe": 30,
+     "Haber": 0,
+     "Descripcion": "Amortización del trimestre"
+    },
+    {
+     "Cuenta": "28160000",
+     "Debe": 0,
+     "Haber": 30,
+     "Descripcion": "Amortización del trimestre"
+    }
+   ]
+  }
+ ],
+ "fichas": [
+  {
+   "Codigo": "10000000",
+   "Descripcion": "Capital social"
+  },
+  {
+   "Codigo": "21600000",
+   "Descripcion": "Mobiliario"
+  },
+  {
+   "Codigo": "28160000",
+   "Descripcion": "Amortización acumulada de mobiliario"
+  },
+  {
+   "Codigo": "40000000",
+   "Descripcion": "Proveedores varios",
+   "NombreComercial": "",
+   "NIF": "",
+   "Poblacion": "",
+   "Pais": "ES"
+  },
+  {
+   "Codigo": "40000001",
+   "Descripcion": "Proveedor Ejemplo Uno, S.L.",
+   "NombreComercial": "Ejemplo Uno",
+   "NIF": "B00000000",
+   "Poblacion": "Ciudad Ejemplo",
+   "Pais": "ES"
+  },
+  {
+   "Codigo": "40000002",
+   "Descripcion": "Proveedor Ejemplo Dos, S.A.",
+   "NombreComercial": "Ejemplo Dos",
+   "NIF": "A00000000",
+   "Poblacion": "Villa Ejemplo",
+   "Pais": "ES"
+  },
+  {
+   "Codigo": "41000001",
+   "Descripcion": "Arrendador Ejemplo",
+   "NombreComercial": "Arrendador Ejemplo",
+   "NIF": "12345678Z",
+   "Poblacion": "Ciudad Ejemplo",
+   "Pais": "ES"
+  },
+  {
+   "Codigo": "43000001",
+   "Descripcion": "Cliente Ejemplo Uno, S.L.",
+   "NombreComercial": "Cliente Uno",
+   "NIF": "B12345678",
+   "Poblacion": "Ciudad Ejemplo",
+   "Pais": "ES"
+  },
+  {
+   "Codigo": "47200000",
+   "Descripcion": "H.P. IVA soportado"
+  },
+  {
+   "Codigo": "47510000",
+   "Descripcion": "H.P. acreedora por retenciones"
+  },
+  {
+   "Codigo": "47700000",
+   "Descripcion": "H.P. IVA repercutido"
+  },
+  {
+   "Codigo": "57200001",
+   "Descripcion": "Banco de ejemplo"
+  },
+  {
+   "Codigo": "60000000",
+   "Descripcion": "Compras de mercaderías"
+  },
+  {
+   "Codigo": "62100000",
+   "Descripcion": "Arrendamientos"
+  },
+  {
+   "Codigo": "68100000",
+   "Descripcion": "Amortización del inmovilizado material"
+  },
+  {
+   "Codigo": "70000000",
+   "Descripcion": "Ventas de mercaderías"
+  }
+ ],
+ "facturas": [
+  {
+   "Ejercicio": "2026",
+   "Serie": "2",
+   "Documento": 1,
+   "TipoAsiento": 1,
+   "Fecha": 20260120,
+   "FechaFactura": 20260120,
+   "FechaOperacion": null,
+   "CuentaCliente": "40000001",
+   "NumeroFactura": "A-10",
+   "NombreCliente": "Proveedor Ejemplo Uno, S.L.",
+   "CifCliente": "B00000000",
+   "ClaveTipoFactura": "F1",
+   "TipoFactura": 1,
+   "TotalFactura": 484,
+   "BaseImponible1": 400,
+   "PorcentajeIVA1": 21,
+   "CuotaIVA1": 84
+  },
+  {
+   "Ejercicio": "2026",
+   "Serie": "2",
+   "Documento": 2,
+   "TipoAsiento": 1,
+   "Fecha": 20260205,
+   "FechaFactura": 20260205,
+   "FechaOperacion": null,
+   "CuentaCliente": "40000002",
+   "NumeroFactura": "B-7",
+   "NombreCliente": "Proveedor Ejemplo Dos, S.A.",
+   "CifCliente": "A00000000",
+   "ClaveTipoFactura": "F1",
+   "TipoFactura": 1,
+   "TotalFactura": 341,
+   "BaseImponible1": 100,
+   "PorcentajeIVA1": 21,
+   "CuotaIVA1": 21,
+   "BaseImponible2": 200,
+   "PorcentajeIVA2": 10,
+   "CuotaIVA2": 20
+  },
+  {
+   "Ejercicio": "2026",
+   "Serie": "2",
+   "Documento": 3,
+   "TipoAsiento": 1,
+   "Fecha": 20260301,
+   "FechaFactura": 20260301,
+   "FechaOperacion": null,
+   "CuentaCliente": "41000001",
+   "NumeroFactura": "ALQ-3",
+   "NombreCliente": "Arrendador Ejemplo",
+   "CifCliente": "12345678Z",
+   "ClaveTipoFactura": "F1",
+   "TipoFactura": 1,
+   "TotalFactura": 1210,
+   "BaseImponible1": 1000,
+   "PorcentajeIVA1": 21,
+   "CuotaIVA1": 210,
+   "CuotaRetencion": 190,
+   "PorcentajeRetencion": 19,
+   "BaseRetencion": 1000
+  },
+  {
+   "Ejercicio": "2026",
+   "Serie": "1",
+   "Documento": 1,
+   "TipoAsiento": 1,
+   "Fecha": 20260115,
+   "FechaFactura": 20260115,
+   "FechaOperacion": null,
+   "CuentaCliente": "43000001",
+   "NumeroFactura": "F-1",
+   "NombreCliente": "Cliente Ejemplo Uno, S.L.",
+   "CifCliente": "B12345678",
+   "ClaveTipoFactura": "F1",
+   "TipoFactura": 1,
+   "TotalFactura": 1100,
+   "BaseImponible1": 1000,
+   "PorcentajeIVA1": 10,
+   "CuotaIVA1": 100
+  },
+  {
+   "Ejercicio": "2026",
+   "Serie": "1",
+   "Documento": 2,
+   "TipoAsiento": 1,
+   "Fecha": 20260210,
+   "FechaFactura": 20260210,
+   "FechaOperacion": null,
+   "CuentaCliente": "43000001",
+   "NumeroFactura": "F-2",
+   "NombreCliente": "Cliente Ejemplo Uno, S.L.",
+   "CifCliente": "B12345678",
+   "ClaveTipoFactura": "F1",
+   "TipoFactura": 1,
+   "TotalFactura": 550,
+   "BaseImponible1": 500,
+   "PorcentajeIVA1": 10,
+   "CuotaIVA1": 50
+  }
+ ]
+}
