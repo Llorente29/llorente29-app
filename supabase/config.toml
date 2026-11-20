@@ -194,6 +194,11 @@ verify_jwt = true
 [functions.conta-erp10-escribir]
 verify_jwt = true
 
+# (20/11) conta-erp10-cola · X10f. Lo validado sale solo a ERP10. Sin sesión: la despierta el
+# cron conta-erp10-despertar con la cabecera x-cron-secret (CRON_SECRET), como conta-diez-cola.
+[functions.conta-erp10-cola]
+verify_jwt = false
+
 # (13/11) conta-pdf · B01r26. El enlace permanente del PDF de una factura que
 # Diez descarga al importar el Excel del traspaso («Url documento»).
 # verify_jwt = FALSE, y es deliberado: quien llama es el servidor de Diez, sin

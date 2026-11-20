@@ -26,6 +26,8 @@ export type EmpresaSimulada = {
   sinAlmacen?: boolean
   /** X10d · El alta de un asiento cuya descripción lleve esto falla con un 500. */
   fallaAsiento?: string
+  /** X10f · El alta de una factura cuyo número lleve esto falla con un 500. */
+  fallaFactura?: string
   /** X10e · La cuenta de IVA repercutido que pone ERP10 en el asiento de una emitida (la que tiene configurada). */
   ivaRepercutido?: string
 }
@@ -100,6 +102,7 @@ export function erp10Simulado(o: { empresas: Record<string, EmpresaSimulada>; cl
       const b = cuerpo()
       for (const k of ['Ejercicio', 'Serie', 'TipoAsiento', 'CuentaCliente', 'FechaFactura']) if (b?.[k] == null) return r(400, { Message: `Falta ${k}` })
       if (String(b.Descripcion ?? '').length > 40) return r(400, { Message: 'Descripcion pasa de 40' })
+      if (e.fallaFactura && String(b.NumeroFactura ?? '').includes(e.fallaFactura)) return r(500, { Message: 'Error al guardar la factura (inventado)' })
       const usa = [String(b.CuentaCliente), ...((b.Apuntes ?? []) as { Cuenta: string }[]).map((a) => a.Cuenta)]
       const falta = usa.find((k) => !(e.subcuentas ?? usa).includes(k))
       if (falta) return r(400, { Message: `No existe la subcuenta ${falta}` })

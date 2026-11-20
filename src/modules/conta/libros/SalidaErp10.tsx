@@ -34,7 +34,8 @@ import { comparar, fechaDelSumas } from '@/modules/conta/erp10/comparar'
 import { abrirExcel, leerSumasYSaldos, reconocer, texto as textoDe, type FilaSumas } from '@/modules/conta/lib/traer'
 import { ComprobarErp10, type Subido } from '@/modules/conta/libros/ComprobarErp10'
 import { casarFacturas, documentosACasar, type DocumentoErp10, type EnvioErp10 } from '@/modules/conta/erp10/casar'
-import { leerConexionErp10, leerEnviosErp10, leerEstadoEscribir, leerSaldosErp10, loQueFalta, sacarAErp10, type ClaseConexion } from '@/modules/conta/services/erp10ApiService'
+import { leerConexionErp10, leerEnviosErp10, leerEstadoEscribir, leerSaldosErp10, leerSalidoHoy, loQueFalta, sacarAErp10, type ClaseConexion } from '@/modules/conta/services/erp10ApiService'
+import { listaDeHoy } from '@/modules/conta/erp10/salidaSola'
 import { loQueHaEntrado, queVaAEntrar } from '@/modules/conta/erp10/conexion'
 import { salePorLaConexion } from '@/modules/conta/erp10/ficheros'
 import { ConexionErp10Tarjeta } from '@/modules/conta/libros/ConexionErp10'
@@ -127,6 +128,9 @@ export function SalidaErp10() {
   // X10b · Sacar a ERP10 por la conexión (las recibidas): la primera, sola; el mes, después de comprobarla.
   const [vueltaEsc, setVueltaEsc] = useState(0)
   const escribir = useLeer(() => leerEstadoEscribir(L.accountId, L.companyId), `${L.companyId}:${vueltaEsc}:${L.vuelta}`)
+  // X10f · Lo de hoy por la conexión (lo que no ha salido, arriba), con «Cómo salió»: sola o a mano.
+  const hoyErp10 = useLeer(() => leerSalidoHoy(L.accountId, L.companyId), `${L.companyId}:hoy:${vueltaEsc}:${L.vuelta}`)
+  const filasHoy = listaDeHoy(hoyErp10.datos ?? [])
   const [confirmar, setConfirmar] = useState(false)
   const [primeraVez, setPrimeraVez] = useState(false)
   const [marcados, setMarcados] = useState<Set<number>>(new Set())
@@ -478,6 +482,24 @@ export function SalidaErp10() {
           <aside className="cxe-der" aria-labelledby="cxe-mirar">
             <h2 className="cxe-der-titulo" id="cxe-mirar">Qué mirar antes de sacarlo · {nMirar}</h2>
             <div className="cxe-der-cuerpo">
+              {filasHoy.length > 0 && (
+                <div className="cxe-nota cxe-hoy">
+                  <p><strong>Hoy en ERP10 · {filasHoy.length}</strong></p>
+                  <table className="cxe-hoy-tabla" aria-label="Hoy en ERP10">
+                    <thead><tr><th>Hora</th><th>Asiento</th><th>Cómo está</th><th>Cómo salió</th></tr></thead>
+                    <tbody>
+                      {filasHoy.map((x) => (
+                        <tr key={x.entryId} data-tono={x.tono}>
+                          <td className="cxe-num">{x.hora}</td>
+                          <td><Link className="cx-enlace" to={rutaAsiento(x.entryId)} title={x.concepto}>{x.numero}</Link></td>
+                          <td className="cxe-hoy-estado" title={x.estado}>{x.estado}</td>
+                          <td>{x.como}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               {CLASES.map((k) => {
                 const sp = s.sinPdf.filter((x) => x.clase === k)
                 if (!sp.length) return null

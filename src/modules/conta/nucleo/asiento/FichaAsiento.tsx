@@ -38,6 +38,9 @@ import { cifra } from '@/modules/conta/nucleo/ficha/textos'
 import { anular, cuentasDeApunte, guardarAMano, leerAsiento, leerEjercicios, localesDeLaCuenta, validar, type CuentaPlan, type EjercicioLibro, type LocalEmpresa } from '@/modules/conta/services/diarioService'
 import { guardarExpedidaPdf } from '@/modules/conta/services/documentosService'
 import { useLeer } from '@/modules/conta/libros/contexto'
+import { LineaErp10 } from '@/modules/conta/nucleo/ficha/LineaErp10'
+import { useLineaErp10 } from '@/modules/conta/nucleo/ficha/useLineaErp10'
+import { avisoYaEnErp10 } from '@/modules/conta/erp10/salidaSola'
 import './asiento.css'
 import { asientosDeAlLado, leerMayorDeCuenta, type MovimientoMayor } from '@/modules/conta/services/asientoNucleoService'
 import { useFicheroElegido } from '@/modules/conta/libro/ficheroElegido'
@@ -286,6 +289,9 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
   // La cuenta de la línea elegida: la del mayor de la derecha.
   const cuentaElegida = asiento ? asiento.apuntes[fila]?.cuentaId ?? null : porCodigo.get(lineas[fila]?.cuenta.trim() ?? '')?.id ?? null
 
+  // X10f · Su línea de ERP10, y lo que se avisa al anular algo que ya está allí.
+  const erp10 = useLineaErp10({ accountId, companyId: activa?.id ?? null, entryId: asiento?.id ?? null, validado: asiento?.estado === 'validado', fecha: asiento?.fecha ?? null })
+  const yaEnErp10 = erp10.datos ? avisoYaEnErp10(erp10.datos) : null
   if (fallo && !base) return <div className="kf-ficha cxa"><p className="kf-aviso" data-tono="mal" role="alert">{fallo}</p></div>
   if (!base || existente === null) return <div className="kf-ficha cxa" aria-busy="true" aria-label="Cargando el asiento"><p className="kf-panel-nota">Abriendo el asiento…</p></div>
   if (entryId && !asiento) return <div className="kf-ficha cxa"><p className="kf-aviso" data-tono="mal" role="alert">Ese asiento no existe o no es de esta empresa. <Link to={rutaNuevoAsiento()}>Escribir uno nuevo</Link></p></div>
@@ -307,6 +313,7 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
         <h1 id="cxa-titulo">Asiento</h1>
         <span className="kf-cola">{nombreEstado}</span>
         <EstadoFicha {...estado} />
+        <LineaErp10 linea={erp10.linea} companyId={activa?.id ?? null} entryId={asiento?.id ?? null} fecha={asiento?.fecha ?? null} quien={userName} releer={erp10.releer} />
         <div className="kf-cabecera-botones">
           <button type="button" className="kf-flecha" aria-label="El asiento de antes" disabled={!lado.antes} onClick={() => ir(lado.antes)}>‹</button>
           <button type="button" className="kf-flecha" aria-label="El asiento de después" disabled={!lado.despues} onClick={() => ir(lado.despues)}>›</button>
@@ -422,6 +429,7 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
         <div className="cxa-velo" role="dialog" aria-modal="true" aria-labelledby="cxa-anular">
           <div className="cxa-confirmar">
             <h2 id="cxa-anular">Anular el asiento {asiento.serie} / {String(asiento.numero ?? '').padStart(4, '0')}</h2>
+            {yaEnErp10 && <p className="kf-aviso" data-tono="falta" role="alert" data-prueba="aviso-ya-en-erp10">{yaEnErp10}</p>}
             <Casilla rotulo="Por qué" htmlFor="cxa-motivo"><input id="cxa-motivo" autoFocus value={motivo} onChange={(e) => setMotivo(e.target.value)} /></Casilla>
             <div className="cxa-confirmar-botones">
               <button type="button" className="kf-guardar" disabled={!motivo.trim() || ocupado} onClick={() => void hacerAnular()}>Anular</button>

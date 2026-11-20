@@ -1,0 +1,4 @@
+# X10f · Lo validado sale solo a ERP10 (la cola, el despertador, lo atascado y el lote desde el servidor).
+supabase/migrations/20261120T2010_x10f_cola_erp10.sql
+supabase/migrations/20261120T2011_x10f_lote_desde_el_servidor.sql
+supabase/staging/sql/20261120_x10f_cola_erp10_prueba.sql

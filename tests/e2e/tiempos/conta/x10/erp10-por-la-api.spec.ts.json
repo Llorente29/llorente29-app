@@ -1,4 +1,4 @@
 {
-  "segundos": 81,
-  "medido": "run 44748193074, commit dca06bda (X10e, 20/11): X10b 15,9 s y 15,3 s, X10d 11,3 s y 11,0 s, a 1456 × 816 y 1366 × 768; X10e (los dos tamaños en una prueba) 27,1 s; el móvil se salta"
+  "segundos": 108,
+  "medido": "run 44794867496, commit 0a4ecd2f (X10f, 20/11): X10b 18,8 s y 16,4 s, X10d 11,7 s y 11,3 s, a 1456 × 816 y 1366 × 768; X10e 22,0 s y X10f 27,4 s (los dos tamaños en una prueba); el móvil se salta"
 }

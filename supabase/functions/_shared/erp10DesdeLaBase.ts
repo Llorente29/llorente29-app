@@ -40,6 +40,12 @@ export type ParaEscribir =
   | { clase: 'dia'; entryId: string; numero: string; api: DiaParaApi; huella: string; pdf: null
       cobro: { entryId: string; api: AsientoParaApi; aparte: boolean; huella: string } }
 
+/** X10f · Lo que pidió el navegador (o la cola) y no sale ahora por la conexión, con su porqué. */
+export type NoSale = { entryId: string; porque: string; parado?: 'recibida' | 'emitida' | 'asiento' }
+
+/** X10f · Una recibida o emitida que no sale por la conexión (las reglas de salePorLaConexion y de las emitidas): sale con el Excel. */
+export const CON_EL_EXCEL = 'No sale por la conexión (retención, inversión del sujeto pasivo, intracomunitaria o más de tres tipos de I.V.A.): sale con el Excel.'
+
 /** La carpeta de los PDF de la salida (la misma regla que la pantalla). */
 export const carpetaDe = (carpeta: string | null | undefined, codigo: string | null | undefined) => carpeta ?? `C:\\Sumied\\${codigo ?? ''}\\`
 
@@ -57,7 +63,12 @@ export function pedidasDelCuerpo(cuerpo: unknown): string[] {
  */
 export async function loQueSaleDesdeLaBase(b: BaseCruda, pedidas: readonly string[]): Promise<{
   salen: ParaEscribir[]
-  noSalen: { entryId: string; porque: string }[]
+  /**
+   * X10f · `parado`: no puede salir por la conexión por una razón suya (lleva retención, no cabe su
+   * cuenta, falta el rango del día…), con su clase. La cola lo deja parado con ese porqué y no lo vuelve
+   * a coger. Sin `parado`, no está en lo que sale (ya salió, o es de otro mes): no se toca.
+   */
+  noSalen: NoSale[]
   cuentasNuevas: { codigo: string; nombre: string; nif: string | null }[]
 }> {
   const s = armarSalida(aPorSalir(b.porSalir), aRecibidas(b.recibidas), aEmitidas(b.emitidas), b.carpeta, aAsientos(b.asientos), aDias(b.dias))
@@ -68,8 +79,9 @@ export async function loQueSaleDesdeLaBase(b: BaseCruda, pedidas: readonly strin
   // El cobro de un día en dos asientos sale con su día, no suelto.
   const cobroDe = new Map(s.ficheros.dias.flatMap((d) => (d.cobroId ? [[d.cobroId, d.entryId] as const] : [])))
   const porque = new Map(s.noPuedenSalir.map((x) => [x.entryId, x.porque]))
+  const claseDe = new Map(s.noPuedenSalir.map((x) => [x.entryId, x.clase === 'recibida' ? 'recibida' as const : x.clase === 'asiento' ? 'asiento' as const : 'emitida' as const]))
   const salen: ParaEscribir[] = []
-  const noSalen: { entryId: string; porque: string }[] = []
+  const noSalen: NoSale[] = []
   // Pedir el cobro de un día de dos asientos es pedir su día (sale con él, una sola vez).
   const vistas = new Set<string>()
   for (const pedida of pedidas) {
@@ -82,7 +94,7 @@ export async function loQueSaleDesdeLaBase(b: BaseCruda, pedidas: readonly strin
     if (e?.api) { salen.push({ clase: 'emitida', entryId: id, numero: e.api.numero, api: e.api, huella: await huellaFila(e.fila), pdf: e.pdf ?? null }); continue }
     const d = dias.get(id)
     if (d) {
-      if (!d.api || !d.cobro) { noSalen.push({ entryId: id, porque: 'Es un día del TPV y no se ha podido armar su factura o su cobro: sale con el Excel.' }); continue }
+      if (!d.api || !d.cobro) { noSalen.push({ entryId: id, porque: 'Es un día del TPV y no se ha podido armar su factura o su cobro: sale con el Excel.', parado: 'emitida' }); continue }
       const aparte = d.cobro.entryId !== id
       // La huella, la misma que apunta el Excel: la fila del día y, en un día de un asiento, la de su cobro.
       const huella = await huellaFila([...d.fila, ...(aparte ? [] : d.cobro.filas.flat())])
@@ -92,7 +104,12 @@ export async function loQueSaleDesdeLaBase(b: BaseCruda, pedidas: readonly strin
     }
     const a = asi.get(id)
     if (a?.api) { salen.push({ clase: 'asiento', entryId: id, numero: a.api.numero, api: a.api, huella: await huellaFila(a.filas.flat()), pdf: null }); continue }
-    noSalen.push({ entryId: id, porque: porque.get(id) ?? 'No está en lo que sale este mes: ya salió, o no sale por aquí.' })
+    // X10f · Lo que está en lo que sale pero no por la conexión: con su porqué y su clase (la cola lo deja parado).
+    if (r || e) { noSalen.push({ entryId: id, porque: CON_EL_EXCEL, parado: r ? 'recibida' : 'emitida' }); continue }
+    if (a) { noSalen.push({ entryId: id, porque: porque.get(id) ?? 'Este asiento no se puede armar para ERP10: sale con el Excel.', parado: 'asiento' }); continue }
+    const np = porque.get(id)
+    if (np) { noSalen.push({ entryId: id, porque: np, parado: claseDe.get(id) ?? 'asiento' }); continue }
+    noSalen.push({ entryId: id, porque: 'No está en lo que sale este mes: ya salió, o no sale por aquí.' })
   }
   return { salen, noSalen, cuentasNuevas: s.listas.cuentas.map((c) => ({ codigo: c.codigoErp10, nombre: c.nombre, nif: c.nif })) }
 }
