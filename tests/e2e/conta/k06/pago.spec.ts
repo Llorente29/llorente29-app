@@ -224,7 +224,10 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     expect(Math.abs((await panel.boundingBox())!.width - antes), 'con las flechas, de vuelta').toBeLessThan(26)
     await page.evaluate(() => { for (const k of Object.keys(window.localStorage)) if (k.startsWith('folvy.conta.nucleo.reparto.')) window.localStorage.removeItem(k) })
 
-    // Validada: pagada por compensación con su liquidación.
+    // Validada: pagada por compensación con su liquidación. Después de recargar, la propuesta del pago tiene que
+    // haber llegado antes de validar (la e2e #1641 validó con la casilla aún vacía: la ficha ya no se deja).
+    await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
+    await expect(ficha(page).locator('#kf-pago')).toHaveValue('43000091', { timeout: 30_000 })
     await ficha(page).locator('[data-guardar-y-siguiente]').click()
     await expect(page.getByText(/Se paga con su liquidación: la 43000091 de Plataforma de Prueba K06 la descuenta/).first()).toBeVisible({ timeout: 60_000 })
     const plat = await idDe(s, `K06P-${t}-2`)

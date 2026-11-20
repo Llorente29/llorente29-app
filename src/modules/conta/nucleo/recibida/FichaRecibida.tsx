@@ -194,8 +194,14 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   // ── K06 · Cómo se paga: la cuenta del pago, propuesta (la 430 de su liquidación, la del último pago) o vacía ──
   const cuentasPago = useUltimo(useLeer(accountId && empresa ? () => cuentasDePago(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-pago`).datos, empresa ?? '')
   const subProvCodigo = delProv?.subcuenta?.codigo ?? null
-  const pagoProv = useUltimo(useLeer(accountId && empresa && provId && delProv ? () => pagoDelProveedor(accountId, empresa, provId, subProvCodigo) : null, `${accountId}:${empresa}:${provId}:${subProvCodigo}:pago:${vuelta}`).datos, `${id}:${provId}`)
-  const conLiquidacion = useLeer(id && pagoProv?.plataforma ? () => hayLiquidacion(id) : null, `${id}:${pagoProv?.plataforma ? 'p' : '-'}:liquidacion:${vuelta}`).datos ?? false
+  const leePagoProv = !!(accountId && empresa && provId && delProv)
+  const pagoProvLeido = useLeer(accountId && empresa && provId && delProv ? () => pagoDelProveedor(accountId, empresa, provId, subProvCodigo) : null, `${accountId}:${empresa}:${provId}:${subProvCodigo}:pago:${vuelta}`)
+  const pagoProv = useUltimo(pagoProvLeido.datos, `${id}:${provId}`)
+  const liquidacionLeida = useLeer(id && pagoProv?.plataforma ? () => hayLiquidacion(id) : null, `${id}:${pagoProv?.plataforma ? 'p' : '-'}:liquidacion:${vuelta}`)
+  const conLiquidacion = liquidacionLeida.datos ?? false
+  // K06 · Mientras se lee la propuesta del pago, no se valida: se guardaría «pendiente» sin que nadie lo haya decidido
+  // (la e2e #1641 pulsó antes de que llegara la 430 de su liquidación). Si la lectura falla, no se espera: queda lo que haya.
+  const leyendoPago = (leePagoProv && !pagoProv && !pagoProvLeido.error) || (!!id && !!pagoProv?.plataforma && liquidacionLeida.datos === null && !liquidacionLeida.error)
   const plataforma = pagoProv?.plataforma ? { ...pagoProv.plataforma, hayLiquidacion: conLiquidacion } : null
   const propuestaPago = pagoProv ? propuestaDelPago({ plataforma, ultimas: pagoProv.ultimas }) : null
   const pagoCuenta = b.pagoCuenta ?? propuestaPago?.cuenta ?? ''
@@ -308,6 +314,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
 
   async function guardarYSiguiente() {
     if (guardando) return
+    if (leyendoPago) { setAviso({ tono: 'falta', texto: 'Aún estoy leyendo cómo se paga (la cuenta del pago que propongo): vuelve a pulsar en un momento. No he guardado nada.' }); return }
     setGuardando(true); setAviso(null)
     try {
       if (aMano) { await guardarNueva(); return }
@@ -479,7 +486,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const conceptoTexto = propuesta?.concepto ?? (prov ? `${b.numero || 'Factura'}-${prov.nombre}` : '')
 
   return (
-    <div className="kf-ficha kf-recibida" ref={raiz} onKeyDown={(e) => { marcarTocada(); alPulsar(e) }} onPointerDown={marcarTocada} data-prueba="ficha-recibida-nucleo" aria-busy={cargando || undefined}>
+    <div className="kf-ficha kf-recibida" ref={raiz} onKeyDown={(e) => { marcarTocada(); alPulsar(e) }} onPointerDown={marcarTocada} data-prueba="ficha-recibida-nucleo" aria-busy={cargando || leyendoPago || undefined}>
       <header className="kf-cabecera">
         <h1>Factura recibida</h1>
         <span className="kf-cola">{cola}</span>
