@@ -168,7 +168,7 @@ describe('el cliente escribe solo si se le pide, y solo tres rutas', () => {
     await expect(clienteDe(e, false).altaFactura({})).rejects.toThrow('no escribe nada en ERP10')
     const c = clienteDe(e, true)
     // @ts-expect-error: llamar es privado; se prueba el freno.
-    await expect(c.llamar('POST', '/api/apuntes/add', undefined, {})).rejects.toThrow('no está en la lista')
+    await expect(c.llamar('POST', '/api/apuntes/update', undefined, {})).rejects.toThrow('no está en la lista')
   })
   it('una recibida entera: da de alta el proveedor que falta, la factura con su asiento y su PDF; en el paso 3 su asiento suma lo de Sumied', async () => {
     const empresa: EmpresaSimulada = { cif: 'B00000000', apuntes: [], subcuentas: ['62300000', '47200000'] }

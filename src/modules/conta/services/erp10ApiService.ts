@@ -171,7 +171,7 @@ export interface EstadoClase {
   /** Un «Darlo por igualado» posterior a la primera: ya se pueden sacar las demás. */
   comprobada: boolean
 }
-export type ClaseConexion = 'recibida' | 'emitida'
+export type ClaseConexion = 'recibida' | 'emitida' | 'asiento'
 export type EstadoEscribir = Record<ClaseConexion, EstadoClase>
 export async function leerEstadoEscribir(accountId: string, companyId: string): Promise<EstadoEscribir> {
   hayBase()
@@ -187,7 +187,7 @@ export async function leerEstadoEscribir(accountId: string, companyId: string): 
     const primera = (filas.find((x) => x.clase === c)?.creado_en as string | undefined) ?? null
     return { primera, comprobada: !!primera && !!ultimoIgualado && ultimoIgualado > primera }
   }
-  return { recibida: de('recibida'), emitida: de('emitida') }
+  return { recibida: de('recibida'), emitida: de('emitida'), asiento: de('asiento') }
 }
 
 /** Lo que dice el servidor de cada factura. */

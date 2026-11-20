@@ -27,7 +27,7 @@ import { CARRIL, CUENTA_A, enCarril, entrarComo, type Sesion } from '../sesion'
 import { rest } from '../api'
 import { ClienteErp10, finalDelNif, lineas, porTipo, resumenSinDatos, sumarPorCuenta, type AlmacenToken } from '../../../../supabase/functions/_shared/erp10Cliente'
 import { erp10Simulado, type EmpresaSimulada } from '../../../conta/erp10/simulado'
-import { sacarEmitida, sacarRecibida, type Envio, type PuertoEscribir, type Resultado } from '../../../../supabase/functions/_shared/erp10Escribir'
+import { sacarAsiento, sacarEmitida, sacarRecibida, type Envio, type PuertoEscribir, type Resultado } from '../../../../supabase/functions/_shared/erp10Escribir'
 import { carpetaDe, loQueSaleDesdeLaBase, pedidasDelCuerpo } from '../../../../supabase/functions/_shared/erp10DesdeLaBase'
 
 test.skip(CARRIL === null, 'El X10 escribe en la cuenta A (la conexión con ERP10, la salida, una recibida): necesita su carril.')
@@ -150,9 +150,14 @@ async function erp10Escribe(page: Page, s: Sesion, empresas: Record<string, Empr
         poner: async (id, cambios) => { Object.assign([...filas.values()].find((x) => x.id === id)!, cambios) },
         pdf: async () => new Uint8Array([37, 80, 68, 70]),
         erp10: c,
+        usados: async (entryId) => new Set([...filas.values()].filter((x) => x.estado === 'en_erp10' && x.entry_id !== entryId).map((x) => `${x.erp10_serie}/${x.erp10_documento}`)),
       }
       const resultados: Resultado[] = []
-      for (const x of base.salen) resultados.push(x.clase === 'recibida' ? await sacarRecibida(x.api, base.cuentasNuevas, x.pdf, p) : await sacarEmitida(x.api, base.cuentasNuevas, x.pdf, p))
+      for (const x of base.salen) {
+        resultados.push(x.clase === 'recibida' ? await sacarRecibida(x.api, base.cuentasNuevas, x.pdf, p)
+          : x.clase === 'emitida' ? await sacarEmitida(x.api, base.cuentasNuevas, x.pdf, p)
+          : await sacarAsiento(x.api, base.cuentasNuevas, p))
+      }
       const porApuntar = resultados.filter((x) => x.estado === 'en_erp10' && x.sinApuntar)
       if (porApuntar.length) {
         const deLaBase = new Map(base.salen.map((x) => [x.entryId, x]))
@@ -205,6 +210,18 @@ async function erp10ConLoDeSumied(s: Sesion, fecha: string, falta: Map<string, n
     return { Cuenta: x.erp ?? x.codigo, Debe: cent > 0 ? cent / 100 : 0, Haber: cent < 0 ? -cent / 100 : 0 }
   })
   return { cif: `ES${nif}`, apuntes: [{ Serie: '1', Documento: 1, TipoAsiento: 1, Fecha: aaaammdd(c.desde), Detalles: det }], subcuentas: [...det.map((d) => d.Cuenta), '47200000'] }
+}
+
+/** X10d · Una cuenta de la empresa bajo esa hoja: la primera que haya, o una nueva inventada (como el X07). */
+async function cuenta(s: Sesion, hoja: string, nombre: string): Promise<string> {
+  const [hay] = await api<{ code: string }[]>(s, 'GET', `company_account?select=code&company_id=eq.${EMPRESA_A}&code=like.${hoja}*&order=code&limit=1`)
+  return hay?.code ?? (await api<{ code: string }>(s, 'POST', 'rpc/company_account_add', { p_company: EMPRESA_A, p_hoja: hoja, p_nombre: nombre, p_quien_nombre: QUIEN })).code
+}
+
+/** X10d · La sociedad con su código de empresa 101 (la de la conexión de la prueba de arriba). */
+async function conCodigo(s: Sesion, connectorId: string) {
+  await sinCodigo(s, connectorId)
+  await api(s, 'POST', 'account_connector', { account_id: CUENTA_A.id, connector_id: connectorId, scope: 'company', company_id: EMPRESA_A, external_account_id: '101', status: 'connected', config: {}, created_by_name: QUIEN })
 }
 
 async function conectar(s: Sesion) {
@@ -300,7 +317,7 @@ for (const tam of TAMANOS) {
     await expect(page.locator('.cxe-marco[aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 })
     for (const k of ['41000002', '62300000']) await expect(tabla.getByRole('row').filter({ hasText: k }).locator('.cxe-dif')).toHaveText('', { timeout: 30_000 })
     // X10c · Factura a factura: la de prueba, casada con el número que le dio ERP10.
-    await expect(page.getByRole('note', { name: 'Factura a factura' })).toHaveText('Factura a factura: la que salió por la conexión está en ERP10 con su número, igual.')
+    await expect(page.getByRole('note', { name: 'Una a una, con su número de ERP10' })).toHaveText('Factura a factura: la que salió por la conexión está en ERP10 con su número, igual.')
     await expect(page.getByRole('button', { name: 'Subir un Excel' })).toBeVisible()
     await page.evaluate(() => window.scrollTo(0, 0))
     const abajo = await page.evaluate(() => [document.querySelector('.cxe')?.getBoundingClientRect().bottom ?? 9999, window.innerHeight])
@@ -312,6 +329,65 @@ for (const tam of TAMANOS) {
     await expect(page.getByRole('heading', { name: 'Marketplace de integraciones', level: 1 })).toBeVisible({ timeout: 40_000 })
     await expect(page.getByText('Diez (contabilidad)', { exact: true })).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText('ERP10 (despacho)')).toHaveCount(0)
+    expect(errores).toEqual([])
+  })
+}
+
+// ── X10d · Los asientos por la conexión ─────────────────────────────────────────────
+
+for (const tam of TAMANOS) {
+  test(`X10d · ${tam.width} × ${tam.height}: un asiento sale por la conexión (el de prueba) y el paso 3 lo casa asiento a asiento`, async ({ page }) => {
+    test.skip((page.viewportSize()?.width ?? 1440) < 768, 'En el ordenador (encargo X10d).')
+    test.setTimeout(240_000)
+    await page.setViewportSize(tam)
+    const s = await entrarComo(page, CUENTA_A.email)
+    const errores = vigilar(page)
+    const hoy = hoyEnMadrid()
+    const fin = finDeMes(hoy)
+    const mesTexto = `${['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][Number(hoy.slice(5, 7)) - 1]} de ${hoy.slice(0, 4)}`
+    const nif = await nifDeLaSociedad(s)
+    await conCodigo(s, await conectar(s))
+    // La salida desde hoy y un pago sin I.V.A. (dos apuntes), validado: un asiento del X07.
+    await api(s, 'POST', 'rpc/conta_erp10_salida_poner', { p_company: EMPRESA_A, p_encender: true, p_codigo: '0007', p_largo: 8, p_desde: hoy, p_quien_nombre: QUIEN })
+    const banco = await cuenta(s, '572', 'Banco inventado X10d')
+    const concepto = `E2E X10d · pago ${Date.now() % 100000}`
+    const p = await api<{ id: string }>(s, 'POST', 'rpc/journal_entry_proponer', {
+      p_company: EMPRESA_A, p_entry: { series: 4, fecha: hoy, concepto, source_type: 'manual', confianza: 'seguro', porque: 'Asiento de la prueba e2e del X10d.' },
+      p_lines: [{ cuenta: '41000002', debe: 30.25, comun: true }, { cuenta: banco, haber: 30.25, comun: true }], p_quien_nombre: QUIEN,
+    })
+    await api(s, 'POST', 'rpc/journal_entry_validar', { p_entry: p.id, p_quien_nombre: QUIEN })
+    const empresa101 = await erp10ConLoDeSumied(s, fin, new Map([['41000002', 3025], [banco, -3025]]), nif)
+    const empresas = { 101: empresa101 }
+    const pedidas: string[] = []
+    await erp10DeMentira(page, s, empresas, nif)
+    await erp10Escribe(page, s, empresas, nif, pedidas)
+    await page.route('**/functions/v1/connector-credentials', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, hasCredentials: true }) }))
+
+    // 1 · La primera vez, un solo asiento, para probar: cuál, y que no se puede borrar.
+    await page.goto('/conta/libros/cierre/salida-erp10', { waitUntil: 'load' })
+    await expect(page.getByRole('heading', { name: 'Salida a ERP10', level: 1 })).toBeVisible({ timeout: 40_000 })
+    const sacar = page.getByRole('button', { name: 'Sacar una para probar' })
+    await expect(sacar).toBeEnabled({ timeout: 30_000 })
+    await sacar.click()
+    const aviso = page.getByRole('alertdialog', { name: 'Sacar a ERP10' })
+    await expect(aviso).toContainText(new RegExp(`^Va a entrar en ERP10 un solo asiento de ${mesTexto}, para probar: el 4/\\d+ de Sumied, ${concepto} \\(30,25 €\\)\\. Si algo sale mal, se corrige a mano en ERP10: Sumied no puede borrarlo\\.`))
+    await page.screenshot({ path: `${DIR}/paso1-asiento-${tam.width}.png` })
+    await aviso.getByRole('button', { name: 'Sacar solo este para probar' }).click()
+    await expect(page.getByRole('heading', { name: 'Compara con ERP10' })).toBeVisible({ timeout: 60_000 })
+    await expect(page.locator('.cxe-hecho')).toHaveText(new RegExp(`^Han entrado en ERP10 1 asiento de ${mesTexto} \\(1/\\d+\\)\\.$`))
+    expect(pedidas).toHaveLength(1)
+    expect(empresa101.apuntes.filter((a) => a.TipoAsiento === 0)).toHaveLength(1)
+
+    // 2 · El paso 3: el asiento casado con el número que le dio ERP10, y las dos cuentas igual.
+    await page.getByRole('button', { name: 'Comparar con ERP10' }).click()
+    await expect(page.locator('.cxe-marco[aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 })
+    await expect(page.getByRole('note', { name: 'Una a una, con su número de ERP10' })).toHaveText('Asiento a asiento: el que salió por la conexión está en ERP10 con su número, igual.', { timeout: 30_000 })
+    const tabla = page.getByRole('table', { name: 'Cuenta a cuenta' })
+    for (const k of ['41000002', banco]) await expect(tabla.getByRole('row').filter({ hasText: k }).locator('.cxe-dif')).toHaveText('', { timeout: 30_000 })
+    await page.evaluate(() => window.scrollTo(0, 0))
+    const abajo = await page.evaluate(() => [document.querySelector('.cxe')?.getBoundingClientRect().bottom ?? 9999, window.innerHeight])
+    expect(abajo[0], 'la pantalla acaba dentro de la ventana').toBeLessThanOrEqual(abajo[1])
+    await page.screenshot({ path: `${DIR}/paso3-asiento-${tam.width}.png` })
     expect(errores).toEqual([])
   })
 }

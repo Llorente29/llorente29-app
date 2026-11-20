@@ -1,6 +1,7 @@
 // supabase/functions/conta-erp10-escribir/index.ts
 //
-// X10b (19/11) · SACAR A ERP10 POR LA CONEXIÓN. X10c: las emitidas también, y LO QUE SE ESCRIBE
+// X10b (19/11) · SACAR A ERP10 POR LA CONEXIÓN. X10c: las emitidas también; X10d, los asientos (lo
+// del X07; los días del TPV no, hasta el R07). Y LO QUE SE ESCRIBE
 // SE ARMA AQUÍ, DESDE LA BASE. Lo llama la salida a ERP10 (Libros › Cierre › Salida a ERP10) con
 // la sesión de un administrador, y solo dice qué:
 //
@@ -32,7 +33,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { clienteErp10 } from "../_shared/erp10Despacho.ts";
 import { FrenoErp10 } from "../_shared/erp10Cliente.ts";
-import { sacarEmitida, sacarRecibida, type Envio, type PuertoEscribir, type Resultado } from "../_shared/erp10Escribir.ts";
+import { sacarAsiento, sacarEmitida, sacarRecibida, type Envio, type PuertoEscribir, type Resultado } from "../_shared/erp10Escribir.ts";
 import { carpetaDe, loQueSaleDesdeLaBase, pedidasDelCuerpo } from "../_shared/erp10DesdeLaBase.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -40,9 +41,17 @@ const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const TOPE_MS = 40_000;
 const EN_LA_DEMO = "En la demo no se escribe en ERP10.";
-const NOMBRE = { recibida: ["recibida", "recibidas"], emitida: ["emitida", "emitidas"] } as const;
-const primeraUna = (c: "recibida" | "emitida") => `La primera factura ${NOMBRE[c][0]} que esta sociedad saca a ERP10 sale sola, para probar. Sácala, compruébala en el paso 3 y después saca las demás.`;
-const sinComprobar = (c: "recibida" | "emitida") => `Antes de sacar más facturas ${NOMBRE[c][1]}, comprueba en el paso 3 la de prueba y dala por igualada.`;
+type Clase = "recibida" | "emitida" | "asiento";
+const PRIMERA: Record<Clase, string> = {
+  recibida: "La primera factura recibida que esta sociedad saca a ERP10 sale sola, para probar. Sácala, compruébala en el paso 3 y después saca las demás.",
+  emitida: "La primera factura emitida que esta sociedad saca a ERP10 sale sola, para probar. Sácala, compruébala en el paso 3 y después saca las demás.",
+  asiento: "El primer asiento que esta sociedad saca a ERP10 sale solo, para probar. Sácalo, compruébalo en el paso 3 y después saca los demás.",
+};
+const SIN_COMPROBAR: Record<Clase, string> = {
+  recibida: "Antes de sacar más facturas recibidas, comprueba en el paso 3 la de prueba y dala por igualada.",
+  emitida: "Antes de sacar más facturas emitidas, comprueba en el paso 3 la de prueba y dala por igualada.",
+  asiento: "Antes de sacar más asientos, comprueba en el paso 3 el de prueba y dalo por igualado.",
+};
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const hoyMadrid = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(new Date());
@@ -93,17 +102,17 @@ Deno.serve(async (req) => {
   }
 
   // Por clase: la primera, sola; las demás, después de comprobarla.
-  for (const clase of ["recibida", "emitida"] as const) {
+  for (const clase of ["recibida", "emitida", "asiento"] as const) {
     const n = base.salen.filter((x) => x.clase === clase).length;
     if (!n) continue;
     const { data: entradas, error: e1 } = await srv.from("conta_erp10_envio").select("creado_en").eq("company_id", companyId).eq("account_id", co.account_id)
       .eq("clase", clase).eq("estado", "en_erp10").order("creado_en", { ascending: true }).limit(1);
     if (e1) return json({ error: `no se ha podido leer lo que ya ha salido a ERP10: ${e1.message}` }, 500);
     const primera = (entradas ?? [])[0]?.creado_en as string | undefined;
-    if (n > 1 && !primera) return json({ error: primeraUna(clase), primera: true, clase }, 409);
+    if (n > 1 && !primera) return json({ error: PRIMERA[clase], primera: true, clase }, 409);
     if (n > 1) {
       const { data: ig } = await srv.from("conta_erp10_igualado").select("id").eq("company_id", companyId).eq("account_id", co.account_id).gt("igualado_en", primera).limit(1);
-      if (!(ig ?? []).length) return json({ error: sinComprobar(clase), sinComprobar: true, clase }, 409);
+      if (!(ig ?? []).length) return json({ error: SIN_COMPROBAR[clase], sinComprobar: true, clase }, 409);
     }
   }
 
@@ -132,6 +141,14 @@ Deno.serve(async (req) => {
         facturasDelMes: (m) => c.cliente.facturasDelMes(m),
         altaFactura: (fd) => c.cliente.altaFactura(fd),
         subirDocumento: (d) => c.cliente.subirDocumento(d),
+        apuntesDelMes: (m) => c.cliente.apuntesDelMes(m),
+        altaApunte: (ap) => c.cliente.altaApunte(ap),
+      },
+      // Los números de ERP10 que ya son de otro asiento de Sumied: un asiento no se enlaza a su gemelo.
+      usados: async (entryId) => {
+        const { data } = await srv.from("conta_erp10_envio").select("erp10_serie, erp10_documento").eq("company_id", companyId).eq("account_id", co.account_id)
+          .eq("estado", "en_erp10").neq("entry_id", entryId);
+        return new Set(((data ?? []) as { erp10_serie: string | null; erp10_documento: number | null }[]).map((x) => `${x.erp10_serie ?? ""}/${x.erp10_documento ?? ""}`));
       },
     };
 
@@ -139,9 +156,10 @@ Deno.serve(async (req) => {
     const quedan: string[] = [];
     for (const x of base.salen) {
       if (Date.now() - t0 > TOPE_MS) { quedan.push(x.entryId); continue; }
-      resultados.push(x.clase === "recibida"
-        ? await sacarRecibida(x.api, base.cuentasNuevas, x.pdf, puerto)
-        : await sacarEmitida(x.api, base.cuentasNuevas, x.pdf, puerto));
+      // Si uno falla, los demás siguen: cada uno dice lo suyo.
+      resultados.push(x.clase === "recibida" ? await sacarRecibida(x.api, base.cuentasNuevas, x.pdf, puerto)
+        : x.clase === "emitida" ? await sacarEmitida(x.api, base.cuentasNuevas, x.pdf, puerto)
+        : await sacarAsiento(x.api, base.cuentasNuevas, puerto));
     }
 
     // Lo que ha entrado (o ya estaba) y no está apuntado en la salida de Sumied: un lote, con la huella de su fila (de la base).

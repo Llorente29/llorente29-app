@@ -16,6 +16,8 @@ export type EnvioErp10 = { entryId: string; clase: string; serie: string; docume
 export type DocumentoErp10 = { serie: string; documento: number; lineas: { cuenta: string; importe: number }[] }
 export type Casada = {
   entryId: string; numero: string; serie: string; documento: number
+  /** X10d · recibida, emitida o asiento. */
+  clase?: string
   estado: 'igual' | 'otras_cuentas' | 'distinta' | 'no_esta'
   detalle: string
 }
@@ -38,11 +40,12 @@ export function casarFacturas(envios: readonly EnvioErp10[], docs: readonly Docu
   for (const e of envios) {
     const a = base.asientos.find((x) => x.entryId === e.entryId)
     if (!a) continue
-    const numero = a.factura ?? `${a.serie}/${a.numero ?? '—'}`
+    const numero = e.clase === 'asiento' ? `${a.serie}/${a.numero ?? '—'}` : a.factura ?? `${a.serie}/${a.numero ?? '—'}`
     const num = `${e.serie}/${e.documento}`
-    const comun = { entryId: e.entryId, numero, serie: e.serie, documento: e.documento }
+    const comun = { entryId: e.entryId, numero, serie: e.serie, documento: e.documento, clase: e.clase }
     const d = doc.get(num)
-    if (!d) { r.push({ ...comun, estado: 'no_esta', detalle: `Salió como ${num} y ERP10 ya no tiene ese número: la han borrado o cambiado allí.` }); continue }
+    const la = e.clase === 'asiento' ? 'lo' : 'la'
+    if (!d) { r.push({ ...comun, estado: 'no_esta', detalle: `Salió como ${num} y ERP10 ya no tiene ese número: ${la} han borrado o cambiado allí.` }); continue }
     const sumied = porCuenta(a.lineas.map((l) => ({ cuenta: aErp.get(l.cuenta) ?? l.cuenta, importe: c(l.importe) })))
     const erp10 = porCuenta(d.lineas)
     const [ts, te] = [debe(sumied), debe(erp10)]
@@ -58,6 +61,12 @@ export function casarFacturas(envios: readonly EnvioErp10[], docs: readonly Docu
 /** La línea de arriba del paso 3: cuántas salidas por la conexión están igual, y las que no. */
 export function frasesCasadas(xs: readonly Casada[]): { resumen: string; bien: boolean; malas: Casada[] } {
   const malas = xs.filter((x) => x.estado !== 'igual')
-  if (!malas.length) return { resumen: `Factura a factura: ${xs.length === 1 ? 'la que salió' : `las ${xs.length} que salieron`} por la conexión ${xs.length === 1 ? 'está' : 'están'} en ERP10 con su número, igual.`, bien: true, malas }
-  return { resumen: `Factura a factura: ${xs.length - malas.length} de ${xs.length} están en ERP10 igual; ${malas.length === 1 ? '1 no' : `${malas.length} no`}.`, bien: false, malas }
+  // X10d · Con asientos, «asiento a asiento»; si son todo asientos, en masculino.
+  const asientos = xs.filter((x) => x.clase === 'asiento').length
+  const titulo = !asientos ? 'Factura a factura' : asientos === xs.length ? 'Asiento a asiento' : 'Factura a factura y asiento a asiento'
+  if (!malas.length) {
+    if (asientos === xs.length) return { resumen: `${titulo}: ${xs.length === 1 ? 'el que salió' : `los ${xs.length} que salieron`} por la conexión ${xs.length === 1 ? 'está' : 'están'} en ERP10 con su número, igual.`, bien: true, malas }
+    return { resumen: `${titulo}: ${xs.length === 1 ? 'la que salió' : `las ${xs.length} que salieron`} por la conexión ${xs.length === 1 ? 'está' : 'están'} en ERP10 con su número, igual.`, bien: true, malas }
+  }
+  return { resumen: `${titulo}: ${xs.length - malas.length} de ${xs.length} están en ERP10 igual; ${malas.length === 1 ? '1 no' : `${malas.length} no`}.`, bien: false, malas }
 }

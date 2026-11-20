@@ -308,9 +308,13 @@ export function SalidaErp10() {
     .map((f) => ({ clase: 'recibida', entryId: f.entryId, numero: f.api!.numero, tercero: f.api!.nombre, total: f.api!.total }))
   const emitidasConexion: PorLaConexion[] = (s?.ficheros.expedidas ?? []).filter((f) => f.api && f.api.iva.length <= 3)
     .map((f) => ({ clase: 'emitida', entryId: f.entryId, numero: f.api!.numero, tercero: f.api!.nombre, total: f.api!.total }))
-  const porClase: Record<ClaseConexion, PorLaConexion[]> = { recibida: recibidasConexion, emitida: emitidasConexion }
+  // X10d · Los asientos (lo del X07), con su api; los cobros de los días del TPV no la llevan (esperan al R07).
+  const asientosConexion: PorLaConexion[] = (s?.ficheros.asientos ?? []).filter((f) => f.api)
+    .map((f) => ({ clase: 'asiento', entryId: f.entryId, numero: f.api!.numero, tercero: f.api!.apuntes.find((l) => l.concepto.trim())?.concepto ?? '', total: f.api!.apuntes.reduce((t, l) => t + l.debe, 0) }))
+  const porClase: Record<ClaseConexion, PorLaConexion[]> = { recibida: recibidasConexion, emitida: emitidasConexion, asiento: asientosConexion }
   const nPorExcel = (s?.ficheros.recibidas.length ?? 0) - recibidasConexion.length + (s?.ficheros.expedidas.length ?? 0) - emitidasConexion.length
-  const clases = (['recibida', 'emitida'] as const).filter((c) => porClase[c].length)
+  const nDias = s?.ficheros.dias.length ?? 0
+  const clases = (['recibida', 'emitida', 'asiento'] as const).filter((c) => porClase[c].length)
   const sinPrueba = escribir.datos ? clases.find((c) => !escribir.datos![c].primera) ?? null : null
   const pruebaPrimero = !!sinPrueba
   const sinComprobar = escribir.datos ? clases.filter((c) => escribir.datos![c].primera && !escribir.datos![c].comprobada) : []
@@ -406,14 +410,16 @@ export function SalidaErp10() {
       {paso === 1 && confirmar && mes && (
         <div className="cxe-confirmar" role="alertdialog" aria-label="Sacar a ERP10">
           <p>{queVaAEntrar({
-            recibidas: aSacar.filter((x) => x.clase === 'recibida').length, emitidas: aSacar.filter((x) => x.clase === 'emitida').length, mes: mesEnPalabras(mes),
+            recibidas: aSacar.filter((x) => x.clase === 'recibida').length, emitidas: aSacar.filter((x) => x.clase === 'emitida').length,
+            asientos: aSacar.filter((x) => x.clase === 'asiento').length, mes: mesEnPalabras(mes),
             prueba: pruebaPrimero && aSacar[0] ? { clase: aSacar[0].clase, numero: aSacar[0].numero, tercero: aSacar[0].tercero, total: aSacar[0].total } : null,
           })}</p>
-          {nPorExcel > 0 && <p className="cx-ayuda">{nPorExcel === 1 ? 'Una factura sale con el Excel' : `${nPorExcel} facturas salen con el Excel`} (retención, inversión del sujeto pasivo, intracomunitaria o más de tres tipos de IVA). Los asientos y los días del TPV, también con el Excel, por ahora.</p>}
-          {!pruebaPrimero && sinComprobar.length > 0 && <p className="cx-ayuda">Las facturas {sinComprobar.map((c) => (c === 'recibida' ? 'recibidas' : 'emitidas')).join(' y ')} esperan a que compruebes la de prueba en el paso 3.</p>}
+          {nPorExcel > 0 && <p className="cx-ayuda">{nPorExcel === 1 ? 'Una factura sale con el Excel' : `${nPorExcel} facturas salen con el Excel`} (retención, inversión del sujeto pasivo, intracomunitaria o más de tres tipos de IVA).</p>}
+          {nDias > 0 && <p className="cx-ayuda">{nDias === 1 ? 'El día del TPV todavía no sale por la conexión' : `Los ${nDias} días del TPV todavía no salen por la conexión`}: {nDias === 1 ? 'sigue' : 'siguen'} con el Excel.</p>}
+          {!pruebaPrimero && sinComprobar.length > 0 && <p className="cx-ayuda">{sinComprobar.map((c) => (c === 'recibida' ? 'Las facturas recibidas' : c === 'emitida' ? 'Las facturas emitidas' : 'Los asientos')).join(', ')} esperan a que compruebes en el paso 3 lo de prueba.</p>}
           <div className="cxe-confirmar-botones">
             <button type="button" className="cxe-sec" onClick={() => setConfirmar(false)} disabled={!!haciendo}>No, todavía no</button>
-            <button type="button" className="cxe-grande" onClick={() => { void sacarPorLaConexion() }} disabled={!!haciendo}>{pruebaPrimero ? 'Sacar solo esta para probar' : 'Meterlas en ERP10'}</button>
+            <button type="button" className="cxe-grande" onClick={() => { void sacarPorLaConexion() }} disabled={!!haciendo}>{pruebaPrimero ? (aSacar[0]?.clase === 'asiento' ? 'Sacar solo este para probar' : 'Sacar solo esta para probar') : 'Meterlas en ERP10'}</button>
           </div>
         </div>
       )}
