@@ -1,0 +1,20 @@
+[
+ {
+  "id": "753-1",
+  "pr": 753,
+  "fecha": "2026-11-20T18:28:36Z",
+  "producto": "sumied",
+  "apartado": "Facturas recibidas",
+  "frase": "«Cómo se paga» es la cuenta del pago, con su nombre, la fecha y el importe.",
+  "ruta": null
+ },
+ {
+  "id": "753-2",
+  "pr": 753,
+  "fecha": "2026-11-20T18:28:36Z",
+  "producto": "sumied",
+  "apartado": "Pagos",
+  "frase": "una recibida se puede pagar con otra cuenta, como la 551 del socio, con su asiento.",
+  "ruta": null
+ }
+]
