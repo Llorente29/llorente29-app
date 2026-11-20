@@ -50,7 +50,8 @@ const numero = (t: string | null): number => {
 /** La medida de la regla 31, al registro del run: la cifra de hoy y la nueva, leídas con el mismo lector. */
 const medida: string[] = []
 function igual(que: string, deHoy: number, nueva: number) {
-  medida.push(`${que}: hoy ${deHoy.toFixed(2)} · nuevo ${nueva.toFixed(2)}${deHoy === nueva ? '' : '  ← NO'}`)
+  const dos = (n: number) => n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  medida.push(`${que}: hoy ${dos(deHoy)} · nuevo ${dos(nueva)}${deHoy === nueva ? '' : '  ← NO'}`)
   expect.soft(nueva, `${que}: la de hoy`).toBe(deHoy)
 }
 
