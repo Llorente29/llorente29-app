@@ -298,3 +298,7 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 .kf-recibida .kf-asiento { padding: 4px 10px; }
 .kf-recibida .kf-asiento header { margin-bottom: 1px; }
 .kf-recibida .kf-asiento td { padding: 1px 6px; }
+
+/* X21 · «No está: crear la …» debajo de una casilla que busca cuentas: las dos casillas de «Añadir subcuenta». */
+.kf-crear { min-width: 420px; max-height: none; overflow: visible; padding: 8px 10px; white-space: normal; }
+.kf-crear .cx-subcuenta { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }

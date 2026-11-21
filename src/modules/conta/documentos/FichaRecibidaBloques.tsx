@@ -273,7 +273,9 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
 
 // ── A qué gasto va ──────────────────────────────────────────────────────────
 
-export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambiar, cambio, alDeshacer, tono, motivo, soloLectura, elegirLocal, errorLocal, sinReparto, enAsiento }: {
+export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambiar, cambio, alDeshacer, tono, motivo, soloLectura, elegirLocal, errorLocal, sinReparto, enAsiento, crear }: {
+  /** X21 · «No está: crear la …» en el buscador de la cuenta (lo pinta la página, que sabe de qué empresa es). */
+  crear?: (q: string, elegir: (c: CuentaHoja) => void) => ReactNode
   gastos: readonly LineaGasto[]
   base: number
   cuentas: readonly CuentaHoja[]
@@ -323,7 +325,7 @@ export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambi
               </button>
               {buscando === i && (
                 <BuscarCuentaHoja cuentas={cuentas} inicial="" alElegir={(c) => { poner(i, { cuenta: c.codigo }); setBuscando(null); refs.current[i]?.focus() }}
-                  alCerrar={(volver) => { setBuscando(null); if (volver) refs.current[i]?.focus() }} />
+                  alCerrar={(volver) => { setBuscando(null); if (volver) refs.current[i]?.focus() }} crear={crear} />
               )}
             </div>
             {locales && (
@@ -473,7 +475,9 @@ export function BloqueHistorial({ hechos, error }: { hechos: readonly HechoHisto
 }
 
 /** «Editar el asiento a mano»: cambiar la cuenta de una línea (F4 para buscarla). */
-export function EditarAsientoAMano({ lineas, cuentas, aMano, alCambiar, alCerrar }: {
+export function EditarAsientoAMano({ lineas, cuentas, aMano, alCambiar, alCerrar, crear }: {
+  /** X21 · «No está: crear la …» en el buscador de la cuenta (lo pinta la página, que sabe de qué empresa es). */
+  crear?: (q: string, elegir: (c: CuentaHoja) => void) => ReactNode
   lineas: readonly { codigo: string; nombre: string; importe: string }[]
   cuentas: readonly CuentaHoja[]
   aMano: Record<string, string>
@@ -495,7 +499,7 @@ export function EditarAsientoAMano({ lineas, cuentas, aMano, alCambiar, alCerrar
                 <strong className="cxf-cuenta-codigo s-cifra">{elegida}</strong> <span className="cxf-cuenta-nombre">{cuentas.find((c) => c.codigo === elegida)?.nombre ?? l.nombre}</span>
               </button>
               {buscando === l.codigo && (
-                <BuscarCuentaHoja cuentas={cuentas} inicial="" alElegir={(c) => { alCambiar({ ...aMano, [l.codigo]: c.codigo }); setBuscando(null) }} alCerrar={() => setBuscando(null)} />
+                <BuscarCuentaHoja cuentas={cuentas} inicial="" alElegir={(c) => { alCambiar({ ...aMano, [l.codigo]: c.codigo }); setBuscando(null) }} alCerrar={() => setBuscando(null)} crear={crear} />
               )}
             </li>
           )
