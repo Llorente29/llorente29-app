@@ -5,7 +5,7 @@
 // la cuenta del núcleo (semilla K02) en su gestoría y la semilla K08, a 1456 × 816 y a 1366 × 768:
 //   1. una factura de un proveedor recién dado de alta enseña su asiento antes de validar, con la línea del
 //      proveedor «Será la 4000000N · Proveedores · …» (aún no tiene subcuenta: se la crea la base al validar);
-//   2. validada, la casilla «Proveedor» dice el nombre, y cada línea del asiento, el nombre de su cuenta
+//   2. validada, la casilla «Proveedor» con su código (el nombre, en «Nombre»), y cada línea del asiento, el nombre de su cuenta
 //      («Compras de mercaderías», nunca su explicación);
 //   3. la barra de abajo, cuando la empresa espera su primera salida a ERP10: en gris, «Esperando la primera
 //      salida a ERP10 · Mandarla». Esa empresa no se puede montar en staging sin un asiento validado hace más
@@ -135,6 +135,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
       await gasto.fill('600')
       await page.getByRole('option', { name: /^60000000 · / }).click()
     }
+    await expect(ficha(page).locator('#kf-proveedor')).toHaveValue(/^4000\d{4}$/, { timeout: 30_000 })
     const sera = new RegExp(`Será la 4000\\d{4} · Proveedores · ${EMISOR(t).replace(/[.,]/g, '\\$&')}`)
     await expect(asiento(page)).toContainText(sera, { timeout: 30_000 })
     await expect(asiento(page).locator('tr', { hasText: '60000000' })).toContainText('Compras de mercaderías')
@@ -149,7 +150,10 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await page.goto(`/conta/documentos/recibidas/${factura(t)}`, { timeout: 30_000 })
     await fichaLista(page)
     await expect(ficha(page).locator('.kf-estado')).toContainText(/Contabilizada · asiento \d+\./, { timeout: 30_000 })
-    await expect(ficha(page).locator('#kf-proveedor')).toHaveValue(EMISOR(t))
+    // La casilla «Proveedor», con su código (la maqueta); el nombre, entero, en «Nombre» (Julio, 21/11).
+    await expect(ficha(page).locator('#kf-proveedor')).toHaveValue(/^4000\d{4}$/)
+    if (numero) await expect(ficha(page).locator('#kf-proveedor')).toHaveValue(numero)
+    await expect(ficha(page).locator('#kf-nombre')).toHaveValue(EMISOR(t))
     await expect(asiento(page).locator('tr', { hasText: '60000000' })).toContainText('Compras de mercaderías')
     await expect(asiento(page)).not.toContainText('Bebidas y producto')
     await expect(asiento(page)).not.toContainText('Será la')

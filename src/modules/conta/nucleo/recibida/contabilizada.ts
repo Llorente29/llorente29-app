@@ -131,9 +131,11 @@ export function laAnterior(o: { vieneDe: string | null; actual: string; enLaCola
 }
 
 /**
- * K08 · Lo que enseña la casilla «Proveedor»: por revisar, su subcuenta (la maqueta: «40000007»; sin ella, el
- * nombre); en una contabilizada o descartada, el nombre (Julio, 21/11: «40000002» no dice nada a quien la mira).
+ * K08 · Lo que enseña la casilla «Proveedor»: su subcuenta, como la maqueta («40000007»), también en una
+ * contabilizada; el nombre va entero en la casilla «Nombre», al lado (Julio, 21/11: el nombre no cabe en
+ * los 106 px de la casilla). Sin subcuenta todavía, la que le tocará al validar («40000001»: la línea del
+ * asiento dice «Será la…»). Sin ninguna de las dos, el nombre.
  */
-export function textoCasillaProveedor(o: { soloLectura: boolean; subcuenta: string; nombre: string | null }): string {
-  return (o.soloLectura ? o.nombre || o.subcuenta : o.subcuenta || o.nombre) || ''
+export function textoCasillaProveedor(o: { subcuenta: string; futura: string; nombre: string | null }): string {
+  return o.subcuenta || o.futura || o.nombre || ''
 }

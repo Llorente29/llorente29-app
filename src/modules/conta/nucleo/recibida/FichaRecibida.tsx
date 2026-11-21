@@ -614,7 +614,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
           {cargando ? <p className="kf-panel-nota" aria-busy="true">Abriendo la factura…</p> : <fieldset className="kf-solo-lectura" disabled={soloLectura} data-solo-lectura={soloLectura ? 'si' : undefined}>
             <div className="kf-fila" style={{ gridTemplateColumns: '1.1fr 1.1fr 2.9fr 1.7fr' }}>
               <Casilla rotulo="Proveedor" origen={origen.proveedor} htmlFor="kf-proveedor" duda={!!emisor}>
-                <Buscador id="kf-proveedor" etiqueta="Proveedor" cargando={proveedoresL === null} enfocar={abrirProveedor} duda={!!emisor} valor={textoProv ?? (provId ? textoCasillaProveedor({ soloLectura, subcuenta, nombre: prov?.nombre ?? null }) : '')} cuenta={subcuenta || null}
+                <Buscador id="kf-proveedor" etiqueta="Proveedor" cargando={proveedoresL === null} enfocar={abrirProveedor} duda={!!emisor} valor={textoProv ?? (provId ? textoCasillaProveedor({ subcuenta, futura: cuentasAsiento?.proveedor?.codigo ?? '', nombre: prov?.nombre ?? null }) : '')} cuenta={subcuenta || null}
                   placeholder={aMano ? 'Código, nombre o NIF' : undefined}
                   ponerTexto={setTextoProv} lista={(t) => { const q = t.toLowerCase(); return proveedores.filter((p) => !q || p.nombre.toLowerCase().includes(q) || (p.nif ?? '').toLowerCase().includes(q)) }}
                   texto={(p) => `${p.nombre}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { if (emisor) void elegirYGuardar(p.id, p.nombre, `Elegido ${p.nombre}.`); else { ed.poner('proveedorId', p.id); setTextoProv(null) } }} />

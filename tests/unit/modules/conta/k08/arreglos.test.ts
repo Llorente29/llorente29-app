@@ -3,7 +3,7 @@
 // K08 · Los cinco arreglos de la ficha que Julio vio grabando facturas de verdad (21/11):
 //   1. el asiento con un proveedor recién dado de alta: «Será la 40000002 · Proveedores · …»;
 //   2. ninguna frase de pantalla nombra funciones, tablas ni columnas;
-//   3. la casilla «Proveedor» de una validada, con el nombre;
+//   3. la casilla «Proveedor»: el código, como la maqueta, también validada (el nombre, en «Nombre»; Julio, 21/11);
 //   4. cada cuenta con su nombre guardado, nunca su explicación;
 //   5. la barra de abajo: gris si espera la primera salida a ERP10; ámbar solo si algo ha fallado.
 import { describe, expect, it } from 'vitest'
@@ -42,13 +42,15 @@ describe('2 · ninguna frase de pantalla nombra funciones, tablas ni columnas', 
   })
 })
 
-describe('3 · la casilla «Proveedor»', () => {
-  it('validada o descartada: el nombre', () => {
-    expect(textoCasillaProveedor({ soloLectura: true, subcuenta: '40000002', nombre: 'HEINEKEN ESPAÑA, S.A.' })).toBe('HEINEKEN ESPAÑA, S.A.')
+describe('3 · la casilla «Proveedor»: el código, como la maqueta (el nombre, entero, en «Nombre»)', () => {
+  it('con su subcuenta, la suya, también validada', () => {
+    expect(textoCasillaProveedor({ subcuenta: '40000002', futura: '40000002', nombre: 'HEINEKEN ESPAÑA, S.A.' })).toBe('40000002')
   })
-  it('por revisar: su subcuenta, como la maqueta; sin ella, el nombre', () => {
-    expect(textoCasillaProveedor({ soloLectura: false, subcuenta: '40000002', nombre: 'HEINEKEN ESPAÑA, S.A.' })).toBe('40000002')
-    expect(textoCasillaProveedor({ soloLectura: false, subcuenta: '', nombre: 'HEINEKEN ESPAÑA, S.A.' })).toBe('HEINEKEN ESPAÑA, S.A.')
+  it('sin subcuenta todavía, la que le tocará', () => {
+    expect(textoCasillaProveedor({ subcuenta: '', futura: '40000003', nombre: 'HEINEKEN ESPAÑA, S.A.' })).toBe('40000003')
+  })
+  it('sin ninguna, el nombre', () => {
+    expect(textoCasillaProveedor({ subcuenta: '', futura: '', nombre: 'HEINEKEN ESPAÑA, S.A.' })).toBe('HEINEKEN ESPAÑA, S.A.')
   })
 })
 
