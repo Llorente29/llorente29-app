@@ -114,7 +114,8 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await ficha(page).locator('#kf-cuenta-0').fill('')
     await expect(franja(page)).toContainText('Falta la cuenta de gasto', { timeout: 30_000 })
     await introFuera(page)
-    await expect(aviso(page)).toContainText('sin validar: Falta la cuenta de gasto en la línea 1', { timeout: 60_000 })
+    // «Guardada, sin validar» o «Sin validar» (sin la cuenta de gasto, guardar no puede): lo que importa es que no valida y dice qué falta.
+    await expect(aviso(page)).toContainText(/sin validar: Falta la cuenta de gasto en la línea 1/i, { timeout: 60_000 })
     await expect(aviso(page)).toContainText('No paso a la siguiente.')
     await expect(page).toHaveURL(new RegExp(factura(t, 1)))
     const [sin] = await rest<{ status: string }[]>(s, `supplier_invoice?select=status&account_id=eq.${NUCLEO.id}&id=eq.${factura(t, 1)}`)
@@ -138,7 +139,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(repetida.getByRole('checkbox', { name: /No es la misma/ })).toBeVisible()
     await sinDudaDeGasto(page)
     await introFuera(page)
-    await expect(aviso(page)).toContainText(`sin validar: Ya está la K09-${t}-000123`, { timeout: 60_000 })
+    await expect(aviso(page)).toContainText(new RegExp(`sin validar: Ya está la K09-${t}-000123`, 'i'), { timeout: 60_000 })
     await expect(page).toHaveURL(new RegExp(factura(t, 3)))
     expect(await loQueSeCorta(page, FICHA), `lo que se corta, la repetida, a ${ancho}`).toEqual([])
     if (t === 1) { await cargada(page, 'la repetida'); await page.screenshot({ path: `${DIR}/repetida-${ancho}.png` }) }
