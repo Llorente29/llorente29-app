@@ -382,11 +382,12 @@ do $$ begin
   delete from public.journal_entry where concept = 'Prueba R14' and account_id = 'a1140000-0000-4000-8000-000000000010';
   set local session_replication_role = origin;
 end $$;
--- Las vueltas atrás quitan un disparador de supplier_invoice y tablas que la referencian: se coge antes
--- supplier_invoice, para que otra sesión de staging (una e2e que borra facturas) no se cruce a mitad
--- (dos interbloqueos así en staging, 44877021402 y 44889381392).
+-- Las vueltas atrás quitan un disparador de supplier_invoice y tablas que la referencian (interbloqueos en
+-- staging: 44877021402, 44889381392 y 44890464100).
 set local lock_timeout = '60s';
-lock table public.supplier_invoice in access exclusive mode;
+-- Borrar las tablas de la 1110 pide también acceso exclusivo a las que apuntan sus claves ajenas: se cogen
+-- todas de una vez y en orden fijo, para esperar a las demás sesiones en vez de cruzarse con ellas.
+lock table public.accounts, public.company, public.company_account, public.party, public.supplier, public.supplier_invoice in access exclusive mode;
 \i supabase/vuelta-atras/20261121T1130_r14_proveedor_solo_completar.down.sql
 do $$ begin
   if (select supplier_id from public.supplier_invoice where id = 'a1140000-0000-4000-8000-000000000107') is not null then raise exception 'PRUEBA R14 · 8: la vuelta atrás de la 1130 no la ha deshecho.'; end if;

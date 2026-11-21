@@ -16,7 +16,11 @@ begin
               where x.cuando = 'al_aplicar' and x.que <> 'no' and x.deshecho_at is null) then
     raise exception 'R14 · hay facturas completadas al aplicar que ya están validadas: no se deshacen solas.';
   end if;
-  for r in select invoice_id from public.conta_proveedor_solo where cuando = 'al_aplicar' and que <> 'no' and deshecho_at is null order by created_at desc loop
+  -- Primero las «ya estaba» y las de plataforma, y las de «alta» al final: si se deshiciera antes el alta,
+  -- el proveedor no se borraría (aún le quedan facturas) y la vuelta atrás no dejaría todo como estaba
+  -- (ensayo 44891384917: 6 de 34 medidas distintas). Todas se crean en el mismo instante: el orden lo da esto.
+  for r in select invoice_id from public.conta_proveedor_solo where cuando = 'al_aplicar' and que <> 'no' and deshecho_at is null
+            order by (que = 'alta'), created_at desc, invoice_id loop
     perform public._conta_proveedor_solo_deshacer(r.invoice_id, 'la vuelta atrás del R14');
     n := n + 1;
   end loop;
