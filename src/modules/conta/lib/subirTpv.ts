@@ -15,7 +15,7 @@
 // Lo mismo comprueba conta_tpv_dia_guardar en la base (R03) al guardar: esto es
 // para decirlo ANTES, en el paso 2, sin subir nada.
 
-import { eurosExactos } from '@/modules/conta/lib/formato'
+import { diaMes, eurosExactos } from '@/modules/conta/lib/formato'
 import { NOMBRE_CLASE, type ClaseRevo, type DiaLeido, type LecturaDia } from '@/modules/conta/lib/lectorRevo'
 
 // ── Los ficheros ─────────────────────────────────────────────────────────────
@@ -437,4 +437,66 @@ export function faltaParaGuardar(formasSinCuenta: number, sinFactura: boolean): 
   if (sinFactura && formasSinCuenta <= 0) return 'Falta la cuenta de la factura del día.'
   const f = faltanCuentas(formasSinCuenta + (sinFactura ? 1 : 0))
   return f && sinFactura ? `${f.replace(/\.$/, '')}, una de ellas la de la factura del día.` : f
+}
+
+// ── R15 · Contabilizar al subir ──────────────────────────────────────────────
+
+/** Un día que se ha contabilizado al subirlo: los números de sus asientos (la factura del día y, si va en dos, su cobro). */
+export interface DiaContabilizado { dia: string; numeros: number[] }
+/** Un día que se ha guardado y queda en espera: el motivo, la frase de la base. */
+export interface DiaEnEspera { dia: string; motivo: string; id?: string }
+
+const ESPERA_POR_CUENTA = /^Falta (decir a qué cuenta va|la cuenta de la factura del día)/
+/** El día espera porque falta una cuenta por elegir (una forma de pago o la factura del día). */
+export const esperaPorCuenta = (motivo: string | null | undefined) => !!motivo && ESPERA_POR_CUENTA.test(motivo)
+
+const nAsiento = (n: number) => `nº ${n.toLocaleString('es-ES')}`
+const motivoCorto = (m: string) => { const t = m.trim().replace(/\.$/, ''); return t.charAt(0).toLowerCase() + t.slice(1) }
+
+/**
+ * Lo que dice el paso 3 al contabilizar (regla 8, con contenido):
+ *   «Contabilizados 31 días: 62 asientos, del nº 12 al nº 73.»
+ *   «En espera 2: el 04/10 (falta decir a qué cuenta va «Bizum») y el 05/10 (…).»
+ * Null en la frase que no tiene nada que decir.
+ */
+export function textoContabilizado(hechos: DiaContabilizado[], espera: DiaEnEspera[]): { contabilizados: string | null; enEspera: string | null } {
+  let contabilizados: string | null = null
+  if (hechos.length) {
+    const nums = hechos.flatMap((h) => h.numeros).sort((a, b) => a - b)
+    const cuantos = hechos.length === 1 ? 'Contabilizado 1 día' : `Contabilizados ${hechos.length} días`
+    const rango = nums.length === 1 ? `el ${nAsiento(nums[0])}`
+      : nums.length === 2 ? `el ${nAsiento(nums[0])} y el ${nAsiento(nums[1])}`
+      : nums.every((n, i) => i === 0 || n === nums[i - 1] + 1) ? `del ${nAsiento(nums[0])} al ${nAsiento(nums[nums.length - 1])}`
+      : `entre el ${nAsiento(nums[0])} y el ${nAsiento(nums[nums.length - 1])}`
+    contabilizados = `${cuantos}: ${nums.length === 1 ? '1 asiento' : `${nums.length} asientos`}, ${rango}.`
+  }
+  let enEspera: string | null = null
+  if (espera.length) {
+    const xs = [...espera].sort((a, b) => a.dia.localeCompare(b.dia)).map((x) => `el ${diaCorto(x.dia)} (${motivoCorto(x.motivo)})`)
+    enEspera = `En espera ${espera.length}: ${lista(xs)}.`
+  }
+  return { contabilizados, enEspera }
+}
+
+/**
+ * Qué se hace con cada día recién guardado: se contabiliza si la base lo da por listo («por_validar»: cuadra y cada
+ * forma de pago tiene su cuenta); si no, queda en espera con su motivo. Un día que ya estaba validado no se toca.
+ */
+export type GuardadoConId = Pick<DiaYaGuardado, 'dia' | 'estado'> & { id: string; motivo?: string | null }
+
+export function queHacerAlSubir(guardados: GuardadoConId[], ids: string[]): { contabilizar: { id: string; dia: string }[]; espera: DiaEnEspera[]; faltaCuenta: boolean } {
+  const mios = guardados.filter((g) => ids.includes(g.id))
+  const contabilizar = mios.filter((g) => g.estado === 'por_validar').map((g) => ({ id: g.id, dia: g.dia }))
+  const espera = mios.filter((g) => g.estado === 'en_espera').map((g) => ({ id: g.id, dia: g.dia, motivo: g.motivo ?? 'No se puede proponer su asiento.' }))
+  return { contabilizar, espera, faltaCuenta: espera.some((x) => esperaPorCuenta(x.motivo)) }
+}
+
+// ── R15 · «Ayer», solo si es ayer ────────────────────────────────────────────
+
+/**
+ * «Ayer · 31 oct» si el último día es ayer de verdad; si no, «Último día subido · 31 oct» (con días del TPV, que se
+ * suben) o «Último día · 31 oct» (solo cierres de Folvy, que no se suben).
+ */
+export function etiquetaUltimoDia(dia: string, hoy: string, subidos = true): string {
+  return `${dia === masDias(hoy, -1) ? 'Ayer' : subidos ? 'Último día subido' : 'Último día'} · ${diaMes(dia)}`
 }

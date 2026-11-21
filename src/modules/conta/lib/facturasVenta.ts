@@ -26,13 +26,13 @@
 import { leerOrden, ordenar, pestanasConTodas, type PestanaEstado, type Sentido } from '@/modules/conta/diseno/plantillas/lista'
 import type { PorqueSinIva } from './ventasSinIva'
 
-export type OrigenFactura = 'a_mano' | 'recurrente' | 'presupuesto' | 'cierre_dia' | 'tienda' | 'automatica' | 'traida'
+export type OrigenFactura = 'a_mano' | 'recurrente' | 'presupuesto' | 'cierre_dia' | 'tienda' | 'automatica' | 'traida' | 'dia_tpv'
 export const NOMBRE_ORIGEN: Record<OrigenFactura, string> = {
   a_mano: 'A mano', recurrente: 'Recurrente', presupuesto: 'De presupuesto', cierre_dia: 'Cierre del día',
-  tienda: 'Tienda online', automatica: 'Automática', traida: 'Traída de Diez',
+  tienda: 'Tienda online', automatica: 'Automática', traida: 'Traída de Diez', dia_tpv: 'Día del TPV',
 }
 export const TONO_ORIGEN: Record<OrigenFactura, 'propuesto' | 'duda' | 'seguro' | 'neutro' | 'falta'> = {
-  a_mano: 'propuesto', recurrente: 'neutro', presupuesto: 'seguro', cierre_dia: 'duda', tienda: 'neutro', automatica: 'neutro', traida: 'neutro',
+  a_mano: 'propuesto', recurrente: 'neutro', presupuesto: 'seguro', cierre_dia: 'duda', tienda: 'neutro', automatica: 'neutro', traida: 'neutro', dia_tpv: 'neutro',
 }
 
 export type EstadoFactura = 'borrador' | 'emitida' | 'enviada' | 'cobrada_parte' | 'cobrada' | 'vencida' | 'esperando_liquidacion' | 'falta_liquidacion' | 'vence_semana' | 'anulada'
@@ -100,6 +100,11 @@ export interface FacturaVenta {
   diez: DiezFactura
   /** PC01 · El estado de cobro de la base (conta_factura_cobro); null en las del libro. */
   estadoCobro: EstadoCobroBase | null
+  /**
+   * R15 · Un día del TPV de fuera (clase «dia»: todas sus facturas, con su PDF) o una de sus facturas con NIF (clase
+   * «nif»: va DENTRO del día, así que no suma otra vez en el total). Se abre en la ficha del día.
+   */
+  tpv?: { clase: 'dia' | 'nif'; diaId: string; dia: string; programa: string | null; pdf: string | null; primero: number | string | null; ultimo: number | string | null }
 }
 
 const c = (n: number) => Math.round(n * 100)
@@ -263,9 +268,9 @@ export function seriesQueHay(fs: readonly FacturaVenta[]): string[] {
   return [...new Set(fs.map((f) => f.serie).filter((s): s is string => !!s))].sort()
 }
 
-/** El total del filtro, sin las anuladas (se compensan con su rectificativa). */
+/** El total del filtro, sin las anuladas (se compensan con su rectificativa) ni las facturas con NIF de un día del TPV (ya suman en su día). */
 export function totalDelFiltro(fs: readonly FacturaVenta[]): number {
-  return fs.filter((f) => f.guardado !== 'anulada').reduce((t, f) => t + c(f.total), 0) / 100
+  return fs.filter((f) => f.guardado !== 'anulada' && f.tpv?.clase !== 'nif').reduce((t, f) => t + c(f.total), 0) / 100
 }
 
 // ── Las cuentas de una factura ────────────────────────────────────────────────
@@ -470,4 +475,33 @@ export function asientoPrevio(
   }
   if (cifras.retencion !== 0) out.push({ codigo: '473', nombre: 'Retenciones que te hacen tus clientes', ...al(cifras.retencion, 'debe') })
   return out
+}
+
+// ── R15 · Los días del TPV en «Facturas emitidas» ─────────────────────────────
+
+/** Una fila de conta_tpv_emitidas (la ficha del día está en services/tpvSubirService.ts). */
+export type FilaEmitidaTpv =
+  | { clase: 'dia'; dia_id: string; dia: string; programa_nombre: string; primero: number | null; ultimo: number | null; facturas: number; base: number; cuota: number; total: number; asiento_id: string | null; pdf: string | null }
+  | { clase: 'nif'; dia_id: string; dia: string; numero: string; contador: string | null; nif: string; cliente: string | null; base: number; cuota: number; total: number; asiento_id: string | null }
+
+/**
+ * Los días del TPV como facturas expedidas: el día entero en una fila («Día del TPV · Revo», tickets X a Y) y cada
+ * factura con NIF en la suya. Y las anotaciones del libro que son de esos días salen de la lista: el día las sustituye.
+ */
+export function conDiasTpv(libro: readonly Omit<FacturaVenta, 'diez'>[], tpv: readonly FilaEmitidaTpv[]): Omit<FacturaVenta, 'diez'>[] {
+  const asientos = new Set(tpv.map((x) => x.asiento_id).filter((x): x is string => !!x))
+  const fuera = libro.filter((f) => !f.entryId || !asientos.has(f.entryId))
+  const base = { fuente: 'libro' as const, vence: null, cobrado: 0, guardado: 'emitida' as const, enviada: false, rectificativa: false, localId: null, estadoCobro: null, origen: 'dia_tpv' as const }
+  const dias = tpv.map((x): Omit<FacturaVenta, 'diez'> => x.clase === 'dia'
+    ? {
+        ...base, id: `tpv:${x.dia_id}`, entryId: x.asiento_id, numero: x.primero == null ? null : x.primero === x.ultimo ? String(x.primero) : `${x.primero} a ${x.ultimo}`,
+        serie: null, fecha: x.dia, cliente: `Día del TPV · ${x.programa_nombre}`, nif: null, base: x.base, iva: x.cuota, total: x.total,
+        tpv: { clase: 'dia', diaId: x.dia_id, dia: x.dia, programa: x.programa_nombre, pdf: x.pdf, primero: x.primero, ultimo: x.ultimo },
+      }
+    : {
+        ...base, id: `tpv:${x.dia_id}:${x.numero}`, entryId: x.asiento_id, numero: x.numero, serie: x.contador, fecha: x.dia,
+        cliente: x.cliente ?? 'Sin nombre', nif: x.nif, base: x.base, iva: x.cuota, total: x.total,
+        tpv: { clase: 'nif', diaId: x.dia_id, dia: x.dia, programa: null, pdf: null, primero: x.numero, ultimo: x.numero },
+      })
+  return [...fuera, ...dias]
 }
