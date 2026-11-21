@@ -11,7 +11,8 @@
 --      descartadas o anuladas (lo validado no se toca: tiene que dar lo mismo después);
 --   3. los proveedores dados de alta desde una factura (created_from = 'factura') y las
 --      subcuentas 4000/4100 de cada empresa.
--- Después de deshacer la tanda, todo tiene que dar como antes.
+-- Corte fijo: lo creado antes del 21/11/2026 a las 00:00 de Madrid (lo que entre durante el
+-- ensayo no cuenta: W06). Después de deshacer la tanda, todo tiene que dar como antes.
 with r as (
   select i.account_id, i.company_id, i.id, i.status,
          public._conta_nif_clave(i.reading->'factura'->'proveedor'->>'nif') nif,
@@ -20,6 +21,7 @@ with r as (
     from public.supplier_invoice i
     join public.company c on c.id = i.company_id and c.account_id = i.account_id
    where i.supplier_id is null and coalesce(i.reading, '{}'::jsonb) ? 'factura'
+     and i.created_at < timestamptz '2026-11-21 00:00:00+01'
 ), m as (
   select r.*, case
     when r.validada or r.status in ('pagada', 'descartada', 'anulada') then 'no la mira (validada, pagada, descartada o anulada)'
@@ -40,8 +42,9 @@ select clave, valor from (
   select 2, 'tabla entera · leídas sin proveedor', count(*)::text from m
   union all
   select 3, 'cuenta ' || left(s.account_id::text, 8) || ' · proveedores dados de alta desde una factura', count(*)::text
-    from public.supplier s where s.created_from = 'factura' group by s.account_id
+    from public.supplier s where s.created_from = 'factura' and s.created_at < timestamptz '2026-11-21 00:00:00+01' group by s.account_id
   union all
   select 4, 'cuenta ' || left(a.account_id::text, 8) || ' · empresa ' || left(a.company_id::text, 8) || ' · subcuentas de la ' || a.template_code, count(*)::text
-    from public.company_account a where a.template_code in ('4000', '4100') and a.kind = 'own' group by a.account_id, a.company_id, a.template_code
+    from public.company_account a where a.template_code in ('4000', '4100') and a.kind = 'own'
+     and a.created_at < timestamptz '2026-11-21 00:00:00+01' group by a.account_id, a.company_id, a.template_code
 ) t order by o, clave;
