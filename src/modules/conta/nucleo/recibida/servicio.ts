@@ -179,3 +179,24 @@ export async function noEsLaMisma(invoiceId: string, otraId: string, motivo: str
   const r = await rpc<{ texto?: string }>('conta_recibida_no_es_la_misma', { p_invoice: invoiceId, p_otra: otraId, p_motivo: motivo, p_quien_nombre: quien })
   return r?.texto ?? 'Anotado: no es la misma. Ya se puede validar.'
 }
+
+/**
+ * K10 · La contrapartida de una recibida, con cualquier subcuenta del plan (como en ERP10): primero las del 6
+ * (lo de siempre), después el resto (el inmovilizado 21x, la 480…). Sin grupos ni cerradas.
+ */
+export async function cuentasDeContrapartida(accountId: string, companyId: string): Promise<{ codigo: string; nombre: string }[]> {
+  const { data, error } = await tabla('company_account').select('code, name, kind, status').eq('account_id', accountId).eq('company_id', companyId)
+  if (error) throw new Error(`No se han podido leer las cuentas: ${error.message}`)
+  return ((data ?? []) as Fila[])
+    .filter((x) => x.kind !== 'group' && x.status !== 'cerrada' && String(x.code).length >= 8)
+    .map((x) => ({ codigo: String(x.code), nombre: String(x.name) }))
+    .sort((a, b) => Number(!a.codigo.startsWith('6')) - Number(!b.codigo.startsWith('6')) || a.codigo.localeCompare(b.codigo))
+}
+
+/** K10 · El código de cada proveedor en la empresa (su subcuenta: company_account_link, papel «principal»), para buscarlo por él. */
+export async function codigosDeProveedores(accountId: string, companyId: string): Promise<Map<string, string>> {
+  const { data, error } = await tabla('company_account_link').select('entity_id, company_account:company_account_id(code)')
+    .eq('account_id', accountId).eq('company_id', companyId).eq('entity', 'supplier').eq('role', 'principal')
+  if (error) throw new Error(`No se han podido leer los códigos de los proveedores: ${error.message}`)
+  return new Map(((data ?? []) as Fila[]).map((x) => [String(x.entity_id), String((x.company_account as Fila | null)?.code ?? '')]))
+}

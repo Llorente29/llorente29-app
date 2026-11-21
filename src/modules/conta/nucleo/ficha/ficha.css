@@ -307,3 +307,11 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 /* X21 · «No está: crear la …» debajo de una casilla que busca cuentas: las dos casillas de «Añadir subcuenta». */
 .kf-crear { min-width: 420px; max-height: none; overflow: visible; padding: 8px 10px; white-space: normal; }
 .kf-crear .cx-subcuenta { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+
+/* K10 · «Cuenta de pago» en la ficha del proveedor: el código (con F4) y su nombre, en una fila, como cualquier casilla de cuenta. */
+.kf-cuenta-de-pago-fila { display: grid; grid-template-columns: minmax(110px, 160px) minmax(0, 1fr) auto; gap: 8px; align-items: start; max-width: 640px; }
+.kf-cuenta-de-pago-fila input { width: 100%; }
+.kf-cuenta-de-pago [data-tono='ok'] { color: var(--kf-verde-tinta, #027a48); }
+.kf-cuenta-de-pago [data-tono='mal'] { color: var(--k-rojo, #b42318); }
+/* K10 · Un aviso de una línea, en ámbar y pequeño (la contrapartida al inmovilizado). */
+.kf-aviso-linea { margin: 2px 0 0; font-size: 12px; color: var(--kf-ambar-tinta, #b54708); }

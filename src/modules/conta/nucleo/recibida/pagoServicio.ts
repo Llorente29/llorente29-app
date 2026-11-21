@@ -39,6 +39,8 @@ export interface CuentasDePago {
   nombres: Map<string, string>
   /** Las tesorerías (banco, tarjeta, caja), por el código de su subcuenta → su id. */
   tesorerias: Map<string, string>
+  /** K10 · El id de cada subcuenta del plan, por su código (para guardar la «Cuenta de pago» en la ficha). */
+  idDe: Map<string, string>
 }
 
 /** Las cuentas del pago de la empresa, una vez por empresa. */
@@ -62,7 +64,7 @@ export async function cuentasDePago(accountId: string, companyId: string): Promi
     .filter((c) => c.kind !== 'group' && String(c.code).length >= 8 && c.status !== 'cerrada')
     .sort((a, b) => orden(a) - orden(b) || String(a.code).localeCompare(String(b.code)))
     .map((c) => ({ codigo: String(c.code), nombre: nombreDe(c) }))
-  return { lista, nombres: new Map(plan.map((c) => [String(c.code), nombreDe(c)])), tesorerias }
+  return { lista, nombres: new Map(plan.map((c) => [String(c.code), nombreDe(c)])), tesorerias, idDe: new Map(plan.map((c) => [String(c.code), String(c.id)])) }
 }
 
 export interface PagoDelProveedor {
@@ -70,11 +72,13 @@ export interface PagoDelProveedor {
   plataforma: { nombre: string; cuenta430: string | null } | null
   /** Las cuentas de sus últimos pagos, del más nuevo al más viejo (sin las compensaciones). */
   ultimas: string[]
+  /** K10 · La «Cuenta de pago» de su ficha en esta empresa (company_account_link, papel «pago»), o null. */
+  deLaFicha: string | null
 }
 
 /** Del proveedor: si es una plataforma (con su 430) y las cuentas de sus últimos pagos en esta empresa. */
 export async function pagoDelProveedor(accountId: string, companyId: string, supplierId: string, subcuentaProveedor: string | null): Promise<PagoDelProveedor> {
-  const [rolesProv, pagos, remesas] = await Promise.all([
+  const [rolesProv, pagos, remesas, enlacePago] = await Promise.all([
     leer(tabla('party_role').select('party_id').eq('account_id', accountId).eq('supplier_id', supplierId).eq('role', 'supplier'), 'el contacto del proveedor'),
     leer(tabla('supplier_invoice_payment').select('paid_on, created_at, method, entry_id, supplier_invoice!inner(supplier_id)')
       .eq('account_id', accountId).eq('company_id', companyId).eq('supplier_invoice.supplier_id', supplierId)
@@ -82,7 +86,11 @@ export async function pagoDelProveedor(accountId: string, companyId: string, sup
     leer(tabla('conta_pago_remesa_linea_estado').select('created_at, estado, remesa_id')
       .eq('account_id', accountId).eq('company_id', companyId).eq('supplier_id', supplierId).in('estado', ['pendiente', 'por_confirmar'])
       .order('created_at', { ascending: false }).limit(5), 'sus pagos que esperan el cargo'),
+    // K10 · Su «Cuenta de pago», la de su ficha en esta empresa.
+    leer(tabla('company_account_link').select('company_account:company_account_id(code)').eq('account_id', accountId).eq('company_id', companyId)
+      .eq('entity', 'supplier').eq('entity_id', supplierId).eq('role', 'pago').limit(1), 'su cuenta de pago'),
   ])
+  const deLaFicha = enlacePago[0] ? String((enlacePago[0].company_account as Fila | null)?.code ?? '') || null : null
   // ¿Es una plataforma? El mismo contacto con el papel «platform» (como cargarContexto), y su 430.
   let plataforma: PagoDelProveedor['plataforma'] = null
   const party = rolesProv[0] ? String(rolesProv[0].party_id) : null
@@ -129,7 +137,7 @@ export async function pagoDelProveedor(accountId: string, companyId: string, sup
     }
   }
   const ultimas = fechadas.sort((a, b) => b.fecha.localeCompare(a.fecha)).map((x) => x.cuenta)
-  return { plataforma, ultimas }
+  return { plataforma, ultimas, deLaFicha }
 }
 
 /** ¿Tiene la factura liquidación de la que descontarla? Ligada, o la base ya sabe cuál («una»). */
@@ -146,4 +154,11 @@ export async function apuntarPago(o: { companyId: string; facturaId: string; pag
   }
   const r = await rpc<{ frase?: string }>('conta_recibida_pagar_con_cuenta', { p_company: o.companyId, p_invoice: o.facturaId, p_cuenta: o.pago.cuenta, p_fecha: o.pago.fecha, p_quien_nombre: o.quien })
   return r?.frase ?? `Pago apuntado con la ${o.pago.cuenta}.`
+}
+
+/** K10 · La «Cuenta de pago» de la ficha del proveedor en una empresa (company_account_link, papel «pago»): su código, o null. */
+export async function cuentaDePagoDeLaFicha(accountId: string, companyId: string, supplierId: string): Promise<string | null> {
+  const f = await leer(tabla('company_account_link').select('company_account:company_account_id(code)').eq('account_id', accountId).eq('company_id', companyId)
+    .eq('entity', 'supplier').eq('entity_id', supplierId).eq('role', 'pago').limit(1), 'su cuenta de pago')
+  return f[0] ? String((f[0].company_account as Fila | null)?.code ?? '') || null : null
 }

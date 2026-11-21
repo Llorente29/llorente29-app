@@ -5,30 +5,28 @@
 import { describe, expect, it } from 'vitest'
 import { fechaDelPago, propuestaDelPago, queHaceElPago, textoDudaPago } from '@/modules/conta/nucleo/recibida/pago'
 
+// K10 (Julio, 21/11): el orden es el de ERP10 — la «Cuenta de pago» de la ficha, después la del último pago, y vacía.
+// La plataforma ya no se propone (su 430 pasó a la ficha con la tanda del K10).
 describe('la propuesta de la cuenta del pago', () => {
-  it('la de su último pago, con su origen', () => {
-    expect(propuestaDelPago({ plataforma: null, ultimas: ['57200001', '57200001'] })).toEqual({ cuenta: '57200001', origen: 'de la última', duda: null })
+  it('la de su ficha, antes que la del último pago', () => {
+    expect(propuestaDelPago({ deLaFicha: '43000002', ultimas: ['57200001'] })).toEqual({ cuenta: '43000002', origen: 'De su ficha', duda: null })
+  })
+  it('sin la de su ficha, la de su último pago, con su origen', () => {
+    expect(propuestaDelPago({ deLaFicha: null, ultimas: ['57200001', '57200001'] })).toEqual({ cuenta: '57200001', origen: 'La del último pago', duda: null })
   })
   it('si sus últimos pagos van por más de una cuenta, la última y la duda con las dos', () => {
-    expect(propuestaDelPago({ plataforma: null, ultimas: ['55100001', '57200001', '55100001'] }))
-      .toEqual({ cuenta: '55100001', origen: 'de la última', duda: { cuentas: ['55100001', '57200001'] } })
+    expect(propuestaDelPago({ deLaFicha: null, ultimas: ['55100001', '57200001', '55100001'] }))
+      .toEqual({ cuenta: '55100001', origen: 'La del último pago', duda: { cuentas: ['55100001', '57200001'] } })
   })
   it('la duda mira solo los cinco últimos', () => {
-    expect(propuestaDelPago({ plataforma: null, ultimas: ['57200001', '57200001', '57200001', '57200001', '57200001', '55100001'] }).duda).toBeNull()
+    expect(propuestaDelPago({ deLaFicha: null, ultimas: ['57200001', '57200001', '57200001', '57200001', '57200001', '55100001'] }).duda).toBeNull()
   })
-  it('sin pagos de antes, vacía: pendiente de pagar', () => {
-    expect(propuestaDelPago({ plataforma: null, ultimas: [] })).toEqual({ cuenta: '', origen: null, duda: null })
+  it('con la de su ficha no hay duda, aunque sus pagos fueran por varias', () => {
+    expect(propuestaDelPago({ deLaFicha: '57200001', ultimas: ['55100001', '57200001'] }).duda).toBeNull()
   })
-  it('de una plataforma con su liquidación, su 430', () => {
-    expect(propuestaDelPago({ plataforma: { nombre: 'Glovo', cuenta430: '43000001', hayLiquidacion: true }, ultimas: ['57200001'] }))
-      .toEqual({ cuenta: '43000001', origen: 'de su liquidación', duda: null })
-  })
-  it('de una plataforma sin liquidación, vacía (no se pone la 430), aunque antes se pagara por banco', () => {
-    expect(propuestaDelPago({ plataforma: { nombre: 'Glovo', cuenta430: '43000001', hayLiquidacion: false }, ultimas: ['57200001'] }))
-      .toEqual({ cuenta: '', origen: null, duda: null })
-  })
-  it('de una plataforma sin su 430 en el plan, vacía', () => {
-    expect(propuestaDelPago({ plataforma: { nombre: 'Glovo', cuenta430: null, hayLiquidacion: true }, ultimas: [] }).cuenta).toBe('')
+  it('sin ninguna, vacía: pendiente de pagar', () => {
+    expect(propuestaDelPago({ deLaFicha: null, ultimas: [] })).toEqual({ cuenta: '', origen: null, duda: null })
+    expect(propuestaDelPago({ deLaFicha: '  ', ultimas: [] })).toEqual({ cuenta: '', origen: null, duda: null })
   })
 })
 
