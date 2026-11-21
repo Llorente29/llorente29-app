@@ -67,7 +67,8 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
 
     await frase.getByRole('link', { name: 'Abrirlo' }).click()
     await expect(page).toHaveURL(new RegExp(`/proveedor/${PROVEEDOR()}|/proveedores/${PROVEEDOR()}`), { timeout: 30_000 })
-    await expect(page.getByText(NOMBRE).first()).toBeVisible({ timeout: 30_000 })
+    // El título de su ficha (la pestaña de la recibida sigue montada, escondida, con el mismo nombre: e2e 44930800302).
+    await expect(page.getByRole('heading', { level: 1, name: NOMBRE })).toBeVisible({ timeout: 30_000 })
     expect(errores).toEqual([])
   })
 }
