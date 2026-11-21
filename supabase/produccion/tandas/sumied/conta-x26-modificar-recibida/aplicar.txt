@@ -1,0 +1,11 @@
+# X26 · «Modificar» una factura recibida ya contabilizada, como en ERP10 (encargo del 21/11). Rama conta/x26-modificar-recibida.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1900  Añade: conta_recibida_modificada (respaldo e historial), conta_recibida_se_puede_modificar (si se puede y por
+#         qué no) y conta_recibida_modificar (las cuentas y el local de las líneas de gasto, en el mismo asiento: el
+#         mismo número, los mismos importes y el mismo IVA; la cadena de huellas vuelta a encadenar y comprobada). No
+#         cambia nada de lo que existe.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x26-modificar-recibida.sql
+supabase/migrations/20261121T1900_x26_modificar_recibida.sql

@@ -1,0 +1,19 @@
+{
+ "_que": "X26 · «Modificar» una recibida contabilizada · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción (esta sesión no lee producción). 1900 solo añade una tabla y dos funciones nuevas. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-21T23:30Z",
+ "tanda": {
+  "supabase/migrations/20261121T1900_x26_modificar_recibida.sql": "21b87d2cd524493ca976ae549ceb2246"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
