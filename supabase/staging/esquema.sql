@@ -6027,6 +6027,131 @@ COMMENT ON FUNCTION public._conta_falta_historico_motivo(p_entry uuid) IS 'N05c:
 
 
 --
+-- Name: _conta_gasto_por_venta(text[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_gasto_por_venta(p_textos text[]) RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  with l as (
+    select ' ' || public._r14_sin_tildes(t) || ' ' as t, o from unnest(coalesce(p_textos, '{}')) with ordinality as x(t, o)
+     where btrim(coalesce(t, '')) <> ''
+  ), casa as (
+    -- Cada línea, a la primera fila que la reconoce, con las palabras que tiene.
+    select distinct on (l.o) l.o, g.orden, g.hoja, g.que,
+           array(select w from unnest(g.palabras) with ordinality as p(w, k)
+                  where l.t like '% ' || public._r14_sin_tildes(w) || ' %' or l.t like '% ' || public._r14_sin_tildes(w) || 's %'
+                     or l.t like '% ' || public._r14_sin_tildes(w) || 'es %' order by k) as ws
+      from l join public.conta_gasto_por_venta g
+        on exists (select 1 from unnest(g.palabras) w
+                    where l.t like '% ' || public._r14_sin_tildes(w) || ' %' or l.t like '% ' || public._r14_sin_tildes(w) || 's %'
+                       or l.t like '% ' || public._r14_sin_tildes(w) || 'es %')
+     order by l.o, g.orden
+  ), por_hoja as (
+    select hoja, min(orden) as orden, (array_agg(que order by orden))[1] as que, count(*) as lineas
+      from casa group by hoja
+  ), ws as (
+    -- Las palabras de cada hoja, por dónde salen primero; sin la misma en singular y en plural.
+    select c.hoja, u.w, public._r14_sin_tildes(u.w) as n, min(c.o * 1000 + u.k) as pos
+      from casa c cross join lateral unnest(c.ws) with ordinality as u(w, k) group by c.hoja, u.w
+  )
+  select case when h.hoja is null then null else jsonb_build_object(
+           'hoja', h.hoja, 'que', h.que, 'lineas', h.lineas, 'de', (select count(*) from l),
+           'palabras', coalesce((select jsonb_agg(z.w order by z.pos) from (
+              select x.w, x.pos from ws x
+               where x.hoja = h.hoja and not exists (select 1 from ws y where y.hoja = x.hoja and y.pos < x.pos
+                       and (y.n || 's' = x.n or y.n || 'es' = x.n or x.n || 's' = y.n or x.n || 'es' = y.n))
+               order by x.pos limit 2) z), '[]'::jsonb)) end
+    from (select * from por_hoja order by lineas desc, orden limit 1) h
+$$;
+
+
+--
+-- Name: FUNCTION _conta_gasto_por_venta(p_textos text[]); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_gasto_por_venta(p_textos text[]) IS 'R14: de las líneas de una factura, la hoja del 6 que más líneas reconoce en conta_gasto_por_venta, con qué vende y sus dos primeras palabras. null si no reconoce ninguna.';
+
+
+--
+-- Name: _conta_gasto_propuesto(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; v_rol public.party_role; v_party text; v_cuenta text; v_nombre text; v_x record; v_g jsonb; v_textos text[];
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null then return jsonb_build_object('cuenta', null, 'porque', 'Esa empresa no está.'); end if;
+  if not exists (select 1 from public.supplier s where s.id = p_supplier and s.account_id = v_acc) then
+    return jsonb_build_object('cuenta', null, 'porque', 'Ese proveedor no es de esta cuenta.');
+  end if;
+
+  -- a · Una plataforma de reparto: su comisión (la de su papel, o la 623).
+  select pr.* into v_rol from public.party_role ps join public.party_role pr on pr.party_id = ps.party_id and pr.role = 'platform'
+   where ps.supplier_id = p_supplier and ps.role = 'supplier' limit 1;
+  if v_rol.id is not null then
+    select name into v_party from public.party where id = v_rol.party_id;
+    v_cuenta := coalesce(nullif(btrim(v_rol.commission_account_code), ''), public._conta_hoja(p_company, '623'));
+    if v_cuenta is not null then
+      select name into v_nombre from public.company_account where company_id = p_company and code = v_cuenta;
+      return jsonb_build_object('cuenta', v_cuenta, 'nombre', v_nombre, 'de', 'plataforma',
+        'porque', format('Propuesta: %s es una plataforma de reparto; su factura es su comisión → %s %s', v_party, v_cuenta, coalesce(v_nombre, '')));
+    end if;
+  end if;
+
+  -- b · Sus facturas en otra sociedad de la cuenta: la cuenta de la más reciente.
+  select e.company_id, c.legal_name, a.template_code, a.code, count(*) over (partition by e.company_id) as n
+    into v_x
+    from public.journal_entry e
+    join public.company c on c.id = e.company_id
+    join public.company_account_link k on k.company_id = e.company_id and k.entity = 'supplier' and k.entity_id = p_supplier::text and k.role = 'principal'
+    join public.journal_line lp on lp.entry_id = e.id and lp.company_account_id = k.company_account_id and lp.credit > 0
+    join public.journal_line lg on lg.entry_id = e.id and lg.debit > 0
+    join public.company_account a on a.id = lg.company_account_id and a.code like '6%'
+   where e.account_id = v_acc and e.company_id <> p_company and e.series = 2 and e.status = 'validado'
+   order by e.entry_date desc, e.created_at desc limit 1;
+  if v_x.company_id is not null then
+    v_cuenta := coalesce((select code from public.company_account where company_id = p_company and code = v_x.code and status = 'activa'),
+                         public._conta_hoja(p_company, v_x.template_code));
+    if v_cuenta is not null then
+      select name into v_nombre from public.company_account where company_id = p_company and code = v_cuenta;
+      return jsonb_build_object('cuenta', v_cuenta, 'nombre', v_nombre, 'de', 'otra_sociedad',
+        'porque', format('Propuesta: en %s sus facturas van a la %s → %s %s', v_x.legal_name, v_x.code, v_cuenta, coalesce(v_nombre, '')));
+    end if;
+  end if;
+
+  -- c · Por lo que vende: las líneas de esta factura (o, sin factura, las de su última).
+  select array_agg(l.raw_text order by l.position) into v_textos
+    from public.supplier_invoice_line l
+   where l.supplier_invoice_id = coalesce(p_invoice, (select i.id from public.supplier_invoice i where i.supplier_id = p_supplier and i.account_id = v_acc order by i.created_at desc limit 1));
+  v_g := public._conta_gasto_por_venta(v_textos);
+  if v_g is not null then
+    v_cuenta := public._conta_hoja(p_company, v_g->>'hoja');
+    if v_cuenta is not null then
+      select coalesce(p.name, a.name) into v_nombre from public.company_account a
+        left join public.pgc_account p on p.plan = a.plan and p.code = a.template_code and p.valid_to is null
+       where a.company_id = p_company and a.code = v_cuenta;
+      return jsonb_build_object('cuenta', v_cuenta, 'nombre', v_nombre, 'de', 'lo_que_vende', 'hoja', v_g->>'hoja', 'que', v_g->>'que',
+        'porque', format('Propuesta: vende %s → %s %s', public._conta_tpv_lista(array(select jsonb_array_elements_text(v_g->'palabras'))), v_g->>'hoja', coalesce(v_nombre, '')));
+    end if;
+  end if;
+  return jsonb_build_object('cuenta', null, 'porque', 'No sé qué te vende: elige tú la cuenta de gasto.');
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid) IS 'R14: lo de conta_gasto_propuesto, sin mirar quién llama (lo usa el alta sola).';
+
+
+--
 -- Name: _conta_gestoria_apuntar(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -9063,6 +9188,200 @@ $$;
 --
 
 COMMENT ON FUNCTION public._conta_propuesta_ventas(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid, p_venta uuid) IS 'S01 · PR 3: la propuesta de ventas de una unidad (plataforma y marca) de un día y local; con p_venta, solo ese pedido como vendido (lo que una liquidación paga después). La única copia de la regla de ventas en la base.';
+
+
+--
+-- Name: _conta_proveedor_solo(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_proveedor_solo(p_invoice uuid, p_cuando text DEFAULT 'al_leer'::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v public.supplier_invoice; c public.company; p jsonb; v_nif text; v_nombre text; v_tipo text; v_pais text;
+  v_party uuid; v_s uuid; v_que text; v_creado boolean := false; v_k uuid; v_kcreada boolean := false;
+  v_plan text; v_d int; v_hoja text; v_code text; v_gasto jsonb; v_dir jsonb; v_origen jsonb; v_motivo text; v_txt text;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice for update;
+  if v.id is null then return jsonb_build_object('que', 'no', 'motivo', 'No está.'); end if;
+  if v.supplier_id is not null then return jsonb_build_object('que', 'ya', 'supplier_id', v.supplier_id); end if;
+  if exists (select 1 from public.conta_proveedor_solo x where x.invoice_id = p_invoice and (x.deshecho_at is not null or x.que <> 'no')) then
+    return jsonb_build_object('que', 'ya', 'motivo', 'Ya se miró (o se deshizo).');
+  end if;
+  -- Lo validado no se toca; lo descartado o anulado, tampoco.
+  if v.status in ('descartada', 'anulada', 'pagada') or exists (select 1 from public.journal_entry e where e.source_type = 'supplier_invoice' and e.source_id = p_invoice and e.status = 'validado') then
+    return jsonb_build_object('que', 'ya', 'motivo', 'Validada, pagada, descartada o anulada: no se toca.');
+  end if;
+  p := v.reading->'factura'->'proveedor';
+  if p is null then return jsonb_build_object('que', 'ya', 'motivo', 'Sin lectura del proveedor.'); end if;
+  select * into c from public.company where id = v.company_id;
+  v_nif := public._conta_nif_clave(p->>'nif');
+  v_nombre := nullif(btrim(regexp_replace(coalesce(p->>'nombre', ''), '\s+', ' ', 'g')), '');
+
+  if v_nif is null then
+    v_motivo := 'La factura no trae el NIF del proveedor: dalo de alta tú.';
+  elsif v_nif = public._conta_nif_clave(c.tax_id) then
+    v_motivo := format('El NIF del proveedor (%s) es el de %s: parece una factura emitida, no recibida.', v_nif, coalesce(c.legal_name, 'la propia empresa'));
+  end if;
+
+  if v_motivo is null then
+    -- Una plataforma de la cuenta: su tercero (con o sin ficha de proveedor).
+    select pt.id into v_party from public.party pt
+     where pt.account_id = v.account_id and public._conta_nif_clave(pt.tax_id) = v_nif
+       and exists (select 1 from public.party_role r where r.party_id = pt.id and r.role = 'platform') limit 1;
+    if v_party is not null then
+      v_que := 'plataforma';
+      select supplier_id into v_s from public.party_role where party_id = v_party and role = 'supplier';
+    else
+      -- Un proveedor de la cuenta, de esta u otra sociedad: el mismo tercero.
+      select s.id into v_s from public.supplier s
+       where s.account_id = v.account_id and s.archived_at is null and public._conta_nif_clave(s.tax_id) = v_nif
+       order by s.created_at limit 1;
+      v_que := case when v_s is null then 'alta' else 'existente' end;
+    end if;
+    if v_s is null then
+      v_tipo := case when public._verifactu_nif_es_valido(v_nif) then 'nif_es'
+                     when v_nif ~ '^[A-Z]{2}' and public._verifactu_nif_iva_ue_valido(left(v_nif, 2), substr(v_nif, 3)) then 'vat_eu' end;
+      if v_tipo is null and v_que <> 'plataforma' then
+        v_motivo := format('El NIF leído (%s) no es válido: compruébalo en el papel y dalo de alta tú.', v_nif);
+      elsif v_nombre is null then
+        v_motivo := 'No leí el nombre del proveedor: dalo de alta tú.';
+      end if;
+    end if;
+  end if;
+
+  if v_motivo is not null then
+    insert into public.conta_proveedor_solo (invoice_id, account_id, company_id, que, motivo, nif, cuando)
+    values (p_invoice, v.account_id, v.company_id, 'no', v_motivo, v_nif, p_cuando)
+    on conflict (invoice_id) do update set que = 'no', motivo = excluded.motivo, nif = excluded.nif, company_id = excluded.company_id;
+    return jsonb_build_object('que', 'no', 'motivo', v_motivo);
+  end if;
+
+  -- El proveedor nuevo, con lo que trae la factura.
+  if v_s is null then
+    v_pais := case when v_tipo = 'vat_eu' then left(v_nif, 2) else 'ES' end;
+    v_dir := public._r14_partir_direccion(p->>'direccion');
+    v_origen := jsonb_build_object('factura', v.invoice_number, 'facturaId', v.id, 'fecha', to_char(now() at time zone 'Europe/Madrid', 'YYYY-MM-DD'), 'quien', 'Sumied');
+    insert into public.supplier (account_id, name, legal_name, tax_id, tax_id_type, country_code, entity_kind,
+                                 tax_id_check_status, tax_id_checked_at, tax_id_verified_at,
+                                 fiscal_street, fiscal_postal_code, fiscal_city, email, phone, website,
+                                 is_active, created_from, created_by_name, data_from_invoice)
+    values (v.account_id, coalesce(v_nombre, v_nif), v_nombre, v_nif, coalesce(v_tipo, 'foreign'), v_pais,
+            case when v_tipo = 'nif_es' and (v_nif ~ '^\d{8}[A-Z]$' or v_nif ~ '^[XYZKLM]') then 'self_employed'
+                 when v_tipo = 'nif_es' and v_nif ~ '^[ABCDEFGHJNPQRSUVW]' then 'company' end,
+            case when v_tipo = 'nif_es' then 'valid' end, case when v_tipo = 'nif_es' then now() end, case when v_tipo = 'nif_es' then now() end,
+            v_dir->>'calle', v_dir->>'cp', v_dir->>'ciudad',
+            nullif(btrim(p->>'email'), ''), nullif(btrim(p->>'telefono'), ''), nullif(btrim(p->>'web'), ''),
+            true, 'factura', 'Sumied',
+            (select jsonb_object_agg(k, v_origen) from unnest(array['nif', 'nombreFiscal']
+               || case when v_dir->>'calle' is not null or v_dir->>'cp' is not null then array['direccion'] else '{}' end
+               || case when nullif(btrim(p->>'email'), '') is not null then array['correo'] else '{}' end
+               || case when nullif(btrim(p->>'telefono'), '') is not null then array['telefono'] else '{}' end
+               || case when nullif(btrim(p->>'web'), '') is not null then array['web'] else '{}' end) k))
+    returning id into v_s;
+    v_creado := true;
+  end if;
+
+  -- Su subcuenta en esta empresa: la siguiente libre de la 4000 o de la 4100 (la plataforma, su 410).
+  select k.company_account_id into v_k from public.company_account_link k
+   where k.company_id = v.company_id and k.entity = 'supplier' and k.entity_id = v_s::text and k.role = 'principal';
+  select a.plan, length(a.code) into v_plan, v_d from public.company_account a where a.company_id = v.company_id limit 1;
+  if v_k is null and v_plan is not null then
+    if v_que = 'plataforma' then v_hoja := '4100';
+    else
+      v_gasto := public._conta_gasto_propuesto(v.company_id, v_s, p_invoice);
+      v_hoja := case when v_gasto->>'cuenta' like '60%' then '4000' else '4100' end;
+    end if;
+    v_code := public.company_account_siguiente(v.company_id, v_hoja, v_d);
+    if v_code is not null then
+      select name into v_txt from public.supplier where id = v_s;
+      insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source, created_by_name)
+      values (v.account_id, v.company_id, v_plan, v_code, v_hoja, (case v_hoja when '4000' then 'Proveedores · ' else 'Acreedores · ' end) || v_txt, 'own', 'manual', 'Sumied')
+      returning id into v_k;
+      insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+      values (v.account_id, v.company_id, v_k, 'supplier', v_s::text, 'principal', 'manual');
+      insert into public.company_account_log (account_id, company_id, que, code, detalle, despues, source, done_by_name)
+      values (v.account_id, v.company_id, 'subcuenta_creada', v_code, format('Subcuenta %s · %s, bajo la %s (la dio de alta Sumied con la factura %s).', v_code, v_txt, v_hoja, coalesce(v.invoice_number, 'sin número')),
+              jsonb_build_object('code', v_code, 'entity', 'supplier', 'entity_id', v_s, 'r14', true), 'manual', 'Sumied');
+      v_kcreada := true;
+    end if;
+  end if;
+
+  update public.supplier_invoice set supplier_id = v_s where id = p_invoice;
+  insert into public.conta_proveedor_solo (invoice_id, account_id, company_id, que, supplier_id, supplier_creado, cuenta_id, cuenta_creada, nif, cuando)
+  values (p_invoice, v.account_id, v.company_id, v_que, v_s, v_creado, v_k, v_kcreada, v_nif, p_cuando)
+  on conflict (invoice_id) do update set que = excluded.que, supplier_id = excluded.supplier_id, supplier_creado = excluded.supplier_creado,
+    cuenta_id = excluded.cuenta_id, cuenta_creada = excluded.cuenta_creada, motivo = null, nif = excluded.nif, company_id = excluded.company_id;
+  select name into v_txt from public.supplier where id = v_s;
+  insert into public.document_activity (account_id, company_id, inbox_id, supplier_invoice_id, actor, actor_name, action, text)
+  values (v.account_id, v.company_id, v.inbox_id, p_invoice, 'folvy', 'Sumied', 'corregida',
+          case v_que when 'alta' then format('Proveedor nuevo: Sumied ha dado de alta a %s con lo que trae la factura%s.', v_txt, coalesce(', con su subcuenta ' || v_code, ''))
+                     when 'plataforma' then format('Es la plataforma %s: la factura va a su ficha%s.', v_txt, coalesce(' y a su ' || v_code, ''))
+                     else format('Es %s, que ya estaba dado de alta en la cuenta%s.', v_txt, coalesce(': su subcuenta en esta empresa, ' || v_code, '')) end);
+  return jsonb_build_object('que', v_que, 'supplier_id', v_s, 'creado', v_creado, 'subcuenta', v_code);
+end $_$;
+
+
+--
+-- Name: FUNCTION _conta_proveedor_solo(p_invoice uuid, p_cuando text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_proveedor_solo(p_invoice uuid, p_cuando text) IS 'R14: el proveedor de una recibida leída sin proveedor. Lo encuentra (plataforma o proveedor de la cuenta) o lo da de alta con lo leído y su subcuenta (siguiente libre de la 4000/4100); o apunta por qué no (sin NIF, NIF no válido, el de la propia empresa). Lo validado no se toca. Lo apunta en conta_proveedor_solo.';
+
+
+--
+-- Name: _conta_proveedor_solo_deshacer(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare r public.conta_proveedor_solo; v public.supplier_invoice; v_nombre text; v_quien text; v_sigue boolean := false; v_texto text;
+begin
+  select * into r from public.conta_proveedor_solo where invoice_id = p_invoice for update;
+  select * into v from public.supplier_invoice where id = p_invoice for update;
+  if v.id is null then raise exception 'Esa factura no está.' using errcode = 'P0002'; end if;
+  if r.invoice_id is null or r.que = 'no' or r.deshecho_at is not null then
+    raise exception 'Sumied no le ha puesto proveedor a esta factura: no hay nada que deshacer.' using errcode = '22023';
+  end if;
+  if exists (select 1 from public.journal_entry e where e.source_type = 'supplier_invoice' and e.source_id = p_invoice and e.status = 'validado') then
+    raise exception 'La factura ya está validada: anula antes su asiento.' using errcode = '22023';
+  end if;
+  v_quien := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  select name into v_nombre from public.supplier where id = r.supplier_id;
+  update public.supplier_invoice set supplier_id = null where id = p_invoice and supplier_id = r.supplier_id;
+  if r.supplier_creado then
+    v_sigue := exists (select 1 from public.supplier_invoice i where i.supplier_id = r.supplier_id and i.id <> p_invoice)
+            or exists (select 1 from public.journal_line l join public.company_account_link k on k.company_account_id = l.company_account_id
+                        where k.entity = 'supplier' and k.entity_id = r.supplier_id::text);
+  end if;
+  if r.cuenta_creada and r.cuenta_id is not null and not v_sigue
+     and not exists (select 1 from public.journal_line l where l.company_account_id = r.cuenta_id) then
+    delete from public.company_account_link where company_account_id = r.cuenta_id;
+    delete from public.company_account where id = r.cuenta_id;
+  end if;
+  if r.supplier_creado and not v_sigue then
+    delete from public.party p where p.id = (select party_id from public.party_role where supplier_id = r.supplier_id and role = 'supplier')
+       and p.source = 'supplier' and (select count(*) from public.party_role x where x.party_id = p.id) = 1;
+    delete from public.supplier where id = r.supplier_id;
+    v_texto := format('Deshecho: %s ya no está dado de alta y la factura vuelve a no tener proveedor.', coalesce(v_nombre, 'el proveedor'));
+  else
+    v_texto := format('Deshecho: la factura ya no es de %s y vuelve a no tener proveedor.', coalesce(v_nombre, 'ese proveedor'));
+  end if;
+  update public.conta_proveedor_solo set deshecho_at = now(), deshecho_por = v_quien where invoice_id = p_invoice;
+  insert into public.document_activity (account_id, company_id, inbox_id, supplier_invoice_id, actor, actor_name, action, text)
+  values (v.account_id, v.company_id, v.inbox_id, p_invoice, 'persona', v_quien, 'corregida', v_quien || ' ha deshecho lo de Sumied. ' || v_texto);
+  return jsonb_build_object('texto', v_texto);
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text) IS 'R14: lo de conta_proveedor_solo_deshacer, sin mirar quién llama (lo usa la vuelta atrás de la 1130).';
 
 
 --
@@ -16921,6 +17240,40 @@ BEGIN
   );
 END;
 $$;
+
+
+--
+-- Name: _r14_partir_direccion(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._r14_partir_direccion(p text) RETURNS jsonb
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  -- «C/ Ejemplo 1, 28000 Madrid» → calle «C/ Ejemplo 1», cp «28000», ciudad «Madrid». Sin cp, todo a la calle.
+  select case
+    when m is null then jsonb_build_object('calle', nullif(btrim(coalesce(p, ''), ' ,.-'), ''))
+    else jsonb_build_object('calle', nullif(btrim(m[1], ' ,.-'), ''), 'cp', m[2], 'ciudad', nullif(btrim(split_part(split_part(btrim(m[3], ' ,.-'), ',', 1), '(', 1), ' ,.-'), ''))
+  end
+  from (select regexp_match(coalesce(p, ''), '^(.*?)[\s,.-]*\m([0-5][0-9]{4})\M(.*)$') as m) x
+$_$;
+
+
+--
+-- Name: _r14_sin_tildes(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._r14_sin_tildes(p text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  select btrim(regexp_replace(translate(lower(coalesce(p, '')), 'áéíóúüàèìòùâêîôûñç', 'aeiouuaeiouaeiounc'), '[^a-z0-9]+', ' ', 'g'))
+$$;
+
+
+--
+-- Name: FUNCTION _r14_sin_tildes(p text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._r14_sin_tildes(p text) IS 'R14: un texto como se compara con conta_gasto_por_venta: minúsculas, sin tildes y solo letras y cifras separadas por un espacio.';
 
 
 --
@@ -43668,6 +44021,31 @@ COMMENT ON FUNCTION public.conta_gasto_aprendido(p_company uuid, p_supplier uuid
 
 
 --
+-- Name: conta_gasto_propuesto(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not (public.belongs_to_account(v_acc) or coalesce(auth.role(), '') = 'service_role') then
+    raise exception 'Esa empresa no es tuya.' using errcode = '42501';
+  end if;
+  return public._conta_gasto_propuesto(p_company, p_supplier, p_invoice);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid) IS 'R14: la cuenta de gasto propuesta para un proveedor sin historial en esta empresa, con su porqué: plataforma (su comisión), sus facturas en otra sociedad de la cuenta, o lo que vende (conta_gasto_por_venta). Se enseña en ámbar.';
+
+
+--
 -- Name: conta_gc_cobro_otra_via(uuid, text, text, date, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -56831,6 +57209,31 @@ $$;
 --
 
 COMMENT ON FUNCTION public.conta_proveedor_iva_clase(p_pais text, p_tipo_nif text, p_nif text, p_vies text, p_regimen text) IS 'I01d (0300). Cómo se apunta el IVA de un proveedor, de su ficha: nacional, isp_nacional (régimen de IVA «inversión del sujeto pasivo»), intracomunitaria (UE con NIF-IVA que VIES no rechaza), ue_sin_nif_iva o isp_extranjero (fuera de la UE).';
+
+
+--
+-- Name: conta_proveedor_solo_deshacer(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid;
+begin
+  select account_id into v_acc from public.supplier_invoice where id = p_invoice;
+  if v_acc is null or not (public.belongs_to_account(v_acc) or coalesce(auth.role(), '') = 'service_role') then
+    raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501';
+  end if;
+  return public._conta_proveedor_solo_deshacer(p_invoice, p_quien_nombre);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text) IS 'R14: «Deshacer» el proveedor que Sumied le puso a una recibida. La factura vuelve a no tener proveedor; si Sumied lo dio de alta y no tiene nada más, se borra con su subcuenta (sin apuntes). No con la factura validada.';
 
 
 --
@@ -117800,6 +118203,28 @@ COMMENT ON VIEW public.conta_factura_cobro IS 'PC01 · El estado de cobro de cad
 
 
 --
+-- Name: conta_gasto_por_venta; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gasto_por_venta (
+    orden integer NOT NULL,
+    hoja text NOT NULL,
+    que text NOT NULL,
+    palabras text[] NOT NULL,
+    CONSTRAINT conta_gasto_por_venta_hoja_check CHECK ((hoja ~ '^6[0-9]{2}$'::text)),
+    CONSTRAINT conta_gasto_por_venta_palabras_check CHECK ((cardinality(palabras) > 0)),
+    CONSTRAINT conta_gasto_por_venta_que_check CHECK ((length(btrim(que)) > 0))
+);
+
+
+--
+-- Name: TABLE conta_gasto_por_venta; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gasto_por_venta IS 'R14. Por lo que vende un proveedor (las líneas de su factura), la hoja del 6 de su gasto. Cada línea va a la primera fila (por orden) que tenga una de sus palabras; gana la hoja con más líneas. Las palabras, con tilde; se comparan sin tildes ni mayúsculas, enteras o en plural. Probada contra los nombres reales (regla 31) en el parte del R14.';
+
+
+--
 -- Name: conta_gc_enlace; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -119265,6 +119690,38 @@ CREATE TABLE public.conta_propuesta_pendiente (
 --
 
 COMMENT ON TABLE public.conta_propuesta_pendiente IS 'S01 · PR 3 (entrega 5): lo que no se ha podido proponer solo, y por qué, en palabras de oficina; donde = el apartado en el que se arregla. Se borra cuando el origen se propone.';
+
+
+--
+-- Name: conta_proveedor_solo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_proveedor_solo (
+    invoice_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid,
+    que text NOT NULL,
+    supplier_id uuid,
+    supplier_creado boolean DEFAULT false NOT NULL,
+    cuenta_id uuid,
+    cuenta_creada boolean DEFAULT false NOT NULL,
+    motivo text,
+    nif text,
+    cuando text DEFAULT 'al_leer'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    deshecho_at timestamp with time zone,
+    deshecho_por text,
+    CONSTRAINT conta_proveedor_solo_check CHECK ((((que = 'no'::text) = ((supplier_id IS NULL) AND (motivo IS NOT NULL))) OR (deshecho_at IS NOT NULL))),
+    CONSTRAINT conta_proveedor_solo_cuando_check CHECK ((cuando = ANY (ARRAY['al_leer'::text, 'al_aplicar'::text]))),
+    CONSTRAINT conta_proveedor_solo_que_check CHECK ((que = ANY (ARRAY['alta'::text, 'existente'::text, 'plataforma'::text, 'no'::text])))
+);
+
+
+--
+-- Name: TABLE conta_proveedor_solo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_proveedor_solo IS 'R14. El proveedor de cada recibida leída: si Sumied lo dio de alta solo (alta), lo encontró (existente) o era una plataforma, con lo que creó; o por qué no (no, con su motivo). La franja de la ficha y «Deshacer» salen de aquí.';
 
 
 --
@@ -134823,6 +135280,14 @@ ALTER TABLE ONLY public.conta_erp10_subcuenta_salida
 
 
 --
+-- Name: conta_gasto_por_venta conta_gasto_por_venta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gasto_por_venta
+    ADD CONSTRAINT conta_gasto_por_venta_pkey PRIMARY KEY (orden);
+
+
+--
 -- Name: conta_gc_cliente conta_gc_cliente_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -135372,6 +135837,14 @@ ALTER TABLE ONLY public.conta_propuesta_pendiente
 
 ALTER TABLE ONLY public.conta_propuesta_pendiente
     ADD CONSTRAINT conta_propuesta_pendiente_uno UNIQUE (company_id, origen, origen_id);
+
+
+--
+-- Name: conta_proveedor_solo conta_proveedor_solo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_proveedor_solo
+    ADD CONSTRAINT conta_proveedor_solo_pkey PRIMARY KEY (invoice_id);
 
 
 --
@@ -142531,6 +143004,13 @@ CREATE INDEX idx_compliance_reminder_log_account ON public.compliance_reminder_l
 --
 
 CREATE INDEX idx_compliance_reminder_log_document ON public.compliance_reminder_log USING btree (document_id);
+
+
+--
+-- Name: idx_conta_proveedor_solo_cuenta; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_conta_proveedor_solo_cuenta ON public.conta_proveedor_solo USING btree (account_id, company_id);
 
 
 --
@@ -152636,6 +153116,46 @@ ALTER TABLE ONLY public.conta_propuesta_pendiente
 
 ALTER TABLE ONLY public.conta_propuesta_pendiente
     ADD CONSTRAINT conta_propuesta_pendiente_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_proveedor_solo conta_proveedor_solo_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_proveedor_solo
+    ADD CONSTRAINT conta_proveedor_solo_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_proveedor_solo conta_proveedor_solo_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_proveedor_solo
+    ADD CONSTRAINT conta_proveedor_solo_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_proveedor_solo conta_proveedor_solo_cuenta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_proveedor_solo
+    ADD CONSTRAINT conta_proveedor_solo_cuenta_id_fkey FOREIGN KEY (cuenta_id) REFERENCES public.company_account(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_proveedor_solo conta_proveedor_solo_invoice_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_proveedor_solo
+    ADD CONSTRAINT conta_proveedor_solo_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.supplier_invoice(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_proveedor_solo conta_proveedor_solo_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_proveedor_solo
+    ADD CONSTRAINT conta_proveedor_solo_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(id) ON DELETE SET NULL;
 
 
 --
@@ -163545,6 +164065,19 @@ CREATE POLICY conta_erp10_subcuenta_salida_leer ON public.conta_erp10_subcuenta_
 
 
 --
+-- Name: conta_gasto_por_venta; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gasto_por_venta ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gasto_por_venta conta_gasto_por_venta_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gasto_por_venta_leer ON public.conta_gasto_por_venta FOR SELECT TO authenticated USING (true);
+
+
+--
 -- Name: conta_gc_cliente; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -164215,6 +164748,19 @@ ALTER TABLE public.conta_propuesta_pendiente ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_propuesta_pendiente_leer ON public.conta_propuesta_pendiente FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_proveedor_solo; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_proveedor_solo ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_proveedor_solo conta_proveedor_solo_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_proveedor_solo_leer ON public.conta_proveedor_solo FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -172695,6 +173241,23 @@ GRANT ALL ON FUNCTION public._conta_falta_historico_motivo(p_entry uuid) TO serv
 
 
 --
+-- Name: FUNCTION _conta_gasto_por_venta(p_textos text[]); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._conta_gasto_por_venta(p_textos text[]) TO anon;
+GRANT ALL ON FUNCTION public._conta_gasto_por_venta(p_textos text[]) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_gasto_por_venta(p_textos text[]) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_gestoria_apuntar(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -173379,6 +173942,22 @@ GRANT ALL ON FUNCTION public._conta_proponer_socio(p_company uuid, p_liq uuid, p
 
 REVOKE ALL ON FUNCTION public._conta_propuesta_ventas(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid, p_venta uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_propuesta_ventas(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid, p_venta uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_proveedor_solo(p_invoice uuid, p_cuando text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_proveedor_solo(p_invoice uuid, p_cuando text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_proveedor_solo(p_invoice uuid, p_cuando text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text) TO service_role;
 
 
 --
@@ -175046,6 +175625,24 @@ GRANT ALL ON FUNCTION public._qty_in_base(p_target_item_id uuid, p_quantity nume
 
 REVOKE ALL ON FUNCTION public._queue_system_alert(p_kind text, p_subject text, p_message text, p_debounce_kind text, p_debounce_window interval) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._queue_system_alert(p_kind text, p_subject text, p_message text, p_debounce_kind text, p_debounce_window interval) TO service_role;
+
+
+--
+-- Name: FUNCTION _r14_partir_direccion(p text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._r14_partir_direccion(p text) TO anon;
+GRANT ALL ON FUNCTION public._r14_partir_direccion(p text) TO authenticated;
+GRANT ALL ON FUNCTION public._r14_partir_direccion(p text) TO service_role;
+
+
+--
+-- Name: FUNCTION _r14_sin_tildes(p text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._r14_sin_tildes(p text) TO anon;
+GRANT ALL ON FUNCTION public._r14_sin_tildes(p text) TO authenticated;
+GRANT ALL ON FUNCTION public._r14_sin_tildes(p text) TO service_role;
 
 
 --
@@ -180171,6 +180768,15 @@ GRANT ALL ON FUNCTION public.conta_gasto_aprendido(p_company uuid, p_supplier uu
 
 
 --
+-- Name: FUNCTION conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gasto_propuesto(p_company uuid, p_supplier uuid, p_invoice uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_gc_cobro_otra_via(p_company uuid, p_gc_cobro text, p_via text, p_fecha date, p_nota text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -182640,6 +183246,15 @@ GRANT ALL ON FUNCTION public.conta_proveedor_iban_poner(p_supplier uuid, p_iban 
 GRANT ALL ON FUNCTION public.conta_proveedor_iva_clase(p_pais text, p_tipo_nif text, p_nif text, p_vies text, p_regimen text) TO anon;
 GRANT ALL ON FUNCTION public.conta_proveedor_iva_clase(p_pais text, p_tipo_nif text, p_nif text, p_vies text, p_regimen text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_proveedor_iva_clase(p_pais text, p_tipo_nif text, p_nif text, p_vies text, p_regimen text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_nombre text) TO service_role;
 
 
 --
@@ -193156,6 +193771,14 @@ GRANT ALL ON TABLE public.conta_factura_cobro TO service_role;
 
 
 --
+-- Name: TABLE conta_gasto_por_venta; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gasto_por_venta TO service_role;
+GRANT SELECT ON TABLE public.conta_gasto_por_venta TO authenticated;
+
+
+--
 -- Name: TABLE conta_gc_enlace; Type: ACL; Schema: public; Owner: -
 --
 
@@ -193670,6 +194293,14 @@ GRANT ALL ON SEQUENCE public.conta_programa_anterior_registro_id_seq TO service_
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.conta_propuesta_pendiente TO anon;
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.conta_propuesta_pendiente TO authenticated;
 GRANT ALL ON TABLE public.conta_propuesta_pendiente TO service_role;
+
+
+--
+-- Name: TABLE conta_proveedor_solo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_proveedor_solo TO service_role;
+GRANT SELECT ON TABLE public.conta_proveedor_solo TO authenticated;
 
 
 --
