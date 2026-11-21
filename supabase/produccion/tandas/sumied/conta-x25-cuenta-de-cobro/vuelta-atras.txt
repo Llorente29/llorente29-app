@@ -1,0 +1,3 @@
+# X25 · la vuelta atrás: el disparador de antes (de su respaldo). Los enlaces que se hayan guardado, se quedan.
+cuenta: scripts/conta/produccion/cuentas/x25-cuenta-de-cobro.sql
+supabase/vuelta-atras/20261121T1800_x25_cuenta_de_cobro.down.sql

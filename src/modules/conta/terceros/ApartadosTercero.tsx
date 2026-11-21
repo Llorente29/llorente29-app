@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { rutaAsiento, rutaFichaProveedor } from '@/config/navegacion'
+import { rutaAsiento, rutaFichaProveedor, rutaFichaTercero } from '@/config/navegacion'
 import { ExtractoCuenta, type EjercicioExtracto } from '@/modules/conta/plan/ExtractoCuenta'
 import { apuntesDeCuentas } from '@/modules/conta/services/libroService'
 import { leerEjercicios } from '@/modules/conta/services/diarioService'
@@ -19,6 +19,8 @@ import { useTercero, papelesDe } from '@/modules/conta/terceros/contextoTercero'
 import { ConQuienHablas, LiquidacionesAnteriores, SusCuentas, TarjetaLiquidaciones } from '@/modules/conta/terceros/piezasTercero'
 import { SusTiendas } from '@/modules/conta/terceros/SusTiendas'
 import { CuandoPaga } from '@/modules/conta/terceros/CuandoPaga'
+import { CuentaDeCobro } from '@/modules/conta/terceros/CuentaDeCobro'
+import { textoNifRepetido } from '@/modules/conta/lib/altaProveedor'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
 import { validarIban, normalizarIban, formatearIban } from '@/modules/conta/lib/iban'
@@ -26,21 +28,35 @@ import { avisoPlazo } from '@/modules/conta/lib/morosidad'
 import { diaMes, eurosExactos } from '@/modules/conta/lib/formato'
 import { periodo } from '@/modules/conta/lib/liquidaciones'
 import {
-  anadirPapel, borrarAportacion, guardarCliente, registrarAportacion, terceroDelMismoNif, type DatosFiscalesCliente,
+  anadirPapel, borrarAportacion, guardarCliente, nombreDelTercero, registrarAportacion, terceroDelMismoNif, type DatosFiscalesCliente,
 } from '@/modules/conta/services/tercerosService'
 
 function useGuardar() {
   const { recargar, avisar } = useTercero()
-  const [fallo, setFallo] = useState<string | null>(null)
+  const [fallo, setFallo] = useState<FalloAlGuardar | null>(null)
   const [ocupado, setOcupado] = useState(false)
   async function guardar(fn: () => Promise<unknown>, texto: string) {
     setOcupado(true); setFallo(null)
     try { await fn(); avisar(texto); recargar() } catch (e) {
-      setFallo(terceroDelMismoNif(e) ? 'Ese NIF ya es de otro contacto. Un NIF, una ficha: hazlo también cliente, plataforma o socio en esa ficha en vez de repetirla.' : e instanceof Error ? e.message : 'No se pudo guardar.')
+      // X25 · El NIF que ya tiene otro: «Ya tienes a … con este NIF», con «Abrirlo», como en el alta (X24).
+      const otro = terceroDelMismoNif(e)
+      if (otro) {
+        const nombre = await nombreDelTercero(otro).catch(() => null)
+        setFallo({ texto: `${nombre ? textoNifRepetido(nombre) : 'Ese NIF ya es de otro contacto.'} Un NIF, una ficha: hazlo también cliente, plataforma o socio en esa ficha en vez de repetirla.`, abrir: rutaFichaTercero(otro) })
+      } else setFallo({ texto: e instanceof Error ? e.message : 'No se pudo guardar.', abrir: null })
     }
     setOcupado(false)
   }
   return { guardar, fallo, ocupado }
+}
+
+interface FalloAlGuardar { texto: string; abrir: string | null }
+
+/** El fallo al guardar; el del NIF repetido, en ámbar y con «Abrirlo» (X25). */
+function Fallo({ f }: { f: FalloAlGuardar | null }) {
+  if (!f) return null
+  if (!f.abrir) return <div className="cx-error" role="alert">{f.texto}</div>
+  return <div className="cx-aviso" role="alert" data-prueba="nif-repetido">{f.texto} <Link to={f.abrir}>Abrirlo</Link></div>
 }
 
 // ── Datos fiscales ──────────────────────────────────────────────────────────
@@ -79,7 +95,7 @@ export function DatosFiscalesTercero() {
         ...d, ...(nifN && d.taxIdType === 'nif_es' ? { taxIdCheckStatus: 'valid' as const } : {}),
       }, userName), `Guardados los datos fiscales de ${nombre.trim()}.`)
     }}>
-      {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      <Fallo f={fallo} />
       <Campo campo="nombre" etiqueta="Nombre con el que lo conocéis" ayuda={conProveedor ? 'Es también proveedor: el nombre se cambia en su ficha de proveedor.' : undefined}>
         {(p) => <input {...p} className="cx-input" value={nombre} disabled={conProveedor} onChange={(e) => setNombre(e.target.value)} />}
       </Campo>
@@ -147,7 +163,7 @@ export function CobroTercero() {
 
   return (
     <div className="cx-formulario">
-      {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      <Fallo f={fallo} />
       {(cliente || socio) && (
         <form className="cx-formulario" onSubmit={(e) => {
           e.preventDefault()
@@ -159,6 +175,8 @@ export function CobroTercero() {
         }}>
           <h2 className="cx-tarjeta-titulo">Cómo te paga</h2>
           <Pildoras campo="forma" etiqueta="Forma de cobro" elegidas={forma ? [forma] : []} opciones={[...FORMAS]} alCambiar={(v) => setForma(v[0] ?? null)} />
+          {/* X25 · Su «Cuenta de cobro», como la «Cuenta de pago» del proveedor (K10): se guarda al elegirla, no con el botón de abajo. */}
+          {cliente && <CuentaDeCobro />}
           <Pildoras campo="plazo" etiqueta="Plazo de cobro (días desde la factura)" elegidas={plazo ? [plazo] : []}
             opciones={PLAZOS.map((p) => ({ valor: String(p), texto: p === 0 ? 'Al contado' : `${p} días` }))}
             alCambiar={(v) => setPlazo(v[0] ?? '')} aviso={plazoN != null ? avisoPlazo([plazoN]) : null}
@@ -247,7 +265,7 @@ function Aportaciones() {
   return (
     <section className="cx-tarjeta" aria-label="Aportaciones del socio">
       <h2 className="cx-tarjeta-titulo">Aportaciones del socio</h2>
-      {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      <Fallo f={fallo} />
       {ficha.aportaciones.length === 0 && <p className="cx-ayuda">Aún no hay ninguna. Restan en la liquidación del local y el mes en que las apuntes.</p>}
       {ficha.aportaciones.map((a) => (
         <div key={a.id} className="cxt-linea">

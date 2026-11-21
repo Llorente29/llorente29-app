@@ -202,6 +202,23 @@ export function textoAsientoDelCobro(q: QueHaceElCobro, o: { nombre: (c: string)
   return `No es un banco ni la caja: al guardar, un asiento del cobro con ${elegida} al debe y ${cliente} al haber, por ${o.importe}, y la factura queda cobrada.`
 }
 
+/** De dónde sale la cuenta del cobro propuesta (el rótulo pequeño, en gris, como en la recibida). */
+export type OrigenCobro = 'De su ficha' | 'La del último cobro'
+
+/**
+ * X25 · La cuenta del cobro que se propone, como en ERP10:
+ *   1. la «Cuenta de cobro» de su ficha (company_account_link, papel «pago» del cliente);
+ *   2. si no la tiene, la de antes del X25, igual: el banco de su ficha (collection_treasury_id) y, si no, la del
+ *      último cobro;
+ *   3. sin ninguna, vacía (pendiente de cobrar).
+ */
+export function propuestaDelCobro(o: { deLaFicha: string | null; banco: string | null; ultimo: string | null }): { cuenta: string; origen: OrigenCobro | null } {
+  if (o.deLaFicha?.trim()) return { cuenta: o.deLaFicha.trim(), origen: 'De su ficha' }
+  if (o.banco?.trim()) return { cuenta: o.banco.trim(), origen: 'De su ficha' }
+  if (o.ultimo?.trim()) return { cuenta: o.ultimo.trim(), origen: 'La del último cobro' }
+  return { cuenta: '', origen: null }
+}
+
 /** La fecha del cobro que se propone: la de la factura más los días de su ficha (sin días, la de la factura). */
 export function fechaDelCobro(fecha: string, dias: number | null): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return ''

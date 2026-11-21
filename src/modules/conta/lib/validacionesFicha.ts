@@ -9,7 +9,8 @@
 //              de más de 60 días, Ley 3/2004).
 
 import type { FichaProveedor } from '@/modules/conta/types'
-import { normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
+import { nifClave, validarNifEs } from '@/modules/conta/lib/nif'
+import { textoNifRepetido } from '@/modules/conta/lib/altaProveedor'
 import { validarIban } from '@/modules/conta/lib/iban'
 import { validarFormatoVatEu } from '@/modules/conta/lib/vatEu'
 import { avisoPlazo } from '@/modules/conta/lib/morosidad'
@@ -33,6 +34,12 @@ export interface ResultadoValidacion {
 /** Otros proveedores de la MISMA cuenta, para el NIF repetido. */
 export interface OtroProveedor { id: string; name: string; taxId: string | null }
 
+/** X25 · El otro proveedor de la cuenta con el mismo NIF (comparado como la base: nifClave), para «Abrirlo»; o null. */
+export function nifRepetidoDe(f: Pick<FichaProveedor, 'id' | 'taxId'>, otrosDeLaCuenta: readonly OtroProveedor[]): OtroProveedor | null {
+  const mio = nifClave(f.taxId)
+  return mio ? otrosDeLaCuenta.find((o) => o.id !== f.id && nifClave(o.taxId) === mio) ?? null : null
+}
+
 export function validarFicha(f: FichaProveedor, otrosDeLaCuenta: OtroProveedor[]): ResultadoValidacion {
   const errores: ProblemaFicha[] = []
   const avisos: ProblemaFicha[] = []
@@ -48,9 +55,9 @@ export function validarFicha(f: FichaProveedor, otrosDeLaCuenta: OtroProveedor[]
   }
 
   if (nif) {
-    const mio = normalizarNif(nif)
-    const repe = otrosDeLaCuenta.find((o) => o.id !== f.id && o.taxId && normalizarNif(o.taxId) === mio)
-    if (repe) errores.push({ campo: 'taxId', mensaje: `Ese NIF ya lo tiene otro proveedor: ${repe.name}.` })
+    // X25 · Con la clave de la base (la del índice único del X24) y la frase del alta: «Ya tienes a … con este NIF».
+    const repe = nifRepetidoDe(f, otrosDeLaCuenta)
+    if (repe) errores.push({ campo: 'taxId', mensaje: textoNifRepetido(repe.name) })
   }
 
   if (f.vatRegime === 'intracomunitario' && (f.taxIdType !== 'vat_eu' || !nif)) {

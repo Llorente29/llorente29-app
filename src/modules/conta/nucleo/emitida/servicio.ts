@@ -53,6 +53,8 @@ export interface ClienteEmitida {
   dias: number | null
   /** La cuenta del cobro de su ficha: la 57x de su tesorería (collection_treasury_id). */
   cobro: string | null
+  /** X25 · Su «Cuenta de cobro» en esta empresa (company_account_link, papel «pago» del cliente), o null. */
+  cuentaCobro: string | null
 }
 
 export interface DeLaEmpresa {
@@ -102,6 +104,7 @@ export async function deLaEmpresa(accountId: string, companyId: string, hoy: str
       retencion: f?.withholding_rate_id ? tasaRet.get(String(f.withholding_rate_id)) ?? null : null,
       dias: f?.payment_terms_days === null || f?.payment_terms_days === undefined ? null : n(f.payment_terms_days),
       cobro: teso ? String(teso.code) : null,
+      cuentaCobro: (() => { const c = enlace('customer', String(p.id), 'pago'); return c && c.status !== 'cerrada' ? String(c.code) : null })(),
     }
   }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
   // La 477 de cada tipo: su enlace «repercutido»; si no, la 477 de su % por el nombre (la misma regla que conta_venta_emitir).
