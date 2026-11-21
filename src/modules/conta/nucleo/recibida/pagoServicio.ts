@@ -20,6 +20,7 @@
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import { pagoAMano } from '@/modules/conta/services/pagosService'
 import { leerComision } from '@/modules/conta/services/comisionService'
+import { cuentasParaMover } from '@/modules/conta/lib/cuentasParaMover'
 import type { CuentaDelPlan } from '../ficha/teclas'
 import type { QueHaceElPago } from './pago'
 
@@ -56,11 +57,8 @@ export async function cuentasDePago(accountId: string, companyId: string): Promi
     const c = porId.get(String(l.company_account_id))
     if (c) tesorerias.set(String(c.code), String(l.entity_id))
   }
-  // X21b · El plan entero (regla 30): «No está» solo si no existe. Primero lo de siempre para pagar.
-  const orden = (c: Fila) => tesorerias.has(String(c.code)) ? 0 : /^5/.test(String(c.code)) || de430.has(String(c.id)) ? 1 : 2
-  const lista = plan
-    .filter((c) => c.kind !== 'group' && String(c.code).length >= 8 && c.status !== 'cerrada')
-    .sort((a, b) => orden(a) - orden(b) || String(a.code).localeCompare(String(b.code)))
+  // X21b · El plan entero (regla 30): «No está» solo si no existe. Primero lo de siempre para pagar (la pieza del cobro, X23).
+  const lista = cuentasParaMover(plan, { tesorerias: new Set(tesorerias.keys()), delante: (c) => de430.has(String(c.id)) })
     .map((c) => ({ codigo: String(c.code), nombre: nombreDe(c) }))
   return { lista, nombres: new Map(plan.map((c) => [String(c.code), nombreDe(c)])), tesorerias }
 }
