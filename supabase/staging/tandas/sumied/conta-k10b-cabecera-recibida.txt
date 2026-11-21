@@ -1,3 +1,7 @@
+# La factura sin IVA de la e2e (la del tipo cambiado): la PRIMERA, porque no necesita nada de la rama y así nada la deja
+# en ROLLBACK (W07: lo de delante tiene que ir de verdad; la 2150 cambió de huella después de ir de verdad). Acaba con
+# «set constraints all immediate»: no deja disparadores pendientes a la 2150.
+supabase/seeds/conta/seed_k10b_sin_iva_staging.sql
 # K10b · La cabecera de la recibida, como ERP10. La 2150 solo añade (va de verdad desde la rama, W05: la e2e ve sus
 # columnas); la 2151 cambia la regla 11 y desde la rama solo pasa en ROLLBACK.
 supabase/migrations/20261121T2150_k10b_cabecera_recibida.sql
