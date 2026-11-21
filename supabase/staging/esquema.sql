@@ -69799,6 +69799,48 @@ COMMENT ON FUNCTION public.e2e_r08_preparar(p_lado text, p_motor text) IS 'SOLO 
 
 
 --
+-- Name: e2e_r14_llega(uuid, text, text, text, text[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.e2e_r14_llega(p_company uuid, p_nif text, p_nombre text, p_numero text, p_lineas text[] DEFAULT ARRAY['POLLO ENTERO 1,8KG'::text, 'ALITAS DE POLLO CONGELADAS'::text]) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare c public.company; v uuid := gen_random_uuid(); r jsonb; n int := coalesce(cardinality(p_lineas), 0);
+begin
+  select * into c from public.company where id = p_company;
+  if c.id is null or c.legal_name not like 'Prueba R14 %' or not public.current_user_is_admin_or_manager_of(c.account_id) then
+    raise exception 'R14 e2e: solo en una empresa «Prueba R14 …» de tu cuenta.' using errcode = '42501';
+  end if;
+  if n = 0 then raise exception 'R14 e2e: sin líneas.' using errcode = '22023'; end if;
+  insert into public.supplier_invoice (id, account_id, company_id, status, source, invoice_number, invoice_date, tax_base_total, tax_total, grand_total,
+                                       needs_review, created_by_name, reading, reading_confidence)
+  values (v, c.account_id, c.id, 'en_revision', 'ocr', p_numero, date '2026-11-10', 100, 10, 110, false, 'Prueba e2e R14',
+          jsonb_build_object('factura', jsonb_build_object('numero', p_numero, 'fecha', '2026-11-10', 'base', 100, 'cuota', 10, 'total', 110,
+            'tipos', jsonb_build_array(jsonb_build_object('tipo', 10, 'base', 100, 'cuota', 10)),
+            'proveedor', jsonb_build_object('nombre', p_nombre, 'nif', p_nif, 'direccion', 'C/ Inventada 1, 28000 Madrid',
+                                            'email', 'pedidos@ejemplo.test', 'telefono', '900000000', 'web', 'ejemplo.test'),
+            'destinatario', jsonb_build_object('nombre', c.legal_name, 'nif', c.tax_id)),
+            'confianza', 'seguro'), 'seguro');
+  insert into public.supplier_invoice_tax (account_id, supplier_invoice_id, vat_pct, base, vat_amount) values (c.account_id, v, 10, 100, 10);
+  insert into public.supplier_invoice_line (supplier_invoice_id, raw_text, qty, unit_price, line_amount, vat_pct, position)
+  select v, t, 1, round(100.0 / n, 2) + case when o = n then 100 - round(100.0 / n, 2) * n else 0 end,
+         round(100.0 / n, 2) + case when o = n then 100 - round(100.0 / n, 2) * n else 0 end, 10, o::int
+    from unnest(p_lineas) with ordinality z(t, o);
+  -- Lo que hace el disparador de la 1120 al confirmar.
+  r := public._conta_proveedor_solo(v, 'al_leer');
+  return jsonb_build_object('id', v, 'proveedor', r);
+end $$;
+
+
+--
+-- Name: FUNCTION e2e_r14_llega(p_company uuid, p_nif text, p_nombre text, p_numero text, p_lineas text[]); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.e2e_r14_llega(p_company uuid, p_nif text, p_nombre text, p_numero text, p_lineas text[]) IS 'SOLO STAGING (semilla R14): una recibida leída de un proveedor nuevo en una empresa «Prueba R14 …», con lo que hará el disparador de la 1120 (_conta_proveedor_solo), para su e2e.';
+
+
+--
 -- Name: edge_drift_registrar(jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -185374,6 +185416,15 @@ GRANT ALL ON FUNCTION public.e2e_f01c_preparar(p_que text, p_juego text) TO serv
 REVOKE ALL ON FUNCTION public.e2e_r08_preparar(p_lado text, p_motor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.e2e_r08_preparar(p_lado text, p_motor text) TO authenticated;
 GRANT ALL ON FUNCTION public.e2e_r08_preparar(p_lado text, p_motor text) TO service_role;
+
+
+--
+-- Name: FUNCTION e2e_r14_llega(p_company uuid, p_nif text, p_nombre text, p_numero text, p_lineas text[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.e2e_r14_llega(p_company uuid, p_nif text, p_nombre text, p_numero text, p_lineas text[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.e2e_r14_llega(p_company uuid, p_nif text, p_nombre text, p_numero text, p_lineas text[]) TO authenticated;
+GRANT ALL ON FUNCTION public.e2e_r14_llega(p_company uuid, p_nif text, p_nombre text, p_numero text, p_lineas text[]) TO service_role;
 
 
 --
