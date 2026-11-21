@@ -215,6 +215,20 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 }
 .kf-soltar strong { color: var(--k-tinta); font-size: 15px; }
 .kf-soltar[data-encima='si'] { background: var(--k-azul-claro); border-color: var(--k-azul); }
+/* K07 · «Cambiar el documento»: un enlace pequeño junto a «Pantalla completa»; y el que hay, resaltado al soltar otro encima. */
+.kf-panel-lupa > button.kf-cambiar-doc { width: auto; height: auto; padding: 0; font-size: 12px; color: var(--k-azul); text-decoration: underline; cursor: pointer; }
+.kf-panel-lupa > button.kf-cambiar-doc:disabled { color: var(--k-raya); cursor: default; }
+.kf-hoja[data-encima='si'] { outline: 2px dashed var(--k-azul); outline-offset: 4px; }
+/* K07 · La contabilizada y la descartada: las mismas casillas, sin poder escribir (un fieldset desactivado que no pinta nada). */
+.kf-solo-lectura { border: 0; margin: 0; padding: 0; min-width: 0; display: contents; }
+/* K07 · El historial de la factura, encima de la ficha. */
+.kf-historial { position: absolute; right: 12px; top: 48px; z-index: 30; width: min(520px, calc(100% - 24px)); max-height: 60%; overflow: auto;
+  background: var(--k-blanco); border: 1px solid var(--k-borde, #d0d5dd); border-radius: 8px; box-shadow: 0 8px 24px rgba(16, 24, 40, 0.18); padding: 10px 14px; }
+.kf-historial header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.kf-historial h3 { margin: 0; font-size: 14px; }
+.kf-historial ol { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.kf-historial li { padding: 4px 0; border-top: 1px solid var(--k-borde, #eaecf0); }
+.kf-historial li small { color: var(--k-gris, #667085); display: block; }
 .kf-soltar-flecha { font-size: 28px; color: var(--k-azul); line-height: 1; }
 .kf-mayor { width: 100%; border-collapse: collapse; background: var(--k-blanco); border-radius: 6px; font-size: 12.5px; }
 .kf-mayor th { text-align: left; font-weight: 600; color: var(--k-apoyo); padding: 5px 8px; border-bottom: 1px solid var(--k-borde); }

@@ -17,8 +17,15 @@
 // validar, guarda, dice por qué y no pasa.
 //
 // Lo que esta ficha no hace, y sigue en la ficha de hoy (Más › «La ficha
-// completa»): los abonos, la comisión de una plataforma, el IBAN, pagar, el
-// historial y descartar. Las validadas y las descartadas se abren con la de hoy.
+// completa»): los abonos, la comisión de una plataforma, el IBAN, pagar y
+// descartar.
+//
+// K07 · Una factura, una sola ficha (Julio, 20/11): la validada y la descartada
+// se abren aquí también, la misma pantalla con las casillas sin poder escribir,
+// la franja «Contabilizada · asiento N» (o «Descartada») y el asiento validado
+// con su número. «Cambiar el documento» en el panel (en una contabilizada,
+// confirmando: conta_recibida_documento_cambiar, 2004), el historial en «Más»,
+// y ‹ vuelve a la que se acaba de validar. Los abonos siguen en la de hoy.
 //
 // K04b · El emisor que no se reconoce: la franja dice «Mira esto · No conozco
 // al que la emite», el NIF y el nombre leídos quedan en sus casillas («PDF») y
@@ -49,12 +56,14 @@ import {
 } from '@/modules/conta/documentos/fichaRecibida'
 import {
   apuntarFactura, cuentasDeGasto, guardarCambiosRecibida, leerExtrasFacturas, leerFactura, leerFichaRecibida, plazoDeLaFicha, ponerPapelRecibida,
-  proveedoresDeLaCuenta, urlDelPapel, verPropuestaFactura, leerAntesDelInicio, sinPapelRecibida,
+  proveedoresDeLaCuenta, urlDelPapel, verPropuestaFactura, leerAntesDelInicio, sinPapelRecibida, leerDescarte, recuperarFactura,
 } from '@/modules/conta/services/documentosService'
-import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
+import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, Comprobaciones, Duda, EstadoFicha, NombreDeCuenta } from '../ficha/piezas'
+import { accionDocumento, etiquetaValidado, franjaContabilizada, franjaDescartada, laAnterior, lineasDelHistorial, opcionesDeMas, queFichaSeAbre, textoCambioAlGuardar, type ModoRecibida, type OpcionMas } from './contabilizada'
+import { cambiarDocumentoContabilizada, leerHistorial, salioAErp10 } from './documentoServicio'
 import { PanelDocumento } from '../ficha/PanelDocumento'
 import { cifra } from '../ficha/textos'
 import { useUltimo } from '../ficha/useUltimo'
@@ -119,6 +128,12 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const f = useLeer(id ? () => leerFactura(id) : null, `${id}:${vuelta}`)
   // Lo último leído de ESTA factura mientras se vuelve a leer (useUltimo): la ficha no se vacía ni pierde su cuenta.
   const fac = useUltimo(f.datos, id)
+  // K07 · En qué está: la validada y la descartada se abren aquí, sin poder escribir.
+  const validada = !!fac?.asiento && fac.asiento.estado === 'validado'
+  const descartada = fac?.estado === 'descartada'
+  // Sin llamar a una función: el compilador de React daría por hecho que lo que sale de ella puede ser «fac» (lo mismo que modoDeLaRecibida).
+  const modo: ModoRecibida = aMano ? 'escribir' : descartada ? 'descartada' : validada ? 'contabilizada' : 'escribir'
+  const soloLectura = modo !== 'escribir'
   const empresa = activa?.id ?? fac?.company_id ?? null
   const filtros = filtrosDe(query)
   const { desde, hasta } = ventanaDe(filtros.mes, hoy)
@@ -208,6 +223,16 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   // K06 · Mientras se lee la propuesta del pago, no se valida: se guardaría «pendiente» sin que nadie lo haya decidido
   // (la e2e #1641 pulsó antes de que llegara la 430 de su liquidación). Si la lectura falla, no se espera: queda lo que haya.
   const leyendoPago = (leePagoProv && !pagoProv && !pagoProvLeido.error) || (!!id && !!pagoProv?.plataforma && liquidacionLeida.datos === null && !liquidacionLeida.error)
+
+  // ── K07 · La contabilizada y la descartada: su asiento validado, si salió a ERP10, su descarte y el historial ──
+  const asientoId = validada ? fac?.asiento?.id ?? null : null
+  const asientoReal = useLeer(accountId && asientoId ? () => leerAsiento(accountId, asientoId) : null, `${accountId}:${asientoId}:asiento-real:${vuelta}`).datos ?? null
+  const enErp10 = useLeer(accountId && asientoId ? () => salioAErp10(accountId, asientoId) : null, `${accountId}:${asientoId}:erp10:${vuelta}`).datos ?? false
+  const descarte = useLeer(descartada && id ? () => leerDescarte(id) : null, `${id}:descarte:${descartada ? 'si' : 'no'}:${vuelta}`).datos ?? null
+  const [verHistorial, setVerHistorial] = useState<string | null>(null)
+  const historial = useLeer(accountId && id && verHistorial === id ? () => leerHistorial(accountId, id) : null, `${accountId}:${id}:historial:${verHistorial === id ? 'si' : 'no'}:${vuelta}`)
+  const [confirmarDoc, setConfirmarDoc] = useState<{ de: string; file: File } | null>(null)
+  const [cambiandoDoc, setCambiandoDoc] = useState(false)
   const plataforma = pagoProv?.plataforma ? { ...pagoProv.plataforma, hayLiquidacion: conLiquidacion } : null
   const propuestaPago = pagoProv ? propuestaDelPago({ plataforma, ultimas: pagoProv.ultimas }) : null
   const pagoCuenta = b.pagoCuenta ?? propuestaPago?.cuenta ?? ''
@@ -261,12 +286,14 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   useNombreDePestana(nombreDePestana(aMano ? prov?.nombre : prov?.nombre ?? fac?.proveedor?.nombre ?? emisor?.nombre, !aMano))
 
   // ── Guardar, validar y pasar ──
-  const siguiente = pos >= 0 && pos < ids.length - 1 ? ids[pos + 1] : null
-  const anterior = pos > 0 ? ids[pos - 1] : null
-  const ir = useCallback((destino: string, aviso?: string) => {
+  // K07 · ‹ después de validar y pasar vuelve a la que se acaba de validar (ya no está en la cola), y › desde ella, aquí.
+  const deDonde = state as { vieneDe?: string; despues?: string } | null
+  const siguiente = pos >= 0 && pos < ids.length - 1 ? ids[pos + 1] : pos < 0 && deDonde?.despues && deDonde.despues !== invoiceId ? deDonde.despues : null
+  const anterior = laAnterior({ vieneDe: deDonde?.vieneDe ?? null, actual: invoiceId, enLaCola: pos > 0 ? ids[pos - 1] : null })
+  const ir = useCallback((destino: string, aviso?: string, mas?: { vieneDe?: string; despues?: string }) => {
     const q = conCambio(search, { fila: destino })
     recordarLista(LISTA_RECIBIDAS, `${rutaDocumentos()}${q}`)
-    navegar(`${rutaRevisarFactura(destino)}${q}`, aviso ? { state: { aviso } } : undefined)
+    navegar(`${rutaRevisarFactura(destino)}${q}`, aviso || mas ? { state: { aviso, ...mas } } : undefined)
   }, [search, navegar])
   // El aviso: el de la factura de antes (lo que dijo al pasar), hasta que esta diga el suyo.
   const avisoDeAntes = (state as { aviso?: string } | null)?.aviso ?? null
@@ -314,6 +341,31 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     catch (e) { return `El pago no se ha apuntado (${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}): queda pendiente de pagar.` }
   }
 
+  /** K07 · «Cambiar el documento»: en una de por revisar se pone al guardar (sin perder lo escrito); en una contabilizada, confirmando. */
+  function alCambiarDocumento(file: File) {
+    if (modo === 'contabilizada') { setConfirmarDoc({ de: invoiceId, file }); return }
+    setFichero({ file, url: URL.createObjectURL(file) }); ed.poner('documento', file.name)
+    setAviso({ tono: 'ok', texto: textoCambioAlGuardar(file.name) })
+  }
+  async function cambiarYa(file: File) {
+    if (!fac || cambiandoDoc) return
+    setConfirmarDoc(null); setCambiandoDoc(true)
+    try {
+      const texto = await cambiarDocumentoContabilizada({ id: fac.id, account_id: fac.account_id }, file, userName)
+      setAviso({ tono: 'ok', texto }); setVuelta((v) => v + 1)
+    } catch (e) {
+      setAviso({ tono: 'mal', texto: `No se ha cambiado el documento: ${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}. Sigue el de antes.` })
+    } finally { setCambiandoDoc(false) }
+  }
+  async function recuperarla() {
+    if (!fac) return
+    try {
+      const estado = await recuperarFactura(fac.id, userName)
+      setAviso({ tono: 'ok', texto: `Recuperada: es una factura y vuelve a «${estado === 'en_revision' ? 'en revisión' : estado}».` })
+      refrescarCuentasMenu(); setVuelta((v) => v + 1)
+    } catch (e) { setAviso({ tono: 'mal', texto: `No se ha recuperado: ${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}.` }) }
+  }
+
   /** Guarda lo cambiado (sin validar). true si todo; si no, el porqué. */
   async function guardarCambios(): Promise<true | string> {
     if (!fac) return true
@@ -348,6 +400,10 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
 
   async function guardarYSiguiente() {
     if (guardando) return
+    // K07 · La contabilizada y la descartada no se guardan (Intro fuera de una casilla llega aquí aunque el botón esté apagado): se dice.
+    if (soloLectura) {
+      setAviso({ tono: 'falta', texto: modo === 'contabilizada' ? 'Ya está contabilizada: no hay nada que guardar. Pasa a la siguiente con ›.' : 'Está descartada: no se guarda. Si es una factura, «Más › Recuperarla».' }); return
+    }
     if (leyendoPago) { setAviso({ tono: 'falta', texto: 'Aún estoy leyendo cómo se paga (la cuenta del pago que propongo): vuelve a pulsar en un momento. No he guardado nada.' }); return }
     setGuardando(true); setAviso(null)
     try {
@@ -371,7 +427,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       if (!r.validado) { setAviso({ tono: 'falta', texto: `Guardada, sin validar: ${r.texto.replace(/^Apuntada y validada\.\s*/, '')} No paso a la siguiente.` }); setVuelta((v) => v + 1); return }
       const pago = await elPago(fac.id, fac.company_id ?? empresa ?? '')
       const texto = `${r.texto} ${pago}${siguiente ? '' : ' No quedan más por revisar en esta lista.'}`
-      if (siguiente) { ir(siguiente, texto); return }
+      if (siguiente) { ir(siguiente, texto, { vieneDe: fac.id }); return }
       setAviso({ tono: 'ok', texto }); setVuelta((v) => v + 1)
     } catch (e) {
       setAviso({ tono: 'mal', texto: `No se ha podido: ${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}. No paso a la siguiente.` })
@@ -492,9 +548,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   }, [claveFicha, pintada, aMano, duda, emisor, seVe])
 
   // ── Lo que no es de esta ficha: la de hoy, dentro de la pestaña ──
-  const validada = !!fac?.asiento && fac.asiento.estado === 'validado'
-  const descartada = fac?.estado === 'descartada'
-  if (!aMano && (completa || (fac && (esAbono(fac) || validada || descartada)))) {
+  const esUnAbono = !!fac && esAbono(fac)
+  if (queFichaSeAbre({ aMano, completa, abono: esUnAbono }) === 'completa') {
     return <>{completa && <p className="kf-aviso" data-tono="ok"><button type="button" className="kf-enlace" onClick={() => setCompleta(false)}>‹ Volver a la ficha nueva</button></p>}<RevisarFacturaPage /></>
   }
   if (!aMano && f.error) return <div className="kf-ficha"><p className="kf-aviso" data-tono="mal">No se ha podido abrir la factura: {f.error}</p></div>
@@ -517,6 +572,22 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     : fichero ? { url: fichero.url, foto: !/pdf/i.test(fichero.file.type), titulo: fichero.file.name }
     : papel.datos ? (papel.datos.url ? { url: papel.datos.url, foto: /^image\//i.test(fac?.llegada?.tipo ?? '') || /\.(jpe?g|png)$/i.test(fac?.llegada?.archivo ?? fac?.papel ?? ''), titulo: `El documento de la ${fac?.numero ?? 'factura'}` } : null) : undefined
   const puede = puedeGuardar({ guardando, validada, descartada })
+  // K07 · La franja, el asiento y «Más» de la contabilizada y la descartada.
+  const pagada = fac?.estado === 'pagada' || !!extra?.pagada
+  const franja = modo === 'contabilizada' ? franjaContabilizada({ numero: fac?.asiento?.numero ?? null, pagada, enErp10 })
+    : modo === 'descartada' ? franjaDescartada({ motivo: descarte?.motivo ?? null, quien: descarte?.quien ?? null }) : estado
+  const lineasValidado = (asientoReal?.apuntes ?? []).map((x) => ({ codigo: x.cuenta, nombre: x.nombreCuenta, debe: x.debe || null, haber: x.haber || null }))
+  const hayDocumento = !!documento
+  const opciones = opcionesDeMas({ modo, aMano, hayDocumento, porPagar: modo === 'contabilizada' && !pagada })
+  const docAccion = accionDocumento({ modo, hayDocumento })
+  const lineasHistorial = historial.datos ? lineasDelHistorial(historial.datos, validada ? { numero: fac?.asiento?.numero ?? null, cuando: asientoReal?.validadoEn ?? null, quien: asientoReal?.validadoPor ?? null } : null) : []
+  const alPulsarMas = (o: OpcionMas) => {
+    if (o.hace === 'completa') { setCompleta(true); return }
+    if (o.id === 'historial') setVerHistorial(invoiceId)
+    else if (o.id === 'abrir' && documento) window.open(documento.url, '_blank', 'noopener')
+    else if (o.id === 'recuperar') void recuperarla()
+    else if (o.id === 'documento') raiz.current?.querySelector<HTMLInputElement>(docAccion?.que === 'poner' ? '.kf-soltar input[type=file]' : '[data-prueba="cambiar-documento"]')?.click()
+  }
   const conceptoTexto = propuesta?.concepto ?? (prov ? `${b.numero || 'Factura'}-${prov.nombre}` : '')
 
   return (
@@ -524,24 +595,38 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       <header className="kf-cabecera">
         <h1>Factura recibida</h1>
         <span className="kf-cola">{cola}</span>
-        {!cargando && <EstadoFicha {...estado} />}
+        {!cargando && <EstadoFicha {...franja} />}
         <div className="kf-cabecera-botones">
           {!aMano && <>
-            <button type="button" className="kf-flecha" aria-label="La anterior" disabled={!anterior} onClick={() => anterior && salida.pedirSalir(() => ir(anterior))}>‹</button>
+            <button type="button" className="kf-flecha" aria-label="La anterior" disabled={!anterior} onClick={() => anterior && salida.pedirSalir(() => ir(anterior, undefined, anterior === deDonde?.vieneDe ? { despues: invoiceId } : undefined))}>‹</button>
             <button type="button" className="kf-flecha" aria-label="La siguiente" disabled={!siguiente} onClick={() => siguiente && salida.pedirSalir(() => ir(siguiente))}>›</button>
           </>}
-          <Mas aMano={aMano} abrirCompleta={() => setCompleta(true)} />
+          <Mas aMano={aMano} opciones={opciones} alPulsar={alPulsarMas} abrirCompleta={() => setCompleta(true)} />
           <button type="button" className="kf-guardar" data-guardar-y-siguiente disabled={!puede || cargando} onClick={() => void guardarYSiguiente()}>
             {guardando ? 'Guardando…' : 'Guardar y siguiente'} <kbd>Intro</kbd>
           </button>
         </div>
       </header>
       {aviso && <p className="kf-aviso" data-tono={aviso.tono} role="status" data-prueba="aviso-ficha">{aviso.texto}</p>}
+      {confirmarDoc?.de === invoiceId && (
+        <div data-prueba="confirmar-documento"><Duda fuerte="Confirma." texto={<>{docAccion?.que === 'cambiar_contabilizada' ? docAccion.confirmar : ''} El nuevo: «{confirmarDoc.file.name}». El asiento no cambia.</>}
+          principal={{ texto: 'Cambiarlo', hacer: () => void cambiarYa(confirmarDoc.file) }}
+          secundario={{ texto: 'Dejar el de antes', hacer: () => setConfirmarDoc(null) }} /></div>
+      )}
+      {verHistorial === invoiceId && (
+        <section className="kf-historial" role="dialog" aria-label="El historial de la factura" data-prueba="historial">
+          <header><h3>El historial de la {fac?.numero ?? 'factura'}</h3><button type="button" className="kf-enlace" onClick={() => setVerHistorial(null)}>Cerrar</button></header>
+          {historial.error ? <p className="kf-panel-nota" role="alert">{historial.error}</p>
+            : !historial.datos ? <p className="kf-panel-nota" aria-busy="true">Leyendo su historial…</p>
+            : lineasHistorial.length ? <ol>{lineasHistorial.map((x, i) => <li key={i}>{x.texto}<small>{x.cuando} · {x.quien}</small></li>)}</ol>
+            : <p className="kf-panel-nota">Aún no se ha cambiado nada de esta factura.</p>}
+        </section>
+      )}
       {salida.aviso}
       <div className="kf-cuerpo">
         <div className="kf-izquierda">
         <div className="kf-formulario">
-          {cargando ? <p className="kf-panel-nota" aria-busy="true">Abriendo la factura…</p> : <>
+          {cargando ? <p className="kf-panel-nota" aria-busy="true">Abriendo la factura…</p> : <fieldset className="kf-solo-lectura" disabled={soloLectura} data-solo-lectura={soloLectura ? 'si' : undefined}>
             <div className="kf-fila" style={{ gridTemplateColumns: '1.1fr 1.1fr 2.9fr 1.7fr' }}>
               <Casilla rotulo="Proveedor" origen={origen.proveedor} htmlFor="kf-proveedor" duda={!!emisor}>
                 <Buscador id="kf-proveedor" etiqueta="Proveedor" cargando={proveedoresL === null} enfocar={abrirProveedor} duda={!!emisor} valor={textoProv ?? (provId ? subcuenta || prov?.nombre || '' : '')} cuenta={subcuenta || null}
@@ -710,41 +795,45 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
               </div>
             </div>
 
-            {duda && (
+            {duda && !soloLectura && (
               <Duda texto={duda.texto}
                 principal={{ texto: `Dejar ${duda.dejar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.dejar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }}
                 secundario={{ texto: `Cambiar a ${duda.cambiar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.cambiar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }} />
             )}
 
-            {dudaPago && (
+            {dudaPago && !soloLectura && (
               <Duda texto={textoDudaPago(dudaPago, (c) => cuentasPago?.nombres.get(c) ?? '').texto}
                 principal={{ texto: `Dejar ${dudaPago.cuentas[0]}`, hacer: () => ed.poner('pagoCuenta', dudaPago.cuentas[0]) }}
                 secundario={{ texto: `Cambiar a ${dudaPago.cuentas[1]}`, hacer: () => ed.poner('pagoCuenta', dudaPago.cuentas[1]) }} />
             )}
 
-            <AsientoQueSale lineas={previa && totales.total !== 0 ? previa.lineas : []} etiqueta={etiqueta}
-              editar={!aMano && id ? { texto: 'Editar el asiento', hacer: () => setCompleta(true) } : null} />
-          </>}
+            {modo === 'contabilizada'
+              ? <AsientoQueSale lineas={lineasValidado} etiqueta={{ texto: etiquetaValidado(fac?.asiento?.numero ?? null), tono: 'bien' }} />
+              : <AsientoQueSale lineas={previa && totales.total !== 0 ? previa.lineas : []} etiqueta={etiqueta}
+                  editar={!aMano && id && !soloLectura ? { texto: 'Editar el asiento', hacer: () => setCompleta(true) } : null} />}
+          </fieldset>}
         </div>
         <AyudaTeclas />
         </div>
         <PanelDocumento documento={documento} acepta={ACEPTA_PAPEL} raya={{ usuario: userId }}
-          sinDocumento={{ marcado: b.sinPdf, motivo: b.motivoSinPdf, poner: (m, motivo) => { ed.poner('sinPdf', m); ed.poner('motivoSinPdf', m ? motivo : '') } }}
-          alElegir={(file) => { setFichero({ file, url: URL.createObjectURL(file) }); ed.poner('documento', file.name) }}
+          sinDocumento={soloLectura ? undefined : { marcado: b.sinPdf, motivo: b.motivoSinPdf, poner: (m, motivo) => { ed.poner('sinPdf', m); ed.poner('motivoSinPdf', m ? motivo : '') } }}
+          alElegir={docAccion?.que === 'poner' ? (file) => { if (modo === 'contabilizada') { setConfirmarDoc({ de: invoiceId, file }); return } setFichero({ file, url: URL.createObjectURL(file) }); ed.poner('documento', file.name) } : undefined}
+          alCambiar={docAccion && docAccion.que !== 'poner' ? alCambiarDocumento : undefined} cambiando={cambiandoDoc}
           otra={{ nombre: 'El mayor del proveedor', contenido: <MayorDelProveedor apuntes={mayor?.apuntes ?? null} subcuenta={subcuenta} hay={!!provId} /> }} />
       </div>
     </div>
   )
 }
 
-function Mas({ aMano, abrirCompleta }: { aMano: boolean; abrirCompleta: () => void }) {
+function Mas({ aMano, opciones, alPulsar, abrirCompleta }: { aMano: boolean; opciones: readonly OpcionMas[]; alPulsar: (o: OpcionMas) => void; abrirCompleta: () => void }) {
   const [abierto, setAbierto] = useState(false)
   return (
     <div className="kf-mas">
       <button type="button" className="kf-boton-hueco" aria-expanded={abierto} onClick={() => setAbierto((x) => !x)}>Más</button>
       {abierto && (
         <ul className="kf-mas-menu" onMouseLeave={() => setAbierto(false)}>
-          {!aMano && <li><button type="button" onClick={() => { setAbierto(false); abrirCompleta() }}>La ficha completa (abono, alta del proveedor, historial, descartar…)</button></li>}
+          {opciones.map((o) => <li key={o.id}><button type="button" data-mas={o.id} onClick={() => { setAbierto(false); alPulsar(o) }}>{o.texto}{o.dato && <small> · {o.dato}</small>}</button></li>)}
+          {!aMano && <li><button type="button" onClick={() => { setAbierto(false); abrirCompleta() }}>La ficha completa (lo que aún no está aquí)</button></li>}
           <li><Link to={rutaDocumentos('por-revisar')}>Volver a la lista de por revisar</Link></li>
         </ul>
       )}
