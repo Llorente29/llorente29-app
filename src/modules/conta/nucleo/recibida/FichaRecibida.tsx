@@ -755,7 +755,10 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
               </>)}
               {/* K10b · El tipo de operación, por factura (como ERP10): nace con el de su ficha; cambiarlo aquí no toca la ficha. */}
               <Casilla rotulo="Tipo de operación" htmlFor="kf-operacion"
-                accion={origenOp ? <span className="kf-origen" data-prueba="origen-operacion">{origenOp === 'De su ficha' && provId ? <Link to={`/conta/proveedores/${provId}`}>De su ficha</Link> : origenOp}</span> : undefined}>
+                accion={origenOp ? <span className="kf-origen" data-prueba="origen-operacion" title={origenOp}>
+                  {/* A 1366 «Cambiado en esta factura» corta el rótulo (Julio, 21/11): «Cambiado», y entero al pasar el ratón. */}
+                  {origenOp === 'De su ficha' ? (provId ? <Link to={`/conta/proveedores/${provId}`}>De su ficha</Link> : 'De su ficha') : 'Cambiado'}
+                </span> : undefined}>
                 {cabEscribible ? (
                   <select id="kf-operacion" aria-label="Tipo de operación" value={opFactura ?? opFicha ?? ''} disabled={guardandoCab} title={textoDeOperacion(opFactura ?? opFicha)}
                     onChange={(e) => { const v = esOperacion(e.target.value) ? e.target.value : null; void ponerCabecera({ operacion: v === opFicha ? null : v }) }}>
