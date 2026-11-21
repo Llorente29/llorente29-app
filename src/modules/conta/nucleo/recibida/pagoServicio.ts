@@ -28,7 +28,8 @@ async function leer(q: PromiseLike<{ data: unknown; error: { message: string } |
   if (error) throw new Error(mensaje(`No se ha podido leer ${que}`, error))
   return (data ?? []) as Fila[]
 }
-const nombreDe = (c: Fila) => String(c.plain_name ?? c.name ?? '')
+// K08 · El nombre guardado en el plan, nunca su explicación (Julio, 21/11).
+const nombreDe = (c: Fila) => String(c.name ?? '')
 
 export interface CuentasDePago {
   /** Las que salen con F4: grupo 5 y las 430 de las plataformas. */

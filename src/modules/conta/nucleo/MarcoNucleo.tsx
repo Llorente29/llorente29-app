@@ -65,8 +65,8 @@ import type { CambiosDePestana } from '@/modules/conta/diseno/plantillas/pestana
 import { cintaVisible, modulosVisibles, MODULOS, sitioDe, type Boton, type IdModulo, type Modulo } from './mapa'
 import { conEjercicio, ejercicioAEnsenar } from './ejercicio'
 import { frasesDeEstado } from './estado'
-import { fraseAtascados } from '@/modules/conta/erp10/salidaSola'
-import { leerAtascadosErp10 } from '@/modules/conta/services/erp10ApiService'
+import { fraseErp10Barra } from '@/modules/conta/erp10/salidaSola'
+import { leerAtascadosErp10, leerSalidaDeLaEmpresa } from '@/modules/conta/services/erp10ApiService'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { bancosCuadrados } from './bancos/servicio'
 import {
@@ -404,8 +404,10 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
   const [cincoMinutos, setCincoMinutos] = useState(0)
   useEffect(() => { const t = setInterval(() => setCincoMinutos((x) => x + 1), 300_000); return () => clearInterval(t) }, [])
   const atascados = useLeer(accountId && activa ? () => leerAtascadosErp10(activa.id) : null, `${accountId}:${activa?.id}:erp10-atascados:${cincoMinutos}`).datos ?? 0
-  const fraseErp10 = fraseAtascados(atascados)
-  if (fraseErp10) estadoFrases.push({ id: 'erp10', tono: 'mira', ...fraseErp10, ruta: rutaConta('libros/cierre/salida-erp10') })
+  // K08 · Ámbar solo si algo ha fallado; esperando la primera salida (o con la salida apagada), en gris.
+  const salidaEmpresa = useLeer(accountId && activa && atascados > 0 ? () => leerSalidaDeLaEmpresa(accountId, activa.id) : null, `${accountId}:${activa?.id}:erp10-salida:${atascados > 0 ? 'si' : 'no'}:${cincoMinutos}`).datos ?? null
+  const fraseErp10 = salidaEmpresa ? fraseErp10Barra({ atascados, salida: salidaEmpresa.salida, pruebaHecha: salidaEmpresa.pruebaHecha }) : null
+  if (fraseErp10) estadoFrases.push({ id: 'erp10', ...fraseErp10, ruta: rutaConta('libros/cierre/salida-erp10') })
   const actual = sitio?.tipo === 'cinta' ? sitio.boton.id : null
   const enFila = estado.abiertas.map((p) => ({ id: p.id, nombre: nombreDe(p.id), conCambios: !!cambios[llaveDe(empresaVista, p.id)], cerrable: p.id !== INICIO }))
   return (

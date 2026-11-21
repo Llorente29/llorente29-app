@@ -101,6 +101,20 @@ export function listaDeHoy(xs: readonly SalidoHoy[]): FilaHoy[] {
   }))
 }
 
+/**
+ * K08 · La frase de la barra de abajo, con su tono. El ámbar, solo cuando algo ha fallado de verdad: lo
+ * validado que lleva más de una hora sin salir con la salida encendida y la primera ya hecha. Si la empresa
+ * espera a que alguien mande su primera salida (X10f), en gris: «Esperando la primera salida a ERP10 ·
+ * Mandarla». Con la salida apagada, en gris también: no ha fallado nada.
+ */
+export function fraseErp10Barra(o: { atascados: number; salida: { encendida: boolean } | null; pruebaHecha: boolean }): { tono: 'mira' | 'gris'; fuerte: string; resto: string } | null {
+  if (o.atascados <= 0) return null
+  if (o.salida && !o.salida.encendida) return { tono: 'gris', fuerte: 'La salida a ERP10 está apagada', resto: '· sale cuando se encienda' }
+  if (o.salida && !o.pruebaHecha) return { tono: 'gris', fuerte: 'Esperando la primera salida a ERP10', resto: '· Mandarla' }
+  const f = fraseAtascados(o.atascados)
+  return f ? { tono: 'mira', ...f } : null
+}
+
 /** La frase de la barra de abajo: lo que lleva más de una hora validado sin salir (o null si no hay nada). */
 export function fraseAtascados(n: number): { fuerte: string; resto: string } | null {
   if (n <= 0) return null

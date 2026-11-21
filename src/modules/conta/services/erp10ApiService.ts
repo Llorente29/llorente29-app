@@ -322,6 +322,25 @@ export async function leerSalidoHoy(accountId: string, companyId: string): Promi
   return ((data ?? []) as Fila[]).map(aSalidoHoy)
 }
 
+/** K08 · La salida a ERP10 de la empresa (null: no tiene) y si ya hizo su primera salida (la misma regla que la ficha). */
+export async function leerSalidaDeLaEmpresa(accountId: string, companyId: string): Promise<{ salida: { encendida: boolean } | null; pruebaHecha: boolean }> {
+  hayBase()
+  const [z, primera] = await Promise.all([
+    tabla('conta_erp10_salida_empresa').select('encendida').eq('account_id', accountId).eq('company_id', companyId).maybeSingle(),
+    tabla('conta_erp10_envio').select('creado_en').eq('account_id', accountId).eq('company_id', companyId).eq('estado', 'en_erp10').order('creado_en', { ascending: true }).limit(1),
+  ])
+  for (const r of [z, primera]) if (r.error) throw new Error(`No se ha podido leer la salida a ERP10: ${r.error.message}`)
+  const desde = ((primera.data ?? []) as Fila[])[0]?.creado_en as string | undefined
+  let pruebaHecha = false
+  if (desde) {
+    const { data: g, error } = await tabla('conta_erp10_igualado').select('id').eq('account_id', accountId).eq('company_id', companyId).gt('igualado_en', desde).limit(1)
+    if (error) throw new Error(`No se ha podido leer lo igualado: ${error.message}`)
+    pruebaHecha = ((g ?? []) as Fila[]).length > 0
+  }
+  const s = z.data as Fila | null
+  return { salida: s ? { encendida: s.encendida === true } : null, pruebaHecha }
+}
+
 /** Cuántos asientos llevan más de una hora validados sin salir a ERP10 (la barra de abajo). */
 export async function leerAtascadosErp10(companyId: string): Promise<number> {
   hayBase()

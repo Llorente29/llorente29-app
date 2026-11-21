@@ -756,7 +756,7 @@ export async function ponerPapelRecibida(f: Pick<FacturaRevisar, 'id' | 'account
   let ruta: string
   try { [ruta] = await uploadReceiptFiles(f.account_id, [fichero]) } catch (e) { return { hecho: false, falta: false, texto: `no se ha podido subir «${fichero.name}» (${motivo(e)})` } }
   const x = await llamar<{ texto?: string }>('conta_recibida_papel_poner', { p_invoice: f.id, p_ruta: ruta, p_nombre: fichero.name, p_quien_nombre: quien })
-  if (x.falta) return { hecho: false, falta: true, texto: 'la base aún no tiene con qué enlazar un PDF nuevo (la tanda D03, 0790): se ha subido, pero la factura sigue sin él' }
+  if (x.falta) return { hecho: false, falta: true, texto: 'la base de datos aún no está preparada para enlazar un PDF nuevo: se ha subido, pero la factura sigue sin él' }
   if (x.error) return { hecho: false, falta: false, texto: x.error }
   return { hecho: true, falta: false, texto: typeof x.datos?.texto === 'string' ? x.datos.texto : `PDF: «${fichero.name}»` }
 }
@@ -764,7 +764,7 @@ export async function ponerPapelRecibida(f: Pick<FacturaRevisar, 'id' | 'account
 /** «Sin PDF» con su motivo (o quitarlo). */
 export async function sinPapelRecibida(invoiceId: string, sin: boolean, motivoSin: string, quien: string | null): Promise<{ hecho: boolean; falta: boolean; texto: string }> {
   const x = await llamar<{ texto?: string }>('conta_recibida_sin_papel', { p_invoice: invoiceId, p_sin: sin, p_motivo: sin ? motivoSin.trim() : null, p_quien_nombre: quien })
-  if (x.falta) return { hecho: false, falta: true, texto: 'la base aún no tiene dónde guardar «Sin PDF» (la tanda D03, 0790)' }
+  if (x.falta) return { hecho: false, falta: true, texto: 'la base de datos aún no está preparada para guardar «Sin PDF»' }
   if (x.error) return { hecho: false, falta: false, texto: x.error }
   return { hecho: true, falta: false, texto: typeof x.datos?.texto === 'string' ? x.datos.texto : sin ? `Sin PDF: «${motivoSin.trim()}»` : 'Ya no está marcada «Sin PDF»' }
 }

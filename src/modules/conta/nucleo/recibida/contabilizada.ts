@@ -129,3 +129,13 @@ export function laAnterior(o: { vieneDe: string | null; actual: string; enLaCola
   if (o.vieneDe && o.vieneDe !== o.actual) return o.vieneDe
   return o.enLaCola
 }
+
+/**
+ * K08 · Lo que enseña la casilla «Proveedor»: su subcuenta, como la maqueta («40000007»), también en una
+ * contabilizada; el nombre va entero en la casilla «Nombre», al lado (Julio, 21/11: el nombre no cabe en
+ * los 106 px de la casilla). Sin subcuenta todavía, la que le tocará al validar («40000001»: la línea del
+ * asiento dice «Será la…»). Sin ninguna de las dos, el nombre.
+ */
+export function textoCasillaProveedor(o: { subcuenta: string; futura: string; nombre: string | null }): string {
+  return o.subcuenta || o.futura || o.nombre || ''
+}
