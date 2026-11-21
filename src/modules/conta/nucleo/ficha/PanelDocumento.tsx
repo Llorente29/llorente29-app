@@ -22,6 +22,9 @@
 //     documento, la lupa vuelve al 100 %: ajustado al ancho de su hueco.
 //   · Lo que dice sin documento, el de cada pantalla (sinDocumentoTexto): en el
 //     asiento, «Este asiento no tiene justificante».
+//   · K07 · «Cambiar el documento» cuando ya hay uno (alCambiar): un enlace
+//     pequeño junto a «Pantalla completa», y soltar un fichero encima del que
+//     hay. Qué hace con él lo decide la ficha (al guardar, o ya, confirmando).
 
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
@@ -31,7 +34,7 @@ const ZOOM = [50, 75, 100, 125, 150, 200] as const
 
 export interface SinDocumento { marcado: boolean; motivo: string; poner: (marcado: boolean, motivo: string) => void }
 
-export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar, tituloSoltar, sinDocumento, otraPrimero = false, accion, sinDocumentoTexto, raya }: {
+export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar, tituloSoltar, sinDocumento, otraPrimero = false, accion, sinDocumentoTexto, raya, alCambiar, cambiando = false }: {
   /** El documento: su dirección y si es una foto; null = sin documento; undefined = cargando. */
   documento: { url: string; foto: boolean; titulo: string } | null | undefined
   /** La segunda pestaña: su nombre y lo que enseña. */
@@ -52,6 +55,10 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
   sinDocumentoTexto?: string
   /** K06 · La raya que se arrastra, y de quién es el reparto que se recuerda (su id de usuario; null: no se recuerda). */
   raya?: { usuario: string | null }
+  /** K07 · «Cambiar el documento» cuando ya hay uno: el enlace junto a «Pantalla completa» y soltar un fichero encima. Sin esto, no se cambia. */
+  alCambiar?: (f: File) => void
+  /** K07 · Mientras se sube el nuevo (el enlace lo dice y no se puede pulsar otra vez). */
+  cambiando?: boolean
 }) {
   const [ver, setVer] = useState<'documento' | 'otra'>(otraPrimero ? 'otra' : 'documento')
   const [zoom, setZoom] = useState<(typeof ZOOM)[number]>(100)
@@ -62,6 +69,7 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
   const [encima, setEncima] = useState(false)
   const caja = useRef<HTMLDivElement>(null)
   const elegir = useRef<HTMLInputElement>(null)
+  const cambiar = useRef<HTMLInputElement>(null)
   const i = ZOOM.indexOf(zoom)
   const completa = () => {
     if (documento) { window.open(documento.url, '_blank', 'noopener'); return }
@@ -82,13 +90,22 @@ export function PanelDocumento({ documento, otra, alElegir, acepta, textoSoltar,
         <button type="button" aria-label="Reducir" disabled={i <= 0 || ver !== 'documento'} onClick={() => setZoom(ZOOM[i - 1])}>−</button>
         <span aria-live="polite">{zoom} %</span>
         <button type="button" aria-label="Ampliar" disabled={i >= ZOOM.length - 1 || ver !== 'documento'} onClick={() => setZoom(ZOOM[i + 1])}>+</button>
+        {alCambiar && documento && (
+          <button type="button" className="kf-enlace kf-cambiar-doc" disabled={cambiando} onClick={() => cambiar.current?.click()}>
+            {cambiando ? 'Cambiando el documento…' : 'Cambiar el documento'}
+          </button>
+        )}
+        {alCambiar && <input ref={cambiar} type="file" accept={acepta} hidden aria-label="El documento nuevo" data-prueba="cambiar-documento"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) alCambiar(f); e.target.value = '' }} />}
         <button type="button" className="kf-boton-hueco" onClick={completa}>Pantalla completa</button>
       </div>
       <div className="kf-panel-cuerpo" data-ver={ver}>
         {ver === 'otra' ? otra.contenido
           : documento === undefined ? <p className="kf-panel-nota" aria-busy="true">Cargando el documento…</p>
           : documento ? (
-            <div className="kf-hoja" style={{ width: `${zoom}%` }}>
+            <div className="kf-hoja" style={{ width: `${zoom}%` }} data-encima={alCambiar && encima ? 'si' : undefined}
+              onDragOver={alCambiar && !cambiando ? (e) => { e.preventDefault(); setEncima(true) } : undefined} onDragLeave={alCambiar ? () => setEncima(false) : undefined}
+              onDrop={alCambiar && !cambiando ? (e) => { e.preventDefault(); setEncima(false); const f = e.dataTransfer.files[0]; if (f) alCambiar(f) } : undefined}>
               {documento.foto ? <img src={documento.url} alt={documento.titulo} /> : <PapelPdf url={documento.url} titulo={documento.titulo} />}
             </div>
           ) : alElegir ? (
