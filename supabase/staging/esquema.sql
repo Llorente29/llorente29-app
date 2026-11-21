@@ -31545,8 +31545,15 @@ begin
     if new.role in ('gasto', 'suplidos') and v_plantilla not like '6%' then
       raise exception 'Sus facturas y sus suplidos van a una cuenta de gastos (grupo 6); % no lo es.', v_plantilla using errcode = '23514';
     end if;
-    if new.role = 'pago' and v_plantilla not like '57%' and v_plantilla not like '43%' then
+    if new.role = 'pago' and new.entity <> 'supplier' and v_plantilla not like '57%' and v_plantilla not like '43%' then   -- K10: al proveedor, cualquier subcuenta
       raise exception 'Se le paga desde un banco o caja (57) o compensando con lo que te debe (43); % no lo es.', v_plantilla using errcode = '23514';
+    end if;
+    -- K10: la cuenta de pago de un proveedor, cualquier subcuenta menos la suya propia.
+    if new.role = 'pago' and new.entity = 'supplier' and exists (
+         select 1 from public.company_account_link l
+          where l.company_id = new.company_id and l.entity = 'supplier' and l.entity_id = new.entity_id
+            and l.role = 'principal' and l.company_account_id = new.company_account_id) then
+      raise exception 'Esa es la cuenta del propio proveedor: no se le paga con ella.' using errcode = '23514';
     end if;
     -- No se enlaza a una cuenta oculta ni cerrada.
     if (select status from public.company_account where id = new.company_account_id) <> 'activa' then
@@ -49632,6 +49639,47 @@ $_$;
 
 
 --
+-- Name: conta_k10_pago_desde_plataforma(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_k10_pago_desde_plataforma() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_n integer;
+begin
+  with candidatos as (
+    select distinct on (l.company_id, pr.supplier_id)
+           l.account_id, l.company_id, pr.supplier_id, l.company_account_id
+      from public.party_role pf
+      join public.party_role pr on pr.account_id = pf.account_id and pr.party_id = pf.party_id and pr.role = 'supplier' and pr.supplier_id is not null
+      join public.company_account_link l on l.account_id = pf.account_id and l.entity = 'customer' and l.entity_id = pf.party_id::text and l.role = 'principal'
+      join public.company_account a on a.id = l.company_account_id and a.account_id = l.account_id and a.code like '430%'
+     where pf.role = 'platform'
+       and not exists (select 1 from public.company_account_link x
+                        where x.company_id = l.company_id and x.entity = 'supplier' and x.entity_id = pr.supplier_id::text and x.role = 'pago')
+     order by l.company_id, pr.supplier_id, l.created_at
+  ), puestos as (
+    insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+    select c.account_id, c.company_id, c.company_account_id, 'supplier', c.supplier_id::text, 'pago', 'manual' from candidatos c
+    on conflict (company_id, entity, entity_id, role) do nothing
+    returning id, account_id, company_id, entity_id, company_account_id
+  )
+  insert into public.conta_k10_pago_desde_plataforma (link_id, account_id, company_id, supplier_id, company_account_id)
+  select p.id, p.account_id, p.company_id, p.entity_id::uuid, p.company_account_id from puestos p;
+  get diagnostics v_n = row_count;
+  return v_n;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_k10_pago_desde_plataforma(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_k10_pago_desde_plataforma() IS 'K10 · Pone la 430 de su plataforma como «Cuenta de pago» (company_account_link, papel «pago») a los proveedores de una plataforma que aún no la tienen en esa empresa, y apunta cada enlace en conta_k10_pago_desde_plataforma. Se puede pasar dos veces: la segunda no pone nada. Devuelve cuántos ha puesto.';
+
+
+--
 -- Name: conta_lectura_estado(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -58727,7 +58775,7 @@ begin
   -- La cuenta de gasto: en el asiento, un apunte que no sea del proveedor ni de impuestos (grupo 4).
   if p_entry is not null then
     select count(*) into v_gasto from public.journal_line l join public.company_account a on a.id = l.company_account_id
-     where l.entry_id = p_entry and a.code !~ '^4';
+     where l.entry_id = p_entry and a.code !~ '^(40|41|472|477|4751)';   -- K10: la 480 y el 21x también son contrapartida
     if v_gasto = 0 then
       orden := 24; codigo := 'falta_gasto'; motivo := 'Falta la cuenta de gasto.'; return next;
     end if;
@@ -62079,6 +62127,78 @@ COMMENT ON FUNCTION public.conta_tpv_dia_ejemplo(p_dia uuid, p_cuentas jsonb, p_
 
 
 --
+-- Name: conta_tpv_dia_ficha(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tpv_dia_ficha(p_dia uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  d public.conta_tpv_dia; v_limite numeric; v_motivo text; v_cobro uuid; v_out jsonb;
+begin
+  select * into d from public.conta_tpv_dia where id = p_dia;
+  if d.id is null or not (public.belongs_to_account(d.account_id) or coalesce(auth.role(), '') = 'service_role') then
+    raise exception 'Ese día no es de tu cuenta.' using errcode = '42501';
+  end if;
+  -- Reglamento de facturación (RD 1619/2012), art. 4: factura simplificada hasta 400 € (IVA incluido) o,
+  -- en hostelería y restauración, hasta 3.000 €.
+  v_limite := case when (select c.sector from public.company c where c.id = d.company_id) = 'hosteleria' then 3000 else 400 end;
+  if d.estado = 'guardado' then v_motivo := public._conta_tpv_propuesta(d.id) ->> 'sin_propuesta'; end if;
+  select k.cobro_entry_id into v_cobro from public.conta_dia_cobro k where k.factura_entry_id = d.entry_id;
+
+  select jsonb_build_object(
+    'id', d.id, 'company_id', d.company_id, 'dia', d.dia, 'programa', d.programa,
+    'programa_nombre', case d.programa when 'revo' then 'Revo' else initcap(d.programa) end,
+    'estado', case when d.estado = 'contabilizado' then 'validado' when v_motivo is not null then 'en_espera' else 'por_validar' end,
+    'motivo', v_motivo,
+    'documentos', d.documentos, 'primero', d.primer_numero, 'ultimo', d.ultimo_numero,
+    'base', d.base, 'cuota', d.cuota, 'total', d.total,
+    'subido_por', d.subido_por_nombre, 'subido_en', d.subido_en,
+    'subida', (select jsonb_build_object('id', s.id, 'cuando', s.created_at, 'quien', s.created_by_name, 'dias', s.dias)
+                 from public.conta_tpv_subida s where s.id = d.subida_id),
+    'contadores', coalesce((select jsonb_agg(jsonb_build_object('contador', x.contador, 'facturas', x.n, 'primero', x.a, 'ultimo', x.b, 'total', x.t) order by x.contador)
+                     from (select contador, count(*) as n, min(numero) as a, max(numero) as b, sum(total) as t
+                             from public.conta_tpv_documento where dia_id = d.id group by contador) x), '[]'::jsonb),
+    'con_nif', coalesce((select jsonb_agg(jsonb_build_object('numero', x.numero, 'contador', x.contador, 'nif', x.cliente_nif, 'cliente', x.cliente_nombre,
+                                                         'base', x.base, 'cuota', x.cuota, 'total', x.total) order by x.numero)
+                    from public.conta_tpv_documento x where x.dia_id = d.id and x.cliente_nif is not null), '[]'::jsonb),
+    'devoluciones', coalesce((select jsonb_agg(jsonb_build_object('numero', x.numero, 'contador', x.contador, 'total', x.total) order by x.numero)
+                    from public.conta_tpv_documento x where x.dia_id = d.id and x.total < 0), '[]'::jsonb),
+    'sobre_limite', coalesce((select jsonb_agg(jsonb_build_object('numero', x.numero, 'total', x.total) order by x.numero)
+                    from public.conta_tpv_documento x where x.dia_id = d.id and x.total > v_limite and x.cliente_nif is null), '[]'::jsonb),
+    'limite', v_limite,
+    'iva', coalesce((select jsonb_agg(jsonb_build_object('tipo', y.tipo, 'base', y.b, 'cuota', y.q, 'facturas', y.n) order by y.tipo)
+                from (select i.tipo, sum(i.base) as b, sum(i.cuota) as q, count(distinct i.documento_id) as n
+                        from public.conta_tpv_impuesto i join public.conta_tpv_documento x on x.id = i.documento_id
+                       where x.dia_id = d.id group by i.tipo) y), '[]'::jsonb),
+    'cobros', coalesce((select jsonb_agg(jsonb_build_object('forma', z.forma, 'importe', z.importe, 'pagos', z.n,
+                                   'cuenta', (select a.code from public.conta_tpv_forma_cuenta f join public.company_account a on a.id = f.company_account_id
+                                               where f.company_id = d.company_id and f.forma = z.forma and f.canal is null limit 1),
+                                   'nombre', (select a.name from public.conta_tpv_forma_cuenta f join public.company_account a on a.id = f.company_account_id
+                                               where f.company_id = d.company_id and f.forma = z.forma and f.canal is null limit 1),
+                                   'por_canal', exists (select 1 from public.conta_tpv_forma_cuenta f where f.company_id = d.company_id and f.forma = z.forma and f.canal is not null))
+                                 order by z.forma)
+                   from (select c.forma, sum(c.importe) as importe, count(*) as n from public.conta_tpv_cobro c where c.dia_id = d.id group by c.forma) z), '[]'::jsonb),
+    'factura', (select jsonb_build_object('id', e.id, 'serie', e.series, 'numero', e.number, 'estado', e.status) from public.journal_entry e where e.id = d.entry_id),
+    'cobro', (select jsonb_build_object('id', e.id, 'serie', e.series, 'numero', e.number, 'estado', e.status) from public.journal_entry e where e.id = v_cobro),
+    'pdf', (select jsonb_build_object('ruta', j.storage_path, 'nombre', j.file_name) from public.journal_entry_document j
+             where j.entry_id = d.entry_id and j.kind = 'resumen_ventas' order by j.created_at desc limit 1),
+    'erp10', (select jsonb_build_object('estado', p.estado, 'serie', p.erp10_serie, 'documento', p.erp10_documento, 'cuando', p.creado_en)
+                from public.conta_erp10_salida_partida p where p.entry_id = d.entry_id order by p.creado_en desc limit 1))
+    into v_out;
+  return v_out;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_tpv_dia_ficha(p_dia uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_tpv_dia_ficha(p_dia uuid) IS 'R15: un día del TPV por dentro, para su ficha: facturas por contador, con NIF y devoluciones, IVA por tipo, cobros con su cuenta, sus dos asientos, su PDF, ERP10, su subida y los tickets por encima del límite de la factura simplificada. Solo lee.';
+
+
+--
 -- Name: conta_tpv_dia_guardar(uuid, date, text, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -62576,6 +62696,48 @@ COMMENT ON FUNCTION public.conta_tpv_dias(p_company uuid, p_desde date, p_hasta 
 
 
 --
+-- Name: conta_tpv_emitidas(uuid, date, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tpv_emitidas(p_company uuid, p_desde date DEFAULT NULL::date, p_hasta date DEFAULT NULL::date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not (public.belongs_to_account(v_acc) or coalesce(auth.role(), '') = 'service_role') then
+    raise exception 'Esa empresa no es tuya.' using errcode = '42501';
+  end if;
+  return coalesce((
+    select jsonb_agg(f order by f->>'dia' desc, f->>'orden', f->>'numero') from (
+      select jsonb_build_object('clase', 'dia', 'orden', '0', 'dia_id', d.id, 'dia', d.dia, 'programa', d.programa,
+               'programa_nombre', case d.programa when 'revo' then 'Revo' else initcap(d.programa) end,
+               'numero', d.primer_numero, 'primero', d.primer_numero, 'ultimo', d.ultimo_numero, 'facturas', d.documentos,
+               'base', d.base, 'cuota', d.cuota, 'total', d.total, 'asiento_id', d.entry_id,
+               'pdf', (select j.storage_path from public.journal_entry_document j where j.entry_id = d.entry_id and j.kind = 'resumen_ventas' order by j.created_at desc limit 1)) as f
+        from public.conta_tpv_dia d
+       where d.company_id = p_company and d.account_id = v_acc and d.estado = 'contabilizado'
+         and (p_desde is null or d.dia >= p_desde) and (p_hasta is null or d.dia <= p_hasta)
+      union all
+      select jsonb_build_object('clase', 'nif', 'orden', '1', 'dia_id', d.id, 'dia', d.dia, 'programa', d.programa,
+               'numero', x.numero, 'contador', x.contador, 'nif', x.cliente_nif, 'cliente', x.cliente_nombre,
+               'base', x.base, 'cuota', x.cuota, 'total', x.total, 'asiento_id', d.entry_id)
+        from public.conta_tpv_dia d join public.conta_tpv_documento x on x.dia_id = d.id and x.cliente_nif is not null
+       where d.company_id = p_company and d.account_id = v_acc and d.estado = 'contabilizado'
+         and (p_desde is null or d.dia >= p_desde) and (p_hasta is null or d.dia <= p_hasta)
+    ) z), '[]'::jsonb);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_tpv_emitidas(p_company uuid, p_desde date, p_hasta date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_tpv_emitidas(p_company uuid, p_desde date, p_hasta date) IS 'R15: los días del TPV contabilizados como facturas expedidas (una fila por día, con su rango y su PDF) y sus facturas con NIF (una fila cada una), para «Facturas emitidas». Solo lee; no son customer_invoice y no van a Verifactu.';
+
+
+--
 -- Name: conta_tpv_factura_de(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -62754,6 +62916,39 @@ $$;
 --
 
 COMMENT ON FUNCTION public.conta_tpv_formas_guardar(p_company uuid, p_cuentas jsonb, p_quien_nombre text) IS 'R06: guarda a qué cuenta va cada forma de pago del TPV y dice qué días pasan a «Listo para validar».';
+
+
+--
+-- Name: conta_tpv_subida_apuntar(uuid, uuid[], text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tpv_subida_apuntar(p_company uuid, p_dias uuid[], p_programa text, p_quien_nombre text DEFAULT NULL::text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid; v_id uuid; v_n int;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not (public.belongs_to_account(v_acc) or coalesce(auth.role(), '') = 'service_role') then
+    raise exception 'Esa empresa no es tuya.' using errcode = '42501';
+  end if;
+  if coalesce(btrim(p_programa), '') = '' then raise exception 'Falta el programa del TPV.' using errcode = '22023'; end if;
+  insert into public.conta_tpv_subida (account_id, company_id, programa, created_by, created_by_name)
+  values (v_acc, p_company, btrim(p_programa), auth.uid(), coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor()))
+  returning id into v_id;
+  update public.conta_tpv_dia set subida_id = v_id
+   where company_id = p_company and account_id = v_acc and id = any(coalesce(p_dias, '{}'));
+  get diagnostics v_n = row_count;
+  update public.conta_tpv_subida set dias = v_n where id = v_id;
+  return v_id;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_tpv_subida_apuntar(p_company uuid, p_dias uuid[], p_programa text, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_tpv_subida_apuntar(p_company uuid, p_dias uuid[], p_programa text, p_quien_nombre text) IS 'R15: apunta una subida de ventas del TPV y los días que entraron en ella (conta_tpv_dia.subida_id). Devuelve su identificador.';
 
 
 --
@@ -118934,6 +119129,27 @@ COMMENT ON TABLE public.conta_gestoria_union IS 'G01b · Cada vez que la unión 
 
 
 --
+-- Name: conta_k10_pago_desde_plataforma; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_k10_pago_desde_plataforma (
+    link_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    supplier_id uuid NOT NULL,
+    company_account_id uuid NOT NULL,
+    at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_k10_pago_desde_plataforma; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_k10_pago_desde_plataforma IS 'K10 · Los enlaces «pago» que la tanda 1650 puso a los proveedores de una plataforma (su 430, que antes se proponía por ser plataforma). Para que la vuelta atrás quite esos y solo esos.';
+
+
+--
 -- Name: conta_lectura_estado; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -121094,6 +121310,7 @@ CREATE TABLE public.conta_tpv_dia (
     subido_por_nombre text,
     subido_en timestamp with time zone DEFAULT now() NOT NULL,
     entry_id uuid,
+    subida_id uuid,
     CONSTRAINT conta_tpv_dia_documentos_check CHECK ((documentos > 0)),
     CONSTRAINT conta_tpv_dia_estado_check CHECK ((estado = ANY (ARRAY['guardado'::text, 'contabilizado'::text]))),
     CONSTRAINT conta_tpv_dia_programa_check CHECK ((programa = 'revo'::text)),
@@ -121120,6 +121337,13 @@ COMMENT ON COLUMN public.conta_tpv_dia.estado IS 'guardado: se puede sustituir s
 --
 
 COMMENT ON COLUMN public.conta_tpv_dia.entry_id IS 'R05: el asiento del día, puesto al validarlo (conta_tpv_dia_validar). Si se anula, vuelve a nulo y el día a «guardado».';
+
+
+--
+-- Name: COLUMN conta_tpv_dia.subida_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_tpv_dia.subida_id IS 'R15. La subida en la que entró el día (la última que lo guardó). Nulo en los subidos antes del R15.';
 
 
 --
@@ -121225,6 +121449,30 @@ CREATE TABLE public.conta_tpv_impuesto (
 --
 
 COMMENT ON TABLE public.conta_tpv_impuesto IS 'R03: un renglón por factura del TPV y tipo de IVA, con su base y su cuota.';
+
+
+--
+-- Name: conta_tpv_subida; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_tpv_subida (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    programa text NOT NULL,
+    dias integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    created_by_name text,
+    CONSTRAINT conta_tpv_subida_dias_check CHECK ((dias >= 0))
+);
+
+
+--
+-- Name: TABLE conta_tpv_subida; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_tpv_subida IS 'R15. Cada subida de ventas del TPV, con su identificador: los días que entraron en ella llevan conta_tpv_dia.subida_id (y sus asientos, por el día). Para deshacer en grupo lo que entró en una subida.';
 
 
 --
@@ -135845,6 +136093,14 @@ ALTER TABLE ONLY public.conta_gestoria_union
 
 
 --
+-- Name: conta_k10_pago_desde_plataforma conta_k10_pago_desde_plataforma_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_k10_pago_desde_plataforma
+    ADD CONSTRAINT conta_k10_pago_desde_plataforma_pkey PRIMARY KEY (link_id);
+
+
+--
 -- Name: conta_lectura_estado conta_lectura_estado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -136578,6 +136834,14 @@ ALTER TABLE ONLY public.conta_tpv_impuesto
 
 ALTER TABLE ONLY public.conta_tpv_impuesto
     ADD CONSTRAINT conta_tpv_impuesto_uno UNIQUE (documento_id, tipo);
+
+
+--
+-- Name: conta_tpv_subida conta_tpv_subida_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_subida
+    ADD CONSTRAINT conta_tpv_subida_pkey PRIMARY KEY (id);
 
 
 --
@@ -143440,6 +143704,20 @@ CREATE INDEX idx_compliance_reminder_log_document ON public.compliance_reminder_
 --
 
 CREATE INDEX idx_conta_proveedor_solo_cuenta ON public.conta_proveedor_solo USING btree (account_id, company_id);
+
+
+--
+-- Name: idx_conta_tpv_dia_subida; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_conta_tpv_dia_subida ON public.conta_tpv_dia USING btree (subida_id) WHERE (subida_id IS NOT NULL);
+
+
+--
+-- Name: idx_conta_tpv_subida_empresa; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_conta_tpv_subida_empresa ON public.conta_tpv_subida USING btree (company_id, created_at DESC);
 
 
 --
@@ -152627,6 +152905,14 @@ ALTER TABLE ONLY public.conta_gestoria_union
 
 
 --
+-- Name: conta_k10_pago_desde_plataforma conta_k10_pago_desde_plataforma_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_k10_pago_desde_plataforma
+    ADD CONSTRAINT conta_k10_pago_desde_plataforma_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_linea conta_linea_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -153963,6 +154249,14 @@ ALTER TABLE ONLY public.conta_tpv_dia
 
 
 --
+-- Name: conta_tpv_dia conta_tpv_dia_subida_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_dia
+    ADD CONSTRAINT conta_tpv_dia_subida_id_fkey FOREIGN KEY (subida_id) REFERENCES public.conta_tpv_subida(id) ON DELETE SET NULL;
+
+
+--
 -- Name: conta_tpv_documento conta_tpv_documento_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -154056,6 +154350,22 @@ ALTER TABLE ONLY public.conta_tpv_impuesto
 
 ALTER TABLE ONLY public.conta_tpv_impuesto
     ADD CONSTRAINT conta_tpv_impuesto_documento_id_fkey FOREIGN KEY (documento_id) REFERENCES public.conta_tpv_documento(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tpv_subida conta_tpv_subida_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_subida
+    ADD CONSTRAINT conta_tpv_subida_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tpv_subida conta_tpv_subida_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_subida
+    ADD CONSTRAINT conta_tpv_subida_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
 
 
 --
@@ -164778,6 +165088,12 @@ CREATE POLICY conta_gestoria_union_leer ON public.conta_gestoria_union FOR SELEC
 
 
 --
+-- Name: conta_k10_pago_desde_plataforma; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_k10_pago_desde_plataforma ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: conta_lectura_estado; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -165583,6 +165899,19 @@ ALTER TABLE public.conta_tpv_impuesto ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_tpv_impuesto_select ON public.conta_tpv_impuesto FOR SELECT USING ((account_id = ANY (( SELECT public.current_user_account_ids() AS current_user_account_ids)::uuid[])));
+
+
+--
+-- Name: conta_tpv_subida; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_tpv_subida ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_tpv_subida conta_tpv_subida_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_tpv_subida_leer ON public.conta_tpv_subida FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -182270,6 +182599,14 @@ GRANT ALL ON FUNCTION public.conta_justificante_publico(p_clave text) TO service
 
 
 --
+-- Name: FUNCTION conta_k10_pago_desde_plataforma(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_k10_pago_desde_plataforma() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_k10_pago_desde_plataforma() TO service_role;
+
+
+--
 -- Name: FUNCTION conta_lectura_estado(p_company uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -184703,6 +185040,15 @@ GRANT ALL ON FUNCTION public.conta_tpv_dia_ejemplo(p_dia uuid, p_cuentas jsonb, 
 
 
 --
+-- Name: FUNCTION conta_tpv_dia_ficha(p_dia uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tpv_dia_ficha(p_dia uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tpv_dia_ficha(p_dia uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tpv_dia_ficha(p_dia uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_tpv_dia_guardar(p_company uuid, p_dia date, p_programa text, p_lectura jsonb, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -184748,6 +185094,15 @@ GRANT ALL ON FUNCTION public.conta_tpv_dias(p_company uuid, p_desde date, p_hast
 
 
 --
+-- Name: FUNCTION conta_tpv_emitidas(p_company uuid, p_desde date, p_hasta date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tpv_emitidas(p_company uuid, p_desde date, p_hasta date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tpv_emitidas(p_company uuid, p_desde date, p_hasta date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tpv_emitidas(p_company uuid, p_desde date, p_hasta date) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_tpv_factura_de(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
 --
 
@@ -184781,6 +185136,15 @@ GRANT ALL ON FUNCTION public.conta_tpv_formas(p_company uuid, p_dia uuid) TO ser
 REVOKE ALL ON FUNCTION public.conta_tpv_formas_guardar(p_company uuid, p_cuentas jsonb, p_quien_nombre text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_tpv_formas_guardar(p_company uuid, p_cuentas jsonb, p_quien_nombre text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_tpv_formas_guardar(p_company uuid, p_cuentas jsonb, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tpv_subida_apuntar(p_company uuid, p_dias uuid[], p_programa text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tpv_subida_apuntar(p_company uuid, p_dias uuid[], p_programa text, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tpv_subida_apuntar(p_company uuid, p_dias uuid[], p_programa text, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tpv_subida_apuntar(p_company uuid, p_dias uuid[], p_programa text, p_quien_nombre text) TO service_role;
 
 
 --
@@ -194448,6 +194812,13 @@ GRANT SELECT ON TABLE public.conta_gestoria_union TO authenticated;
 
 
 --
+-- Name: TABLE conta_k10_pago_desde_plataforma; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_k10_pago_desde_plataforma TO service_role;
+
+
+--
 -- Name: TABLE conta_lectura_estado; Type: ACL; Schema: public; Owner: -
 --
 
@@ -195118,6 +195489,14 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.conta_tpv_forma_cuenta TO auth
 
 GRANT ALL ON TABLE public.conta_tpv_impuesto TO service_role;
 GRANT SELECT ON TABLE public.conta_tpv_impuesto TO authenticated;
+
+
+--
+-- Name: TABLE conta_tpv_subida; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_tpv_subida TO service_role;
+GRANT SELECT ON TABLE public.conta_tpv_subida TO authenticated;
 
 
 --
