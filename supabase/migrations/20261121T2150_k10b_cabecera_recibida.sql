@@ -26,6 +26,9 @@
 -- La regla 11 que lee el tipo de operación de la factura va aparte, en la 2151 (cambia): esta solo AÑADE,
 -- y así va de verdad a staging desde la rama (W05) y la e2e ve sus columnas.
 --
+-- sin hueco: el fichero no retira nada al aplicarse. Solo conta_recibida_cabecera, al cambiar lo que afecta al asiento, quita
+-- el asiento PROPUESTO (nunca uno validado) de esa recibida, como conta_recibida_guardar (0790): se vuelve a proponer al
+-- abrirla o validarla, y un asiento propuesto no tiene número en la serie.
 -- Nada en el camino del pedido: ningún pedido escribe recibidas.
 -- Vuelta atrás: supabase/vuelta-atras/20261121T2150_k10b_cabecera_recibida.down.sql (después de la de la 2151)
 
