@@ -177,7 +177,7 @@ describe('qué se guarda y con qué (regla 8; contrato de la 0790)', () => {
     expect(noHoy.map((c) => c.campo)).toEqual(['iva', 'estadoPago'])
     const t = textoDelGuardado({ hechos: ['Vence: 18/11/2026'], fallos: [], noHoy: noHoy.slice(0, 1) })
     expect(t.tono).toBe('falta')
-    expect(t.texto).toMatch(/^Guardado: Vence: 18\/11\/2026\. Importes por tipo de IVA: no se puede guardar todavía — la base aún no tiene la función/)
+    expect(t.texto).toMatch(/^Guardado: Vence: 18\/11\/2026\. Importes por tipo de IVA: no se puede guardar todavía — la base de datos aún no está preparada para guardarlo/)
     expect(textoDelGuardado({ hechos: ['Vence: 18/11/2026'], fallos: [], noHoy: [] })).toEqual({ tono: 'ok', texto: 'Guardado: Vence: 18/11/2026.' })
   })
   it('«Antes: …» se escribe en palabras', () => {

@@ -62,7 +62,7 @@ import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioS
 import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, Comprobaciones, Duda, EstadoFicha, NombreDeCuenta } from '../ficha/piezas'
-import { accionDocumento, etiquetaValidado, franjaContabilizada, franjaDescartada, laAnterior, lineasDelHistorial, opcionesDeMas, queFichaSeAbre, textoCambioAlGuardar, type ModoRecibida, type OpcionMas } from './contabilizada'
+import { accionDocumento, etiquetaValidado, franjaContabilizada, franjaDescartada, laAnterior, lineasDelHistorial, opcionesDeMas, textoCasillaProveedor, queFichaSeAbre, textoCambioAlGuardar, type ModoRecibida, type OpcionMas } from './contabilizada'
 import { cambiarDocumentoContabilizada, leerHistorial, salioAErp10 } from './documentoServicio'
 import { PanelDocumento } from '../ficha/PanelDocumento'
 import { cifra } from '../ficha/textos'
@@ -71,7 +71,8 @@ import { Buscador } from '../ficha/Buscador'
 import { cuentasQueEncajan, queHaceIntro, type CuentaDelPlan } from '../ficha/teclas'
 import { origenes } from './origen'
 import { casillasVacias, comprobacionesDe, dondeVaElFoco, dudaDelGasto, emisorDesconocido, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
-import { calendarioDe, cuentasAMano, delProveedor, gastoAprendido, marcaDeLaFactura, mayorDelProveedor, textoOperacion } from './servicio'
+import { calendarioDe, cuentasAMano, delProveedor, gastoAprendido, marcaDeLaFactura, mayorDelProveedor, subcuentasDeProveedores, textoOperacion } from './servicio'
+import { cuentaDelProveedorEnElAsiento } from './proveedorEnAsiento'
 import { fechaDelPago, propuestaDelPago, queHaceElPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
 import { apuntarPago, cuentasDePago, hayLiquidacion, pagoDelProveedor } from './pagoServicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
@@ -243,8 +244,26 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const cuentasPlan: CuentaDelPlan[] = useMemo(() => cuentasGasto.map((c) => ({ codigo: c.codigo, nombre: c.nombre })), [cuentasGasto])
   const nombreGasto = useCallback((c: string) => cuentasPlan.find((x) => x.codigo === c)?.nombre ?? nombresProp?.get(c) ?? 'Cuenta', [cuentasPlan, nombresProp])
   const subProv = delProv?.subcuenta ?? null
-  const cuentasAsiento = useMemo(() => (propuesta ? cuentasDeLaPropuesta(propuesta.lineas, (c) => nombresProp?.get(c) ?? 'Cuenta')
-    : aManoCuentas ? { ...aManoCuentas.cuentas, proveedor: subProv ? { codigo: subProv.codigo, nombre: subProv.nombre } : null } : null), [propuesta, nombresProp, aManoCuentas, subProv])
+  // K08 · Sin su subcuenta (un proveedor recién dado de alta), la que le tocará: «Será la 40000002 · Proveedores · …».
+  const sinSubcuenta = !!(accountId && empresa && provId && delProv && !delProv.subcuenta)
+  const subcuentasProv = useLeer(sinSubcuenta && accountId && empresa ? () => subcuentasDeProveedores(accountId, empresa) : null, `${accountId}:${empresa}:${provId}:${sinSubcuenta ? 'sin' : 'con'}:subcuentas:${vuelta}`).datos ?? null
+  const gastoDelAsiento = b.gastos[0]?.cuenta?.trim() || null
+  const subCodigo = subProv?.codigo ?? null
+  const subNombre = subProv?.nombre ?? null
+  // Una cadena nueva: el compilador de React da por alias de «prov» lo que sale de él.
+  const provNombreFicha: string | null = prov ? `${prov.nombre}` : null
+  const cuentasAsiento = useMemo(() => {
+    const p = subCodigo || subcuentasProv ? cuentaDelProveedorEnElAsiento({
+      subcuenta: subCodigo ? { codigo: subCodigo, nombre: subNombre ?? '' } : null, proveedor: provNombreFicha, gasto: gastoDelAsiento,
+      ocupados: subcuentasProv?.ocupados ?? new Set<string>(), digitos: subcuentasProv?.digitos ?? 8,
+    }) : null
+    const delProveedor = p ? { codigo: p.codigo, nombre: p.nombre } : null
+    if (propuesta) {
+      const c = cuentasDeLaPropuesta(propuesta.lineas, (x) => nombresProp?.get(x) ?? 'Cuenta')
+      return delProveedor ? { ...c, proveedor: delProveedor } : c
+    }
+    return aManoCuentas ? { ...aManoCuentas.cuentas, proveedor: delProveedor } : null
+  }, [propuesta, nombresProp, aManoCuentas, subCodigo, subNombre, provNombreFicha, gastoDelAsiento, subcuentasProv])
   const previa = cuentasAsiento ? asientoVistaPrevia(b, cuentasAsiento, nombreGasto, nombreLocal) : null
   const totales = totalesDe(b)
 
@@ -346,7 +365,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       const r = await guardarCambiosRecibida(fac, cambiosParaLaBase(bb, campos as (keyof BorradorFicha)[], { previa: prev, comun: '', retencionTipoId: b.retencion && original.retencion && b.retencion.tipo === original.retencion.tipo ? ficha?.retencionId ?? null : null }),
         { quien: userName, nombres: { proveedor: nombreProveedor(b.proveedorId) }, localPropuesto: localPropuesto ?? null })
       if (r.fallos.length) return `No se ha guardado: ${r.fallos.map((x) => `${x.etiqueta}, ${x.porque.replace(/\.$/, '')}`).join(' · ')}.`
-      if (!r.conTanda) return 'No se ha guardado: la base aún no tiene la función que guarda la ficha (0790).'
+      if (!r.conTanda) return 'No se ha guardado: la base de datos aún no está preparada para guardar la ficha.'
       if (r.texto) partes.push(r.texto)
     }
     if (!fichero && ed.cambios.some((c) => c.campo === 'sinPdf' || c.campo === 'motivoSinPdf')) {
@@ -595,7 +614,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
           {cargando ? <p className="kf-panel-nota" aria-busy="true">Abriendo la factura…</p> : <fieldset className="kf-solo-lectura" disabled={soloLectura} data-solo-lectura={soloLectura ? 'si' : undefined}>
             <div className="kf-fila" style={{ gridTemplateColumns: '1.1fr 1.1fr 2.9fr 1.7fr' }}>
               <Casilla rotulo="Proveedor" origen={origen.proveedor} htmlFor="kf-proveedor" duda={!!emisor}>
-                <Buscador id="kf-proveedor" etiqueta="Proveedor" cargando={proveedoresL === null} enfocar={abrirProveedor} duda={!!emisor} valor={textoProv ?? (provId ? subcuenta || prov?.nombre || '' : '')} cuenta={subcuenta || null}
+                <Buscador id="kf-proveedor" etiqueta="Proveedor" cargando={proveedoresL === null} enfocar={abrirProveedor} duda={!!emisor} valor={textoProv ?? (provId ? textoCasillaProveedor({ soloLectura, subcuenta, nombre: prov?.nombre ?? null }) : '')} cuenta={subcuenta || null}
                   placeholder={aMano ? 'Código, nombre o NIF' : undefined}
                   ponerTexto={setTextoProv} lista={(t) => { const q = t.toLowerCase(); return proveedores.filter((p) => !q || p.nombre.toLowerCase().includes(q) || (p.nif ?? '').toLowerCase().includes(q)) }}
                   texto={(p) => `${p.nombre}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { if (emisor) void elegirYGuardar(p.id, p.nombre, `Elegido ${p.nombre}.`); else { ed.poner('proveedorId', p.id); setTextoProv(null) } }} />
@@ -714,7 +733,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                     <option value={aMano && ejeLocal ? LOCAL_COMUN : ''}>{ejeLocal ? 'Común a todos los locales' : 'Sin locales'}</option>
                     {locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}{l.id === localPropuesto ? ' (su ficha)' : ''}</option>)}
                   </select>
-                  <select aria-label="Marca" disabled title="La marca de la factura no se cambia desde aquí: la base aún no la guarda (conta_recibida_guardar)." value="">
+                  <select aria-label="Marca" disabled title="La marca de la factura aún no se puede cambiar desde esta ficha." value="">
                     <option value="">{marca ? `${marca} (de la factura)` : 'Sin repartir por marca'}</option>
                   </select>
                 </div>

@@ -46,6 +46,15 @@ export interface DelProveedor {
   subcuenta: { id: string; codigo: string; nombre: string } | null
 }
 
+/** K08 · Las subcuentas de proveedores y acreedores de la empresa (400/410) y sus cifras: para decir cuál le tocará a uno nuevo. */
+export async function subcuentasDeProveedores(accountId: string, companyId: string): Promise<{ ocupados: Set<string>; digitos: number }> {
+  const { data, error } = await tabla('company_account').select('code').eq('account_id', accountId).eq('company_id', companyId).or('code.like.400%,code.like.410%')
+  if (error) throw new Error(`No se han podido leer las cuentas de proveedores: ${error.message}`)
+  const ocupados = new Set(((data ?? []) as Fila[]).map((x) => String(x.code)))
+  const digitos = [...ocupados].find((c) => /^\d+$/.test(c))?.length ?? 8
+  return { ocupados, digitos }
+}
+
 /** El régimen de IVA y la subcuenta del proveedor. */
 export async function delProveedor(accountId: string, companyId: string, supplierId: string): Promise<DelProveedor> {
   const [{ data: p, error: ep }, { data: l, error: el }] = await Promise.all([

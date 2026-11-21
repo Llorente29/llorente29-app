@@ -129,3 +129,11 @@ export function laAnterior(o: { vieneDe: string | null; actual: string; enLaCola
   if (o.vieneDe && o.vieneDe !== o.actual) return o.vieneDe
   return o.enLaCola
 }
+
+/**
+ * K08 · Lo que enseña la casilla «Proveedor»: por revisar, su subcuenta (la maqueta: «40000007»; sin ella, el
+ * nombre); en una contabilizada o descartada, el nombre (Julio, 21/11: «40000002» no dice nada a quien la mira).
+ */
+export function textoCasillaProveedor(o: { soloLectura: boolean; subcuenta: string; nombre: string | null }): string {
+  return (o.soloLectura ? o.nombre || o.subcuenta : o.subcuenta || o.nombre) || ''
+}
