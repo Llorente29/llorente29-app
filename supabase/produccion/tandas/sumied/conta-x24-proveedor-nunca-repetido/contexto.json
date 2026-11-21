@@ -1,0 +1,28 @@
+{
+ "_que": "X24 · un proveedor nunca se da de alta dos veces · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción (esta sesión no lee producción). 1700 cambia en caliente _conta_proveedor_solo y _conta_proveedor_solo_deshacer (misma firma, sin otras firmas) y añade una columna a conta_proveedor_solo; 1710 cambia el índice único del NIF de supplier (destruye: autorizo). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-21T17:30Z",
+ "tanda": {
+  "supabase/migrations/20261121T1700_x24_proveedor_sin_nif.sql": "38d62cb5cbb568163054da538d5d6e69",
+  "supabase/migrations/20261121T1710_x24_nif_unico.sql": "983ec498ea70a668a5c120ff422fbb6e"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_proveedor_solo",
+   "public.supplier"
+  ],
+  "funciones": [
+   "public._conta_proveedor_solo(uuid,text)",
+   "public._conta_proveedor_solo_deshacer(uuid,text)",
+   "public._conta_nif_clave(text)",
+   "public._r14_nombre_clave(text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
