@@ -4,8 +4,12 @@
 //   1. Una a mano del cliente Uno (su 43000081), base 100 al 21 %, cobrada a la 43000082 (la 430 del cliente Dos: no es
 //      un banco). Sale en la lista con su nombre, la línea del asiento sale y cabe, y al guardar queda cobrada con ese
 //      asiento: serie 4, la 43000082 al debe y la 43000081 al haber, por 121.
-//   2. Regla 31: otra igual cobrada al banco de su ficha (57200001) deja el mismo asiento que dejaba antes del X23: su
-//      huella contra la de un cobro del K05 hecho antes de hoy (la misma vara: serie, estado y cada apunte).
+//   2. Regla 31: otra igual cobrada al banco de su ficha (57200001) deja el mismo asiento que dejaba antes del X23. El
+//      «antes», el que escribe el camino de main para un cobro al banco (apuntarCobro de main, sin cambiar: la misma
+//      llamada a conta_banco_a_mano con el banco de la 57200001, la 430 del cliente, «Cobro factura <n>» y 121); el
+//      «después», el que deja la pantalla nueva. La misma vara a los dos lados: serie, estado y cada apunte.
+//      (Primera pasada, run 44906222306: buscaba el «antes» en un cobro del K05 de antes de hoy, y en el carril, que
+//      se clona en cada run, no hay ninguno.)
 // Números inventados (T11), uno por pasada.
 
 import { test, expect, type Page } from '@playwright/test'
@@ -17,12 +21,15 @@ test.use({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
 const DIR = 'docs/conta/capturas/x23'
 const CLIENTE = '43000081'
 const OTRA = '43000082'
-const ANTES_DEL_X23 = '2026-11-21T11:00:00Z'
 const ficha = (page: Page) => page.locator('.k-zona[data-activa="si"] [data-prueba="ficha-emitida-nucleo"]')
 const aviso = (page: Page) => ficha(page).locator('[data-prueba="aviso-ficha"]')
 
-async function rest<T>(s: Sesion, ruta: string): Promise<T> {
-  const r = await fetch(`${STAGING_URL}/rest/v1/${ruta}`, { headers: { apikey: anonKey(), Authorization: `Bearer ${s.access_token}` } })
+async function rest<T>(s: Sesion, ruta: string, cuerpo?: unknown): Promise<T> {
+  const r = await fetch(`${STAGING_URL}/rest/v1/${ruta}`, {
+    method: cuerpo === undefined ? 'GET' : 'POST',
+    headers: { apikey: anonKey(), Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json' },
+    body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+  })
   const texto = await r.text()
   expect(r.status, `GET ${ruta}: ${texto.slice(0, 300)}`).toBeLessThan(300)
   return JSON.parse(texto) as T
@@ -110,10 +117,14 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await ficha(page).locator('[data-guardar-y-siguiente]').click()
     await expect(aviso(page)).toContainText('Cobro apuntado en la 57200001', { timeout: 60_000 })
     const despues = huella(await cobroDe(s, num2))
-    const k05 = await rest<Asiento[]>(s, `journal_entry?${SELECT}&account_id=eq.${NUCLEO.id}&concept=like.${encodeURIComponent('Cobro factura K05A-1-1')}&status=eq.validado&created_at=lt.${ANTES_DEL_X23}&order=created_at.desc&limit=1`)
-    expect(k05, 'un cobro del K05 de antes del X23').toHaveLength(1)
-    const antes = huella(k05[0])
-    console.log(`[X23] regla 31 · antes (K05, ${k05[0].created_at}): ${antes}`)
+    // El «antes»: lo que hace main al cobrar al banco (servicio.ts de main, apuntarCobro, rama «banco»), con la misma factura de ejemplo.
+    const [c572] = await rest<{ id: string }[]>(s, `company_account?select=id&account_id=eq.${NUCLEO.id}&code=eq.57200001`)
+    const [enlace] = await rest<{ entity_id: string }[]>(s, `company_account_link?select=entity_id&account_id=eq.${NUCLEO.id}&company_account_id=eq.${c572.id}&entity=eq.bank_account&role=eq.principal`)
+    const num0 = `X23-${ancho}-${n}-0`
+    const r0 = await rest<{ asiento_id: string }>(s, 'rpc/conta_banco_a_mano', { p_banco: enlace.entity_id, p_fecha: '2026-10-01', p_cuenta: CLIENTE, p_concepto: `Cobro factura ${num0}`, p_importe: 121, p_quien_nombre: 'Prueba e2e X23' })
+    const [a0] = await rest<Asiento[]>(s, `journal_entry?${SELECT}&account_id=eq.${NUCLEO.id}&id=eq.${r0.asiento_id}`)
+    const antes = huella(a0)
+    console.log(`[X23] regla 31 · antes (el camino de main, conta_banco_a_mano): ${antes}`)
     console.log(`[X23] regla 31 · después (${num2}): ${despues}`)
     expect(despues).toBe(antes)
     expect(errores).toEqual([])
