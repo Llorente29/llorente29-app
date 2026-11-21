@@ -221,6 +221,85 @@ do $$ begin
   end if;
 end $$;
 
+-- 4b · La plataforma del emisor (Julio, 21/11) --------------------------------------------------------
+-- Una plataforma de reparto factura a menudo con un NIF de fuera (GB…, NL…) o sin NIF. Su emisor se une
+-- a la plataforma de la cuenta por su NIF o, si el NIF es de fuera o no viene, por su nombre (sin «Ltd»,
+-- «S.L.», «B.V.»…): nunca un proveedor suelto. Con dos plataformas que encajan, ninguna.
+create or replace function public._r14_nombre_clave(p text)
+returns text language sql immutable as $function$
+  select nullif(btrim(regexp_replace(' ' || public._r14_sin_tildes(p) || ' ',
+    ' (ltd|limited|plc|llc|inc|corp|sl|slu|s l|s l u|sa|sau|s a|bv|b v|nv|gmbh|ag|sas|sarl|srl|spa|sociedad limitada|sociedad anonima|co|company|technologies|technology) ', ' ', 'g')), '')
+$function$;
+comment on function public._r14_nombre_clave(text) is 'R14: el nombre de una empresa para compararlo: sin tildes ni signos y sin su forma jurídica («Cheerfy Ltd» → «cheerfy»).';
+
+create or replace function public._r14_plataforma_de(p_account uuid, p_nif text, p_nombre text)
+returns table (party_id uuid, como text) language plpgsql stable security definer set search_path = public as $function$
+declare v_nif text := public._conta_nif_clave(p_nif); v_nom text := public._r14_nombre_clave(p_nombre); v_ids uuid[];
+begin
+  -- Por su NIF: el del tercero de la plataforma, o el de su ficha de proveedor.
+  if v_nif is not null then
+    select array_agg(distinct pt.id) into v_ids from public.party pt
+     where pt.account_id = p_account and exists (select 1 from public.party_role r where r.party_id = pt.id and r.role = 'platform')
+       and (public._conta_nif_clave(pt.tax_id) = v_nif
+            or exists (select 1 from public.party_role rs join public.supplier s on s.id = rs.supplier_id
+                        where rs.party_id = pt.id and rs.role = 'supplier' and public._conta_nif_clave(s.tax_id) = v_nif));
+    if cardinality(v_ids) = 1 then party_id := v_ids[1]; como := 'nif'; return next; return; end if;
+  end if;
+  -- Por su nombre, solo si el NIF es de fuera o no viene (un NIF español manda: es otra empresa).
+  if v_nom is null or (v_nif is not null and public._verifactu_nif_es_valido(v_nif)) then return; end if;
+  select array_agg(distinct pt.id) into v_ids from public.party pt
+    join public.party_role r on r.party_id = pt.id and r.role = 'platform'
+    left join public.sales_channel ch on ch.id = r.channel_id
+   where pt.account_id = p_account and pt.archived_at is null
+     and exists (select 1 from unnest(array[public._r14_nombre_clave(pt.name), public._r14_nombre_clave(ch.name)]) k
+                  where k is not null and length(k) >= 4 and (v_nom = k or v_nom like k || ' %' or k like v_nom || ' %'));
+  if cardinality(v_ids) = 1 then party_id := v_ids[1]; como := 'nombre'; return next; end if;
+end $function$;
+comment on function public._r14_plataforma_de(uuid, text, text) is 'R14: la plataforma (su tercero) de un emisor: por su NIF (el del tercero o el de su ficha de proveedor) o, con un NIF de fuera o sin NIF, por su nombre sin forma jurídica. Nada si encajan dos.';
+revoke all on function public._r14_plataforma_de(uuid, text, text) from public, anon, authenticated;
+
+create table if not exists public.conta_proveedor_unido (
+  supplier_id       uuid primary key references public.supplier(id) on delete cascade,
+  account_id        uuid not null references public.accounts(id) on delete cascade,
+  party_antes       uuid references public.party(id) on delete set null,
+  party_plataforma  uuid not null references public.party(id) on delete cascade,
+  como              text not null check (como in ('nif', 'nombre')),
+  cuando            text not null check (cuando in ('al_leer', 'al_aplicar')),
+  created_at        timestamptz not null default now()
+);
+comment on table public.conta_proveedor_unido is
+  'R14. Los proveedores sueltos que eran una plataforma y Sumied unió a su tercero (por su NIF o por su nombre). party_antes, el tercero suelto (archivado con su nota): con esto la vuelta atrás los deja como estaban.';
+alter table public.conta_proveedor_unido enable row level security;
+drop policy if exists conta_proveedor_unido_leer on public.conta_proveedor_unido;
+create policy conta_proveedor_unido_leer on public.conta_proveedor_unido for select to authenticated using (public.belongs_to_account(account_id));
+revoke all on table public.conta_proveedor_unido from anon, authenticated;
+grant select on table public.conta_proveedor_unido to authenticated;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'conta_lectura') then grant select on table public.conta_proveedor_unido to conta_lectura; end if;
+end $$;
+
+-- Unir una ficha de proveedor suelta al tercero de su plataforma: su papel de proveedor pasa al tercero de
+-- la plataforma; el suelto, sin papeles, se archiva con su nota (no se borra: la vuelta atrás lo devuelve).
+create or replace function public._r14_unir(p_supplier uuid, p_plataforma uuid, p_como text, p_cuando text)
+returns boolean language plpgsql volatile security definer set search_path = public as $function$
+declare v_antes uuid; v_cuenta uuid; v_nombre text;
+begin
+  select r.party_id, r.account_id into v_antes, v_cuenta from public.party_role r where r.supplier_id = p_supplier and r.role = 'supplier';
+  if v_antes is null or v_antes = p_plataforma then return false; end if;
+  if exists (select 1 from public.party_role r where r.party_id = p_plataforma and r.role = 'supplier') then return false; end if;
+  if exists (select 1 from public.party_role r where r.party_id = v_antes and r.role = 'platform') then return false; end if;
+  update public.party_role set party_id = p_plataforma where supplier_id = p_supplier and role = 'supplier';
+  select name into v_nombre from public.party where id = p_plataforma;
+  update public.party set archived_at = coalesce(archived_at, now()), archived_note = 'Unido a la plataforma ' || v_nombre || ' (R14)'
+   where id = v_antes and not exists (select 1 from public.party_role r where r.party_id = v_antes);
+  insert into public.conta_proveedor_unido (supplier_id, account_id, party_antes, party_plataforma, como, cuando)
+  values (p_supplier, v_cuenta, v_antes, p_plataforma, p_como, p_cuando)
+  on conflict (supplier_id) do update set party_antes = excluded.party_antes, party_plataforma = excluded.party_plataforma, como = excluded.como, cuando = excluded.cuando;
+  return true;
+end $function$;
+comment on function public._r14_unir(uuid, uuid, text, text) is 'R14: une una ficha de proveedor suelta al tercero de su plataforma (su papel de proveedor) y archiva el suelto con su nota. Lo apunta en conta_proveedor_unido.';
+revoke all on function public._r14_unir(uuid, uuid, text, text) from public, anon, authenticated;
+
 -- 5 · El alta sola ---------------------------------------------------------------------------------
 create or replace function public._r14_partir_direccion(p text)
 returns jsonb language sql immutable as $function$
@@ -236,7 +315,7 @@ create or replace function public._conta_proveedor_solo(p_invoice uuid, p_cuando
 returns jsonb language plpgsql volatile security definer set search_path = public as $function$
 declare
   v public.supplier_invoice; c public.company; p jsonb; v_nif text; v_nombre text; v_tipo text; v_pais text;
-  v_party uuid; v_s uuid; v_que text; v_creado boolean := false; v_k uuid; v_kcreada boolean := false;
+  v_party uuid; v_como text; v_s uuid; v_que text; v_creado boolean := false; v_k uuid; v_kcreada boolean := false;
   v_plan text; v_d int; v_hoja text; v_code text; v_gasto jsonb; v_dir jsonb; v_origen jsonb; v_motivo text; v_txt text;
 begin
   select * into v from public.supplier_invoice where id = p_invoice for update;
@@ -255,20 +334,24 @@ begin
   v_nif := public._conta_nif_clave(p->>'nif');
   v_nombre := nullif(btrim(regexp_replace(coalesce(p->>'nombre', ''), '\s+', ' ', 'g')), '');
 
-  if v_nif is null then
-    v_motivo := 'La factura no trae el NIF del proveedor: dalo de alta tú.';
-  elsif v_nif = public._conta_nif_clave(c.tax_id) then
+  if v_nif is not null and v_nif = public._conta_nif_clave(c.tax_id) then
     v_motivo := format('El NIF del proveedor (%s) es el de %s: parece una factura emitida, no recibida.', v_nif, coalesce(c.legal_name, 'la propia empresa'));
+  else
+    -- Una plataforma de la cuenta (Julio, 21/11): por su NIF o, si el NIF es de fuera o no viene, por su nombre.
+    select x.party_id, x.como into v_party, v_como from public._r14_plataforma_de(v.account_id, v_nif, v_nombre) x;
+    if v_party is null and v_nif is null then v_motivo := 'La factura no trae el NIF del proveedor: dalo de alta tú.'; end if;
   end if;
 
   if v_motivo is null then
-    -- Una plataforma de la cuenta: su tercero (con o sin ficha de proveedor).
-    select pt.id into v_party from public.party pt
-     where pt.account_id = v.account_id and public._conta_nif_clave(pt.tax_id) = v_nif
-       and exists (select 1 from public.party_role r where r.party_id = pt.id and r.role = 'platform') limit 1;
     if v_party is not null then
       v_que := 'plataforma';
       select supplier_id into v_s from public.party_role where party_id = v_party and role = 'supplier';
+      -- Si la plataforma no tiene ficha de proveedor y hay una suelta con su NIF, se une a ella (no otra suelta).
+      if v_s is null and v_nif is not null then
+        select s.id into v_s from public.supplier s
+         where s.account_id = v.account_id and s.archived_at is null and public._conta_nif_clave(s.tax_id) = v_nif order by s.created_at limit 1;
+        if v_s is not null and not public._r14_unir(v_s, v_party, v_como, p_cuando) then v_s := null; end if;
+      end if;
     else
       -- Un proveedor de la cuenta, de esta u otra sociedad: el mismo tercero.
       select s.id into v_s from public.supplier s
@@ -317,6 +400,15 @@ begin
                || case when nullif(btrim(p->>'web'), '') is not null then array['web'] else '{}' end) k))
     returning id into v_s;
     v_creado := true;
+    -- La ficha nueva de una plataforma va en el tercero de la plataforma (el disparador del C03 la une por
+    -- el NIF; por el nombre, no): si ha quedado en un tercero suyo, pasa al de la plataforma y ese se borra.
+    if v_que = 'plataforma' then
+      select party_id into v_txt from public.party_role where supplier_id = v_s and role = 'supplier';
+      if v_txt is distinct from v_party::text then
+        update public.party_role set party_id = v_party where supplier_id = v_s and role = 'supplier';
+        delete from public.party pa where pa.id = v_txt::uuid and pa.source = 'supplier' and not exists (select 1 from public.party_role ro where ro.party_id = pa.id);
+      end if;
+    end if;
   end if;
 
   -- Su subcuenta en esta empresa: la siguiente libre de la 4000 o de la 4100 (la plataforma, su 410).

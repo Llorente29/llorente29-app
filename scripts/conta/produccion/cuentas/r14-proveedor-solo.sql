@@ -13,6 +13,8 @@
 --      subcuentas 4000/4100 de cada empresa.
 --   5. CON LA TANDA PUESTA (dentro del ensayo): las completadas al aplicar, por cuenta,
 --      empresa y lo que hizo Sumied (o por qué no). Sin la tanda, «no está».
+--   7. CON LA TANDA PUESTA: las fichas de proveedor sueltas que eran una plataforma y se unieron
+--      a ella al aplicar (Julio, 21/11), por cuenta y por empresa en la que tienen facturas.
 --   6. CON LA TANDA PUESTA: la regla 31 de la tabla de lo que vende, por cuenta. Las
 --      recibidas leídas con líneas; a cuántas propone algo; de las que tienen su asiento
 --      validado, a cuántas propone y en cuántas acierta la hoja de su gasto (la cuenta del
@@ -64,7 +66,7 @@ select 5, coalesce((xpath('/row/k/text()', r))[1]::text, 'con la tanda'), coales
           select ''cuenta '' || left(account_id::text, 8) || '' · empresa '' || left(coalesce(company_id::text, ''-''), 8) || '' · al aplicar · ''
                  || case que when ''alta'' then ''proveedor nuevo'' when ''existente'' then ''uno que ya estaba'' when ''plataforma'' then ''plataforma''
                     else ''sin completar · '' || case when motivo like ''La factura no trae%'' then ''sin NIF'' when motivo like ''El NIF leído%'' then ''NIF que no valida''
-                                                    when motivo like ''El NIF del proveedor%'' then ''NIF de la propia empresa'' when motivo like ''No leí el nombre%'' then ''sin nombre'' else ''otro'' end end as k,
+                                                    when motivo like ''El NIF del proveedor%'' then ''NIF de la propia empresa'' when motivo like ''No leí el nombre%'' then ''sin nombre'' when motivo like ''No he podido%'' then motivo else ''otro'' end end as k,
                  count(*)::text as v
             from public.conta_proveedor_solo where cuando = ''al_aplicar'' group by 1 order by 1', false, false, '') end as x) q
   left join lateral unnest(coalesce(xpath('/table/row', q.x), array[null::xml])) r on true
@@ -85,5 +87,15 @@ select 6, coalesce((xpath('/row/k/text()', r))[1]::text, 'regla 31'), coalesce((
                  || count(*) filter (where verdad is not null and hoja is not null) || '' y acierta la hoja en ''
                  || count(*) filter (where verdad is not null and hoja = left(verdad, 3)) as v
             from f group by account_id order by 1', false, false, '') end as x) q
+  left join lateral unnest(coalesce(xpath('/table/row', q.x), array[null::xml])) r on true
+union all
+-- quieta: solo existe con la tanda puesta (la crea la 1110) y solo cuenta lo unido al aplicar.
+select 7, coalesce((xpath('/row/k/text()', r))[1]::text, 'unidas a su plataforma'), coalesce((xpath('/row/v/text()', r))[1]::text, 'no está')
+  from (select case when to_regclass('public.conta_proveedor_unido') is null then null else query_to_xml('
+          select ''cuenta '' || left(u.account_id::text, 8) || '' · empresa '' || coalesce(left(e.company_id::text, 8), ''sin facturas'')
+                 || '' · fichas sueltas unidas a su plataforma, por su '' || u.como as k, count(distinct u.supplier_id)::text as v
+            from public.conta_proveedor_unido u
+            left join lateral (select distinct i.company_id from public.supplier_invoice i where i.supplier_id = u.supplier_id and i.account_id = u.account_id) e on true
+           where u.cuando = ''al_aplicar'' group by 1 order by 1', false, false, '') end as x) q
   left join lateral unnest(coalesce(xpath('/table/row', q.x), array[null::xml])) r on true
 ) u order by o, clave;

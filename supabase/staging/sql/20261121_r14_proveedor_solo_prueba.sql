@@ -192,6 +192,31 @@ begin
   raise notice '4 OK: la plataforma, en su tercero, con su 41000001; «%».', g->>'porque';
 end $$;
 
+-- 4b · Julio, 21/11: una plataforma que factura con un NIF de fuera (GB…, que no es de la UE) y cuyo
+-- tercero no tiene NIF: se une a ella por su nombre («… Ltd» es la plataforma «…»), nunca suelta.
+do $$
+declare v_p uuid;
+begin
+  insert into public.party (account_id, name, source) values ('a1140000-0000-4000-8000-000000000010', 'Pedidos Ejemplo', 'manual') returning id into v_p;
+  insert into public.party_role (account_id, party_id, role) values ('a1140000-0000-4000-8000-000000000010', v_p, 'platform');
+end $$;
+select pg_temp.r14_llega(11, '11', 'GB000000000', 'Pedidos Ejemplo Ltd', array['Service fee']) as f11 \gset
+set constraints public.r14_proveedor_solo immediate;
+set constraints public.r14_proveedor_solo deferred;
+do $$
+declare s uuid; v_party uuid;
+begin
+  select supplier_id into s from public.supplier_invoice where id = 'a1140000-0000-4000-8000-000000000111';
+  select id into v_party from public.party where account_id = 'a1140000-0000-4000-8000-000000000010' and name = 'Pedidos Ejemplo';
+  if s is null or not exists (select 1 from public.party_role where party_id = v_party and role = 'supplier' and supplier_id = s) then
+    raise exception 'PRUEBA R14 · 4b: no va a la plataforma por su nombre: %', pg_temp.r14_que('a1140000-0000-4000-8000-000000000111');
+  end if;
+  if exists (select 1 from public.party where account_id = 'a1140000-0000-4000-8000-000000000010' and tax_id = 'GB000000000') then
+    raise exception 'PRUEBA R14 · 4b: ha quedado un tercero suelto con el NIF de fuera.';
+  end if;
+  raise notice '4b OK: «Pedidos Ejemplo Ltd» (GB000000000) va a la plataforma «Pedidos Ejemplo» por su nombre, sin tercero suelto; %.', pg_temp.r14_que('a1140000-0000-4000-8000-000000000111');
+end $$;
+
 -- 5 · No se da de alta: sin NIF, NIF que no valida, el de la propia empresa; ni la anulada ---------
 select pg_temp.r14_llega(4, '11', null, 'Sin NIF, S.L.', array['Pan']) as f4 \gset
 select pg_temp.r14_llega(5, '11', 'B00000001', 'NIF Malo, S.L.', array['Pan']) as f5 \gset
@@ -227,7 +252,7 @@ set local role authenticated;
 do $$
 declare r2 jsonb; r1 jsonb;
 begin
-  if (select count(*) from public.conta_proveedor_solo) <> 6 then raise exception 'PRUEBA R14 · 6: X no ve sus 6 filas.'; end if;
+  if (select count(*) from public.conta_proveedor_solo) <> 7 then raise exception 'PRUEBA R14 · 6: X no ve sus 7 filas.'; end if;
   r2 := public.conta_proveedor_solo_deshacer('a1140000-0000-4000-8000-000000000102', 'Admin X');
   r1 := public.conta_proveedor_solo_deshacer('a1140000-0000-4000-8000-000000000101', 'Admin X');
   if r2->>'texto' <> 'Deshecho: la factura ya no es de Suministros Inventados, S.L. y vuelve a no tener proveedor.'
@@ -285,6 +310,15 @@ begin
 end $f$;
 select pg_temp.r14_sin_mirar(7, '12', 'E00000000', 'Reparaciones Inventadas, S.L.', array['Reparación de la cámara', 'Mano de obra']) as f7 \gset
 select pg_temp.r14_sin_mirar(8, '12', 'F00000000', 'Anulada, S.L.', array['Pan'], 'anulada') as f8 \gset
+-- Julio, 21/11: una ficha suelta (dada de alta a mano, como Cheerfy en Frango) de una plataforma sin ficha.
+do $$
+declare v_p uuid;
+begin
+  insert into public.party (account_id, name, source) values ('a1140000-0000-4000-8000-000000000010', 'Reparto Muestra', 'manual') returning id into v_p;
+  insert into public.party_role (account_id, party_id, role) values ('a1140000-0000-4000-8000-000000000010', v_p, 'platform');
+  insert into public.supplier (id, account_id, name, tax_id, tax_id_type, country_code, is_active)
+  values ('a1140000-0000-4000-8000-0000000002a1', 'a1140000-0000-4000-8000-000000000010', 'Reparto Muestra Limited', 'GB000000001', 'foreign', 'GB', true);
+end $$;
 create temp table _antes on commit drop as
   select i.account_id, i.company_id, count(*) filter (where i.supplier_id is null and i.reading ? 'factura') as sin_proveedor from public.supplier_invoice i
    where i.account_id = 'a1140000-0000-4000-8000-000000000010' group by 1, 2;
@@ -301,6 +335,13 @@ begin
   if (select supplier_id from public.supplier_invoice where id = 'a1140000-0000-4000-8000-000000000108') is not null then raise exception 'PRUEBA R14 · 7: ha tocado la anulada.'; end if;
   -- Antes: la 101 y la 102 (deshechas), la 104, 105 y 106 (sin poder), la 107 y la 108 (anulada) = 7 sin proveedor. Después: se completa solo la 107.
   if (n_antes, n_despues) is distinct from (7, 6) then raise exception 'PRUEBA R14 · 7: antes % y después % sin proveedor (esperaba 7 y 6).', n_antes, n_despues; end if;
+  if (select r.party_id from public.party_role r where r.supplier_id = 'a1140000-0000-4000-8000-0000000002a1' and r.role = 'supplier')
+     is distinct from (select id from public.party where account_id = 'a1140000-0000-4000-8000-000000000010' and name = 'Reparto Muestra') then
+    raise exception 'PRUEBA R14 · 7: la ficha suelta no se ha unido a su plataforma.';
+  end if;
+  if not exists (select 1 from public.party where account_id = 'a1140000-0000-4000-8000-000000000010' and tax_id = 'GB000000001' and archived_note = 'Unido a la plataforma Reparto Muestra (R14)') then
+    raise exception 'PRUEBA R14 · 7: el tercero suelto no queda archivado con su nota.';
+  end if;
   raise notice '7a OK: al aplicar, de % sin proveedor a %: la de reparaciones con su 41000001 (622 → 4100); la anulada y las deshechas, no; la segunda pasada, nada.', n_antes, n_despues;
 end $$;
 -- La de reparaciones, validada en X2 a la 62200000. Llega otra suya a X1 que vende pan: manda lo de X2.
@@ -327,8 +368,8 @@ begin
      or exists (select 1 from public.conta_proveedor_solo where invoice_id = 'a1140000-0000-4000-8000-000000000110') then
     raise exception 'PRUEBA R14 · 7: ha tocado la validada.';
   end if;
-  if pg_temp.r14_subcuenta('11', s) is distinct from '41000002' then raise exception 'PRUEBA R14 · 7: su subcuenta en X1 (622 → 4100, la siguiente libre: la 41000001 es de la plataforma): %', pg_temp.r14_subcuenta('11', s); end if;
-  raise notice '7b OK: la de X1, el mismo proveedor con su 41000002 (la siguiente libre) y «%»; la validada sin proveedor, sin tocar.', g->>'porque';
+  if pg_temp.r14_subcuenta('11', s) is distinct from '41000003' then raise exception 'PRUEBA R14 · 7: su subcuenta en X1 (622 → 4100, la siguiente libre: la 41000001 y la 41000002 son de las plataformas): %', pg_temp.r14_subcuenta('11', s); end if;
+  raise notice '7b OK: la de X1, el mismo proveedor con su 41000003 (la siguiente libre) y «%»; la validada sin proveedor, sin tocar.', g->>'porque';
 end $$;
 
 -- 8 · Las tres vueltas atrás ---------------------------------------------------------------------
@@ -340,9 +381,18 @@ do $$ begin
   delete from public.journal_entry where concept = 'Prueba R14' and account_id = 'a1140000-0000-4000-8000-000000000010';
   set local session_replication_role = origin;
 end $$;
+-- Las vueltas atrás quitan un disparador de supplier_invoice y tablas que la referencian: se coge antes
+-- supplier_invoice, para que otra sesión de staging (una e2e que borra facturas) no se cruce a mitad
+-- (dos interbloqueos así en staging, 44877021402 y 44889381392).
+set local lock_timeout = '60s';
+lock table public.supplier_invoice in access exclusive mode;
 \i supabase/vuelta-atras/20261121T1130_r14_proveedor_solo_completar.down.sql
 do $$ begin
   if (select supplier_id from public.supplier_invoice where id = 'a1140000-0000-4000-8000-000000000107') is not null then raise exception 'PRUEBA R14 · 8: la vuelta atrás de la 1130 no la ha deshecho.'; end if;
+  if (select p.name from public.party_role r join public.party p on p.id = r.party_id where r.supplier_id = 'a1140000-0000-4000-8000-0000000002a1' and r.role = 'supplier') <> 'Reparto Muestra Limited'
+     or exists (select 1 from public.party where tax_id = 'GB000000001' and archived_at is not null) then
+    raise exception 'PRUEBA R14 · 8: la vuelta atrás no devuelve la ficha suelta a su tercero.';
+  end if;
 end $$;
 \i supabase/vuelta-atras/20261121T1120_r14_proveedor_solo_al_leer.down.sql
 \i supabase/vuelta-atras/20261121T1110_r14_proveedor_solo_anade.down.sql

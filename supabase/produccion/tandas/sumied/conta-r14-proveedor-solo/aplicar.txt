@@ -8,7 +8,8 @@
 #         «Deshacer» (conta_proveedor_solo_deshacer).
 #   1120  Cambia en caliente supplier_invoice: un disparador diferido que, al leer una
 #         recibida sin proveedor, lo busca o lo da de alta. Nunca para la lectura.
-#   1130  Completa las recibidas ya leídas sin proveedor, en todas las cuentas (lo
+#   1130  Une a su plataforma las fichas de proveedor sueltas que son una plataforma (por su NIF
+#         o, con un NIF de fuera o sin NIF, por su nombre: Julio, 21/11). Y completa las recibidas ya leídas sin proveedor, en todas las cuentas (lo
 #         validado, pagado, descartado o anulado no se toca). ESCRIBE sobre lo que existe
 #         (supplier_invoice.supplier_id) llamando a _conta_proveedor_solo: el analizador
 #         no lo ve dentro de la llamada y lo da por «sigue»; va declarado aquí.
