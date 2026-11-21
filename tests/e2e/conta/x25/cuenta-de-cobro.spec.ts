@@ -108,6 +108,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
       await caja.getByRole('combobox', { name: 'Cuenta de cobro' }).fill(PLATAFORMA)
       await page.getByRole('option', { name: new RegExp(`^${PLATAFORMA} · `) }).click()
       await expect(caja.locator('[data-prueba="cuenta-de-cobro-dicho"]')).toHaveText(new RegExp(`^Guardada: la ${PLATAFORMA} · .+ es su cuenta de cobro\\. Sus facturas la traen en «Cómo se cobra»\\.$`), { timeout: 30_000 })
+      // La casilla enseña la guardada, con su nombre del plan (no solo el aviso: e2e 44950611942, la captura la sacó vacía).
+      await expect(caja.getByRole('combobox', { name: 'Cuenta de cobro' })).toHaveValue(PLATAFORMA)
+      await expect(caja.getByRole('textbox', { name: 'Nombre de la cuenta de cobro' })).not.toHaveValue('')
       await page.screenshot({ path: `${DIR}/ficha-cliente-${ancho}.png` })
 
       // Su emitida nueva la trae, «De su ficha», con la línea del asiento; y queda cobrada con ese asiento.

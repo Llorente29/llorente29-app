@@ -26,13 +26,15 @@ export function CuentaDeCobro() {
   const [texto, setTexto] = useState<string | null>(null)
   const [creadas, setCreadas] = useState<CuentaDelPlan[]>([])
   const [dicho, setDicho] = useState<{ tono: 'ok' | 'mal'; texto: string } | null>(null)
+  // Lo recién guardado (o quitado, «»), mientras se vuelve a leer: la casilla no se vacía después de «Guardada».
+  const [elegida, setElegida] = useState<string | null>(null)
   const plan = useLeer(companyId ? () => cuentasDePago(accountId, companyId) : null, `${accountId}:${companyId}:cuentas-cobro:${creadas.length}`).datos ?? null
   const suya = useLeer(companyId ? () => cuentaDeCobroDelCliente(accountId, companyId, partyId) : null, `${accountId}:${companyId}:${partyId}:cuenta-cobro:${vuelta}`)
   // La suya propia (su 430 de cliente) no es una cuenta de cobro: no sale en la lista.
   const propia = ficha.cuentas.find((c) => c.papel === 'cliente')?.code ?? null
   const lista = useMemo(() => [...(plan?.lista ?? []), ...creadas].filter((c) => c.codigo !== propia), [plan, creadas, propia])
   if (!companyId) return null
-  const cuenta = suya.datos ?? ''
+  const cuenta = elegida ?? suya.datos ?? ''
   const nombre = (c: string) => plan?.nombres.get(c) ?? creadas.find((x) => x.codigo === c)?.nombre ?? ''
 
   async function guardar(c: CuentaDelPlan, id?: string) {
@@ -41,14 +43,14 @@ export function CuentaDeCobro() {
     try {
       await cambiarCuentaCobro(companyId, partyId, cuentaId, userName ?? null)
       setDicho({ tono: 'ok', texto: `Guardada: la ${c.codigo}${c.nombre ? ` · ${c.nombre}` : ''} es su cuenta de cobro. Sus facturas la traen en «Cómo se cobra».` })
-      setTexto(null); setVuelta((v) => v + 1)
+      setTexto(null); setElegida(c.codigo); setVuelta((v) => v + 1)
     } catch (e) { setDicho({ tono: 'mal', texto: `No se ha guardado: ${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}.` }) }
   }
   async function quitar() {
     if (!companyId) return
     try {
       await quitarCuentaCobro(companyId, partyId, userName ?? null)
-      setDicho({ tono: 'ok', texto: 'Quitada: sus facturas proponen el banco de su ficha o la cuenta de su último cobro.' }); setTexto(null); setVuelta((v) => v + 1)
+      setDicho({ tono: 'ok', texto: 'Quitada: sus facturas proponen el banco de su ficha o la cuenta de su último cobro.' }); setTexto(null); setElegida(''); setVuelta((v) => v + 1)
     } catch (e) { setDicho({ tono: 'mal', texto: `No se ha quitado: ${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}.` }) }
   }
 
