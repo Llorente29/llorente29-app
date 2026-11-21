@@ -55,7 +55,7 @@ import {
   importeEs, rehacerCuota, rehacerRetencion, totalesDe, desdeElTotal, type BorradorFicha, type LineaIva,
 } from '@/modules/conta/documentos/fichaRecibida'
 import {
-  apuntarFactura, cuentasDeGasto, guardarCambiosRecibida, leerExtrasFacturas, leerFactura, leerFichaRecibida, plazoDeLaFicha, ponerPapelRecibida,
+  apuntarFactura, guardarCambiosRecibida, leerExtrasFacturas, leerFactura, leerFichaRecibida, plazoDeLaFicha, ponerPapelRecibida,
   proveedoresDeLaCuenta, urlDelPapel, verPropuestaFactura, leerAntesDelInicio, sinPapelRecibida, leerDescarte, recuperarFactura,
 } from '@/modules/conta/services/documentosService'
 import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioService'
@@ -74,9 +74,11 @@ import { crearProveedor } from '@/modules/conta/services/proveedorService'
 import { revisarAlta } from '@/modules/conta/lib/altaProveedor'
 import { tipoEntidadPorNif } from '@/modules/conta/lib/nif'
 import { casillasVacias, comprobacionesDe, dondeVaElFoco, dudaDelGasto, emisorDesconocido, estadoDeLaFicha, etiquetaDelAsiento, franjaProveedorSolo, gastoEnAmbar, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
-import { calendarioDe, cuentasAMano, delProveedor, deshacerProveedorSolo, gastoAprendido, gastoPropuesto as leerGastoPropuesto, marcaDeLaFactura, mayorDelProveedor, noEsLaMisma, otrasDelProveedor, proveedorSolo, subcuentasDeProveedores, textoOperacion } from './servicio'
+import { calendarioDe, cuentasAMano, delProveedor, deshacerProveedorSolo, gastoAprendido, gastoPropuesto as leerGastoPropuesto, marcaDeLaFactura, mayorDelProveedor, noEsLaMisma, otrasDelProveedor, proveedorSolo, subcuentasDeProveedores, textoOperacion, cuentasDeContrapartida, codigosDeProveedores } from './servicio'
 import { cuentaDelProveedorEnElAsiento } from './proveedorEnAsiento'
 import { faltasParaValidar, laRepetida, textoNoSeValida, textoRepetida } from './validarSoloLoCompleto'
+import { avisoInmovilizado } from './contrapartida'
+import { proveedoresQueEncajan } from './buscarProveedor'
 import { fechaDelPago, propuestaDelPago, queHaceElPago, textoAsientoDelPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
 import { apuntarPago, cuentasDePago, hayLiquidacion, pagoDelProveedor } from './pagoServicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
@@ -157,9 +159,12 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const [vueltaProv, setVueltaProv] = useState(0)
   const proveedoresL = useUltimo(useLeer(accountId ? () => proveedoresDeLaCuenta(accountId) : null, `${accountId}:proveedores:${vueltaProv}`).datos, accountId ?? '')
   const proveedores = useMemo(() => proveedoresL ?? [], [proveedoresL])
+  // K10 · El proveedor, también por su código en la empresa (como en ERP10).
+  const codigosProv = useLeer(accountId && empresa ? () => codigosDeProveedores(accountId, empresa) : null, `${accountId}:${empresa}:codigos-proveedores:${vueltaProv}`).datos ?? null
   const localesL = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}:locales`).datos
   const locales = useMemo(() => localesL ?? [], [localesL])
-  const cuentasGastoL = useLeer(accountId && empresa ? () => cuentasDeGasto(accountId, empresa) : null, `${accountId}:${empresa}:gastos`).datos
+  // K10 · La contrapartida, con cualquier subcuenta: primero las del 6, después el resto (21x, 480…).
+  const cuentasGastoL = useLeer(accountId && empresa ? () => cuentasDeContrapartida(accountId, empresa) : null, `${accountId}:${empresa}:contrapartidas`).datos
   const cuentasGasto = useMemo(() => cuentasGastoL ?? [], [cuentasGastoL])
   const tiposIva = useLeer(accountId ? () => tiposDeIvaRecibida(accountId) : null, `${accountId}:tipos-iva`).datos ?? [21, 10, 4, 0]
   const dup = useLeer(accountId && fac ? () => duplicadaDe(accountId, fac.id, fac.proveedor?.id ?? null) : null, `${accountId}:${id}:${fac?.numero}:${fac?.total}:dup:${vuelta}`).datos ?? null
@@ -248,7 +253,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const repetida = otrasL && modo === 'escribir' ? laRepetida({ id: invoiceId, numero: b.numero, confirmada: otrasL.confirmada, otras: otrasL.otras }) : null
   const [cambiandoDoc, setCambiandoDoc] = useState(false)
   const plataforma = pagoProv?.plataforma ? { ...pagoProv.plataforma, hayLiquidacion: conLiquidacion } : null
-  const propuestaPago = pagoProv ? propuestaDelPago({ plataforma, ultimas: pagoProv.ultimas }) : null
+  const propuestaPago = pagoProv ? propuestaDelPago({ deLaFicha: pagoProv.deLaFicha, ultimas: pagoProv.ultimas }) : null
   const pagoCuenta = b.pagoCuenta ?? propuestaPago?.cuenta ?? ''
   const pagoFecha = b.pagoFecha ?? fechaDelPago(b.fecha, b.vence)
   const origenPago = b.pagoCuenta === null ? propuestaPago?.origen ?? null : null
@@ -702,8 +707,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
               <Casilla rotulo="Proveedor" origen={origen.proveedor} htmlFor="kf-proveedor" duda={!!emisor}>
                 <Buscador id="kf-proveedor" etiqueta="Proveedor" cargando={proveedoresL === null} enfocar={abrirProveedor} duda={!!emisor} valor={textoProv ?? (provId ? textoCasillaProveedor({ subcuenta, futura: cuentasAsiento?.proveedor?.codigo ?? '', nombre: prov?.nombre ?? null }) : '')} cuenta={subcuenta || null}
                   placeholder={aMano ? 'Código, nombre o NIF' : undefined}
-                  ponerTexto={setTextoProv} lista={(t) => { const q = t.toLowerCase(); return proveedores.filter((p) => !q || p.nombre.toLowerCase().includes(q) || (p.nif ?? '').toLowerCase().includes(q)) }}
-                  texto={(p) => `${p.nombre}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { if (emisor) void elegirYGuardar(p.id, p.nombre, `Elegido ${p.nombre}.`); else { ed.poner('proveedorId', p.id); setTextoProv(null) } }} />
+                  ponerTexto={setTextoProv} lista={(t) => proveedoresQueEncajan(t, proveedores, codigosProv ?? new Map())}
+                  texto={(p) => `${p.nombre}${codigosProv?.get(p.id) ? ` · ${codigosProv.get(p.id)}` : ''}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { if (emisor) void elegirYGuardar(p.id, p.nombre, `Elegido ${p.nombre}.`); else { ed.poner('proveedorId', p.id); setTextoProv(null) } }} />
               </Casilla>
               {nuevo ? (<>
                 <Casilla rotulo="N.I.F." htmlFor="kf-nif"><input id="kf-nif" data-casilla autoCapitalize="characters" autoFocus value={nuevo.nif}
@@ -827,7 +832,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                     <Buscador id={`kf-cuenta-${i}`} etiqueta={`Cuenta de gasto ${i + 1}`} cargando={cuentasGastoL === null} valor={textoCuenta[i] ?? g.cuenta} cuenta={g.cuenta || null} duda={!!duda && i === 0}
                       ponerTexto={(t) => { setTextoCuenta((x) => ({ ...x, [i]: t })); if (!t.trim()) ponerGasto(i, { cuenta: '' }) }} lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8)}
                       texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }}
-                      crear={crearCuenta((c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }, 'solo van cuentas de gasto (las del 6)')} />
+                      crear={crearCuenta((c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) })} />
                     <NombreDeCuenta etiqueta={`Nombre de la cuenta ${i + 1}`} valor={g.cuenta ? nombreGasto(g.cuenta) : ''} duda={!!duda && i === 0} />
                     <input className="kf-cifra" data-casilla={b.gastos.length > 1 ? '' : undefined} aria-label={`Importe del gasto ${i + 1}`} placeholder={i === b.gastos.length - 1 ? importeEs(totales.base) : ''}
                       value={g.importe || (b.gastos.length === 1 ? importeEs(totales.base + (totales.recargo ?? 0)) : '')} readOnly={b.gastos.length === 1}
@@ -870,6 +875,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
               </div>
             </div>
 
+            {!soloLectura && avisoInmovilizado(b.gastos.map((g) => g.cuenta)) && (
+              <p className="kf-aviso-linea" data-prueba="aviso-inmovilizado">{avisoInmovilizado(b.gastos.map((g) => g.cuenta))}</p>
+            )}
             {duda && !soloLectura && (
               <Duda texto={duda.texto}
                 principal={{ texto: `Dejar ${duda.dejar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.dejar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }}

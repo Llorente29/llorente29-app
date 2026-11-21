@@ -24,6 +24,7 @@ import { favoritosDe } from '@/modules/conta/esqueleto/ordenes'
 import type { Contexto } from '@/modules/conta/esqueleto/productos'
 import { menuPersonaVisible } from './mapa'
 import { ejerciciosEnOrden } from './ejercicio'
+import { LogoHorizontal } from '@/marca/PiezasMarca'
 
 function EmpresaYEjercicio({ ejercicios, ejercicio, elegirEjercicio }: {
   ejercicios: readonly Ejercicio[]; ejercicio: Ejercicio | null; elegirEjercicio: (codigo: string) => void
@@ -191,7 +192,8 @@ export function Arriba({ marca, ejercicios, ejercicio, elegirEjercicio, abrirBus
   return (
     <header className="k-arriba">
       <div className="k-arriba-izquierda">
-        <Link to={rutaConta('inicio')} className="k-marca">{marca}</Link>
+        {/* K10 · El logo aprobado (el SVG blanco de la marca), nunca el nombre escrito con una fuente (Julio, 21/11). */}
+        <Link to={rutaConta('inicio')} className="k-marca" aria-label={`${marca}: al inicio`} data-prueba="logo-barra"><LogoHorizontal blanco alto={24} /></Link>
         <EmpresaYEjercicio ejercicios={ejercicios} ejercicio={ejercicio} elegirEjercicio={elegirEjercicio} />
       </div>
       <button type="button" className="k-buscador" onClick={abrirBuscador} aria-keyshortcuts="Control+K">

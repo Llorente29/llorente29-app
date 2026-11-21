@@ -72,10 +72,11 @@ import { proponerAlta } from '@/modules/conta/lib/propuestaAlta'
 import { ivaDeVentas, type ActividadParaIva } from '@/modules/conta/lib/ivaVentas'
 import { codigoIae, ejercicioActual, type DatosEmpresa } from '@/modules/conta/empresa/datosEmpresa'
 import { Buscador } from '@/modules/conta/empresa/ApartadosActividad'
-import { MARCA, CON_MARCA } from '../cuenta/marca'
+import { MARCA } from '../cuenta/marca'
 import { entenderPrograma, fraseDePrograma } from '@/modules/conta/alta/programa'
 import { planActivado, ponerProgramaAnterior } from '@/modules/conta/services/programaService'
 import { activarPlan } from '@/modules/conta/services/planService'
+import { LogoHorizontal } from '@/marca/PiezasMarca'
 
 export type MarcoAlta = 'pantalla' | 'ventana'
 
@@ -691,7 +692,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   return (
     <div className={`cx cx-alta${movil ? ' cx-alta-movil' : ''}`}>
       <header className="cx-alta-cabeza">
-        <span className="cx-alta-logo">{CON_MARCA ? MARCA.nombre : 'folvy'}</span>
+        {/* K10 · El logo de la marca, nunca su nombre escrito con una fuente. */}
+        <span className="cx-alta-logo" data-prueba="logo-alta"><LogoHorizontal alto={24} /></span>
         <div className="cx-alta-cabeza-derecha">
           {movil ? (
             <button type="button" className="cx-alta-cuantos" aria-haspopup="dialog" aria-expanded={hoja}

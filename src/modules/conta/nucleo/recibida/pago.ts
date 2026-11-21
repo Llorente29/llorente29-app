@@ -4,10 +4,11 @@
 // ser por más que bancos»). Lo que decide la ficha de la recibida, sin React ni
 // red, como «Cómo se cobra» en la emitida (K05):
 //
-//   · La PROPUESTA: en las de plataforma, su 430 si hay liquidación de la que
-//     descontarla; si no, la cuenta del último pago del proveedor. Vacía quiere
-//     decir pendiente de pagar. Si sus últimos pagos van por más de una cuenta,
-//     la duda en ámbar.
+//   · La PROPUESTA (K10, Julio, 21/11: como en ERP10): la «Cuenta de pago» de
+//     la ficha del proveedor; si no la tiene, la del último pago; si no hay
+//     ninguna, vacía (pendiente de pagar). Si sus últimos pagos van por más de
+//     una cuenta, la duda en ámbar. La «plataforma» ya no se propone: su 430
+//     pasó a la ficha con la tanda del K10.
 //   · Qué HACE al guardar la cuenta que hay en la casilla:
 //       - un banco, una tarjeta o la caja de la empresa (su tesorería): lo
 //         mismo que «Ya la he pagado» de Pagos (conta_pago_a_mano): queda
@@ -23,12 +24,12 @@ import type { TonoEstado } from '../ficha/piezas'
 
 const fechaEs = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 
-/** De dónde sale la cuenta propuesta (el rótulo pequeño al lado del título). */
-export type OrigenPago = 'de su liquidación' | 'de la última'
+/** De dónde sale la cuenta propuesta (el rótulo pequeño, en gris). */
+export type OrigenPago = 'De su ficha' | 'La del último pago'
 
 export interface DatosPropuestaPago {
-  /** Si el proveedor es una plataforma: su 430 (null si no la tiene en el plan) y si la factura tiene liquidación de la que descontarla. */
-  plataforma: { nombre: string; cuenta430: string | null; hayLiquidacion: boolean } | null
+  /** K10 · La «Cuenta de pago» de la ficha del proveedor en esta empresa (company_account_link, papel «pago»), o null. */
+  deLaFicha: string | null
   /** Las cuentas de sus últimos pagos, del más nuevo al más viejo (sin las compensaciones). */
   ultimas: readonly string[]
 }
@@ -45,21 +46,17 @@ export interface PropuestaPago {
 export const PAGOS_PARA_LA_DUDA = 5
 
 /**
- * La cuenta del pago que se propone:
- *   1. de una plataforma, su 430, si hay liquidación de la que descontarla (y la tiene en el plan);
- *      sin liquidación, vacía: queda pendiente y se paga después por bancos (no se pone la 430);
- *   2. si no, la de su último pago; si los últimos van por más de una cuenta, la duda;
- *   3. sin pagos de antes, vacía.
+ * K10 · La cuenta del pago que se propone, como en ERP10:
+ *   1. la «Cuenta de pago» de su ficha;
+ *   2. si no la tiene, la de su último pago; si los últimos van por más de una cuenta, la duda;
+ *   3. sin ninguna, vacía (pendiente de pagar).
  */
 export function propuestaDelPago(d: DatosPropuestaPago): PropuestaPago {
-  if (d.plataforma) {
-    if (d.plataforma.hayLiquidacion && d.plataforma.cuenta430) return { cuenta: d.plataforma.cuenta430, origen: 'de su liquidación', duda: null }
-    return { cuenta: '', origen: null, duda: null }
-  }
+  if (d.deLaFicha?.trim()) return { cuenta: d.deLaFicha.trim(), origen: 'De su ficha', duda: null }
   const ultimas = d.ultimas.filter((c) => c.trim() !== '').slice(0, PAGOS_PARA_LA_DUDA)
   if (!ultimas.length) return { cuenta: '', origen: null, duda: null }
   const distintas = [...new Set(ultimas)]
-  return { cuenta: ultimas[0], origen: 'de la última', duda: distintas.length > 1 ? { cuentas: distintas } : null }
+  return { cuenta: ultimas[0], origen: 'La del último pago', duda: distintas.length > 1 ? { cuentas: distintas } : null }
 }
 
 export type QueHaceElPago =

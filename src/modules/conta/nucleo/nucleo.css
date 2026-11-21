@@ -53,6 +53,8 @@ html.k-sin-rueda, html.k-sin-rueda body { overflow: hidden; }
 }
 .k-arriba-izquierda { display: flex; align-items: center; gap: 22px; min-width: 0; flex-shrink: 1; }
 .k-marca { color: var(--k-blanco); font-size: 17px; font-weight: 700; text-decoration: none; letter-spacing: -0.01em; }
+/* K10 · El logo en la barra: a su altura, sin deformar (el SVG lleva su proporción). */
+.k-marca { display: inline-flex; align-items: center; line-height: 0; }
 .k-nucleo .k-marca:focus-visible { outline: 2px solid var(--k-blanco); outline-offset: 2px; }
 .k-empresa {
   display: inline-flex; align-items: center; gap: 8px; height: 28px; max-width: 420px; padding: 0 10px;
