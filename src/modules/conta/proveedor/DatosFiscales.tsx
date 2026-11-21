@@ -19,6 +19,9 @@
 //     postales del C00; nunca pisan lo escrito.
 
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { rutaFichaProveedor } from '@/config/navegacion'
+import { nifRepetidoDe } from '@/modules/conta/lib/validacionesFicha'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { Campo, OrigenDelDato, Pildoras, SeGuarda, type OpcionPildora } from '@/modules/conta/proveedor/piezas'
 import { origenDelCampo } from '@/modules/conta/lib/fichaDesdeDocumento'
@@ -174,6 +177,11 @@ function Formulario() {
           placeholder={tipoId === 'vat_eu' ? 'FR40303265045' : 'B12345678'}
           onChange={(e) => setTaxId(e.target.value)} onBlur={() => void guardarNif()} />}
       </Campo>
+      {/* X25 · El NIF de otro proveedor de la cuenta: «Ya tienes a … con este NIF», con «Abrirlo» (como el alta, X24). */}
+      {g.error('taxId')?.startsWith('Ya tienes a') && (() => {
+        const repe = nifRepetidoDe({ id: f.id, taxId }, datos.otros)
+        return repe ? <p className="cx-ayuda" data-prueba="nif-repetido-abrir"><Link to={rutaFichaProveedor(repe.id)}>Abrirlo</Link></p> : null
+      })()}
       <OrigenDelDato campo="nif" texto={origenDelCampo(f.dataFromInvoice, 'nif')} />
       {tipoId === 'foreign' ? (
         <Campo campo="countryCode" etiqueta="País (código de dos letras)"

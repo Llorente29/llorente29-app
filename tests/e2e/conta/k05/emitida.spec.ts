@@ -112,7 +112,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(ficha(page).locator('#kf-venta-0')).toHaveValue('70000000', { timeout: 15_000 })
     await expect(ficha(page).locator('#kf-cobro')).toHaveValue('57200001')
     // El origen, junto al título; y el nombre de la cuenta, entero (no se desborda de su casilla).
-    await expect(ficha(page).locator('[data-prueba="origen-cobro"]')).toHaveText('de su ficha')
+    await expect(ficha(page).locator('[data-prueba="origen-cobro"]')).toHaveText('De su ficha')  // X25: como en la recibida (K10)
     const nombreCobro = ficha(page).getByRole('textbox', { name: 'Nombre de la cuenta del cobro' })
     await expect(nombreCobro).toHaveValue('Bancos · Cuenta principal')
     expect(await nombreCobro.evaluate((el) => el.scrollWidth <= el.clientWidth), 'el nombre de la cuenta del cobro cabe entero').toBe(true)

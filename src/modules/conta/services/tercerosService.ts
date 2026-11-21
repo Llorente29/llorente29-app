@@ -290,7 +290,8 @@ async function cuentasDeTercero(accountId: string, companyId: string, partyId: s
     else if (supplierId && l.entity === 'supplier' && l.entity_id === supplierId && l.role === 'principal') suyas.push({ ...base, papel: 'proveedor' })
     else if (supplierId && l.entity === 'supplier' && l.entity_id === supplierId && l.role === 'pago' && String(c.template_code).startsWith('43')) suyas.push({ ...base, papel: 'pago' })
   }
-  const conDueno = new Set(enlaces.filter((l) => ['customer', 'supplier'].includes(String(l.entity)) && ['principal', 'pago'].includes(String(l.role))).map((l) => String(l.company_account_id)))
+  // X25 · La cuenta de cobro de un cliente (su «pago») no es suya: puede ser la 430 de otro (una plataforma).
+  const conDueno = new Set(enlaces.filter((l) => (['customer', 'supplier'].includes(String(l.entity)) && l.role === 'principal') || (l.entity === 'supplier' && l.role === 'pago')).map((l) => String(l.company_account_id)))
   const sinDueno = cuentas
     .filter((c) => String(c.template_code).startsWith('430') && c.source !== 'serie' && !conDueno.has(String(c.id)) && c.status === 'activa')
     .map((c) => ({ id: String(c.id), code: String(c.code), name: String(c.name), traida: c.source === 'migrated' }))
@@ -305,6 +306,12 @@ export async function guardarCliente(accountId: string, partyId: string | null, 
 }
 
 /** El id del tercero que ya tiene ese NIF, si la base ha parado por eso. */
+/** X24/X25 · El nombre de un tercero de la cuenta, para «Ya tienes a … con este NIF»; null si no se puede leer. */
+export async function nombreDelTercero(partyId: string): Promise<string | null> {
+  const { data } = await tabla('party').select('name').eq('id', partyId).maybeSingle()
+  return data ? String((data as Fila).name) : null
+}
+
 export function terceroDelMismoNif(e: unknown): string | null {
   const m = e instanceof Error ? e.message.match(/MISMO_NIF ([0-9a-f-]{36})/) : null
   return m ? m[1] : null
@@ -383,6 +390,26 @@ export async function asegurarCuentaLiquidacion(companyId: string, partyId: stri
   await rpc<void>('company_account_link_set', { p_company: companyId, p_entity: 'customer', p_entity_id: partyId, p_role: 'liquidacion', p_account_id: r.id, p_quien_nombre: quien, p_source: 'manual' })
   return { code: r.code, nueva: true }
 }
+
+/**
+ * X25 · La «Cuenta de cobro» del cliente en esta empresa, como la «Cuenta de pago» del proveedor (K10): el papel
+ * «pago» del cliente en company_account_link. Su código, o null si no la tiene.
+ */
+export async function cuentaDeCobroDelCliente(accountId: string, companyId: string, partyId: string): Promise<string | null> {
+  const { data, error } = await tabla('company_account_link').select('company_account:company_account_id(code)')
+    .eq('account_id', accountId).eq('company_id', companyId).eq('entity', 'customer').eq('entity_id', partyId).eq('role', 'pago').limit(1)
+  if (error) throw new Error(`No se ha podido leer su cuenta de cobro: ${error.message}`)
+  const c = ((data ?? []) as Fila[])[0]?.company_account as Fila | null | undefined
+  return c ? String(c.code) : null
+}
+
+/** X25 · Pone su «Cuenta de cobro» (queda en el registro del plan); la base no deja la suya propia. */
+export const cambiarCuentaCobro = (companyId: string, partyId: string, cuentaId: string, quien: string | null) =>
+  rpc<void>('company_account_link_set', { p_company: companyId, p_entity: 'customer', p_entity_id: partyId, p_role: 'pago', p_account_id: cuentaId, p_quien_nombre: quien, p_source: 'manual' })
+
+/** X25 · Quita su «Cuenta de cobro»: sus emitidas vuelven a proponer lo de antes. */
+export const quitarCuentaCobro = (companyId: string, partyId: string, quien: string | null) =>
+  rpc<void>('company_account_link_unset', { p_company: companyId, p_entity: 'customer', p_entity_id: partyId, p_role: 'pago', p_quien_nombre: quien })
 
 /** Esta 430 es la suya: el enlace de cliente (company_account_link_set, el del C02). */
 export const enlazarCuentaCliente = (companyId: string, partyId: string, cuentaId: string, quien: string | null) =>

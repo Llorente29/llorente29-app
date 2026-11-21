@@ -46,7 +46,7 @@ import { dondeVaElFoco, dudaDelGasto, etiquetaDelAsiento, puedeGuardar, trimestr
 import { calendarioDe } from '../recibida/servicio'
 import {
   asientoDeLaEmitida, borradorDesdeAsiento, borradorVacio, comprobacionesEmitida, estadoDeLaEmitida, ETIQUETAS_EMITIDA, fechaDelCobro, nombreDePestanaEmitida,
-  queHaceElCobro, textoAsientoDelCobro, textoOperacionCliente, vaciasEmitida, type BorradorEmitida, type CuentasEmitida, type ModoEmitida,
+  propuestaDelCobro, queHaceElCobro, textoAsientoDelCobro, textoOperacionCliente, vaciasEmitida, type BorradorEmitida, type CuentasEmitida, type ModoEmitida,
 } from './asiento'
 import {
   apuntarCobro, asientoDeFacturacion, cobroDeLaFactura, colaEmitidas, deLaEmpresa, documentoDeLaEmitida, emitidaRepetida, guardarEmitida, mayorDelCliente, repartoDeVentas, ultimaCuentaDeCobro,
@@ -124,13 +124,15 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   const reparto = useUltimo(useLeer(accountId && empresa && b.clienteId && modo !== 'hecha_sola' ? () => repartoDeVentas(accountId, empresa, b.clienteId, entryId || null) : null, `${accountId}:${empresa}:${b.clienteId}:${entryId}:reparto:${vuelta}`).datos, `${claveFicha}:${b.clienteId}`)
   // En la hecha sola, el cobro apuntado de verdad (o nada: pendiente de cobrar), nunca la propuesta de su ficha.
   const cobroApuntado = useLeer(modo === 'hecha_sola' && accountId && empresa && sub && b.numero ? () => cobroDeLaFactura(accountId, empresa, sub.id, b.numero) : null, `${accountId}:${empresa}:${sub?.id}:${b.numero}:cobro:${vuelta}`).datos ?? null
-  const ultimoCobro = useLeer(accountId && empresa && sub && !cliente?.cobro ? () => ultimaCuentaDeCobro(accountId, empresa, sub.id) : null, `${accountId}:${empresa}:${sub?.id}:ultimo-cobro`).datos ?? null
+  const ultimoCobro = useLeer(accountId && empresa && sub && !cliente?.cobro && !cliente?.cuentaCobro ? () => ultimaCuentaDeCobro(accountId, empresa, sub.id) : null, `${accountId}:${empresa}:${sub?.id}:ultimo-cobro`).datos ?? null
   const repetida = useLeer(accountId && empresa && b.numero.trim() ? () => emitidaRepetida(accountId, empresa, b.numero, cliente?.nif ?? null, entryId || null) : null, `${accountId}:${empresa}:${b.numero}:${cliente?.nif}:${entryId}:repetida:${vuelta}`).datos ?? null
 
   // Lo que se propone donde nadie ha escrito: la cuenta de venta (la de su última factura, o la primera 70x) y el cobro (de su ficha o de la última).
   const ventaPropuesta = reparto?.[0]?.cuenta ?? emp?.ventas[0]?.codigo ?? ''
-  const cobroPropuesto = cliente?.cobro ?? ultimoCobro ?? ''
-  const origenCobro = b.cobroCuenta !== null ? null : cliente?.cobro ? 'de su ficha' : ultimoCobro ? 'de la última' : null
+  // X25 · La «Cuenta de cobro» de su ficha; si no, la de antes (el banco de su ficha o la del último cobro).
+  const propuestaCobro = propuestaDelCobro({ deLaFicha: cliente?.cuentaCobro ?? null, banco: cliente?.cobro ?? null, ultimo: ultimoCobro })
+  const cobroPropuesto = propuestaCobro.cuenta
+  const origenCobro = b.cobroCuenta !== null ? null : propuestaCobro.origen
   const be: BorradorEmitida = useMemo(() => ({
     ...b,
     ventas: b.ventas.map((v, i) => (i === 0 && !v.cuenta && !soloLeer ? { ...v, cuenta: ventaPropuesta } : v)),

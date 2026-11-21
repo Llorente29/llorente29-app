@@ -160,7 +160,7 @@ describe('propuesta de dirección (§4.3) — las 4 direcciones REALES de Foodin
 describe('validaciones al guardar (§5.7)', () => {
   it('NIF repetido en la misma cuenta: bloquea y dice quién lo tiene', () => {
     const r = validarFicha(completa, [{ id: 'otro', name: 'AMIRSA', taxId: 'B-87123790' }])
-    expect(r.errores).toEqual([{ campo: 'taxId', mensaje: 'Ese NIF ya lo tiene otro proveedor: AMIRSA.' }])
+    expect(r.errores).toEqual([{ campo: 'taxId', mensaje: 'Ya tienes a AMIRSA con este NIF.' }])
   })
   it('el propio proveedor no cuenta como repetido', () => {
     expect(validarFicha(completa, [{ id: 's1', name: 'yo', taxId: 'B87123790' }]).errores).toEqual([])

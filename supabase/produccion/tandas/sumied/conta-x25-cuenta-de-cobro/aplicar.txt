@@ -1,0 +1,11 @@
+# X25 · La «Cuenta de cobro» en la ficha del cliente, como en ERP10 (encargo del 21/11). Rama conta/x25-cuenta-de-cobro.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1800  CAMBIA EN CALIENTE (declarado en su cabecera, con su prueba de staging): el disparador de
+#         company_account_link deja al CLIENTE cualquier subcuenta en el papel «pago» (su cuenta de cobro), menos la
+#         suya propia, como el K10 hizo con el proveedor. Misma firma, guarda md5, respaldo y vuelta atrás. No toca
+#         ningún enlace.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x25-cuenta-de-cobro.sql
+supabase/migrations/20261121T1800_x25_cuenta_de_cobro.sql

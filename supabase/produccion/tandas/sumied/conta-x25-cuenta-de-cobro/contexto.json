@@ -1,0 +1,23 @@
+{
+ "_que": "X25 · la cuenta de cobro en la ficha del cliente · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción (esta sesión no lee producción). 1800 cambia en caliente la función del disparador company_account_misma_cuenta() (misma firma, sin otras firmas); no toca ningún enlace. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-21T22:30Z",
+ "tanda": {
+  "supabase/migrations/20261121T1800_x25_cuenta_de_cobro.sql": "1d7a0d099b14f7fa89a018c8c766a8cf"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_account_link"
+  ],
+  "funciones": [
+   "public.company_account_misma_cuenta()"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
