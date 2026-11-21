@@ -81,8 +81,11 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     if (await local.isEnabled()) await local.selectOption({ index: 1 })
     await ficha(page).getByRole('checkbox', { name: 'Guardarla sin documento' }).check()
     await ficha(page).getByRole('textbox', { name: 'Por qué no tiene documento' }).fill('Prueba e2e X26: escrita a mano, sin documento')
-    await ficha(page).locator('[data-guardar-y-siguiente]').click()
-    await expect(page.getByText(/Apuntada y validada/).first()).toBeVisible({ timeout: 60_000 })
+    // Si aún está leyendo cómo se paga, la ficha lo dice y no guarda: se vuelve a pulsar (e2e 44957890884).
+    await expect(async () => {
+      if (!(await page.getByText(/Apuntada y validada/).first().isVisible())) await ficha(page).locator('[data-guardar-y-siguiente]').click()
+      await expect(page.getByText(/Apuntada y validada/).first()).toBeVisible({ timeout: 10_000 })
+    }).toPass({ timeout: 90_000, intervals: [2_000] })
     const [fac] = await pedir<{ id: string; journal_entry_id: string }[]>(s, `supplier_invoice?select=id,journal_entry_id&account_id=eq.${NUCLEO.id}&invoice_number=eq.${numero}`)
     expect(fac?.journal_entry_id, 'la recibida, con su asiento').toBeTruthy()
     const [antes] = await pedir<{ series: number; number: number }[]>(s, `journal_entry?select=series,number&id=eq.${fac.journal_entry_id}`)
