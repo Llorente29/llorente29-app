@@ -232,9 +232,13 @@ test('a 1456 × 816: se contabilizan al subir, se abren, el que espera se arregl
   if (!lectura.ok) throw new Error(lectura.problemas.join(' | '))
   const g = await rest(s, 'POST', 'rpc/conta_tpv_dia_guardar', { p_company: gemela, p_dia: DIAS[0], p_programa: 'revo', p_lectura: lectura.lectura.dias.find((x) => x.dia === DIAS[0])!.lectura, p_quien_nombre: 'Prueba e2e R15' })
   expect(g.status, `la gemela guarda el 13/10: ${JSON.stringify(g.datos).slice(0, 200)}`).toBe(200)
-  await page.evaluate(([clave, valor]) => { window.localStorage.setItem(clave, valor) }, [`folvy.conta.empresa.${NUCLEO.id}`, gemela] as const)
+  // Entrar en la gemela como de cero: sin las pestañas guardadas de la primera. Con ellas, el marco del núcleo
+  // (K05 · 0b, cambiarDeEmpresa) aparca las de la primera y abre la gemela en SU Inicio, no en la dirección pedida
+  // (run 44948665516: la pantalla era Inicio de la gemela, con una sola pestaña).
+  await page.evaluate(() => { try { window.sessionStorage.clear() } catch { /* sin almacén */ } })
   await page.addInitScript(([clave, valor]) => { window.localStorage.setItem(clave, valor) }, [`folvy.conta.empresa.${NUCLEO.id}`, gemela] as const)
   await page.goto('/conta/ventas/cierres?ver=todos', { timeout: 30_000 })
+  await expect(page.getByRole('button', { name: /^Bar de prueba R15 1456-gemela / })).toBeVisible({ timeout: 30_000 })
   await zonaActiva(page).getByRole('row').filter({ hasText: '5001 a 5048' }).waitFor({ timeout: 40_000 })
   await zonaActiva(page).getByRole('button', { name: /^Validar los 1 listos$/ }).first().click()
   await page.getByRole('dialog', { name: 'Validar 1 cierre' }).getByRole('button', { name: 'Validar 1 cierre' }).click()
