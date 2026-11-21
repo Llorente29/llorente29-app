@@ -150,8 +150,8 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   const cuentasVenta: CuentaDelPlan[] = useMemo(() => [...(emp?.ventas ?? []).map((c) => ({ codigo: c.codigo, nombre: c.nombre })),
     ...creadas.filter((c) => !(emp?.ventas ?? []).some((v) => v.codigo === c.codigo))], [emp, creadas])
   /** X21 · «No está: crear la …» en los buscadores de cuenta de esta ficha (la empresa, la de la ficha). */
-  const crearCuenta = (alCrear: (c: CuentaDelPlan) => void) => (q: string, cerrar: () => void) => (empresa
-    ? <CrearDesdeBuscador accountId={accountId} companyId={empresa} q={q} quien={userName ?? null}
+  const crearCuenta = (alCrear: (c: CuentaDelPlan) => void, noVa?: string) => (q: string, cerrar: () => void) => (empresa
+    ? <CrearDesdeBuscador accountId={accountId} companyId={empresa} q={q} quien={userName ?? null} noVa={noVa}
         alCrear={(c) => { const n = { codigo: c.code, nombre: c.name }; setCreadas((x) => [...x, n]); alCrear(n); cerrar() }} />
     : null)
   const cuentasCobro: CuentaDelPlan[] = useMemo(() => [...(emp?.cobros ?? []).map((c) => ({ codigo: c.codigo, nombre: c.nombre })),
@@ -429,7 +429,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
                       : <Buscador id={`kf-venta-${i}`} etiqueta={`Cuenta de venta ${i + 1}`} cargando={!emp} valor={textoCuenta[i] ?? v.cuenta} cuenta={v.cuenta || null} duda={!!duda && i === 0}
                           ponerTexto={(t) => setTextoCuenta((x) => ({ ...x, [i]: t }))} lista={(t) => cuentasQueEncajan(t, cuentasVenta, 8)}
                           texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerVenta(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }}
-                          crear={crearCuenta((c) => { ponerVenta(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) })} />}
+                          crear={crearCuenta((c) => { ponerVenta(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }, 'solo van cuentas de venta (las del 70)')} />}
                     <NombreDeCuenta etiqueta={`Nombre de la cuenta de venta ${i + 1}`} valor={v.cuenta ? nombreVenta(v.cuenta) : ''} duda={!!duda && i === 0} />
                     <input className="kf-cifra" data-casilla={be.ventas.length > 1 && !soloLeer ? '' : undefined} aria-label={`Importe de la venta ${i + 1}`}
                       value={be.ventas.length === 1 ? importeEs(previa?.base ?? 0) : v.importe} readOnly={be.ventas.length === 1 || soloLeer}
@@ -458,7 +458,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
                     : <Buscador id="kf-cobro" etiqueta="La cuenta del cobro" cargando={!emp} valor={textoCobro ?? be.cobroCuenta ?? ''} cuenta={be.cobroCuenta || null}
                         ponerTexto={(t) => { setTextoCobro(t); if (!t.trim()) ed.poner('cobroCuenta', '') }} lista={(t) => cuentasQueEncajan(t, cuentasCobro, 8)}
                         texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) }}
-                        crear={crearCuenta((c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) })} />}
+                        crear={crearCuenta((c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) }, 'solo van bancos y caja (las del 57)')} />}
                   {/* Sin cuenta, «Pendiente de cobrar» en la casilla ancha (en la de la cuenta no cabía entero). */}
                   <NombreDeCuenta etiqueta="Nombre de la cuenta del cobro" valor={nombreDelCobro} placeholder="Pendiente de cobrar" />
                 </div>

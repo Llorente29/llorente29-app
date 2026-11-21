@@ -201,7 +201,7 @@ export default function RevisarFacturaPage() {
   const cuentas = useLeer(accountId && fac?.company_id ? () => cuentasDeGasto(accountId, fac.company_id!) : null, `${accountId}:${fac?.company_id}:gastos`)
   // X21 · Lo que no está en el buscador de cuentas se crea aquí (código y nombre), en la empresa de la factura, y queda elegido.
   const crearCuenta = (q: string, elegir: (c: { codigo: string; nombre: string }) => void) => (fac?.company_id
-    ? <CrearDesdeBuscador accountId={accountId} companyId={fac.company_id} q={q} quien={userName ?? null}
+    ? <CrearDesdeBuscador accountId={accountId} companyId={fac.company_id} q={q} quien={userName ?? null} noVa="solo van cuentas de gasto (las del 6)"
         alCrear={(c) => { cuentas.recargar(); elegir({ codigo: c.code, nombre: c.name }) }} />
     : null)
   const tiposIva = useLeer(accountId ? () => tiposDeIvaRecibida(accountId) : null, `${accountId}:tipos-iva`)

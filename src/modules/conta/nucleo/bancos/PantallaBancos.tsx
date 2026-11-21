@@ -64,7 +64,7 @@ const TONO_PALABRA = { 'Por conciliar': 'mira', Conciliado: 'bien', Apartado: 'n
 const num = (x: string): number | null => { const n = Number(x.replace(/\./g, '').replace(',', '.')); return x.trim() && Number.isFinite(n) ? n : null }
 const euros = (cent: number | null) => (cent === null ? '' : cifra(cent / 100))
 /** X21 · Lo que pinta «No está: crear la …» en un buscador de cuenta de Bancos (y qué hacer con la creada). */
-type CrearCuenta = (alCrear: (c: CuentaDelPlan) => void) => (q: string, cerrar: () => void) => ReactNode
+type CrearCuenta = (alCrear: (c: CuentaDelPlan) => void, noVa?: string) => (q: string, cerrar: () => void) => ReactNode
 
 const primeraHoja = (nombres: Readonly<Record<string, string>>, prefijo: string) => Object.keys(nombres).filter((c) => c.startsWith(prefijo) && c.length >= 8).sort()[0] ?? null
 
@@ -114,8 +114,8 @@ export default function PantallaBancos() {
   const cuentasPlan: CuentaDelPlan[] = useMemo(() => Object.entries(nombres).filter(([c]) => c.length >= 8).map(([codigo, nombre]) => ({ codigo, nombre })).sort((a, b) => a.codigo.localeCompare(b.codigo)), [nombres])
   const cuenta572 = banco?.cuenta ?? null
   // X21 · «No está: crear la …» en los buscadores de cuenta de Bancos (la empresa, la de arriba): creada, elegida y releída.
-  const crearCuenta: CrearCuenta = (alCrear) => (q, cerrar) => (companyId
-    ? <CrearDesdeBuscador accountId={accountId} companyId={companyId} q={q} quien={cuentaConta.userName ?? null}
+  const crearCuenta: CrearCuenta = (alCrear, noVa) => (q, cerrar) => (companyId
+    ? <CrearDesdeBuscador accountId={accountId} companyId={companyId} q={q} quien={cuentaConta.userName ?? null} noVa={noVa}
         alCrear={(c) => { setVuelta((v) => v + 1); alCrear({ codigo: c.code, nombre: c.name }); cerrar() }} />
     : null)
   const cuenta = cuantos(movs)
@@ -309,7 +309,7 @@ export default function PantallaBancos() {
                       ponerTexto={(t) => { setTextoBarra(t); setCuentaBarra(null) }}
                       lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8).filter((c) => c.codigo !== cuenta572)} texto={(c) => `${c.codigo} · ${c.nombre}`}
                       elegir={(c) => { setCuentaBarra(c); setTextoBarra(null); setTimeout(() => document.getElementById('kb-conciliar-n')?.focus(), 0) }}
-                      crear={crearCuenta((c) => { setCuentaBarra(c); setTextoBarra(null) })} />
+                      crear={crearCuenta((c) => { setCuentaBarra(c); setTextoBarra(null) }, 'no va la del propio banco')} />
                   </div>
                   <kbd>F4</kbd>
                 </div>
@@ -535,7 +535,7 @@ function AMano({ banco, hoy, cuentas, ocupado, hacer, crearCuenta }: { banco: Ba
         <Casilla rotulo="Cuenta" origen="F4" htmlFor="kb-cuenta">
           <Buscador id="kb-cuenta" etiqueta="Cuenta" valor={texto ?? (cuenta ? `${cuenta.codigo} · ${cuenta.nombre}` : '')} cuenta={cuenta?.codigo ?? null} ponerTexto={(t) => { setTexto(t); setCuenta(null) }}
             lista={(t) => cuentasQueEncajan(t, cuentas, 8).filter((c) => c.codigo !== banco.cuenta)} texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { setCuenta(c); setTexto(null) }}
-            crear={crearCuenta?.((c) => { setCuenta(c); setTexto(null) })} />
+            crear={crearCuenta?.((c) => { setCuenta(c); setTexto(null) }, 'no va la del propio banco')} />
         </Casilla>
         <Casilla rotulo="Concepto" htmlFor="kb-concepto"><input id="kb-concepto" data-casilla value={concepto} onChange={(e) => setConcepto(e.target.value)} /></Casilla>
         <Casilla rotulo="Ingreso" htmlFor="kb-ingreso"><input id="kb-ingreso" data-casilla className="kf-cifra" inputMode="decimal" value={ingreso} onChange={(e) => setIngreso(e.target.value)} /></Casilla>
