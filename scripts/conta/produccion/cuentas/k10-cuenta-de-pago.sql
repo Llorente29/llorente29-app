@@ -9,7 +9,9 @@
 --     descartadas), que hasta hoy proponían la 430 de su plataforma; y cuántas de ellas propondrían esa
 --     misma 430 con el K10 (porque su proveedor la tiene en la ficha). Antes: la segunda es 0 (o lo que
 --     ya hubiera a mano); después, las dos iguales. Lo que falte es una que cambiaría de cuenta.
--- Escrito sin las funciones de la tanda, para que valga antes de aplicarla.
+-- Escrito sin las funciones de la tanda, para que valga antes de aplicarla. Corte fijo: lo creado antes del
+-- 22/11/2026 a las 00:00 de Madrid, en todo lo que la tanda no escribe; el enlace «pago» (lo que escribe la
+-- tanda) va sin corte, a propósito: es lo que se mide antes y después.
 with pl as (
   select distinct on (l.company_id, pr.supplier_id)
          l.account_id, l.company_id, pr.supplier_id, l.company_account_id as la430
@@ -18,6 +20,7 @@ with pl as (
     join public.company_account_link l on l.account_id = pf.account_id and l.entity = 'customer' and l.entity_id = pf.party_id::text and l.role = 'principal'
     join public.company_account a on a.id = l.company_account_id and a.account_id = l.account_id and a.code like '430%'
    where pf.role = 'platform'
+     and pf.created_at < timestamptz '2026-11-22 00:00:00+01' and pr.created_at < timestamptz '2026-11-22 00:00:00+01' and l.created_at < timestamptz '2026-11-22 00:00:00+01'
    order by l.company_id, pr.supplier_id, l.created_at
 ), conficha as (
   select pl.*, k.company_account_id as depago
@@ -27,7 +30,7 @@ with pl as (
   select c.account_id, c.company_id, count(*) as recibidas, count(*) filter (where c.depago = c.la430) as la_misma
     from conficha c
     join public.supplier_invoice i on i.account_id = c.account_id and i.company_id = c.company_id and i.supplier_id = c.supplier_id
-   where i.status not in ('anulada', 'descartada')
+   where i.status not in ('anulada', 'descartada') and i.created_at < timestamptz '2026-11-22 00:00:00+01'
    group by c.account_id, c.company_id
 ), por as (
   select account_id, company_id, count(*) as proveedores,
