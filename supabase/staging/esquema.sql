@@ -52911,6 +52911,51 @@ $$;
 
 
 --
+-- Name: conta_operacion_clase(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_operacion_clase(p_operacion text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select case p_operacion
+    when 'interior' then 'nacional'
+    when 'isp_interior' then 'isp_nacional'
+    when 'intra_bienes' then 'intracomunitaria'
+    when 'intra_servicios' then 'intracomunitaria'
+    when 'fuera_ue' then 'isp_extranjero'
+    when 'exenta' then 'exenta'
+    else null end
+$$;
+
+
+--
+-- Name: FUNCTION conta_operacion_clase(p_operacion text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_operacion_clase(p_operacion text) IS 'K10b · La clase de IVA (la de conta_proveedor_iva_clase, y «exenta») de un tipo de operación de la factura; null si no tiene.';
+
+
+--
+-- Name: conta_operacion_nombre(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_operacion_nombre(p_operacion text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select case p_operacion
+    when 'interior' then 'Operaciones interiores'
+    when 'isp_interior' then 'Inversión del sujeto pasivo'
+    when 'intra_bienes' then 'Adquisición intracomunitaria de bienes'
+    when 'intra_servicios' then 'Adquisición intracomunitaria de servicios'
+    when 'fuera_ue' then 'Fuera de la UE (inversión del sujeto pasivo)'
+    when 'exenta' then 'Exenta o no sujeta'
+    else p_operacion end
+$$;
+
+
+--
 -- Name: conta_pago_a_mano(uuid, uuid, uuid, date, numeric); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -58123,6 +58168,153 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_recibida_antes_del_inicio(p_invoice uuid) IS 'N03: para una recibida con fecha anterior al día de inicio de su empresa, si hay que preguntar «¿Ya estaba contabilizada?», con las fechas, el programa de antes, la respuesta que haya y, si ya vino con lo traído (mismo NIF y número, source = traida), cuál. Solo lee.';
+
+
+--
+-- Name: conta_recibida_cabecera(uuid, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_cabecera(p_invoice uuid, p_cambios jsonb, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_f public.supplier_invoice;
+  v_c jsonb := coalesce(p_cambios, '{}'::jsonb);
+  v_quien text := coalesce(nullif(trim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  v_claves constant text[] := array['operacion', 'deduce_en', 'concepto', 'observaciones', 'marca'];
+  v_raras text[];
+  v_cambios jsonb := '[]'::jsonb;
+  v_textos text[] := '{}';
+  v_al_asiento boolean := false;
+  v_quitados int := 0;
+  v_txt text; v_dia date; v_uuid uuid; v_p jsonb; v_abierto date; v_suyo date;
+  v_op text; v_deduce date; v_concepto text; v_notas text; v_marca uuid;
+begin
+  if jsonb_typeof(v_c) <> 'object' then
+    raise exception 'Los cambios no se entienden: tiene que ser un objeto con lo que cambia.' using errcode = '22023';
+  end if;
+  select array_agg(k order by k) into v_raras from jsonb_object_keys(v_c) k where not (k = any (v_claves));
+  if v_raras is not null then
+    raise exception 'No sé guardar: %. Lo que sé guardar aquí: %.', array_to_string(v_raras, ', '), array_to_string(v_claves, ', ') using errcode = '22023';
+  end if;
+  select * into v_f from public.supplier_invoice where id = p_invoice for update;
+  if v_f.id is null or not public.belongs_to_account(v_f.account_id) then
+    raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501';
+  end if;
+  if v_f.status in ('anulada', 'descartada') then
+    raise exception 'Está %: no se cambia.', v_f.status using errcode = '22023';
+  end if;
+  if exists (select 1 from public.journal_entry e where e.account_id = v_f.account_id and e.source_type = 'supplier_invoice'
+                and e.source_id = v_f.id and e.status = 'validado') then
+    raise exception 'Ya está contabilizada: para cambiarla, anula su asiento.' using errcode = '22023';
+  end if;
+  v_op := v_f.vat_operation; v_deduce := v_f.deduct_from; v_concepto := v_f.entry_concept; v_notas := v_f.notes; v_marca := v_f.brand_id;
+
+  -- El tipo de operación («» o null: el de su ficha).
+  if v_c ? 'operacion' then
+    v_txt := nullif(trim(v_c ->> 'operacion'), '');
+    if v_txt is not null and public.conta_operacion_clase(v_txt) is null then
+      raise exception 'No conozco el tipo de operación «%».', v_txt using errcode = '22023';
+    end if;
+    if v_txt is distinct from v_f.vat_operation then
+      v_op := v_txt; v_al_asiento := true;
+      v_cambios := v_cambios || jsonb_build_object('campo', 'operacion', 'antes', v_f.vat_operation, 'ahora', v_txt);
+      v_textos := array_append(v_textos, format('Tipo de operación: %s', coalesce(public.conta_operacion_nombre(v_txt), 'el de su ficha')));
+    end if;
+  end if;
+
+  -- El trimestre en que se deduce (su primer día; «» o null: el suyo).
+  if v_c ? 'deduce_en' then
+    v_dia := nullif(v_c ->> 'deduce_en', '')::date;
+    if v_dia is not null then
+      if v_f.invoice_date is null then raise exception 'Sin la fecha de la factura no se elige el trimestre.' using errcode = '22023'; end if;
+      v_dia := date_trunc('quarter', v_dia)::date;
+      v_suyo := date_trunc('quarter', v_f.invoice_date)::date;
+      if v_dia < v_suyo then
+        raise exception 'No se deduce antes de su fecha: la factura es del %, y el % es anterior.', to_char(v_f.invoice_date, 'DD/MM/YYYY'),
+          public.conta_iva_periodo_frase('', extract(quarter from v_dia)::int || 'T', extract(year from v_dia)::int) using errcode = '22023';
+      end if;
+      v_p := public.conta_iva_presentado(v_f.company_id, v_dia);
+      if v_p is not null then
+        raise exception 'El IVA % ya está presentado: no se deduce ahí. El IVA presentado no se toca.',
+          public.conta_iva_periodo_frase('de', v_p->>'periodo', (v_p->>'ejercicio')::int) using errcode = '23514';
+      end if;
+      v_abierto := public.conta_primer_dia_iva_abierto(v_f.company_id, v_dia);
+      if v_abierto is null or v_abierto >= (v_dia + interval '3 months')::date then
+        raise exception 'El trimestre del % no está abierto: elige uno abierto.', to_char(v_dia, 'DD/MM/YYYY') using errcode = '23514';
+      end if;
+      if v_dia = v_suyo then v_dia := null; end if;   -- el suyo: lo de siempre
+    end if;
+    if v_dia is distinct from v_f.deduct_from then
+      v_deduce := v_dia; v_al_asiento := true;
+      v_cambios := v_cambios || jsonb_build_object('campo', 'deduce_en', 'antes', v_f.deduct_from, 'ahora', v_dia);
+      v_textos := array_append(v_textos, format('Se deduce en: %s', case when v_dia is null then 'el suyo'
+        else extract(quarter from v_dia)::int || 'T de ' || extract(year from v_dia)::int end));
+    end if;
+  end if;
+
+  -- El concepto del asiento («» o null: el propuesto).
+  if v_c ? 'concepto' then
+    v_txt := nullif(trim(v_c ->> 'concepto'), '');
+    if length(v_txt) > 200 then raise exception 'El concepto del asiento, como mucho 200 letras.' using errcode = '22023'; end if;
+    if v_txt is distinct from v_f.entry_concept then
+      v_concepto := v_txt; v_al_asiento := true;
+      v_cambios := v_cambios || jsonb_build_object('campo', 'concepto', 'antes', v_f.entry_concept, 'ahora', v_txt);
+      v_textos := array_append(v_textos, case when v_txt is null then 'Concepto: el propuesto' else format('Concepto: «%s»', v_txt) end);
+    end if;
+  end if;
+
+  -- Las observaciones: no van al asiento.
+  if v_c ? 'observaciones' then
+    v_txt := nullif(trim(v_c ->> 'observaciones'), '');
+    if length(v_txt) > 2000 then raise exception 'Las observaciones, como mucho 2.000 letras.' using errcode = '22023'; end if;
+    if v_txt is distinct from v_f.notes then
+      v_notas := v_txt;
+      v_cambios := v_cambios || jsonb_build_object('campo', 'observaciones', 'antes', v_f.notes, 'ahora', v_txt);
+      v_textos := array_append(v_textos, case when v_txt is null then 'Sin observaciones' else 'Observaciones' end);
+    end if;
+  end if;
+
+  -- La marca: una de la cuenta, activa (null: sin marca).
+  if v_c ? 'marca' then
+    v_uuid := nullif(v_c ->> 'marca', '')::uuid;
+    if v_uuid is not null and not exists (select 1 from public.brand b where b.id = v_uuid and b.account_id = v_f.account_id) then
+      raise exception 'Esa marca no es de esta cuenta.' using errcode = '42501';
+    end if;
+    if v_uuid is distinct from v_f.brand_id then
+      v_marca := v_uuid; v_al_asiento := true;
+      v_cambios := v_cambios || jsonb_build_object('campo', 'marca', 'antes', v_f.brand_id, 'ahora', v_uuid);
+      v_textos := array_append(v_textos, format('Marca: %s', coalesce((select b.name from public.brand b where b.id = v_uuid), 'sin marca')));
+    end if;
+  end if;
+
+  if jsonb_array_length(v_cambios) = 0 then
+    return jsonb_build_object('guardado', '[]'::jsonb, 'texto', 'No había nada que guardar: todo estaba como está.', 'asiento_quitado', false);
+  end if;
+  update public.supplier_invoice
+     set vat_operation = v_op, deduct_from = v_deduce, entry_concept = v_concepto, notes = v_notas, brand_id = v_marca, updated_at = now()
+   where id = v_f.id;
+  if v_al_asiento then
+    delete from public.journal_entry e
+     where e.account_id = v_f.account_id and e.source_type = 'supplier_invoice' and e.source_id = v_f.id and e.status in ('propuesto', 'borrador');
+    get diagnostics v_quitados = row_count;
+  end if;
+  insert into public.supplier_invoice_change (account_id, supplier_invoice_id, by_name, what, cambios)
+  values (v_f.account_id, v_f.id, v_quien, 'guardar', v_cambios);
+  return jsonb_build_object(
+    'guardado', (select jsonb_agg(x->>'campo') from jsonb_array_elements(v_cambios) x),
+    'texto', 'Guardado: ' || array_to_string(v_textos, ', ') || '.'
+             || case when v_quitados > 0 then ' Su asiento propuesto se ha quitado para proponerlo otra vez con lo nuevo.' else '' end,
+    'asiento_quitado', v_quitados > 0);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_cabecera(p_invoice uuid, p_cambios jsonb, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_cabecera(p_invoice uuid, p_cambios jsonb, p_quien_nombre text) IS 'K10b · Guarda la cabecera de una recibida sin contabilizar: el tipo de operación, el trimestre en que se deduce (nunca uno presentado), el concepto del asiento, las observaciones y la marca. Deja su rastro en supplier_invoice_change.';
 
 
 --
@@ -120513,6 +120705,9 @@ END, ''::text)) STORED,
     recipient_answer text,
     recipient_answered_at timestamp with time zone,
     recipient_answered_by_name text,
+    vat_operation text,
+    deduct_from date,
+    entry_concept text,
     CONSTRAINT supplier_invoice_arrival_channel_check CHECK ((arrival_channel = ANY (ARRAY['subida'::text, 'correo'::text, 'cocina'::text, 'portal'::text]))),
     CONSTRAINT supplier_invoice_before_start_answer_check CHECK (((before_start_answer IS NULL) OR (before_start_answer = ANY (ARRAY['ya_estaba'::text, 'es_nueva'::text])))),
     CONSTRAINT supplier_invoice_descartada_con_motivo CHECK (((status = 'descartada'::text) = ((discarded_at IS NOT NULL) AND (length(TRIM(BOTH FROM COALESCE(discard_reason, ''::text))) > 0) AND (status_before_discard IS NOT NULL)))),
@@ -120529,7 +120724,8 @@ END, ''::text)) STORED,
     CONSTRAINT supplier_invoice_retencion_completa CHECK ((((withholding_rate_id IS NULL) = (withholding_amount IS NULL)) AND ((withholding_amount IS NULL) OR (withholding_amount >= (0)::numeric)))),
     CONSTRAINT supplier_invoice_source_check CHECK ((source = ANY (ARRAY['manual'::text, 'ocr'::text, 'lote'::text, 'liquidacion'::text, 'traida'::text]))),
     CONSTRAINT supplier_invoice_status_check CHECK ((status = ANY (ARRAY['borrador'::text, 'en_revision'::text, 'aprobada'::text, 'con_discrepancias'::text, 'pagada'::text, 'anulada'::text, 'descartada'::text]))),
-    CONSTRAINT supplier_invoice_vat_non_deductible_reason_check CHECK (((vat_non_deductible_reason IS NULL) OR (vat_non_deductible_reason = ANY (ARRAY['no_a_nombre'::text, 'ticket_sin_nif'::text, 'otro'::text, 'sin_roi'::text]))))
+    CONSTRAINT supplier_invoice_vat_non_deductible_reason_check CHECK (((vat_non_deductible_reason IS NULL) OR (vat_non_deductible_reason = ANY (ARRAY['no_a_nombre'::text, 'ticket_sin_nif'::text, 'otro'::text, 'sin_roi'::text])))),
+    CONSTRAINT supplier_invoice_vat_operation_check CHECK ((vat_operation = ANY (ARRAY['interior'::text, 'isp_interior'::text, 'intra_bienes'::text, 'intra_servicios'::text, 'fuera_ue'::text, 'exenta'::text])))
 );
 
 
@@ -120762,6 +120958,27 @@ COMMENT ON COLUMN public.supplier_invoice.recipient_answered_at IS 'E03: cuándo
 --
 
 COMMENT ON COLUMN public.supplier_invoice.recipient_answered_by_name IS 'E03: quién lo contestó.';
+
+
+--
+-- Name: COLUMN supplier_invoice.vat_operation; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier_invoice.vat_operation IS 'K10b · El tipo de operación de esta factura, si se cambió en ella (como ERP10): interior, isp_interior, intra_bienes, intra_servicios, fuera_ue o exenta. Nulo = el de su ficha (conta_proveedor_iva_clase).';
+
+
+--
+-- Name: COLUMN supplier_invoice.deduct_from; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier_invoice.deduct_from IS 'K10b · El primer día del trimestre en que se deduce, si se eligió uno distinto del suyo. Nulo = su fecha, o el primer día abierto (conta_recibida_fecha). Nunca uno presentado.';
+
+
+--
+-- Name: COLUMN supplier_invoice.entry_concept; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier_invoice.entry_concept IS 'K10b · El concepto del asiento, escrito a mano. Nulo = el propuesto.';
 
 
 --
@@ -183223,6 +183440,24 @@ GRANT ALL ON FUNCTION public.conta_numero_texto(p numeric) TO service_role;
 
 
 --
+-- Name: FUNCTION conta_operacion_clase(p_operacion text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.conta_operacion_clase(p_operacion text) TO anon;
+GRANT ALL ON FUNCTION public.conta_operacion_clase(p_operacion text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_operacion_clase(p_operacion text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_operacion_nombre(p_operacion text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.conta_operacion_nombre(p_operacion text) TO anon;
+GRANT ALL ON FUNCTION public.conta_operacion_nombre(p_operacion text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_operacion_nombre(p_operacion text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_pago_a_mano(p_company uuid, p_invoice uuid, p_treasury uuid, p_fecha date, p_importe numeric); Type: ACL; Schema: public; Owner: -
 --
 
@@ -184325,6 +184560,15 @@ GRANT ALL ON FUNCTION public.conta_recibe_mercancia(p_company uuid) TO service_r
 REVOKE ALL ON FUNCTION public.conta_recibida_antes_del_inicio(p_invoice uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_recibida_antes_del_inicio(p_invoice uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_recibida_antes_del_inicio(p_invoice uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibida_cabecera(p_invoice uuid, p_cambios jsonb, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_cabecera(p_invoice uuid, p_cambios jsonb, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_cabecera(p_invoice uuid, p_cambios jsonb, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_cabecera(p_invoice uuid, p_cambios jsonb, p_quien_nombre text) TO service_role;
 
 
 --
