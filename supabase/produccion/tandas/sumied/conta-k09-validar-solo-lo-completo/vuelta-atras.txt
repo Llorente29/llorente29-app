@@ -1,0 +1,3 @@
+# K09 · la vuelta atrás: conta_motivos_para_validar desde su respaldo y fuera lo nuevo (la tabla y el CHECK, solo si no se han usado).
+cuenta: scripts/conta/produccion/cuentas/k09-validar.sql
+supabase/vuelta-atras/20261121T0945_k09_validar_solo_lo_completo.down.sql

@@ -1,0 +1,8 @@
+# Lo que necesita la e2e (tests/e2e/conta/k09), en la gestoría de la cuenta del núcleo: tres recibidas por
+# revisar por tamaño, dos con el mismo número escrito de otra forma. Solo añade, con ids fijos: se puede
+# aplicar dos veces igual (W07), y va de verdad desde la rama (W05). Va DELANTE de la migración: no la
+# necesita, y la migración (cambia) solo pasa en ROLLBACK desde la rama.
+supabase/seeds/conta/seed_k09_validar_staging.sql
+# K09 · Nunca se valida una recibida incompleta ni repetida (los motivos de la factura al validar).
+supabase/migrations/20261121T0945_k09_validar_solo_lo_completo.sql
+supabase/staging/sql/20261121_k09_validar_solo_lo_completo_prueba.sql
