@@ -26,7 +26,7 @@ import { Link } from 'react-router-dom'
 import { rutaFichaProveedor } from '@/config/navegacion'
 import { useApp } from '@/context/AppContext'
 import { Campo, Dialogo } from '@/modules/conta/proveedor/piezas'
-import { crearProveedor } from '@/modules/conta/services/proveedorService'
+import { crearProveedor, NifRepetidoError } from '@/modules/conta/services/proveedorService'
 import { tipoEntidadPorNif } from '@/modules/conta/lib/nif'
 import { avisoNifAlta, revisarAlta, textoNifRepetido, valoresInicialesAlta, type ProveedorExistente } from '@/modules/conta/lib/altaProveedor'
 import type { FichaProveedor } from '@/modules/conta/types'
@@ -115,7 +115,9 @@ export function FormularioAltaProveedor({ accountId, otros, nombreInicial, nifIn
       }
       alCrear(creado)
     } catch (e2) {
-      setFallo(e2 instanceof Error ? e2.message : 'No se pudo crear.')
+      // X24 · La base lo ha parado por el NIF: la misma frase, con «Abrirlo», no un error.
+      if (e2 instanceof NifRepetidoError) setRepetido(e2.repetido)
+      else setFallo(e2 instanceof Error ? e2.message : 'No se pudo crear.')
       setOcupado(false)
     }
   }
@@ -138,7 +140,7 @@ export function FormularioAltaProveedor({ accountId, otros, nombreInicial, nifIn
       </Campo>
       {repetido && (
         <div className="cx-aviso" role="alert" data-prueba="nif-repetido">
-          {textoNifRepetido(repetido.name)}{repetido.id && <> <Link to={rutaFichaProveedor(repetido.id)}>Abrirlo</Link></>}
+          {textoNifRepetido('archivado' in repetido && repetido.archivado ? `${repetido.name} (archivado)` : repetido.name)}{repetido.id && <> <Link to={rutaFichaProveedor(repetido.id)}>Abrirlo</Link></>}
         </div>
       )}
       {delPapel && (

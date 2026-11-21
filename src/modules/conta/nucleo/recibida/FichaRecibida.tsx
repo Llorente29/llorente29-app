@@ -70,7 +70,7 @@ import { useUltimo } from '../ficha/useUltimo'
 import { Buscador } from '../ficha/Buscador'
 import { cuentasQueEncajan, queHaceIntro, type CuentaDelPlan } from '../ficha/teclas'
 import { origenes } from './origen'
-import { crearProveedor } from '@/modules/conta/services/proveedorService'
+import { crearProveedor, NifRepetidoError } from '@/modules/conta/services/proveedorService'
 import { revisarAlta, textoNifRepetido, type ProveedorExistente } from '@/modules/conta/lib/altaProveedor'
 import { tipoEntidadPorNif } from '@/modules/conta/lib/nif'
 import { casillasVacias, comprobacionesDe, dondeVaElFoco, dudaDelGasto, emisorDesconocido, estadoDeLaFicha, etiquetaDelAsiento, franjaProveedorSolo, gastoEnAmbar, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
@@ -363,7 +363,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
         entityKind: r.nif ? tipoEntidadPorNif(r.nif) : null, createdBy: userId ?? null, createdByName: userName ?? null })
       ed.poner('proveedorId', creado.id); setTextoProv(null); setNuevo(null); setVueltaProv((v) => v + 1)
       setAviso({ tono: 'ok', texto: `Dado de alta ${creado.name}${creado.taxId ? ` (${creado.taxId})` : ''} y elegido en esta factura. Su subcuenta se crea al validarla.` })
-    } catch (e) { setNuevo({ ...nuevo, ocupado: false, fallo: e instanceof Error ? e.message : String(e) }) }
+    } catch (e) { setNuevo({ ...nuevo, ocupado: false, fallo: e instanceof Error ? e.message : String(e), repetido: e instanceof NifRepetidoError ? e.repetido : null }) }
   }
   const [guardando, setGuardando] = useState(false)
   useEffect(() => () => { if (fichero) URL.revokeObjectURL(fichero.url) }, [fichero])
@@ -727,7 +727,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 <button type="button" className="kf-enlace-plano" disabled={nuevo.ocupado} onClick={() => setNuevo(null)}>Cancelar</button>
                 {nuevo.repetido ? (
                   <p className="kf-aviso kf-repetida" data-tono="falta" role="alert" data-prueba="nif-repetido">
-                    <strong>Mira esto ·</strong> {textoNifRepetido(nuevo.repetido.name)}{nuevo.repetido.id && <> <Link className="kf-enlace" to={rutaFichaProveedor(nuevo.repetido.id)}>Abrirlo</Link></>}
+                    <strong>Mira esto ·</strong> {nuevo.fallo ?? textoNifRepetido(nuevo.repetido.name)}{nuevo.repetido.id && <> <Link className="kf-enlace" to={rutaFichaProveedor(nuevo.repetido.id)}>Abrirlo</Link></>}
                   </p>
                 ) : nuevo.fallo && <p className="kf-error" role="alert">{nuevo.fallo}</p>}
               </div>

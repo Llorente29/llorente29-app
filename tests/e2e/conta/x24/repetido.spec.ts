@@ -55,7 +55,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await ficha(page).locator('#kf-nombre').fill('Otro Proveedor Inventado X24')
     await ficha(page).locator('#kf-nombre').press('Enter')
     const frase = ficha(page).locator('[data-prueba="nif-repetido"]')
-    await expect(frase).toHaveText(`Mira esto · Ya tienes a ${NOMBRE} con este NIF. Abrirlo`, { timeout: 15_000 })
+    // Si en el carril está archivado, lo dice («(archivado)»): la base cuenta también los archivados.
+    await expect(frase).toHaveText(new RegExp(`^Mira esto · Ya tienes a ${NOMBRE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( \\(archivado\\))? con este NIF\\. Abrirlo$`), { timeout: 30_000 })
+    console.log(`[X24] ${await frase.textContent()}`)
     await expect(frase).toHaveAttribute('data-tono', 'falta')
     await expect(ficha(page).locator('.kf-error')).toHaveCount(0)
     const cabe = await frase.evaluate((e) => e.getBoundingClientRect().right <= window.innerWidth + 1 && e.scrollWidth <= e.clientWidth + 1)
