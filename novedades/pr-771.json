@@ -1,0 +1,20 @@
+[
+ {
+  "id": "771-1",
+  "pr": 771,
+  "fecha": "2026-11-21T10:15:18Z",
+  "producto": "sumied",
+  "apartado": "Facturas recibidas",
+  "frase": "en «Cómo se paga» vale cualquier cuenta del plan, con bancos y caja primero. Si no es un banco ni la caja, una línea dice el asiento que hará.",
+  "ruta": null
+ },
+ {
+  "id": "771-2",
+  "pr": 771,
+  "fecha": "2026-11-21T10:15:18Z",
+  "producto": "sumied",
+  "apartado": "Buscadores de cuentas",
+  "frase": "«No está» solo sale si la cuenta no existe en el plan. Si existe pero ahí no va, lo dice con su porqué: «La 43000004 · … existe, pero aquí solo van cuentas de gasto (las del 6)».",
+  "ruta": null
+ }
+]

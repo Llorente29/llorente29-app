@@ -25,6 +25,7 @@ import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useAnalitica, useConPropias } from '@/modules/conta/marco/nuevo/contexto'
 import { BuscarCuentaHoja } from '@/modules/conta/diseno/plantillas'
+import { CrearDesdeBuscador } from '@/modules/conta/plan/CrearDesdeBuscador'
 import { useAvisoSalir } from '@/modules/conta/diseno/plantillas/avisoSalir'
 import { useNombreDePestana, useSeVe } from '@/modules/conta/diseno/plantillas/pestana'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
@@ -378,7 +379,10 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
                             {buscando === i && (
                               <BuscarCuentaHoja cuentas={plan.map((c) => ({ codigo: c.code, nombre: c.nombre }))} inicial={l.cuenta}
                                 alElegir={(c) => { cambia(i, { cuenta: c.codigo }); setBuscando(null); foco.current = { fila: i, casilla: 'concepto' } }}
-                                alCerrar={(volver) => { setBuscando(null); if (volver) foco.current = { fila: i, casilla: 'subcuenta' } }} />
+                                alCerrar={(volver) => { setBuscando(null); if (volver) foco.current = { fila: i, casilla: 'subcuenta' } }}
+                                // X21 · Lo que no está, se crea aquí (código y nombre) y queda elegido; las cuentas se vuelven a leer.
+                                crear={activa ? (q, elegir) => <CrearDesdeBuscador accountId={accountId} companyId={activa.id} q={q} quien={userName ?? null}
+                                  alCrear={(c) => { setVuelta((v) => v + 1); elegir({ codigo: c.code, nombre: c.name }) }} /> : undefined} />
                             )}
                           </td>
                           <td className="cxa-c-nombre">{cta?.oficial ?? ''}</td>

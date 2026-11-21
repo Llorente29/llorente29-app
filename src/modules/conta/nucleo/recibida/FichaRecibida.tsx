@@ -74,11 +74,12 @@ import { casillasVacias, comprobacionesDe, dondeVaElFoco, dudaDelGasto, emisorDe
 import { calendarioDe, cuentasAMano, delProveedor, gastoAprendido, marcaDeLaFactura, mayorDelProveedor, noEsLaMisma, otrasDelProveedor, subcuentasDeProveedores, textoOperacion } from './servicio'
 import { cuentaDelProveedorEnElAsiento } from './proveedorEnAsiento'
 import { faltasParaValidar, laRepetida, textoNoSeValida, textoRepetida } from './validarSoloLoCompleto'
-import { fechaDelPago, propuestaDelPago, queHaceElPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
+import { fechaDelPago, propuestaDelPago, queHaceElPago, textoAsientoDelPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
 import { apuntarPago, cuentasDePago, hayLiquidacion, pagoDelProveedor } from './pagoServicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import { AltaDesdeFactura } from '@/modules/conta/documentos/ProveedorDesdeFactura'
 import { fraseAltaEnFactura } from '@/modules/conta/lib/altaProveedor'
+import { CrearDesdeBuscador } from '@/modules/conta/plan/CrearDesdeBuscador'
 
 /**
  * K06 · El borrador de esta ficha: el de la ficha de hoy y la cuenta del pago con su fecha. null = lo que
@@ -119,6 +120,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const setCompleta = (si: boolean) => setCompletaDe(si ? invoiceId : null)
   const [textoProv, setTextoProv] = useState<string | null>(null)
   const [textoCuenta, setTextoCuenta] = useState<Record<number, string>>({})
+  // X21 · Las subcuentas creadas desde los buscadores de esta ficha («No está: crear la …»): ya elegibles y con su nombre.
+  const [creadas, setCreadas] = useState<CuentaDelPlan[]>([])
   const [textoTotal, setTextoTotal] = useState<string | null>(null)
   const [fichero, setFichero] = useState<{ file: File; url: string } | null>(null)
 
@@ -242,14 +245,20 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const pagoFecha = b.pagoFecha ?? fechaDelPago(b.fecha, b.vence)
   const origenPago = b.pagoCuenta === null ? propuestaPago?.origen ?? null : null
   const dudaPago = b.pagoCuenta === null && propuestaPago?.duda ? propuestaPago.duda : null
-  const nombrePago = pagoCuenta ? cuentasPago?.nombres.get(pagoCuenta) ?? 'Cuenta' : ''
+  const nombrePago = pagoCuenta ? cuentasPago?.nombres.get(pagoCuenta) ?? creadas.find((c) => c.codigo === pagoCuenta)?.nombre ?? 'Cuenta' : ''
   // Lo que se escribe en la casilla del pago, de ESTA factura (al pasar a otra, se vuelve a lo suyo).
   const [escrito, setEscrito] = useState<{ de: string; texto: string | null }>({ de: '', texto: null })
   const textoPago = escrito.de === `${aMano}:${invoiceId}` ? escrito.texto : null
   const setTextoPago = (texto: string | null) => setEscrito({ de: `${aMano}:${invoiceId}`, texto })
 
   // ── El asiento que sale ──
-  const cuentasPlan: CuentaDelPlan[] = useMemo(() => cuentasGasto.map((c) => ({ codigo: c.codigo, nombre: c.nombre })), [cuentasGasto])
+  const cuentasPlan: CuentaDelPlan[] = useMemo(() => [...cuentasGasto.map((c) => ({ codigo: c.codigo, nombre: c.nombre })),
+    ...creadas.filter((c) => !cuentasGasto.some((g) => g.codigo === c.codigo))], [cuentasGasto, creadas])
+  /** X21 · «No está: crear la …» en los buscadores de cuenta de esta ficha (la empresa, la de la ficha). */
+  const crearCuenta = (alCrear: (c: CuentaDelPlan) => void, noVa?: string) => (q: string, cerrar: () => void) => (empresa
+    ? <CrearDesdeBuscador accountId={accountId} companyId={empresa} q={q} quien={userName ?? null} noVa={noVa}
+        alCrear={(c) => { const n = { codigo: c.code, nombre: c.name }; setCreadas((x) => [...x, n]); alCrear(n); cerrar() }} />
+    : null)
   const nombreGasto = useCallback((c: string) => cuentasPlan.find((x) => x.codigo === c)?.nombre ?? nombresProp?.get(c) ?? 'Cuenta', [cuentasPlan, nombresProp])
   const subProv = delProv?.subcuenta ?? null
   // K08 · Sin su subcuenta (un proveedor recién dado de alta), la que le tocará: «Será la 40000002 · Proveedores · …».
@@ -326,6 +335,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const importePago = Math.round(totales.total * 100) / 100
   const queElPago = (): QueHaceElPago => queHaceElPago({ cuenta: pagoCuenta, fecha: pagoFecha, hoy, importe: importePago,
     tesorerias: cuentasPago?.tesorerias ?? new Map<string, string>(), plataforma, cuentaProveedor: subProvCodigo })
+  const asientoDelPago = modo === 'contabilizada' ? null
+    : textoAsientoDelPago(queElPago(), { nombre: (c) => cuentasPago?.nombres.get(c) ?? creadas.find((x) => x.codigo === c)?.nombre ?? '', cuentaProveedor: subProvCodigo, importe: `${cifra(importePago)} €` })
   async function elPago(facturaId: string, empresaId: string): Promise<string> {
     const q = queElPago()
     if (q.que === 'pendiente') return textoPendiente(q.porque)
@@ -757,7 +768,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                   <div className="kf-gasto" key={i} data-una={b.gastos.length === 1 ? 'si' : undefined}>
                     <Buscador id={`kf-cuenta-${i}`} etiqueta={`Cuenta de gasto ${i + 1}`} cargando={cuentasGastoL === null} valor={textoCuenta[i] ?? g.cuenta} cuenta={g.cuenta || null} duda={!!duda && i === 0}
                       ponerTexto={(t) => { setTextoCuenta((x) => ({ ...x, [i]: t })); if (!t.trim()) ponerGasto(i, { cuenta: '' }) }} lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8)}
-                      texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }} />
+                      texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }}
+                      crear={crearCuenta((c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }, 'solo van cuentas de gasto (las del 6)')} />
                     <NombreDeCuenta etiqueta={`Nombre de la cuenta ${i + 1}`} valor={g.cuenta ? nombreGasto(g.cuenta) : ''} duda={!!duda && i === 0} />
                     <input className="kf-cifra" data-casilla={b.gastos.length > 1 ? '' : undefined} aria-label={`Importe del gasto ${i + 1}`} placeholder={i === b.gastos.length - 1 ? importeEs(totales.base) : ''}
                       value={g.importe || (b.gastos.length === 1 ? importeEs(totales.base + (totales.recargo ?? 0)) : '')} readOnly={b.gastos.length === 1}
@@ -785,8 +797,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 </h2>
                 <div className="kf-cobro">
                   <Buscador id="kf-pago" etiqueta="La cuenta del pago" cargando={!cuentasPago} valor={textoPago ?? pagoCuenta} cuenta={pagoCuenta || null} duda={!!dudaPago}
-                    ponerTexto={(t) => { setTextoPago(t); if (!t.trim()) ed.poner('pagoCuenta', '') }} lista={(t) => cuentasQueEncajan(t, cuentasPago?.lista ?? [], 8)}
-                    texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ed.poner('pagoCuenta', c.codigo); setTextoPago(null) }} />
+                    ponerTexto={(t) => { setTextoPago(t); if (!t.trim()) ed.poner('pagoCuenta', '') }} lista={(t) => cuentasQueEncajan(t, [...(cuentasPago?.lista ?? []), ...creadas], 8)}
+                    texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ed.poner('pagoCuenta', c.codigo); setTextoPago(null) }}
+                    crear={crearCuenta((c) => { ed.poner('pagoCuenta', c.codigo); setTextoPago(null) })} />
                   <NombreDeCuenta etiqueta="Nombre de la cuenta del pago" valor={nombrePago} placeholder="Pendiente de pagar" duda={!!dudaPago} />
                 </div>
                 <div className="kf-pago-fechas">
@@ -794,6 +807,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                   <label className="kf-rotulo-chico">Fecha del pago<CasillaFecha id="kf-pago-fecha" etiqueta="La fecha del pago" iso={pagoCuenta ? pagoFecha : ''} hoy={hoy} poner={(x) => ed.poner('pagoFecha', x)} /></label>
                   <label className="kf-rotulo-chico">Importe<input className="kf-cifra" readOnly tabIndex={-1} aria-label="Importe del pago" value={cifra(importePago)} /></label>
                 </div>
+                {/* X21b · Cualquier cuenta vale para pagar; si no es un banco, la caja ni la 430 de la plataforma, qué asiento hará (sin bloquear). */}
+                {asientoDelPago && <p className="kf-pago-asiento" data-prueba="pago-asiento">{asientoDelPago}</p>}
               </div>
             </div>
 

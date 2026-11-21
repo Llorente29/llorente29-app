@@ -102,6 +102,7 @@ import {
 import { accionPdf } from '@/modules/conta/lib/pdfDeLaRecibida'
 import { LineaErp10 } from '@/modules/conta/nucleo/ficha/LineaErp10'
 import { useLineaErp10 } from '@/modules/conta/nucleo/ficha/useLineaErp10'
+import { CrearDesdeBuscador } from '@/modules/conta/plan/CrearDesdeBuscador'
 import {
   BloqueGasto, BloqueHistorial, BloqueImportesIva, BloquePago, BloqueProveedorFactura, EditarAsientoAMano, HuecoPapel,
 } from '@/modules/conta/documentos/FichaRecibidaBloques'
@@ -198,6 +199,11 @@ export default function RevisarFacturaPage() {
   const proveedores = useLeer(accountId ? () => proveedoresDeLaCuenta(accountId) : null, `${accountId}:proveedores`)
   const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}-local:locales`)
   const cuentas = useLeer(accountId && fac?.company_id ? () => cuentasDeGasto(accountId, fac.company_id!) : null, `${accountId}:${fac?.company_id}:gastos`)
+  // X21 · Lo que no está en el buscador de cuentas se crea aquí (código y nombre), en la empresa de la factura, y queda elegido.
+  const crearCuenta = (q: string, elegir: (c: { codigo: string; nombre: string }) => void) => (fac?.company_id
+    ? <CrearDesdeBuscador accountId={accountId} companyId={fac.company_id} q={q} quien={userName ?? null} noVa="solo van cuentas de gasto (las del 6)"
+        alCrear={(c) => { cuentas.recargar(); elegir({ codigo: c.code, nombre: c.name }) }} />
+    : null)
   const tiposIva = useLeer(accountId ? () => tiposDeIvaRecibida(accountId) : null, `${accountId}:tipos-iva`)
   const descarte = useLeer(fac?.estado === 'descartada' ? () => leerDescarte(fac.id) : null, `${invoiceId}:${fac?.id ?? '-'}:${fac?.estado}:descarte:${vuelta}`)
 
@@ -781,7 +787,7 @@ export default function RevisarFacturaPage() {
       {!descartada && <IvaNoDeducibleFicha accountId={accountId} invoiceId={invoiceId} soloLectura={soloLectura} quien={userName} alGuardar={() => setVuelta((x) => x + 1)} />}
       {!descartada && <BloqueComision e={comision} invoiceId={invoiceId} soloLectura={soloLectura} quien={userName} alLigar={() => setVuelta((x) => x + 1)} />}
       <BloqueGasto enAsiento={abono ? (g) => cuentaDelGastoEnAsiento(g, cuentasProp) : undefined} gastos={b.gastos} base={totales.base} cuentas={cuentas.datos ?? []} locales={ejeLocal ? locales.datos ?? [] : null} nombreEje={ejeLocal?.nombre ?? 'Local'}
-        alCambiar={(g) => ed.poner('gastos', g)} cambio={ed.cambioDe('gastos')} alDeshacer={() => ed.deshacer('gastos')} soloLectura={soloLectura}
+        alCambiar={(g) => ed.poner('gastos', g)} cambio={ed.cambioDe('gastos')} alDeshacer={() => ed.deshacer('gastos')} soloLectura={soloLectura} crear={crearCuenta}
         tono={mGasto.tono} motivo={[mGasto.motivo, !ficha?.localId && ficha?.recepcion?.local ? `El local sale de la recepción del ${fechaEs(ficha.recepcion.fecha).slice(0, 5)}.` : null].filter(Boolean).join(' ')} />
       <BloquePago formaPago={b.formaPago} vence={b.vence} estadoPago={b.estadoPago} soloLectura={soloLectura}
         motivoEstado={abono ? estadoPagoAbono(loQueAnula.datos) : estadoPagoComision(comision.datos, !!pagada)}
@@ -804,7 +810,7 @@ export default function RevisarFacturaPage() {
       {aMano && previa && (
         <EditarAsientoAMano lineas={previa.lineas.map((l) => ({ codigo: Object.entries(b.aMano).find(([, x]) => x === l.codigo && l.aMano)?.[0] ?? l.codigo, nombre: l.nombre, importe: importeEs(l.debe ?? l.haber ?? 0) }))}
           cuentas={[...(cuentas.datos ?? []), ...[...(nombresProp?.entries() ?? [])].filter(([c]) => !/^6/.test(c)).map(([codigo, nombre]) => ({ codigo, nombre }))]}
-          aMano={b.aMano} alCambiar={(m) => ed.poner('aMano', m)} alCerrar={() => setAMano(false)} />
+          aMano={b.aMano} alCambiar={(m) => ed.poner('aMano', m)} alCerrar={() => setAMano(false)} crear={crearCuenta} />
       )}
       {vista.datos && !vista.datos.propuesta && !fac.asiento && <p className="s-apoyo">{vista.datos.porque}</p>}
       <div role="status" aria-live="polite">
