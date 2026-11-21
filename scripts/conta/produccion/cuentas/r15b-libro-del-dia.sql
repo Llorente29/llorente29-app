@@ -25,7 +25,8 @@ select clave, valor from (
   union all
   select 1, k || ' · de ellos, ya salidos a ERP10',
          count(*) filter (where exists (select 1 from public.conta_erp10_salida_partida s
-                                          where s.entry_id = pre.entry_id and s.account_id = pre.account_id and s.estado = 'salida'))::text
+                                          where s.entry_id = pre.entry_id and s.account_id = pre.account_id and s.estado = 'salida'
+                                            and s.creado_en < timestamptz '2026-11-22 00:00:00+01'))::text
     from pre group by k
   union all
   select 2, 'cuenta ' || left(account_id::text, 8) || ' · empresa ' || left(company_id::text, 8) || ' · día ' || to_char(dia, 'YYYY-MM-DD') || ' · libro de IVA (regla 31)',
