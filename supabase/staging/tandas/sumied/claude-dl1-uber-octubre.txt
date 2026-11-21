@@ -1,0 +1,5 @@
+# DL1 · Uber de octubre (1225: no añade objetos; en Foodint anula dos bloques y
+# compensa las liquidaciones de octubre). Su prueba (ROLLBACK, cuenta A): sin
+# Foodint no hace nada; un bloque validado se anula en su fecha.
+supabase/migrations/20261113T1225_dl1_uber_octubre.sql
+supabase/staging/sql/20261113_dl1_uber_octubre_prueba.sql

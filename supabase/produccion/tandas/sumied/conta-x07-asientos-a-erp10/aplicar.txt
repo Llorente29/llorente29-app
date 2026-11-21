@@ -1,0 +1,15 @@
+# X07 · Los asientos salen a ERP10 (encargo X07, 18/11). Rama
+# conta/x07-asientos-a-erp10. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   0745  Cambia en caliente conta_erp10_por_salir, con la misma firma: lo que lleva
+#         I.V.A. y no es una factura (libro de no sujetas, o un apunte de I.V.A. sin
+#         libro) pasa a asiento que no sale, con su frase; antes se tomaba por
+#         recibida. Declarado en la cabecera y con su prueba de staging.
+#   0746  Añade conta_erp10_asientos_por_salir (solo lee): los asientos que salen,
+#         con cada apunte.
+#
+# Nada en el camino del pedido; las dos funciones solo leen. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x07-asientos-erp10.sql
+supabase/migrations/20261118T0745_x07_por_salir_asientos.sql
+supabase/migrations/20261118T0746_x07_asientos_por_salir.sql

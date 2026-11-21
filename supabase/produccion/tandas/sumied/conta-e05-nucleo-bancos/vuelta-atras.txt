@@ -1,0 +1,4 @@
+# E05 · la vuelta atrás: quita la función. Los asientos ya escritos con ella se
+# quedan (son asientos validados de la serie 3, como cualquier otro).
+cuenta: scripts/conta/produccion/cuentas/e05-nucleo-bancos.sql
+supabase/vuelta-atras/20261118T2248_e05_banco_a_mano.down.sql

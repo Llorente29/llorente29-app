@@ -1,0 +1,13 @@
+# E02 · La lectura caída se ve y se avisa. Rama conta/e02-lectura-caida. Se
+# ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0600  document_inbox: read_failure, read_failure_cause y read_failure_at
+#         (admiten nulos, con su CHECK solo sobre ellas); dos índices pequeños;
+#         conta_lectura_estado (tabla de una fila); _conta_lectura_caida,
+#         conta_lectura_estado (función), _conta_lectura_vigia y su cron cada
+#         10 minutos. Solo añade.
+#
+# Nada de sale ni del camino del pedido; ninguna función que exista cambia
+# (_queue_system_alert tampoco: regla 2). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/e02-lectura-caida.sql
+supabase/migrations/20261118T0600_e02_lectura_caida.sql

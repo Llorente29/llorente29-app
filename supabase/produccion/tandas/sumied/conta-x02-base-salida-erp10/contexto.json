@@ -1,0 +1,20 @@
+{
+ "_que": "X02 · la base de la salida a ERP10 · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging fb983744, 17/11 08:49Z), en SOLO LECTURA, el 17/11: no en producción (esta sesión no lee producción). Ninguno de los objetos de la tanda existe: las cuatro tablas y las cinco funciones son nuevas. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-17T09:16Z",
+ "tanda": {
+  "supabase/migrations/20261117T1010_x02_salida_erp10_tablas.sql": "12481418ccb06d9a5b1c79ccc907da79",
+  "supabase/migrations/20261117T1011_x02_salida_erp10_funciones.sql": "e6b3f13785f682a8a5cacba3246b2c3d"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

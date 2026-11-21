@@ -1,0 +1,19 @@
+# DL1 · Las 12 ventas del día de Glovo de Carabanchel de octubre (Julio, DL1·20,
+# 12/11). Rama claude/dl1-glovo-ventas-octubre. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   2342  Añade _dl1_envio_aclarar y aclara como Julio los 22 envíos de 4,50
+#         por aclarar (06–18/10) con «lo_paga» («los envíos los paga el
+#         cliente y Glovo nos los abona»): conta_envio_aclarar quita el asiento
+#         propuesto de cada día y el cierre del día lo vuelve a proponer.
+#         Validarlos va después, desde la pantalla, con su PDF.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-glovo-envios.sql
+supabase/migrations/20261112T2342_dl1_glovo_envios.sql
+sin-vuelta-atras: supabase/migrations/20261112T2342_dl1_glovo_envios.sql · motivo: lo aclarado se cambia volviéndolo a aclarar, y los asientos que quita los vuelve a proponer el cierre del día.
+esperado: dl1-glovo-envios · Pedidos de Glovo de octubre con el envío por aclarar, menos 4 = 0
+esperado: dl1-glovo-envios · Envíos aclarados por Julio como «lo_paga», menos 22 = 0
+esperado: dl1-glovo-envios · Lo que suman esos envíos, menos 99,00 = 0.00
+esperado: dl1-glovo-envios · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
+esperado: dl1-glovo-envios · IVA de Foodint 477 del 1T al 3T de 2026 = como antes

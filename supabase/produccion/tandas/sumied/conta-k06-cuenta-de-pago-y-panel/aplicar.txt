@@ -1,0 +1,11 @@
+# K06 · La recibida: la cuenta de pago (respuesta K05 · 2, 20/11). Rama conta/k06-cuenta-de-pago-y-panel.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0840  Añade conta_recibida_pagar_con_cuenta: el pago de una recibida validada con una
+#         cuenta que no es una tesorería ni la 430 de su liquidación (la 551 del socio…), con
+#         su asiento validado (serie 4), su pago en supplier_invoice_payment y la factura
+#         pagada. No cambia ninguna tabla ni función que exista (tampoco _bank_recibida_pagado).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k06-pagar-con-cuenta.sql
+supabase/migrations/20261120T0840_k06_pagar_con_cuenta.sql

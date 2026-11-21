@@ -95,6 +95,8 @@ export interface Ultimo {
 export interface Direccion { tipo: 'documentos' | 'facturas' | 'liquidaciones'; direccion: string; activa: boolean }
 export interface DatosPuerta {
   direcciones: Direccion[]
+  /** E01 · La dirección de esta empresa: la misma que enseña Correo de facturas (la base la elige, con su dominio). */
+  direccion?: Direccion | null
   conectados: { bancos: { proveedor: string; estado: string; ultima: string | null }[]; uber_por_correo: boolean }
   ultimos: Ultimo[]
 }

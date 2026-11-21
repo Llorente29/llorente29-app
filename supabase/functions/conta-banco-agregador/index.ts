@@ -35,6 +35,7 @@ import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { OpenBankingClient } from "npm:@open-banking-io/client@1.3.0";
 import { ibanLimpio, mirarCuenta, proveedorOpenBankingIo, RELEER_DIAS_OBI, sincronizarEmpresa, type BaseAgregador, type ParteCuenta } from "../_shared/bancoAgregador.ts";
+import { pasarElMotor, type PasadaServidor } from "../_shared/bancos/agente.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -128,12 +129,22 @@ Deno.serve(async (req) => {
     if (e2) fallo = `${fallo ?? "Todo bien"} (y no se ha podido apuntar la pasada: ${e2.message})`;
     partes.push({ empresa: c.company_id, banco: c.bank_name, cuentas, error: fallo, refresco: refrescos.get(c.id) ?? null });
   }
-  const mal = partes.some((p) => p.error || p.cuentas.some((x) => x.estado === "fallo"));
+  // B01·21 · El motor, sin que nadie abra Bancos: por cada empresa con algo en «pendiente» (de este banco, de Revolut o
+  // de un fichero), la misma pasada que la del navegador, registrada como la del día, y el aviso si queda algo viejo.
+  const pasadas: PasadaServidor[] = [];
+  const { data: conPendiente, error: e3 } = await srv.from("bank_movement").select("account_id, company_id").eq("status", "pendiente").limit(5000);
+  if (e3) pasadas.push({ empresa: "-", resultado: null, sinProponer: 0, error: `No se ha podido mirar qué empresas tienen algo pendiente: ${e3.message}` });
+  const empresas = new Map<string, string>();
+  for (const f of (conPendiente ?? []) as { account_id: string; company_id: string }[]) empresas.set(String(f.company_id), String(f.account_id));
+  for (const [empresa, cuenta] of empresas) pasadas.push(await pasarElMotor(srv, cuenta, empresa, hoy));
+  console.log(`[conta-banco-agregador] ${hoy}: el motor · ${JSON.stringify(pasadas)}`);
+
+  const mal = partes.some((p) => p.error || p.cuentas.some((x) => x.estado === "fallo")) || pasadas.some((p) => p.error);
   // B01·14 · También lo que trajo del banco al ponerse al día (syncAll) y lo que dio de los días releídos.
   console.log(`[conta-banco-agregador] ${hoy}: ${JSON.stringify(partes.map((p) => ({ banco: p.banco, error: p.error, refresco: p.refresco,
     cuentas: p.cuentas.map((x) => ({ iban4: x.iban4, estado: x.estado, leidos: x.leidos, nuevos: x.nuevos, repetidos: x.repetidos, continuidad: x.continuidad,
       pendientes: x.pendientes, tarde: x.tarde, releidoDesde: x.desdeReleido, releidosDelBanco: x.releidosDelBanco ?? null, releidosDelBancoCent: x.releidosDelBancoCent ?? null })) })))}`);
-  return json({ hoy, ayer, partes }, mal ? 500 : 200);
+  return json({ hoy, ayer, partes, motor: pasadas }, mal ? 500 : 200);
 });
 
 const DIA = /^\d{4}-\d{2}-\d{2}$/;

@@ -22,7 +22,10 @@ describe('fraseDelMes', () => {
     expect(fraseDelMes(rev({ faltan: [{ codigo: 'asientos', n: 2 }, { codigo: 'recibidas_sin_pdf', n: 1 }] }), NOVIEMBRE)).toBe('Faltan 3 cosas antes de traspasar octubre.')
     expect(fraseDelMes(rev({ faltan: [{ codigo: 'asientos', n: 1 }] }), NOVIEMBRE)).toBe('Falta 1 cosa antes de traspasar octubre.')
   })
-  it('el mes en curso aún no se traspasa', () => expect(fraseDelMes(rev(), '2026-10-24')).toBe('Octubre aún no ha terminado: se traspasa a partir del 1 de noviembre.'))
+  // SP (Julio, 15/11): el mes en curso también se traspasa, con su aviso.
+  it('el mes en curso se puede traspasar, con su aviso', () => expect(fraseDelMes(rev(), '2026-10-24')).toBe('Octubre aún no ha terminado, pero puedes traspasar lo que lleva. Lo que entre después con fecha de octubre ya no viajará a Diez.'))
+  it('el mes en curso con cosas pendientes dice lo que falta', () => expect(fraseDelMes(rev({ faltan: [{ codigo: 'asientos', n: 1 }] }), '2026-10-24')).toBe('Falta 1 cosa antes de traspasar octubre.'))
+  it('el mes en curso sin nada', () => expect(fraseDelMes(rev({ van: 0 }), '2026-10-24')).toBe('Octubre no tiene nada por traspasar a Diez.'))
   it('nada que traspasar', () => expect(fraseDelMes(rev({ van: 0 }), NOVIEMBRE)).toBe('Octubre no tiene nada por traspasar a Diez.'))
   it('traspasándose, terminado y cerrado, terminado sin cerrar, con fallos', () => {
     expect(fraseDelMes(rev({ traspaso: tr({ estado: 'traspasando', llegaron: 30, mes_cerrado: false }) }), NOVIEMBRE)).toBe('Octubre se está traspasando a Diez: van 30 de 120.')

@@ -1,0 +1,5 @@
+# DL1·26 · Glovo French Tacos (0815: no añade objetos; en Foodint crea dos
+# subcuentas y apunta). Su prueba (ROLLBACK, cuenta A): sin Foodint no hace nada;
+# un asiento de ventas con IVA del 10 % y promoción al Debe se valida.
+supabase/migrations/20261114T0815_dl1_glovo_french_tacos.sql
+supabase/staging/sql/20261114_dl1_glovo_french_tacos_prueba.sql

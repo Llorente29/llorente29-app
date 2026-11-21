@@ -1,0 +1,2 @@
+# DL1 · facturas de octubre a su fecha: la 0905 no tiene vuelta atrás (se declara en aplicar.txt): lo borrado se recupera con _conta_asientos_borrado_deshacer.
+cuenta: scripts/conta/produccion/cuentas/dl1-facturas-a-su-fecha.sql

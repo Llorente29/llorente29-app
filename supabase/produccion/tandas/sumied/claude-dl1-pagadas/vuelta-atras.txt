@@ -1,0 +1,2 @@
+# DL1 · compensaciones de Glovo del céntimo: la 0045 no tiene vuelta atrás (se declara en aplicar.txt): un asiento validado se anula con un contraasiento.
+cuenta: scripts/conta/produccion/cuentas/dl1-glovo-centimos.sql

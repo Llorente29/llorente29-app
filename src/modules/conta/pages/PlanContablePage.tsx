@@ -21,12 +21,13 @@ import { CabeceraEntradaMovil, MarcoAjustes } from '@/modules/conta/ajustes/Marc
 import { useAjustes } from '@/modules/conta/ajustes/contextoAjustes'
 import { CampoLista, CampoTexto, Resultado } from '@/modules/conta/empresa/campos'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
-import { cuentasPorGrupo, encaja, lineaDelPlan, type CuentaPlan } from '@/modules/conta/lib/planVista'
+import { cuentasPorGrupo, lineaDelPlan, type CuentaPlan } from '@/modules/conta/lib/planVista'
 import {
   abiertosPorDefecto, arbolPlan, duenoDeCuenta, ejemplosDeIva, estaAbierto, filasBuscadas, filasVisibles, resumenNodo, textoRuta, tieneHijos, type NodoPlan,
 } from '@/modules/conta/lib/planArbol'
-import { limpiarPalabras, siguienteLibre, type Entidad } from '@/modules/conta/lib/planEmpresa'
-import { activarPlan, anadirSubcuenta, deshacerSubcuenta, ocultarCuenta, ponerPalabras, renombrarCuenta, type DatosPlan } from '@/modules/conta/services/planService'
+import { limpiarPalabras } from '@/modules/conta/lib/planEmpresa'
+import { activarPlan, ocultarCuenta, ponerPalabras, renombrarCuenta, type DatosPlan } from '@/modules/conta/services/planService'
+import { SubcuentaRapida } from '@/modules/conta/plan/SubcuentaRapida'
 import { RegistroPlan } from '@/modules/conta/plan/RegistroPlan'
 import { PropuestasPlan } from '@/modules/conta/plan/PropuestasPlan'
 import { propuestasDelPlan } from '@/modules/conta/lib/propuestasPlan'
@@ -76,63 +77,6 @@ function Activar({ p, alActivar }: { p: DatosPlan; alActivar: (texto: string) =>
       </div>
       <Resultado hecho={h.hecho} fallo={h.fallo} />
     </section>
-  )
-}
-
-// ── Añadir subcuenta ────────────────────────────────────────────────────────
-
-function AnadirSubcuenta({ p, cerrar }: { p: DatosPlan; cerrar: () => void }) {
-  const { quien, plan } = useAjustes()
-  const hojas = useMemo(() => p.serie.filter((s) => s.isLeaf), [p.serie])
-  const [buscar, setBuscar] = useState('')
-  const [hoja, setHoja] = useState('')
-  const [nombre, setNombre] = useState('')
-  const [plain, setPlain] = useState('')
-  const [enlace, setEnlace] = useState('')
-  const [fallos, setFallos] = useState<Record<string, string>>({})
-  const [creada, setCreada] = useState<{ id: string; code: string } | null>(null)
-  const h = useHacer(plan.recargar)
-  const candidatas = hojas.filter((s) => encaja(buscar, s)).slice(0, 40)
-  const siguiente = hoja ? siguienteLibre(hoja, p.digitos, new Set(p.cuentas.map((c) => c.code))) : null
-  const opcionesEnlace = [{ valor: '', texto: 'Ninguno' },
-    ...p.proveedores.map((x) => ({ valor: `supplier:${x.id}`, texto: `Proveedor · ${x.name}` })),
-    ...p.bancos.map((x) => ({ valor: `bank_account:${x.id}`, texto: `Banco · ${x.name}` }))]
-  return (
-    <form className="cx-tarjeta cx-tablas-abierta cx-formulario" aria-label="Añadir subcuenta" noValidate onSubmit={(e) => {
-      e.preventDefault()
-      const f: Record<string, string> = {}
-      if (!hoja) f.hoja = 'Elige de qué cuenta cuelga.'
-      if (!nombre.trim()) f.nombre = 'Ponle un nombre.'
-      if (hoja && !siguiente) f.hoja = `Ya no quedan subcuentas libres en ${hoja}.`
-      setFallos(f)
-      if (Object.keys(f).length) return
-      const [entity, id] = enlace ? enlace.split(':') as [Entidad, string] : [null, null]
-      let hecha: { id: string; code: string } | null = null
-      void h.hacer(async () => {
-        hecha = await anadirSubcuenta(quien.companyId, hoja, nombre.trim(), plain.trim() || null, entity && id ? { entity, id } : null, null)
-        setCreada(hecha)
-      }, () => `Creada ${hecha?.code} · ${nombre.trim()}, bajo la ${hoja}.`)
-    }}>
-      <h2 className="cx-tarjeta-titulo">Añadir subcuenta</h2>
-      <CampoTexto etiqueta="De qué cuenta cuelga (busca por nombre o número)" valor={buscar} cambiar={setBuscar} deshabilitado={h.guardando} />
-      <CampoLista etiqueta="Cuenta" valor={hoja} cambiar={setHoja} fallo={fallos.hoja} deshabilitado={h.guardando}
-        opciones={[{ valor: '', texto: 'Elige una' }, ...candidatas.map((s) => ({ valor: s.code, texto: `${s.code} · ${s.name}` }))]} />
-      {siguiente && <p className="cx-ayuda">Será la <span className="cx-cifra">{siguiente}</span>: el siguiente número libre.</p>}
-      <CampoTexto etiqueta="Nombre" valor={nombre} cambiar={setNombre} fallo={fallos.nombre} deshabilitado={h.guardando} />
-      <CampoTexto etiqueta="Qué se apunta aquí (si quieres)" valor={plain} cambiar={setPlain} deshabilitado={h.guardando} />
-      <CampoLista etiqueta="Es de un proveedor o un banco (si quieres)" valor={enlace} cambiar={setEnlace} opciones={opcionesEnlace} deshabilitado={h.guardando} />
-      <div className="cx-pie">
-        <button type="button" className="cx-boton-sec" onClick={cerrar} disabled={h.guardando}>Cerrar</button>
-        {creada && (
-          <button type="button" className="cx-boton-sec" disabled={h.guardando}
-            onClick={() => void h.hacer(async () => { await deshacerSubcuenta(creada.id, null); setCreada(null) }, `Deshecho: ya no está la ${creada.code}.`)}>
-            Deshacer
-          </button>
-        )}
-        <button type="submit" className="cx-boton" disabled={h.guardando}>{h.guardando ? 'Guardando…' : 'Añadir'}</button>
-      </div>
-      <Resultado hecho={h.hecho} fallo={h.fallo} />
-    </form>
   )
 }
 
@@ -428,7 +372,7 @@ function Contenido() {
   const botones = p.activo && (
     <div className="cx-plan-botones">
       <Link to={rutaPlanSitio()} className="cx-boton-sec">Qué va a cada sitio</Link>
-      <button type="button" className="cx-boton" onClick={() => setAnadiendo(true)} aria-label="Añadir subcuenta">{movil ? '+' : '+ Añadir subcuenta'}</button>
+      <button type="button" className="cx-boton" onClick={() => { setAnadiendo(true); requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.cx-subcuenta-codigo input')?.focus()) }} aria-label="Añadir subcuenta">{movil ? '+' : '+ Añadir subcuenta'}</button>
     </div>
   )
   const cabeza = movil ? cabezaMovil(p.activo ? <button type="button" className="cx-boton cx-mas" onClick={() => setAnadiendo(true)} aria-label="Añadir subcuenta">+</button> : undefined) : (
@@ -466,8 +410,12 @@ function Contenido() {
       {avisoTraer}
       {movil && !nodoMovil && <p className="cx-ayuda" style={{ margin: 0 }}>{lineaDelPlan(p)}</p>}
       {!nodoMovil && <PropuestasPlan propuestas={propuestas} companyId={quien.companyId} quien={null} alCambiar={plan.recargar} />}
-      {anadiendo && <AnadirSubcuenta p={p} cerrar={() => setAnadiendo(false)} />}
       <section className="cx-tarjeta cx-plan" aria-label="Cuentas">
+        {/* X20 · Como en ERP10: el código y el nombre, encima del árbol. En el móvil, al pulsar «+». */}
+        {(!movil || anadiendo) && !nodoMovil && (
+          <SubcuentaRapida companyId={quien.companyId} digitos={p.digitos} serie={p.serie} cuentas={p.cuentas} quien={null}
+            foco={movil && anadiendo} alCrear={() => plan.recargar()} />
+        )}
         <div className="cx-tablas-barra">
           <input className="cx-input cx-buscar" type="search" aria-label="Buscar una cuenta" placeholder="Busca: «alquiler», «472», «Glovo»"
             value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />

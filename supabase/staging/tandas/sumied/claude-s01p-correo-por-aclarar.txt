@@ -1,0 +1,7 @@
+# S01p·20 · punto 1 · El lector de correos no descarta en silencio (1504: añade conta_entrada_sin_factura,
+# conta_entrada_sin_factura_resuelta y conta_correo_sin_factura_pdf; 1511: los 8 de Foodint, que en staging no hace nada).
+# Su prueba (ROLLBACK, cuenta A): una fila por correo con el asunto y el porqué, y sale en Documentos;
+# «Subir el PDF a mano»; volver a leer y entrar la saca; una persona no llama a las de la entrada; la vuelta atrás.
+supabase/migrations/20261113T1504_s01p_correo_por_aclarar.sql
+supabase/migrations/20261113T1511_s01p_foodint_ocho_por_aclarar.sql
+supabase/staging/sql/20261113_s01p_correo_por_aclarar_prueba.sql

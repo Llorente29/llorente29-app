@@ -36,6 +36,7 @@ import { deDondeSale, estadoDe, estadoMes, mesDe, nombreMes, type AsientoDiario,
 import { TablaAsiento } from '@/modules/conta/diseno/plantillas'
 import { apoyoApunte, columnasApuntes, lineasDeApuntes } from '@/modules/conta/libro/apuntesAsiento'
 import { NOMBRE_CONFIANZA, NOMBRE_SERIE, cuadre } from '@/modules/conta/lib/libro'
+import { nombrePrograma } from '@/modules/conta/services/corteService'
 import { PagoDeModelo } from '@/modules/conta/libro/PagoDeModelo'
 import {
   cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
@@ -61,6 +62,9 @@ import { avisoTardia, candadoDelAsiento, mensajePresentado } from '@/modules/con
 import { FranjaIvaPresentado, FranjaTardia } from '@/modules/conta/diseno/CandadoIva'
 import { marcasDelAsiento, type MarcaReapertura } from '@/modules/conta/services/reaperturaIvaService'
 import { textoMarcaReapertura } from '@/modules/conta/lib/ivaPresentado'
+import { LineaErp10 } from '@/modules/conta/nucleo/ficha/LineaErp10'
+import { useLineaErp10 } from '@/modules/conta/nucleo/ficha/useLineaErp10'
+import { avisoYaEnErp10 } from '@/modules/conta/erp10/salidaSola'
 
 interface Datos {
   asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null
@@ -149,6 +153,9 @@ export default function AsientoPage() {
     return () => { vivo = false }
   }, [a, accountId])
 
+  // X10f · Su línea de ERP10, junto a su estado, y lo que se avisa al anular algo que ya está allí.
+  const erp10 = useLineaErp10({ accountId, companyId: activa?.id ?? null, entryId: a?.id ?? null, validado: a?.estado === 'validado', fecha: a?.fecha ?? null })
+  const yaEnErp10 = erp10.datos ? avisoYaEnErp10(erp10.datos) : null
   if (error) return <ErrorConReintento mensaje={error} reintentar={recargar} />
   if (!datos) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando el asiento" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{[0, 1, 2, 3].map((i) => <Hueso key={i} alto={44} />)}</div>
   if (!a) return <div className="cx-tarjeta"><Vacio titulo="Ese asiento no está." explicacion="Puede que se descartara, o que sea de otra cuenta." accion={<Link to={rutaLibroDiario()} className="cx-enlace">Volver al libro</Link>} /></div>
@@ -214,6 +221,7 @@ export default function AsientoPage() {
             <Chip>Serie {NOMBRE_SERIE[a.serie]}</Chip>
             {encendido && a.numero != null && <Chip>{MARCA.nombre} {a.numero.toLocaleString('es-ES')}</Chip>}
             <DetalleDiezPieza d={diez} alHacer={(t) => { setFallo(null); setHecho(t); recargar() }} alFallar={(t) => { setHecho(null); setFallo(t); recargar() }} />
+            <LineaErp10 linea={erp10.linea} companyId={activa?.id ?? null} entryId={a.id} fecha={a.fecha} quien={userName} releer={erp10.releer} />
             <Chip>Fecha {fechaLarga(a.fecha)}</Chip>
             <Chip tono="azul">{deDondeSale(a)}</Chip>
           </div>
@@ -340,7 +348,7 @@ export default function AsientoPage() {
       )}
       {dialogo === 'anular' && (
         <ConMotivo titulo={`Anular ${NOMBRE_SERIE[a.serie]} nº ${a.numero?.toLocaleString('es-ES') ?? ''}`} boton="Anular" conFecha
-          ayuda="No se borra: hago un contraasiento que le da la vuelta, apunte por apunte, enlazado con este (CCom 29). Si su mes está cerrado, va al primer día abierto."
+          ayuda={`No se borra: hago un contraasiento que le da la vuelta, apunte por apunte, enlazado con este (CCom 29). Si su mes está cerrado, va al primer día abierto.${yaEnErp10 ? ` ${yaEnErp10}` : ''}`}
           alCerrar={() => setDialogo(null)}
           hacer={async (motivo, fecha) => {
             // Respuesta 8: si su factura ya está en Diez, el contraasiento va solo a Diez.
@@ -393,7 +401,7 @@ function DetalleContable({ a, companyId }: { a: AsientoDiario; companyId: string
     <dl className="cxd-detalle">
       <dt>Serie</dt><dd>{NOMBRE_SERIE[a.serie]} · código {a.serie}</dd>
       <dt>Número</dt><dd>{a.numero ?? 'se pone al validar'}</dd>
-      {a.traido && <><dt>Traído</dt><dd>{a.traido.programa}{a.traido.serie ? ` · serie ${a.traido.serie}` : ''}{a.traido.numero ? ` · nº ${a.traido.numero}` : ''}</dd></>}
+      {a.traido && <><dt>Traído</dt><dd>{nombrePrograma(a.traido.programa) ?? a.traido.programa}{a.traido.numero ? ` · n.º en ${nombrePrograma(a.traido.programa) ?? a.traido.programa} ${a.traido.serie ? `${a.traido.serie}/` : ''}${a.traido.numero}` : ''}</dd></>}
       <dt>Validado</dt><dd>{a.validadoEn ? `${fechaLarga(a.validadoEn.slice(0, 10))}${a.validadoPor ? ` · ${a.validadoPor}` : ''}` : 'aún no'}</dd>
       <dt>Orden en la cadena</dt><dd>{a.cadena ?? '—'}</dd>
       <dt>Huella</dt><dd className="cxd-codigo" title={a.huella ?? undefined}>{corta(a.huella)}</dd>

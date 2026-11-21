@@ -1,0 +1,5 @@
+# B01r24 · 0955: en Foodint, casa los 6 de noviembre que quedaron fuera y
+# aparta el traspaso ya apuntado. No añade funciones (usa _dl1_casar,
+# _dl1_validar y _b01r23_ignorar). Su prueba (ROLLBACK): sin Foodint no hace nada.
+supabase/migrations/20261113T0955_b01r24_noviembre_fuera.sql
+supabase/staging/sql/20261113_b01r24_noviembre_fuera_prueba.sql

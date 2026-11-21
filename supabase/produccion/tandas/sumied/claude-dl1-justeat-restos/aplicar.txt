@@ -1,0 +1,18 @@
+# DL1·29 · Just Eat: lo de antes de octubre que tiene documento (Julio, 13/11).
+# Rama claude/dl1-justeat-restos. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   1905  Las 8 facturas de junio a agosto, de «en revisión» a pagadas por
+#         compensación fuera de Sumied; la compensación de las 3 que Diez no
+#         compensó, a 01/10; y los 12 cargos GL (139,79) sin IVA, como gasto
+#         contra la 43000003, a 01/10. Validado como Julio. No crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-justeat-restos.sql
+supabase/migrations/20261113T1905_dl1_justeat_restos.sql
+sin-vuelta-atras: supabase/migrations/20261113T1905_dl1_justeat_restos.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-justeat-restos · Las 8 facturas de junio a agosto en en_revision = 0
+esperado: dl1-justeat-restos · 43000003 a 31/10, menos 256,66 = 0.00
+esperado: dl1-justeat-restos · 41000004 a 31/10, menos 8,07 = 0.00
+esperado: dl1-justeat-restos · IVA 472 del 4T = como antes
+esperado: dl1-justeat-restos · IVA 477 del 4T = como antes

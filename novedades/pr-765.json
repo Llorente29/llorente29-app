@@ -1,0 +1,29 @@
+[
+ {
+  "id": "765-1",
+  "pr": 765,
+  "fecha": "2026-11-21T07:18:43Z",
+  "producto": "sumied",
+  "apartado": "Plan contable",
+  "frase": "«Añadir subcuenta» son dos casillas, código y nombre, y se guarda con Intro, como en ERP10. Vale el código entero, con punto (430.30) o la raíz (430), que deja escrita la siguiente libre.",
+  "ruta": null
+ },
+ {
+  "id": "765-2",
+  "pr": 765,
+  "fecha": "2026-11-21T07:18:43Z",
+  "producto": "sumied",
+  "apartado": "Plan contable",
+  "frase": "dice de qué cuenta cuelga, si ya existe («Ábrela») o si su raíz no está en el plan. Al crear una 430, 400, 410 o 572, ofrece al lado su ficha.",
+  "ruta": null
+ },
+ {
+  "id": "765-3",
+  "pr": 765,
+  "fecha": "2026-11-21T07:18:43Z",
+  "producto": "sumied",
+  "apartado": "Formas de pago",
+  "frase": "desde el buscador de cuentas, «No está: crear la …» la crea sin salir de la ventana y la deja elegida.",
+  "ruta": null
+ }
+]

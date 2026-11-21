@@ -1,0 +1,19 @@
+{
+ "_que": "X08 · los días del TPV salen a ERP10 · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging, 18/11), en SOLO LECTURA: no en producción (esta sesión no lee producción). conta_erp10_dias_tpv_por_salir es nueva; no cambia ninguna que exista. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-19T06:10Z",
+ "tanda": {
+  "supabase/migrations/20261119T0551_x08_dias_tpv_por_salir.sql": "bd628b9e2d1d37499eb799f39619f95e"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

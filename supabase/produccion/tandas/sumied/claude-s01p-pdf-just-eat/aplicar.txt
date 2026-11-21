@@ -1,0 +1,10 @@
+# S01p·20 · 1b · El PDF de las facturas de Just Eat, hecho de su correo (Julio, 13/11).
+# Rama claude/s01p-pdf-just-eat. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1706  conta_factura_papel_del_correo y conta_correo_papeles_que_faltan (añaden): el PDF hecho del
+#         correo es el papel de su factura (si aún no tiene), y la lista de las de Just Eat sin papel.
+#
+# Solo añade. No toca ningún dato: los PDF de las 43 de Foodint los pone el botón de Correo de facturas,
+# después de fusionar. Los 3 de octubre (de D) no salen en la lista. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-pdf-just-eat.sql
+supabase/migrations/20261113T1706_s01p_pdf_del_correo.sql

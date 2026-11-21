@@ -1,0 +1,20 @@
+[
+ {
+  "id": "634-1",
+  "pr": 634,
+  "fecha": "2026-11-12T22:26:33Z",
+  "producto": "sumied",
+  "apartado": "Bancos",
+  "frase": "los movimientos que llegan del banco se proponen solos cada noche, sin tener que abrir Bancos.",
+  "ruta": null
+ },
+ {
+  "id": "634-2",
+  "pr": 634,
+  "fecha": "2026-11-12T22:26:33Z",
+  "producto": "sumied",
+  "apartado": "Bancos",
+  "frase": "en «¿Es otra cosa?» ya puedes elegir «Cobro de un cliente» o «Pago a un proveedor».",
+  "ruta": null
+ }
+]

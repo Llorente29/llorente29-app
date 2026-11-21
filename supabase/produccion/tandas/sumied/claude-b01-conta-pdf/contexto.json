@@ -1,0 +1,8 @@
+{
+ "_que": "B01r26 · el enlace del PDF · contexto de producción, medido en SOLO LECTURA el 13/11 a las 16:50Z: conta_pdf_llave y conta_pdf_acceso no existen; extensions.gen_random_bytes, sí; el bucket conta-documentos, privado; conta_diez_traspaso con 0 filas. La 1805 solo añade. Nada en el camino del pedido; no está en el historial.",
+ "medido": "2026-11-13T16:50Z",
+ "tanda": {
+  "supabase/migrations/20261113T1805_b01r26_conta_pdf.sql": "7e3aab977b89542cf2e2724157c70f3e"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

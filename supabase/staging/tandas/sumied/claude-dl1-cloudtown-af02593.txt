@@ -1,0 +1,5 @@
+# DL1 · Cloudtown, la AF-02593 (1421: en Foodint, apunta y valida un asiento;
+# no añade funciones). Su prueba (ROLLBACK, cuenta A): sin Foodint no deja nada,
+# y un asiento de la misma forma se propone y se valida como la persona.
+supabase/migrations/20261112T1421_dl1_cloudtown_af02593.sql
+supabase/staging/sql/20261112_dl1_cloudtown_af02593_prueba.sql

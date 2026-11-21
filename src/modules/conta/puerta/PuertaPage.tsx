@@ -25,6 +25,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { rutaBancos, rutaDocumentos, rutaLiquidaciones, rutaLiquidacionesVentas, rutaLoteCatcher, rutaQueEsperas, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
+import { AvisoLecturaCaida } from '@/modules/conta/documentos/AvisoLecturaCaida'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
@@ -42,6 +43,7 @@ import {
 } from '@/modules/conta/lib/puerta'
 import { cabeceraMes, filasDocumentos, nadaEnColumna, primeras, type CabeceraMes, type Columna, type FilaDoc } from '@/modules/conta/lib/documentosMes'
 import { dejarFicheros, mirarFicheros, tomarFicheros } from '@/modules/conta/puerta/entregas'
+import { NOTA_DIRECCION } from '@/modules/conta/lib/correoFacturas'
 
 const NOMBRE = MARCA.nombre
 const ACEPTA = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.zip,.xlsx,.xls,.csv,.n43,.q43,.c43,.aeb,.txt,.xml,.xsig,application/pdf,image/*'
@@ -98,6 +100,8 @@ export default function PuertaPage() {
     <EncabezadoPagina titulo="Documentos" frase="Todo lo que te llega se coloca solo. Aquí solo ves lo que necesita algo de ti."
       principal={movil ? undefined : principal} masAcciones={activa ? mas : []} />
   )
+  // E02 · Mientras la lectura de facturas esté caída, la franja va debajo del encabezado.
+  const lecturaCaida = <AvisoLecturaCaida companyId={activa?.id} />
   if (!accountId && !cargando) return <div className="s-pagina">{encabezado}<p className="s-apoyo">No hay cuenta activa: elige una cuenta para ver sus documentos.</p></div>
   if (!activa) return <div className="s-pagina">{encabezado}<p className="s-apoyo">Aún no hay ninguna empresa: da de alta tu empresa y aquí entra todo lo suyo.</p></div>
 
@@ -107,7 +111,8 @@ export default function PuertaPage() {
   const filas = d ? filasDocumentos(d, hoy) : null
   const porPedir = filas?.mandar.filter((x) => x.dias > 0) ?? []
   const noSe = (p?.ultimos ?? []).filter(necesitaMirarse)
-  const direccion = p?.direcciones.find((x) => x.tipo === 'documentos') ?? null
+  // E01 · Una sola fuente: la dirección de esta empresa la dice la base (la misma que Correo de facturas).
+  const direccion = p?.direccion ?? null
   const fuentesDe = (x: FilaDoc): Fuente[] => (d?.fuentes ?? []).filter((f) => x.fuentes.some((y) => y.id === f.id))
 
   const alElegir = (fs: FileList | null) => { const a = Array.from(fs ?? []); if (a.length) setSubida(a); if (elegir.current) elegir.current.value = ''; if (camara.current) camara.current.value = '' }
@@ -124,6 +129,7 @@ export default function PuertaPage() {
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }}
       onDrop={(e) => { const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length) { e.preventDefault(); setSubida(fs) } }}>
       {encabezado}
+      {lecturaCaida}
       <input ref={elegir} type="file" multiple accept={ACEPTA} className="s-oculto" aria-label="Elegir los documentos" onChange={(e) => alElegir(e.target.files)} />
       <input ref={camara} type="file" accept="image/*,application/pdf" capture="environment" className="s-oculto" aria-label="Hacer una foto" onChange={(e) => alElegir(e.target.files)} />
 
@@ -400,7 +406,7 @@ function TuCorreo({ p, direccion, encendida, ocupado, alCrear, alCopiar }: {
         ) : (
           <div className="cxdo-correo"><span className="cxdo-correo-dir">Aún no tienes tu dirección</span><button type="button" className="cxdo-boton-blanco" disabled={ocupado || !p} onClick={alCrear}>Crear tu dirección</button></div>
         )}
-        <p className="cxdo-correo-nota">Dáselo a tus proveedores o reenvía aquí lo que te mandan. Facturas, liquidaciones, extractos o nóminas: {NOMBRE} sabe qué es cada cosa.</p>
+        <p className="cxdo-correo-nota" data-prueba="direccion-nota">{NOTA_DIRECCION}</p>
         {direccion && !encendida
           ? <p className="cxdo-apagada" data-prueba="direccion-apagada">Apagada: aún no recibe correos.</p>
           : <ul className="cxdo-marcas">{marcas.map((m) => <li key={m}>{m}</li>)}</ul>}

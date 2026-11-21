@@ -1,0 +1,5 @@
+# S01p·18.2 · punto 2 · La fecha de la recibida (0913: añade conta_recibida_fecha).
+# Su prueba (ROLLBACK, cuenta A): la del 31/10 con el 4T abierto, su fecha; un mes cerrado a mano no frena;
+# el 2T presentado, el primer día abierto y lo mismo que propone la base; sin ejercicio, lo dice; permisos; vuelta atrás.
+supabase/migrations/20261113T0913_s01p_recibida_fecha.sql
+supabase/staging/sql/20261113_s01p_recibida_fecha_prueba.sql

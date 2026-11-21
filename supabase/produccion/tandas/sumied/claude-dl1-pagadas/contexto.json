@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · compensaciones de Glovo del céntimo · contexto de producción, medido en SOLO LECTURA el 12/11 a las 23:26Z: la 0045 no crea ni cambia ningún objeto; valida 3 asientos propuestos del 16/10 (channel_settlement, 41000002/43000001) con _dl1_validar (en producción). Nada en el camino del pedido; la 0045 no está en el historial.",
+ "medido": "2026-11-12T23:26Z",
+ "tanda": {
+  "supabase/migrations/20261113T0045_dl1_glovo_centimos.sql": "12c339a49a27932acfb2c71c25c407ce"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

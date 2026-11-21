@@ -1,0 +1,17 @@
+# B01r26 · El token de la C0009 (14/11). Rama claude/b01-lectura-del-mes. Se
+# ensaya y se aplica desde main nombrando esta rama, antes de fusionar y antes de
+# «Seguir traspasando octubre».
+#
+#   2256  Quita el token guardado de la conexión de Foodint (era de la C0009) y
+#         deja los 333 envíos de octubre parados por «iguales» —banco,
+#         liquidaciones y a mano— en «pendiente» sin el motivo, fuera del detalle
+#         del traspaso. Solo esos: si no son 333, no cambia nada. Las facturas,
+#         los ajustes de ventas y los pagos a proveedor no se tocan.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/b01r26-token-de-la-c0009.sql
+supabase/migrations/20261114T2256_b01r26_token_de_la_c0009.sql
+sin-vuelta-atras: supabase/migrations/20261114T2256_b01r26_token_de_la_c0009.sql · motivo: el token era de la C0009 y el motivo que se quita lo escribió el traspaso comparando con la C0009; devolverlos diría algo falso.
+esperado: b01r26-token-de-la-c0009 · Conexión de Foodint con token guardado = 0
+esperado: b01r26-token-de-la-c0009 · Envíos parados por iguales (banco, liquidaciones y a mano) = 0
+esperado: b01r26-token-de-la-c0009 · Fallos en el detalle del traspaso de octubre, menos 21 = 0

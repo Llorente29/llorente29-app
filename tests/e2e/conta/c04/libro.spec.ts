@@ -69,18 +69,17 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   }
   // Las vistas: solo los orígenes que hay, con cuántos (los filtros de antes).
   const vistas = page.getByRole('group', { name: 'Vistas' })
-  // V01 · Entrega 3: lo PROPUESTO de una liquidación se decide en Ventas › Liquidaciones; «Plataformas»
-  // sale aquí solo si A tiene liquidaciones que ya son libro (validadas o anuladas), como «Banco».
+  // S01p·18 · 2 (Julio, 12/11): todo lo propuesto sale también aquí, sea cual sea su origen; «Banco» y
+  // «Plataformas» salen si A tiene asientos de ese origen, propuestos o no.
   for (const f of [/^Para revisar · \d+$/, /^Ventas · \d+$/, /^Compras · \d+$/, /^Nóminas · \d+$/, /^Manuales · \d+$/, /^Anulados · \d+$/]) {
     await expect(vistas.getByRole('button', { name: f })).toBeVisible()
   }
-  // «Banco» sale solo si A tiene asientos del banco que son libro (validados o anulados: lo propuesto del
-  // banco se decide en Bancos › Por validar, S02 · PR 2). La semilla no trae ninguno, pero «Por validar»
-  // de b01 valida de verdad, y deshacerlo después los anula: se mira lo que hay, no lo que había (regla 31).
-  const banco = await rest<{ id: string }[]>(s, 'GET', `journal_entry?select=id&company_id=eq.${enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')}&source_type=eq.bank&status=neq.propuesto&limit=1`)
+  // «Banco» sale si A tiene asientos del banco (S01p·18 · 2: también los propuestos, que antes solo se
+  // veían en Bancos › Por validar). Se mira lo que hay, no lo que había (regla 31).
+  const banco = await rest<{ id: string }[]>(s, 'GET', `journal_entry?select=id&company_id=eq.${enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')}&source_type=eq.bank&limit=1`)
   expect(banco.status, JSON.stringify(banco.datos)).toBe(200)
   await expect(vistas.getByRole('button', { name: /^Banco · \d+$/ })).toHaveCount(banco.datos.length)
-  const plataformas = await rest<{ id: string }[]>(s, 'GET', `journal_entry?select=id&company_id=eq.${enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')}&source_type=eq.channel_settlement&status=neq.propuesto&limit=1`)
+  const plataformas = await rest<{ id: string }[]>(s, 'GET', `journal_entry?select=id&company_id=eq.${enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')}&source_type=eq.channel_settlement&limit=1`)
   expect(plataformas.status, JSON.stringify(plataformas.datos)).toBe(200)
   await expect(vistas.getByRole('button', { name: /^Plataformas · \d+$/ })).toHaveCount(plataformas.datos.length)
   // «Te toca hoy»: lo que espera revisión, con su número (filtra al pulsarlo).
@@ -93,9 +92,9 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   await expect(ventas.filter({ hasText: 'Para revisar' })).toHaveCount(1)
   await expect(ventas.filter({ hasText: 'Hecho por Folvy' })).toHaveCount(1)
   await expect(filaDe(page, /Publicidad en la plataforma · octubre/).getByText('Anulado')).toBeVisible()
-  // V01 · Entrega 3: la liquidación propuesta (con su marca cedida) ya no se lista aquí: se decide en
-  // Ventas › Liquidaciones. Su asiento se abre por su dirección (abajo, «A · asiento (N12)»).
-  await expect(filaDe(page, /Liquidación Plataforma Norte/)).toHaveCount(0)
+  // S01p·18 · 2: la liquidación propuesta (con su marca cedida) sale aquí, para revisar, y dice que
+  // también espera en Ventas › Liquidaciones (antes solo se abría por su dirección).
+  await expect(filaDe(page, /Liquidación Plataforma Norte/).first()).toContainText('También en Ventas › Liquidaciones')
   // Respuesta 3 · 1: el número con su serie, y el contraasiento la dice por su nombre.
   const contra = filaDe(page, /Anula General nº 2: Estaba repetido/)
   await expect(contra).toBeVisible()
@@ -166,10 +165,10 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   // Para revisar: solo lo que espera, sin esconder el resto (Todos sigue con todo).
   await vistas.getByRole('button', { name: /^Para revisar · \d+$/ }).click()
   await expect(filaDe(page, /Ventas del día/).filter({ hasText: 'Hecho por Folvy' })).toHaveCount(0)
-  await expect(filaDe(page, /Liquidación Plataforma Norte · 16–30 sep/)).toHaveCount(0)
-  // S02 · PR 2: lo propuesto de una factura recibida (el alquiler de la semilla) se
-  // decide en Compras y gastos › Facturas recibidas: no se lista dos veces.
-  await expect(filaDe(page, /Alquiler Norte Mercado · octubre/)).toHaveCount(0)
+  // S01p·18 · 2: lo propuesto que también espera en su apartado sale en «Para revisar» y lo dice: la
+  // liquidación (Ventas › Liquidaciones) y la factura recibida del alquiler de la semilla (Facturas recibidas).
+  await expect(filaDe(page, /Liquidación Plataforma Norte · 16–30 sep/).first()).toContainText('También en Ventas › Liquidaciones')
+  await expect(filaDe(page, /Alquiler Norte Mercado · octubre/).first()).toContainText('También en Compras y gastos › Facturas recibidas')
   await expect(page.locator('.cxt-pie')).toContainText(/\d+ de \d+ asientos/)
 })
 

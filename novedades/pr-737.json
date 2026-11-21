@@ -1,0 +1,20 @@
+[
+ {
+  "id": "737-1",
+  "pr": 737,
+  "fecha": "2026-11-19T08:30:41Z",
+  "producto": "sumied",
+  "apartado": "Bancos (pantallas nuevas)",
+  "frase": "el mes, al lado del banco, como en ERP10; se cambia con Re Pág y Av Pág, y la rejilla, el saldo y lo que queda por revisar son de ese mes.",
+  "ruta": null
+ },
+ {
+  "id": "737-2",
+  "pr": 737,
+  "fecha": "2026-11-19T08:30:41Z",
+  "producto": "sumied",
+  "apartado": "Bancos (pantallas nuevas)",
+  "frase": "«Es otra factura» busca la factura sin salir de la pantalla: elige una, se ve su asiento y se confirma con Intro.",
+  "ruta": null
+ }
+]

@@ -1,0 +1,6 @@
+# S01p·18 · 2 · «Contabilizar» valida lo que propone (1915: cambia _compras_liquidacion_confirmar).
+# Su prueba (ROLLBACK, cuenta A, con un socio de prueba y las cifras de octubre de Alcalá):
+# los cuatro asientos validados a nombre del administrador, uno cojo que queda propuesto
+# con su porqué, la frase, y la vuelta atrás.
+supabase/migrations/20261112T1915_s01p_contabilizar_valida.sql
+supabase/staging/sql/20261112_s01p_contabilizar_valida_prueba.sql

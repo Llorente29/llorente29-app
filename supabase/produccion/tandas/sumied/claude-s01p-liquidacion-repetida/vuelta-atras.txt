@@ -1,0 +1,3 @@
+# S01p·21 · la vuelta atrás: las cuatro funciones desde su respaldo y fuera las dos nuevas (la tabla, si está vacía).
+cuenta: scripts/conta/produccion/cuentas/s01p-liquidacion-repetida.sql
+supabase/vuelta-atras/20261113T1822_s01p_liquidacion_repetida.down.sql

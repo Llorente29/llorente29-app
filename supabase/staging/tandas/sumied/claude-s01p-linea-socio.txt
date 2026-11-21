@@ -1,0 +1,6 @@
+# S01p·18 · punto 1 · La línea desconocida del socio (1755: añade las reglas y lo pendiente; cambia conta_propuestas_socio).
+# Su prueba (ROLLBACK, cuenta A, con un socio de prueba con las cifras de octubre de Alcalá):
+# el género pendiente (Debe 430 / Haber 4009, 770,00), sin contestar no, el saldo que no cuadra no,
+# el contrario en noviembre, cancelar de más no, «a mano», las reglas, y la vuelta atrás.
+supabase/migrations/20261112T1755_s01p_linea_socio.sql
+supabase/staging/sql/20261112_s01p_linea_socio_prueba.sql

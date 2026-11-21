@@ -7,12 +7,15 @@
 //     para saber cuál es tu factura) y se guarda con compras_liquidacion_guardar.
 //   · compras/liquidacion/:liqId: lo leído, el contraste con lo que sabe
 //     Folvy (compras, ventas, producto a producto), «Decirle cuál es cuál» y
-//     «Contabilizar» (compras_liquidacion_confirmar). Los tres asientos los
-//     propone el libro, como todo lo demás. V01 · Entrega 3: vive en Ventas ›
+//     «Contabilizar» (compras_liquidacion_confirmar). Los asientos los propone
+//     el libro, como todo lo demás, y S01p·18 · 2: quien contabiliza ya ha
+//     revisado la liquidación entera, así que quedan validados a su nombre; el
+//     que no se puede, se dice con su porqué y espera en «Para revisar». V01 · Entrega 3: vive en Ventas ›
 //     Liquidaciones › Socios de marca, con SocioDelMes (albaranes como soporte,
 //     sus albaranes contra su Relación Compras y Ventas, sus asientos y el cobro).
 //
-// Lo que no cuadra o no se sabe qué es, para (bloqueos) y se dice.
+// Lo que no cuadra, para (bloqueos) y se dice. Una línea de la transacción que
+// no es ninguna de las dos facturas se pregunta, no para (S01p·18, LineaSocio).
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -30,7 +33,9 @@ import { albaranesDeLiquidacion, type AlbaranLiquidacion } from '@/modules/conta
 import { VerPapel } from '@/modules/conta/compras/VerPapel'
 import { celdasPdf } from '@/modules/conta/lib/celdasPdf'
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
-import { leerLiquidacion, type FacturaLeida, type LiquidacionLeida } from '@/modules/conta/lib/lectorLiquidacionMensual'
+import { leerLiquidacion, sinContestar, type FacturaLeida, type LiquidacionLeida, type QueEsLinea } from '@/modules/conta/lib/lectorLiquidacionMensual'
+import { CuentaQueTeManda, LineasDelSocio, LoQueApuntara } from '@/modules/conta/compras/LineaSocio'
+import { TEXTO_QUE_ES, useContextoSocio, type ReglaSocio } from '@/modules/conta/compras/reglasSocio'
 import { rpc, tabla } from '@/modules/conta/services/bd'
 import { MARCA as PRODUCTO } from '../cuenta/marca'
 import { SocioDelMes } from '@/modules/conta/ventas/SocioDelMes'
@@ -45,6 +50,19 @@ interface Contraste {
   ventas: { plataforma: string; documento: number | null; folvy: number | null; pedidos: number | null; diferencia: number }[]
   productos: { casados: number; no_nuestros: number; sin_casar: number; sin_casar_con_compras: number; no_coinciden: { nombre: string; documento: number; unidad: string; folvy: number | null; comparable: boolean }[] }
   marcas: string; marcas_frase: string
+}
+/** Lo que contesta «Contabilizar» (S01p·18 · 2). */
+interface RespuestaContabilizar {
+  frase: string
+  validados?: { id: string; concepto: string; serie: number; numero: number }[]
+  sinValidar?: { id: string; concepto: string; porque: string }[]
+  sinPropuesta?: string | null
+}
+/** La frase, con el número de cada asiento validado («… Ventas nº 3.390, Compras nº 3.391…»). */
+function fraseContabilizada(r: RespuestaContabilizar): string {
+  const v = r.validados ?? []
+  if (v.length === 0) return r.frase
+  return `${r.frase} ${v.map((x) => `${x.concepto} (nº ${x.numero.toLocaleString('es-ES')})`).join(' · ')}.`
 }
 interface Producto { nombre: string; compras: number; unidad: string; articulo: string | null; articulo_nombre: string | null; no_es_nuestro: boolean }
 
@@ -73,6 +91,9 @@ function NuevaLiquidacion() {
   const [leyendo, setLeyendo] = useState(false)
   const [fallo, setFallo] = useState<string | null>(null)
   const [guardando, setGuardando] = useState(false)
+  const socio = useContextoSocio(activa?.id ?? null, proveedor, local)
+  const [nuevas, setNuevas] = useState<Record<string, ReglaSocio>>({})
+  const reglas = useMemo(() => ({ ...socio.reglas, ...nuevas }), [socio.reglas, nuevas])
 
   useEffect(() => {
     void Promise.all([nombreDe('supplier', proveedor), nombreDe('locations', local)]).then(([p, l]) => setNombres({ proveedor: p, local: l }))
@@ -85,7 +106,8 @@ function NuevaLiquidacion() {
       const pdf = await pdfjs()
       const docs = []
       for (const f of fs) docs.push({ nombre: f.name, paginas: await celdasPdf(pdf, await f.arrayBuffer()) })
-      setLectura(leerLiquidacion(docs, activa.nif))
+      const recordadas: Record<string, QueEsLinea> = Object.fromEntries(Object.values(reglas).map((r) => [r.clave, r.queEs]))
+      setLectura(leerLiquidacion(docs, activa.nif, { reglas: recordadas, pendiente: socio.pendiente, socio: nombres.proveedor ?? undefined }))
     } catch (e) {
       setFallo(`No he podido leer los documentos: ${e instanceof Error ? e.message : String(e)}`)
     } finally { setLeyendo(false) }
@@ -99,11 +121,12 @@ function NuevaLiquidacion() {
         <p style={{ marginTop: 0 }}>Suelta los cinco PDF que te manda: tu factura, la suya, la cuenta, las ventas y el inventario.</p>
         <label className="cx-campo">
           <span className="cx-etiqueta">Los PDF de la liquidación</span>
-          <input type="file" accept="application/pdf" multiple className="cx-input" disabled={leyendo}
+          <input type="file" accept="application/pdf" multiple className="cx-input" disabled={leyendo || !socio.listo || !activa}
             onChange={(e) => void leer(Array.from(e.target.files ?? []))} />
         </label>
         {leyendo && <p role="status">Leyendo…</p>}
         {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+        {socio.fallo && <div className="cx-error" role="alert">{socio.fallo}</div>}
       </Tarjeta>
       {lectura && (
         <>
@@ -111,14 +134,19 @@ function NuevaLiquidacion() {
           <Facturas lectura={lectura} />
           {lectura.noReconocidos.length > 0 && <p className="cx-aviso">No sé qué son: {lectura.noReconocidos.join(', ')}. No los he usado.</p>}
           {lectura.avisos.map((a) => <p key={a} className="cx-ayuda" style={{ margin: 0 }}>{a}</p>)}
+          <CuentaQueTeManda lectura={lectura} />
+          <LineasDelSocio lectura={lectura} empresa={activa?.id ?? null} proveedor={proveedor} socio={nombres.proveedor ?? 'el socio'}
+            local={nombres.local ?? 'este local'} pendiente={socio.pendiente} reglas={reglas}
+            alCambiar={(l, r) => { setLectura(l); if (r) setNuevas((rs) => ({ ...rs, [r.clave]: r })) }} />
           {lectura.bloqueos.length > 0 && (
             <div className="cx-error" role="alert">
               <strong>No se puede guardar todavía:</strong>
               <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{lectura.bloqueos.map((b) => <li key={b}>{b}</li>)}</ul>
             </div>
           )}
+          <LoQueApuntara lectura={lectura} socio={nombres.proveedor ?? 'el socio'} />
           <div className="cx-pie" style={{ justifyContent: 'flex-start' }}>
-            <button type="button" className="cx-boton" disabled={guardando || lectura.bloqueos.length > 0 || !activa || !proveedor || !local}
+            <button type="button" className="cx-boton" disabled={guardando || lectura.bloqueos.length > 0 || sinContestar(lectura).length > 0 || !activa || !proveedor || !local}
               onClick={async () => {
                 if (!activa || !local) return
                 setGuardando(true); setFallo(null)
@@ -127,6 +155,7 @@ function NuevaLiquidacion() {
                   navigate(rutaLiquidacion(id), { state: { aviso: `Guardada la liquidación ${lectura.emitida?.numero ?? ''}: ahora la comparo con lo que sabe ${PRODUCTO.nombre}.` } })
                 } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo guardar.') } finally { setGuardando(false) }
               }}>{guardando ? 'Guardando…' : 'Guardar y comparar'}</button>
+            {sinContestar(lectura).length > 0 && lectura.bloqueos.length === 0 && <span className="cx-ayuda">Contesta la pregunta de arriba para guardar.</span>}
           </div>
         </>
       )}
@@ -147,7 +176,9 @@ function TresCifras({ lectura, saldo }: { lectura: LiquidacionLeida; saldo: numb
         <span className="cx-ayuda">El género suyo que queda en tu local a fin de mes.</span></Tarjeta>
       <div className="cxc-tres-saldo"><span className="cx-etiqueta">{s == null ? 'La diferencia' : fraseSaldo(s)?.replace(/ [\d.,]+ €$/, '')}</span>
         <div className="cxc-tres-cifra">{s == null ? '—' : eurosExactos(Math.abs(s))}</div>
-        <span className="cx-ayuda">La diferencia.{lectura.transaccion?.saldo ? ' Coincide con la cuenta que te manda.' : ''}</span></div>
+        <span className="cx-ayuda">{(lectura.lineasSocio ?? []).length > 0
+          ? (sinContestar(lectura).length > 0 ? 'Lo que dice la cuenta que te manda: falta saber qué es una de sus líneas.' : 'Cuadra con las facturas y lo pendiente ✓')
+          : `La diferencia.${lectura.transaccion?.saldo ? ' Coincide con la cuenta que te manda.' : ''}`}</span></div>
     </div>
   )
 }
@@ -266,6 +297,7 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
       </Tarjeta>
 
       <Facturas lectura={lec} />
+      <CuentaQueTeManda lectura={lec} />
 
       <Tarjeta titulo="Lo que voy a apuntar">
         <p style={{ marginTop: 0 }}>
@@ -275,6 +307,12 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
             : <>quedan <strong>{eurosExactos(Math.abs(Number(liq.net_settlement ?? 0)))} por pagar</strong></>}, que se cerrarán cuando lleguen al banco.
           {contraste.compras.recepciones > 0 ? ` Los ${contraste.compras.recepciones} albaranes no se apuntan aparte.` : ''}
         </p>
+        {(lec.lineasSocio ?? []).filter((l) => l.queEs).map((l, i) => (
+          <p key={i} className="cx-ayuda" style={{ margin: 0 }} data-prueba="linea-guardada">
+            «{l.concepto}» ({eurosExactos(l.importe)}): {TEXTO_QUE_ES[l.queEs as QueEsLinea].toLowerCase()}
+            {l.queEs === 'a_mano' ? ', sin asiento.' : '. Va en su propio asiento, entre su cuenta de cliente y las facturas pendientes de recibir.'}
+          </p>
+        ))}
         {bloqueos.length > 0 && (
           <div className="cx-error" role="alert"><strong>No se puede contabilizar:</strong>
             <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{bloqueos.map((b) => <li key={b}>{b}</li>)}</ul></div>
@@ -286,8 +324,10 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
             : <button type="button" className="cx-boton" disabled={confirmando || bloqueos.length > 0} onClick={async () => {
                 setConfirmando(true); setFallo(null)
                 try {
-                  const r = await rpc<{ frase: string }>('compras_liquidacion_confirmar', { p_liq: liqId })
-                  setAviso(r.frase); setVuelta((v) => v + 1)
+                  const r = await rpc<RespuestaContabilizar>('compras_liquidacion_confirmar', { p_liq: liqId })
+                  setAviso(fraseContabilizada(r))
+                  if ((r.sinValidar ?? []).length > 0) setFallo((r.sinValidar ?? []).map((x) => `«${x.concepto}» no se ha validado: ${x.porque}`).join(' '))
+                  setVuelta((v) => v + 1)
                 } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo contabilizar.') } finally { setConfirmando(false) }
               }}>{confirmando ? 'Contabilizando…' : 'Contabilizar'}</button>}
         </div>

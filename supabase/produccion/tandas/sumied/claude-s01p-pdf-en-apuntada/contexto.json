@@ -1,0 +1,8 @@
+{
+ "_que": "S01p·22 · el PDF de una recibida ya apuntada · contexto medido en SOLO LECTURA el 2026-11-14: en Foodint, seis recibidas de octubre sin PDF, todas con su asiento validado: GLOVOAPP I170326000585810 (2/3438), FV-02931 (2/3384), FV-02927 (2/3383) y las tres de liquidación 4126424, 4126364 y 4126341 (2/3435 a 2/3437). conta_recibida_papel_poner (md5 bf70e29b952c64a38ca6c75d8a092f5d, el mismo en la base local) rechaza toda factura con su asiento validado; el trozo del guardia está una sola vez. Ningún disparador de supplier_invoice salta al cambiar raw_document_url.",
+ "medido": "2026-11-14T07:35Z",
+ "tanda": {
+  "supabase/migrations/20261114T0831_s01p_pdf_en_apuntada.sql": "434274a599c8e707225189fb4fe79204"
+ },
+ "contexto": {"tablas": ["public.supplier_invoice", "public.journal_entry"], "funciones": ["public.conta_recibida_papel_poner(uuid,text,text,text)"], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

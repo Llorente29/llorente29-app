@@ -36,3 +36,4 @@ export {
   type CambioCampo, type CambiosSinGuardar, type FormatoCampo, type Registro, type ResultadoGuardar,
 } from './cambios'
 export { useAvisoSalir, destinoDelClic, type AvisoSalirControl, type OpcionesAvisoSalir } from './avisoSalir'
+export { PestanaContexto, usePestana, usePestanaActiva, useNombreDePestana, useSeVe, type PestanaDeTrabajo, type CambiosDePestana } from './pestana'

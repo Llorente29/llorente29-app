@@ -36,6 +36,7 @@ import { contactoParaLlamar, correoPedirDatos } from '@/modules/conta/lib/textos
 import { diaMes, euros, eurosExactos, iniciales } from '@/modules/conta/lib/formato'
 import { PAYMENT_METHOD_LABEL } from '@/modules/conta/types'
 import { BloqueAprendido, FraseAprendido } from '@/modules/conta/proveedor/Aprendido'
+import { LineasDeSuLiquidacion } from '@/modules/conta/proveedor/LineasDeSuLiquidacion'
 import { ConQuienHablas } from '@/modules/conta/proveedor/Contactos'
 import { AvisoIban, ListaFacturas, TarjetaFacturas } from '@/modules/conta/proveedor/Facturas'
 import { Extracto } from '@/modules/conta/proveedor/SusCuentas'
@@ -356,6 +357,7 @@ function Resumen({ secciones }: { secciones: SeccionDeFicha[] }) {
         <div className="cxp-col-estrecha">
           <SaldoDeCatcher />
           <BloqueAprendido />
+          <LineasDeSuLiquidacion />
           <ConQuienHablas />
           <Notas />
         </div>
@@ -509,6 +511,7 @@ function PortadaMovil({ secciones }: { secciones: SeccionDeFicha[] }) {
       </div>
       <SaldoDeCatcher />
       <FraseAprendido />
+      <LineasDeSuLiquidacion />
       <nav className="cx-lista" aria-label="Apartados de la ficha">
         {apartados.map((a) => {
           const l = a === 'articulos' ? { detalle: 'Lo que le compras y a qué precio', falta: false } : lineaApartado(a, base)

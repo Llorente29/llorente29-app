@@ -1,0 +1,3 @@
+# K06 · la vuelta atrás: quita la función nueva. Los pagos que ya hizo se quedan con su asiento validado.
+cuenta: scripts/conta/produccion/cuentas/k06-pagar-con-cuenta.sql
+supabase/vuelta-atras/20261120T0840_k06_pagar_con_cuenta.down.sql

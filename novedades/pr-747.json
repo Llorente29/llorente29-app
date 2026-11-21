@@ -1,0 +1,29 @@
+[
+ {
+  "id": "747-1",
+  "pr": 747,
+  "fecha": "2026-11-20T07:45:37Z",
+  "producto": "sumied",
+  "apartado": "Bancos",
+  "frase": "conciliar es un solo paso: al elegir la cuenta o la factura, el asiento queda en el diario. Se pueden marcar varios (Espacio, Mayús ↑ ↓) y conciliarlos a la vez a la misma cuenta.",
+  "ruta": null
+ },
+ {
+  "id": "747-2",
+  "pr": 747,
+  "fecha": "2026-11-20T07:45:37Z",
+  "producto": "sumied",
+  "apartado": "Bancos",
+  "frase": "«Cuadra» compara el último extracto del banco con lo que está en el diario, y el recibo que el banco no cobró se aparta solo y dice por qué, con «Volver a abrirlo».",
+  "ruta": null
+ },
+ {
+  "id": "747-3",
+  "pr": 747,
+  "fecha": "2026-11-20T07:45:37Z",
+  "producto": "sumied",
+  "apartado": "Bancos",
+  "frase": "«Deshacer» quita del diario el último asiento; si detrás hay otros, si ya salió a ERP10 o si tiene el IVA presentado, lo anula con un contraasiento y dice por qué. Y «Repartidores» tiene su botón en Importaciones.",
+  "ruta": null
+ }
+]

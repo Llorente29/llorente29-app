@@ -38,6 +38,32 @@ export interface Cierre {
   estado: EstadoCierre
   motivo: string | null
   esperaAMano: boolean
+  /** R05 · De dónde: de Folvy (un local y un canal; por defecto) o de un TPV de fuera (un día de la empresa). */
+  fuente?: 'folvy' | 'tpv'
+  /** R05 · Lo del día del TPV (conta_tpv_dias): solo en los de fuente «tpv». */
+  tpv?: CierreTpv
+  /** R07 · El cobro del día, si el día va en dos asientos (la factura del día y su cobro, conta_dia_cobro). */
+  cobro?: CobroDelDia | null
+}
+
+/** R07 · El asiento del cobro del día que va con la factura del día. */
+export interface CobroDelDia { id: string; numero: number | null; estado: string }
+
+/** R05 · Un día del TPV en la lista: una fila por día, con su numeración, base, IVA y cómo se cobró. */
+export interface CierreTpv {
+  diaId: string
+  programa: string
+  facturas: number
+  primero: number
+  ultimo: number
+  base: number
+  cuota: number
+  formas: { forma: string; importe: number }[]
+  conNif: number
+  subidoPor: string | null
+  subidoEn: string | null
+  /** El salto con el día anterior (decisión 8): un aviso, no para nada. */
+  aviso: string | null
 }
 
 type Fila = Record<string, unknown>
@@ -54,6 +80,50 @@ export function cierreDeFila(f: Fila): Cierre {
     documento: s(f.documento), ajustes: n(f.ajustes), estado: ['por_validar', 'en_espera', 'validado', 'anulado'].includes(estado) ? estado : 'en_espera',
     motivo: s(f.motivo), esperaAMano: f.espera_a_mano === true,
   }
+}
+
+/** R05 · Una fila de conta_tpv_dias, como un cierre más de la lista (sin ficha propia: no se abre). */
+export function cierreTpvDeFila(f: Fila): Cierre {
+  const estado = String(f.estado) as EstadoCierre
+  const programa = String(f.programa_nombre ?? f.programa ?? 'TPV')
+  return {
+    id: null, localId: `tpv:${String(f.id)}`, local: 'Toda la empresa', dia: String(f.dia), unidad: null,
+    canalId: null, canal: `TPV · ${programa}`, canalSlug: null, marca: null,
+    tiques: n(f.facturas), total: n(f.total), asientoId: s(f.asiento_id), estadoAsiento: s(f.estado_asiento),
+    numeroAsiento: f.numero_asiento == null ? null : n(f.numero_asiento), facturaId: null, factura: null,
+    documento: s(f.documento), ajustes: 0, estado: ['por_validar', 'en_espera', 'validado', 'anulado'].includes(estado) ? estado : 'en_espera',
+    motivo: s(f.motivo), esperaAMano: false, fuente: 'tpv',
+    tpv: {
+      diaId: String(f.id), programa, facturas: n(f.facturas), primero: n(f.primero), ultimo: n(f.ultimo), base: n(f.base), cuota: n(f.cuota),
+      formas: ((f.formas ?? []) as Fila[]).map((x) => ({ forma: String(x.forma), importe: n(x.importe) })),
+      conNif: n(f.con_nif), subidoPor: s(f.subido_por), subidoEn: s(f.subido_en), aviso: s(f.aviso),
+    },
+  }
+}
+
+/** R05 · «5001 a 5048» (o un solo número). */
+export const numeracionTpv = (t: Pick<CierreTpv, 'primero' | 'ultimo'>): string => (t.primero === t.ultimo ? String(t.primero) : `${t.primero} a ${t.ultimo}`)
+
+/**
+ * R05 · Cómo se cobró, en palabras: «Efectivo, tarjeta y plataformas». Las formas
+ * como vengan del TPV; «Deliverect» (las plataformas) va la última.
+ */
+export function cobradoTpv(formas: readonly { forma: string }[]): string {
+  const plataforma = (f: string) => f.trim().toLowerCase() === 'deliverect'
+  const nombres = [...new Set(formas.filter((x) => !plataforma(x.forma)).map((x) => x.forma.trim().toLowerCase()))]
+  if (formas.some((x) => plataforma(x.forma))) nombres.push('plataformas')
+  if (!nombres.length) return '—'
+  const t = nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+/** R05 · «Subido hoy por Marta», «Subido ayer por Marta» o «Subido el 09/11 por Marta». hoy: AAAA-MM-DD de Madrid. */
+export function subidoTpv(t: Pick<CierreTpv, 'subidoEn' | 'subidoPor'>, hoy: string): string | null {
+  if (!t.subidoEn) return null
+  const dia = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid' }).format(new Date(t.subidoEn))
+  const ayer = new Date(`${hoy}T12:00:00Z`); ayer.setUTCDate(ayer.getUTCDate() - 1)
+  const cuando = dia === hoy ? 'hoy' : dia === ayer.toISOString().slice(0, 10) ? 'ayer' : `el ${dia.slice(8, 10)}/${dia.slice(5, 7)}`
+  return `Subido ${cuando}${t.subidoPor ? ` por ${t.subidoPor}` : ''}`
 }
 
 export const NOMBRE_ESTADO_CIERRE: Record<EstadoCierre, { texto: string; tono: 'propuesto' | 'duda' | 'seguro' | 'neutro' }> = {
@@ -86,16 +156,20 @@ export function pestanasCierres(xs: readonly Cierre[]): { id: PestanaCierres; et
 export function filtrarCierres(xs: readonly Cierre[], pestana: PestanaCierres, q: string): Cierre[] {
   const t = q.trim().toLowerCase()
   return xs.filter((x) => (pestana === 'todos' || x.estado === DE_PESTANA[pestana])
-    && (!t || [x.local, x.canal, x.marca ?? '', x.factura ?? '', x.dia, x.motivo ?? ''].some((v) => v.toLowerCase().includes(t))
+    && (!t || [x.local, x.canal, x.marca ?? '', x.factura ?? '', x.dia, x.motivo ?? '', x.tpv ? numeracionTpv(x.tpv) : ''].some((v) => v.toLowerCase().includes(t))
       || (Number(t.replace(',', '.')) > 0 && Math.abs(x.total - Number(t.replace(',', '.'))) < 0.005)))
 }
 
-/** Los que se pueden validar de una vez: por validar, con su asiento y sin nada que lo frene. */
-export const listos = (xs: readonly Cierre[]): Cierre[] => xs.filter((x) => x.estado === 'por_validar' && !!x.asientoId && !!x.id)
+/**
+ * Los que se pueden validar de una vez: por validar, con su asiento y sin nada que lo frene. R05: un día del TPV
+ * por validar no tiene asiento todavía (se propone y se valida a la vez, al pulsar): basta con que se pueda proponer.
+ */
+export const listos = (xs: readonly Cierre[]): Cierre[] =>
+  xs.filter((x) => x.estado === 'por_validar' && (x.fuente === 'tpv' ? !!x.tpv : !!x.asientoId && !!x.id))
 
 /** El resumen de «ayer»: el último día con cierres (de cualquier estado), por canal. */
 export function resumenDeAyer(xs: readonly Cierre[]): { dia: string; total: number; tiques: number; porCanal: { canal: string; total: number }[]; porValidar: number } | null {
-  const conCierre = xs.filter((x) => x.id)
+  const conCierre = xs.filter((x) => x.id || x.fuente === 'tpv')
   if (!conCierre.length) return null
   const dia = conCierre.map((x) => x.dia).sort().at(-1)!
   const delDia = conCierre.filter((x) => x.dia === dia && x.estado !== 'anulado')
@@ -227,4 +301,17 @@ export function etiquetaAjuste(a: AjustePedido): string {
   if (a.deOtroDia) return 'DE OTRO DÍA'
   if (a.dia) return `PASADO AL ${fechaCorta(a.dia)}`
   return 'CAMBIADO'
+}
+
+/**
+ * R07 · Los asientos de un cierre, como se enseñan en la lista y en la ficha: «Factura del día nº 5 ·
+ * cobro nº 6» si va en dos; «Asiento nº 5» si va en uno; null si aún no tiene número.
+ */
+export function textoAsientos(x: Pick<Cierre, 'numeroAsiento' | 'cobro'>): string | null {
+  const n = (v: number) => v.toLocaleString('es-ES')
+  if (x.cobro) {
+    if (x.numeroAsiento == null) return 'Factura del día y su cobro, sin validar'
+    return `Factura del día nº ${n(x.numeroAsiento)} · cobro nº ${x.cobro.numero == null ? '—' : n(x.cobro.numero)}`
+  }
+  return x.numeroAsiento == null ? null : `Asiento nº ${n(x.numeroAsiento)}`
 }

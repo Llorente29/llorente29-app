@@ -1,0 +1,19 @@
+{
+ "_que": "Q05 · «Pantallas nuevas» en la ficha de la cuenta · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging 9c6714b4, 18/11 19:30Z), en SOLO LECTURA, el 18/11: no en producción (esta sesión no lee producción). Las dos funciones que cambian existen con la firma de la 20261031T1706 y su md5 en local: conta_interruptores_de_cuenta 23a8cf0d1fe4781b6df95d31ca01b974 y conta_interruptor_cambiar e73267fddf6b6fb5aaec4b66cecf4b61; ninguna nombra conta_nucleo. La medida de la tanda (lo que no se mueve: los interruptores de Sumied de feature_flags, tabla entera, y las dos funciones) dio en local 1 encendido de cada clave y 2 funciones. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-18T19:33Z",
+ "tanda": {
+  "supabase/migrations/20261118T2029_q05_interruptor_nucleo.sql": "a430f34e1dd2e317fc496abf3603323e"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": ["public.conta_interruptores_de_cuenta(uuid)", "public.conta_interruptor_cambiar(uuid,text,boolean,text)"],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

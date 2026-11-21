@@ -35,13 +35,16 @@ import { SIN_APUNTADAS, lineaDeArriba, motivoDeRevisar, motivoPideRoi } from '@/
 import { PreguntaRoi } from '@/modules/conta/empresa/ApartadoRoi'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
+import { pasadasSolas } from '@/modules/conta/services/pasadaSolaService'
+import { ayerEnMadrid } from '@/modules/conta/services/inicioService'
+import { AvisoLecturaCaida } from './AvisoLecturaCaida'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { diaMes, entendido, meses, productoDeDocumentos, type FilaDocumento } from '@/modules/conta/documentos/documentos'
+import { diaMes, entendido, esCorreoSinFactura, meses, productoDeDocumentos, tituloDeLlegada, type FilaDocumento } from '@/modules/conta/documentos/documentos'
 import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { MARCA } from '@/modules/conta/cuenta/marca'
-import { leerDocumentos, leerExtrasFacturas, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type ExtraFactura, type Subida } from '@/modules/conta/services/documentosService'
+import { leerCorreosDeLlegadas, leerDocumentos, leerExtrasFacturas, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type ExtraFactura, type Subida } from '@/modules/conta/services/documentosService'
 import { Pedirselas } from '@/modules/conta/documentos/Pedirselas'
 import { leerParaValidar, validarEnBloque, type ResultadoBloque } from '@/modules/conta/documentos/paraValidarService'
 import { BarraMarcadas, ConfirmarBloque, ResultadoDelBloque } from '@/modules/conta/documentos/ValidarEnBloque'
@@ -85,6 +88,12 @@ export default function DocumentosPage() {
   const datos = useLeer(activa ? () => leerDocumentos(activa.id, desde, hasta) : null, `${activa?.id}:${desde}:${hasta}:${vuelta}`)
   const ids = useMemo(() => (datos.datos?.filas ?? []).filter((x) => x.tipo === 'factura').map((x) => x.id), [datos.datos])
   const extras = useLeer(accountId && ids.length ? () => leerExtrasFacturas(accountId, ids) : null, `${accountId}:${ids.join(',')}`)
+  // S01p·20 · 1 · Las llegadas sin fichero que son un correo de plataforma: su asunto (la fila lo enseña).
+  const sinFichero = useMemo(() => (datos.datos?.filas ?? []).filter((x) => x.tipo === 'llegada' && !x.archivo).map((x) => x.id), [datos.datos])
+  const correos = useLeer(accountId && sinFichero.length ? () => leerCorreosDeLlegadas(accountId, sinFichero) : null, `${accountId}:${sinFichero.join(',')}:correos`)
+  // E04 · Desde Inicio, «N facturas pasadas solas a su sociedad»: solo esas, y se dice (regla 7: lo pide el enlace, no lo esconde nadie).
+  const soloPasadas = query.get('pasadas') === '1'
+  const pasadas = useLeer(soloPasadas && activa ? () => pasadasSolas(activa.id, ayerEnMadrid(hoy)) : null, `${activa?.id}:${hoy}:pasadas:${vuelta}`)
   // S01o · Lo que Sumied apuntó solo (con su porqué) y por qué se quedaron las demás. Si no se puede leer, la lista sale igual y lo dice.
   const solas = useLeer(activa ? () => leerApuntadasSolas(activa.id) : null, `${activa?.id}:${vuelta}:apuntadas-solas`)
   const sol = solas.datos ?? SIN_APUNTADAS
@@ -156,7 +165,8 @@ export default function DocumentosPage() {
   if (!activa) return <div className="s-pagina"><p className="s-apoyo">Aún no hay ninguna empresa: da de alta tu empresa y aquí llegan sus facturas.</p></div>
 
   const d = datos.datos
-  const todasLasFilas = d?.filas ?? []
+  const todasLasFilas = (d?.filas ?? []).map((x) => (correos.datos?.has(x.id) ? { ...x, correo: correos.datos.get(x.id)! } : x))
+    .filter((x) => !soloPasadas || (pasadas.datos?.ids.includes(x.id) ?? true))
   const base = filtrarSinPestana(todasLasFilas, mapa, f)
   const pestanas = pestanasConNumero(base, mapa)
   const filas = filasDeLaLista(todasLasFilas, mapa, f)
@@ -217,7 +227,9 @@ export default function DocumentosPage() {
   const locales = [...new Set(todasLasFilas.map((x) => localDeFila(x, mapa.get(x.id))).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, 'es'))
   const canales = [...new Set(todasLasFilas.map((x) => x.canal))]
 
-  const nombre = (x: FilaDocumento) => x.proveedor.nombre ?? (x.tipo === 'llegada' ? 'Documento sin leer' : 'No reconozco el emisor')
+  // S01p·18.2 · 3: una llegada sin leer dice qué archivo es, no «Documento sin leer».
+  // S01p·20 · 1: y un correo sin factura, su asunto.
+  const nombre = (x: FilaDocumento) => x.proveedor.nombre ?? (x.tipo === 'llegada' ? (x.archivo || esCorreoSinFactura(x) ? tituloDeLlegada(x) : 'Documento sin leer') : 'No reconozco el emisor')
   const euro = (n: number | null | undefined) => (n === null || n === undefined ? '—' : eurosExactos(n))
   const propuesto = (x: FilaDocumento) => {
     if (x.tipo !== 'factura' || !x.entendido) return null
@@ -228,12 +240,14 @@ export default function DocumentosPage() {
       </span>
     )
   }
+  // S01p·20 · 1 · Un correo sin factura dice en la fila, en una frase, por qué está aquí (Julio, 13/11).
+  const porqueDelCorreo = (x: FilaDocumento) => (esCorreoSinFactura(x) && x.porque ? <span className="s-lista-propuesto" data-prueba="porque-correo">{x.porque}</span> : null)
   // N5 · La regla de anchos: sin sitio, se ocultan primero el local, la base y el IVA, luego el número; nunca la fecha, el proveedor ni el total.
   const columnas: ColumnaLista<FilaDocumento>[] = [
     { id: 'fecha', titulo: 'Fecha', ordenable: true, ancho: '80px', prioridad: 1, minimo: 80, celda: (x) => <span className="s-cifra">{diaMes(x.fecha ?? x.llego.slice(0, 10))}</span> },
     {
       id: 'proveedor', titulo: 'Proveedor', ordenable: true, prioridad: 1, minimo: 200,
-      celda: (x) => <span className="s-lista-texto-doble"><span className="s-lista-principal">{nombre(x)}</span>{propuesto(x)}</span>,
+      celda: (x) => <span className="s-lista-texto-doble"><span className="s-lista-principal">{nombre(x)}</span>{propuesto(x)}{porqueDelCorreo(x)}</span>,
     },
     { id: 'numero', titulo: 'Nº de factura', ordenable: true, prioridad: 3, minimo: 130, celda: (x) => <span className="s-cifra">{x.numero ?? '—'}</span> },
     ...(ejeLocal ? [{ id: 'local', titulo: ejeLocal.nombre, prioridad: 5, minimo: 120, celda: (x: FilaDocumento) => localDeFila(x, mapa.get(x.id)) ?? 'Común' }] : []),
@@ -261,6 +275,7 @@ export default function DocumentosPage() {
         <span className="s-tarjeta-cabeza"><span className="s-lista-principal">{nombre(x)}</span><strong className="s-cifra">{euro(x.total)}</strong></span>
         <span className="s-tarjeta-apoyo">{[x.numero ?? 'sin número', diaMes(x.fecha ?? x.llego.slice(0, 10)), l].filter(Boolean).join(' · ')}</span>
         <span className="s-tarjeta-pie">{enBloque ? <ListaParaValidar p={pv?.get(x.id)} cargando={!pv && !listas.error} /> : <Chip tono={e.tono}>{e.texto}</Chip>}{propuesto(x)}</span>
+        {esCorreoSinFactura(x) && <span className="s-tarjeta-apoyo" data-prueba="porque-correo">{x.porque}</span>}
         {enBloque && mapa.get(x.id)?.motivo && <span className="s-tarjeta-apoyo"><MotivoRevisar x={x} motivo={mapa.get(x.id)?.motivo} /></span>}
         {f.pestana === 'solas' && (
           <span className="s-tarjeta-apoyo">{mapa.get(x.id)?.sola}{' '}
@@ -326,6 +341,7 @@ export default function DocumentosPage() {
         masAcciones={mas}
         principal={botonSubir}
       />
+      <AvisoLecturaCaida companyId={activa?.id} />
       <input ref={ficheros} type="file" multiple accept={ACEPTA} className="s-oculto" aria-label="Elegir facturas para subir"
         onChange={(e) => void subir(e.target.files)} data-prueba="subir-ficheros" />
       <input ref={camara} type="file" accept="image/*" capture="environment" className="s-oculto" aria-label="Hacer una foto a una factura"
@@ -338,6 +354,13 @@ export default function DocumentosPage() {
           <p className="s-aviso-lista">Elige el PDF o la foto de la factura con «Subir factura»{movil ? ', o hazle una foto' : ''}: la leo y la pongo aquí, en «Por revisar».</p>
         )}
       </div>
+      {soloPasadas && pasadas.datos && (
+        <p className="s-aviso-lista" data-tono="ok" data-prueba="solo-pasadas">
+          {pasadas.datos.n === 1 ? 'La factura que he pasado sola a esta sociedad desde ayer, porque iba a su nombre.' : `Las ${pasadas.datos.n} facturas que he pasado solas a esta sociedad desde ayer, porque iban a su nombre.`}{' '}
+          <button type="button" className="s-boton s-boton-enlace" onClick={() => cambiar({ pasadas: null })}>Ver todas</button>
+        </p>
+      )}
+      {soloPasadas && pasadas.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No he podido saber cuáles he pasado solas: {pasadas.error}. Salen todas.</p>}
       {fallo && <p className="s-aviso-lista" data-tono="falta" role="alert">{fallo}</p>}
       {hecho && <p className="s-aviso-lista" data-tono="seguro" role="status">{hecho}</p>}
       {datos.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer las facturas: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p>}
@@ -439,7 +462,7 @@ export default function DocumentosPage() {
       </BotonPulgar>
 
       {aclarando && accountId && (
-        <AclararDocumento fila={aclarando} accountId={accountId} quien={userName ?? null} alCerrar={() => setAclarando(null)}
+        <AclararDocumento fila={aclarando} accountId={accountId} companyId={activa.id} quien={userName ?? null} alCerrar={() => setAclarando(null)}
           alSubirFactura={() => { setAclarando(null); ficheros.current?.click() }}
           alHecho={(m) => { setAclarando(null); setHecho(m); setVuelta((v) => v + 1); refrescarCuentasMenu() }} />
       )}

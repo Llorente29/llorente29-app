@@ -123,6 +123,10 @@ export const anadirSubcuenta = (companyId: string, hoja: string, nombre: string,
     p_company: companyId, p_hoja: hoja, p_nombre: nombre, p_plain_name: plain, p_entity: enlace?.entity ?? null, p_entity_id: enlace?.id ?? null, p_quien_nombre: quien,
   })
 
+/** X20 · Una subcuenta con el código que se escribe, como en ERP10: la cuenta de la que cuelga la busca la base. */
+export const anadirConCodigo = (companyId: string, codigo: string, nombre: string, quien: string | null) =>
+  rpc<{ id: string; code: string; hoja: string; hoja_nombre: string }>('company_account_add_codigo', { p_company: companyId, p_codigo: codigo, p_nombre: nombre, p_quien_nombre: quien })
+
 export const ocultarCuenta = (id: string, oculta: boolean, quien: string | null) =>
   rpc<void>('company_account_set_hidden', { p_id: id, p_oculta: oculta, p_quien_nombre: quien })
 

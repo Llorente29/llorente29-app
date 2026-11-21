@@ -1,0 +1,8 @@
+# N02 · la carga abierta y el día de inicio (0832 amplía cinco CHECK; 0833 añade
+# tres columnas que admiten nulos y conta_dia_de_inicio). Primero la medida de
+# ANTES, en su sesión y sin las migraciones (regla 31); después las dos
+# migraciones y su prueba (ROLLBACK, cuenta A), que toma la medida de DESPUÉS.
+supabase/staging/sql/20261117_n02_medida_antes.sql
+supabase/migrations/20261117T0832_n02_carga_abierta.sql
+supabase/migrations/20261117T0833_n02_dia_de_inicio.sql
+supabase/staging/sql/20261117_n02_carga_prueba.sql

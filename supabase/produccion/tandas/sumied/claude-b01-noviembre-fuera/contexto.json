@@ -1,0 +1,8 @@
+{
+ "_que": "B01r24 · los de noviembre que quedaron fuera · contexto de producción, medido en SOLO LECTURA el 13/11 a las 08:37Z: la 0955 no añade ni cambia objetos; en Foodint casa 6 movimientos con _dl1_casar, valida con _dl1_validar (1842) y aparta uno con _b01r23_ignorar (0155): las tres en producción. Ningún mes de banco cerrado. Nada en el camino del pedido; la 0955 no está en el historial.",
+ "medido": "2026-11-13T08:37Z",
+ "tanda": {
+  "supabase/migrations/20261113T0955_b01r24_noviembre_fuera.sql": "d4980956dc779aef95c259a1b3bcd96f"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

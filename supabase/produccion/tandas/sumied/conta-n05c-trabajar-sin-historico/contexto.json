@@ -1,0 +1,24 @@
+{
+ "_que": "N05c · empezar a trabajar sin el histórico · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging 399a8a3, 17/11 15:15Z), en SOLO LECTURA: no en producción (esta sesión no lee producción). Las filas son las de la base local; el contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-17T16:10Z",
+ "tanda": {
+  "supabase/migrations/20261117T1655_n05c_sin_historico_decision.sql": "830793a48c40993114ee10b6beb231b0",
+  "supabase/migrations/20261117T1656_n05c_sin_historico_validar.sql": "e298fa9b5c44f6ac3f0fcb961c67eed8"
+ },
+ "contexto": {
+  "tablas": [
+   "public.fiscal_year"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.fiscal_year": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

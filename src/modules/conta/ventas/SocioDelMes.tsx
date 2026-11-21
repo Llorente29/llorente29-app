@@ -30,7 +30,7 @@ import { albaranesDeLiquidacion } from '@/modules/conta/services/comprasService'
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { validar } from '@/modules/conta/services/diarioService'
 import { cargarContexto } from '@/modules/conta/services/propuestasLibroService'
-import { candidatosCobro, lineasDelSocio, type MovimientoCandidato } from '@/modules/conta/services/liquidacionesVentasService'
+import { candidatosCobro, lineasDelSocio, liquidacionesDelSocioEnElMes, type MovimientoCandidato } from '@/modules/conta/services/liquidacionesVentasService'
 import { VerPapel } from '@/modules/conta/compras/VerPapel'
 
 type Fila = Record<string, unknown>
@@ -79,7 +79,17 @@ export function SocioDelMes({ accountId, companyId, liq, relacion, quien }: {
   const lineas = useLeer(() => lineasDelSocio(accountId, liq.id), `${liq.id}:lineas`)
   const asientos = useLeer(() => asientosDe(accountId, liq.id), `${liq.id}:asientos:${vuelta}`)
   const saldo = liq.net_settlement == null ? null : Number(liq.net_settlement)
-  const cobro = useLeer(companyId && saldo !== null && saldo > 0 ? () => candidatosCobro(accountId, companyId, saldo, liq.period_to) : null, `${liq.id}:cobro:${vuelta}`)
+  // S01p·18 · 3: el cobro puede llegar junto, el de todos sus locales del mes (el factoring de
+  // octubre pagó Alcalá y Carabanchel en un movimiento): se buscan los dos importes.
+  const cobro = useLeer(companyId && saldo !== null && saldo > 0 ? async () => {
+    const delMes = liq.party_id ? await liquidacionesDelSocioEnElMes(accountId, liq.party_id, liq.period_from) : []
+    const junto = Math.round(delMes.reduce((t, l) => t + l.neto * 100, 0)) / 100
+    const solos = await candidatosCobro(accountId, companyId, saldo, liq.period_to)
+    const juntos = delMes.length > 1 && Math.round(junto * 100) !== Math.round(saldo * 100)
+      ? (await candidatosCobro(accountId, companyId, junto, liq.period_to)).map((m) => ({ ...m, junto: delMes }))
+      : []
+    return [...solos.map((m) => ({ ...m, junto: null })), ...juntos]
+  } : null, `${liq.id}:cobro:${vuelta}`)
   const confirmada = liq.status !== 'borrador'
 
   const c = lineas.datos ? cruzarConRelacion(relacion, lineas.datos.casados, lineas.datos.lineas) : null
@@ -91,17 +101,19 @@ export function SocioDelMes({ accountId, companyId, liq, relacion, quien }: {
     setOcupado(null)
   }
 
-  async function casar(m: MovimientoCandidato): Promise<string> {
+  async function casar(m: MovimientoCandidato & { junto: { local: string | null; neto: number }[] | null }): Promise<string> {
     if (!companyId || !liq.party_id) throw new Error('La liquidación no dice su socio: no sé a qué 430 va el cobro.')
     const ctx = await cargarContexto(accountId, companyId)
     const c430 = ctx.enlace('customer', liq.party_id, 'principal')
     if (!c430) throw new Error('El socio no tiene su cuenta de cliente (430): ponla en Contactos.')
     await rpc('bank_casar', {
       p_movement: m.id, p_destino: { tipo: 'cuenta', tercero_id: liq.party_id, concepto: 'Cobro de la liquidación del socio', lineas: [{ cuenta: c430, importe: m.importe }] },
-      p_confianza: 'seguro', p_porque: `Casado desde Ventas › Liquidaciones: el saldo de la liquidación (${eurosExactos(m.importe)}), llegado el ${m.fecha.split('-').reverse().join('/')}.`,
+      p_confianza: 'seguro', p_porque: m.junto
+        ? `Casado desde Ventas › Liquidaciones: el cobro de sus ${m.junto.length} locales del mes (${m.junto.map((l) => `${l.local ?? 'sin local'} ${eurosExactos(l.neto)}`).join(' + ')} = ${eurosExactos(m.importe)}), llegado el ${m.fecha.split('-').reverse().join('/')}.`
+        : `Casado desde Ventas › Liquidaciones: el saldo de la liquidación (${eurosExactos(m.importe)}), llegado el ${m.fecha.split('-').reverse().join('/')}.`,
       p_razones: [], p_por: 'persona', p_regla: null,
     })
-    return `Cobro casado: ${eurosExactos(m.importe)} del ${m.fecha.split('-').reverse().join('/')}${m.banco ? ` en ${m.banco}` : ''}, con su asiento del banco contra la ${c430}.`
+    return `Cobro casado: ${eurosExactos(m.importe)} del ${m.fecha.split('-').reverse().join('/')}${m.banco ? ` en ${m.banco}` : ''}, con su asiento del banco contra la ${c430}${m.junto ? ` (el de sus ${m.junto.length} locales del mes)` : ''}.`
   }
 
   return (
@@ -164,14 +176,15 @@ export function SocioDelMes({ accountId, companyId, liq, relacion, quien }: {
 
       {saldo !== null && saldo > 0 && (
         <Tarjeta titulo="El cobro">
-          <p className="cx-ayuda" style={{ marginTop: 0 }}>Te paga {eurosExactos(saldo)}, por banco o por factoring. Los movimientos de ese importe desde el fin del mes y sin casar:</p>
+          <p className="cx-ayuda" style={{ marginTop: 0 }}>Te paga {eurosExactos(saldo)}, por banco o por factoring. Los movimientos de ese importe (o del de todos sus locales del mes, si paga junto) desde el fin del mes y sin casar:</p>
           {cobro.error && <div className="cx-error" role="alert">{cobro.error}</div>}
           {cobro.datos && cobro.datos.length === 0 && <p className="cx-ayuda">Ninguno: aún no ha llegado, llegó por otro importe o ya está casado en Bancos.</p>}
           {cobro.datos && cobro.datos.length > 0 && (
             <ul className="cxc-albaranes" aria-label="Movimientos que pueden ser su cobro">
               {cobro.datos.map((m) => (
                 <li key={m.id}>
-                  <span>{m.fecha.split('-').reverse().join('/')} · {eurosExactos(m.importe)} · {m.concepto}{m.banco ? ` · ${m.banco}` : ''}</span>
+                  <span>{m.fecha.split('-').reverse().join('/')} · {eurosExactos(m.importe)} · {m.concepto}{m.banco ? ` · ${m.banco}` : ''}
+                    {m.junto && <span className="cx-ayuda" data-prueba="cobro-junto"> · el de todos sus locales del mes: {m.junto.map((l) => `${(l.local ?? 'sin local').replace(/^Foodint\s+/i, '')} ${eurosExactos(l.neto)}`).join(' + ')}</span>}</span>
                   <button type="button" className="cx-boton-sec" disabled={!!ocupado} onClick={() => void hacer(m.id, () => casar(m))}>{ocupado === m.id ? 'Casando…' : 'Casar'}</button>
                 </li>
               ))}

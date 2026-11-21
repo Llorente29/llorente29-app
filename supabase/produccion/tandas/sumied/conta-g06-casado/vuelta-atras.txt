@@ -1,0 +1,2 @@
+# G06 · Tarea 2 · vuelta atrás: quita la vista y la tabla del enlace único (los dos enlaces de ahora no se tocaron).
+supabase/vuelta-atras/20261112T0938_g06_enlace_gocardless.down.sql

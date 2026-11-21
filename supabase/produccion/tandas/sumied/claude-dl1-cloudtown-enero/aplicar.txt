@@ -1,0 +1,29 @@
+# DL1 · Cloudtown, enero de Carabanchel (Julio, DL1·16, 12/11). Rama
+# claude/dl1-cloudtown-enero. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar, y DESPUÉS del real de la 1421 (la AF-02593, #631):
+# la migración para si la AF-02593 no está validada.
+#
+#   1451  Añade _dl1_asiento_iva y, como Julio:
+#         1. emite la factura de Llorente29 a Cloudtown por su parte de enero
+#            (09–31/01, Carabanchel), serie F, fecha de expedición el día del
+#            real y la de operación en el concepto: 4.211,64 + IVA 10 % 421,16
+#            = 4.632,80 (IVA al 4T);
+#         2. 09/03: los 718,14 de la 678 a la 43000004 (parte del anterior
+#            titular, 01–08/01, pagada por cuenta de Cloudtown), sin IVA;
+#         3. 01/10: la FV-02593 de Cloudtown (stock de febrero, 1.140,99), que
+#            no estaba en los libros, con su IVA soportado al 4T;
+#         4. 01/10: su compensación contra la AF-02593.
+#         La 43000004 pasa de −4.210,62 a −0,67 (lo explica el parte, línea a
+#         línea). Verifactu, apagado.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-cloudtown-enero.sql
+supabase/migrations/20261112T1451_dl1_cloudtown_enero.sql
+sin-vuelta-atras: supabase/migrations/20261112T1451_dl1_cloudtown_enero.sql · motivo: una factura emitida tiene su número y se corrige con una rectificativa; un asiento validado, con un contraasiento.
+esperado: dl1-cloudtown-enero · Factura de la DL1 a Cloudtown (enero) emitida, menos 1 = 0
+esperado: dl1-cloudtown-enero · Asientos de la DL1 de Cloudtown de enero validados por Julio, menos 3 = 0
+esperado: dl1-cloudtown-enero · 43000004 validado, menos −0,67 = 0.00
+esperado: dl1-cloudtown-enero · 67800000 de marzo de 2026 = 0.00
+esperado: dl1-cloudtown-enero · IVA repercutido de la factura de enero a Cloudtown, menos 421,16 = 0.00
+esperado: dl1-cloudtown-enero · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
+esperado: dl1-cloudtown-enero · IVA de Foodint 477 del 1T al 3T de 2026 = como antes

@@ -67,6 +67,8 @@ export interface PlanLectura {
   /** El cliente de Sumied de cada ficha de Bitrix24. */
   partyDeFicha: Map<string, string>
   cobroCliente: Record<string, unknown>[]
+  /** G06 · Lo atado en esta lectura, para el sitio único del enlace (conta_gc_enlace): cada cliente de esta cuenta de GoCardless con su ficha. */
+  enlaces: { gcClienteId: string; partyId: string; por: 'nif' | 'correo' | 'persona' }[]
   mandatosSumied: { gcMandatoId: string; fila: Record<string, unknown> }[]
   servicios: ServicioImportado[]
   tarifas: (TarifaImportada & { partyId: string; desde: string })[]
@@ -186,6 +188,7 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
   return {
     filas: { clientes, mandatos, suscripciones, cobros, payouts }, nuevos, cambiados, iguales,
     parejas: casado.parejas, diferenciasDelCasado: casado.diferencias, partyDeCliente, partyDeFicha, cobroCliente, mandatosSumied,
+    enlaces: [...partyDeCliente].map(([gcClienteId, partyId]) => ({ gcClienteId, partyId, por: (porDe.get(gcClienteId) ?? 'correo') as 'nif' | 'correo' | 'persona' })),
     servicios: conv.servicios, tarifas, lineas, noConvertidas,
     resumen: {
       // «Mandatos activos», como los cuenta GoCardless (status active). El casado usa todos los vivos (también los que van camino del banco).
