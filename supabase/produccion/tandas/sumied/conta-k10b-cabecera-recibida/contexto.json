@@ -1,0 +1,23 @@
+{
+ "_que": "K10b · cabecera de la recibida · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. 2150 añade tres columnas que admiten nulos a supplier_invoice y tres funciones, y cambia cuatro trozos de conta_motivos_para_validar. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-21T20:54Z",
+ "tanda": {
+  "supabase/migrations/20261121T2150_k10b_cabecera_recibida.sql": "8f8e03da6c213819fa8b5772138b9d8d"
+ },
+ "contexto": {
+  "tablas": [
+   "public.supplier_invoice"
+  ],
+  "funciones": [
+   "public.conta_motivos_para_validar(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
