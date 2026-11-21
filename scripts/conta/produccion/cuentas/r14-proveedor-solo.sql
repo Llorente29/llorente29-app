@@ -11,6 +11,14 @@
 --      descartadas o anuladas (lo validado no se toca: tiene que dar lo mismo después);
 --   3. los proveedores dados de alta desde una factura (created_from = 'factura') y las
 --      subcuentas 4000/4100 de cada empresa.
+--   5. CON LA TANDA PUESTA (dentro del ensayo): las completadas al aplicar, por cuenta,
+--      empresa y lo que hizo Sumied (o por qué no). Sin la tanda, «no está».
+--   6. CON LA TANDA PUESTA: la regla 31 de la tabla de lo que vende, por cuenta. Las
+--      recibidas leídas con líneas; a cuántas propone algo; de las que tienen su asiento
+--      validado, a cuántas propone y en cuántas acierta la hoja de su gasto (la cuenta del
+--      6 al debe). Sin la tanda, «no está».
+-- Las 5 y 6 se leen con query_to_xml: así la cuenta no falla sin la tanda (antes y después
+-- de deshacerla dicen lo mismo, «no está») y, con ella, lee lo que crea la 1110.
 -- Corte fijo: lo creado antes del 21/11/2026 a las 00:00 de Madrid (lo que entre durante el
 -- ensayo no cuenta: W06). Después de deshacer la tanda, todo tiene que dar como antes.
 with r as (
@@ -35,6 +43,7 @@ with r as (
     from r
 )
 select clave, valor from (
+select o, clave, valor from (
   select 1 o, 'cuenta ' || left(account_id::text, 8) || ' · empresa ' || left(company_id::text, 8) || ' · leídas sin proveedor · ' || clase clave,
          count(*)::text || ' facturas · ' || count(distinct nif) || ' NIF distintos' valor
     from m group by account_id, company_id, clase
@@ -47,4 +56,34 @@ select clave, valor from (
   select 4, 'cuenta ' || left(a.account_id::text, 8) || ' · empresa ' || left(a.company_id::text, 8) || ' · subcuentas de la ' || a.template_code, count(*)::text
     from public.company_account a where a.template_code in ('4000', '4100') and a.kind = 'own'
      and a.created_at < timestamptz '2026-11-21 00:00:00+01' group by a.account_id, a.company_id, a.template_code
-) t order by o, clave;
+) t
+union all
+-- quieta: solo existe con la tanda puesta (la crea la 1110) y solo cuenta lo hecho al aplicar.
+select 5, coalesce((xpath('/row/k/text()', r))[1]::text, 'con la tanda'), coalesce((xpath('/row/v/text()', r))[1]::text, 'no está')
+  from (select case when to_regclass('public.conta_proveedor_solo') is null then null else query_to_xml('
+          select ''cuenta '' || left(account_id::text, 8) || '' · empresa '' || left(coalesce(company_id::text, ''-''), 8) || '' · al aplicar · ''
+                 || case que when ''alta'' then ''proveedor nuevo'' when ''existente'' then ''uno que ya estaba'' when ''plataforma'' then ''plataforma''
+                    else ''sin completar · '' || case when motivo like ''La factura no trae%'' then ''sin NIF'' when motivo like ''El NIF leído%'' then ''NIF que no valida''
+                                                    when motivo like ''El NIF del proveedor%'' then ''NIF de la propia empresa'' when motivo like ''No leí el nombre%'' then ''sin nombre'' else ''otro'' end end as k,
+                 count(*)::text as v
+            from public.conta_proveedor_solo where cuando = ''al_aplicar'' group by 1 order by 1', false, false, '') end as x) q
+  left join lateral unnest(coalesce(xpath('/table/row', q.x), array[null::xml])) r on true
+union all
+-- quieta: solo existe con la tanda puesta (la función la crea la 1110); el corte de fecha va dentro.
+select 6, coalesce((xpath('/row/k/text()', r))[1]::text, 'regla 31'), coalesce((xpath('/row/v/text()', r))[1]::text, 'no está')
+  from (select case when to_regprocedure('public._conta_gasto_por_venta(text[])') is null then null else query_to_xml('
+          with f as (
+            select i.account_id, public._conta_gasto_por_venta(array(select l.raw_text from public.supplier_invoice_line l where l.supplier_invoice_id = i.id order by l.position))->>''hoja'' hoja,
+                   (select a.template_code from public.journal_entry e join public.journal_line jl on jl.entry_id = e.id and jl.debit > 0
+                      join public.company_account a on a.id = jl.company_account_id and a.code like ''6%''
+                     where e.source_type = ''supplier_invoice'' and e.source_id = i.id and e.status = ''validado'' order by jl.debit desc limit 1) verdad
+              from public.supplier_invoice i
+             where coalesce(i.reading, ''{}''::jsonb) ? ''factura'' and i.created_at < timestamptz ''2026-11-21 00:00:00+01''
+               and exists (select 1 from public.supplier_invoice_line l where l.supplier_invoice_id = i.id))
+          select ''cuenta '' || left(account_id::text, 8) || '' · regla 31 de la tabla'' as k,
+                 count(*) || '' leídas con líneas · propone en '' || count(hoja) || '' · de '' || count(verdad) || '' validadas, propone en ''
+                 || count(*) filter (where verdad is not null and hoja is not null) || '' y acierta la hoja en ''
+                 || count(*) filter (where verdad is not null and hoja = left(verdad, 3)) as v
+            from f group by account_id order by 1', false, false, '') end as x) q
+  left join lateral unnest(coalesce(xpath('/table/row', q.x), array[null::xml])) r on true
+) u order by o, clave;

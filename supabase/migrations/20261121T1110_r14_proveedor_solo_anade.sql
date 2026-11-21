@@ -124,7 +124,9 @@ begin
    where ps.supplier_id = p_supplier and ps.role = 'supplier' limit 1;
   if v_rol.id is not null then
     select name into v_party from public.party where id = v_rol.party_id;
-    v_cuenta := coalesce(nullif(btrim(v_rol.commission_account_code), ''), public._conta_hoja(p_company, '623'));
+    -- La comisión de su papel, si la base la tiene (party_role.commission_account_code, de la 1113 del D01):
+    -- leída por jsonb, para que no falle donde la columna no esté.
+    v_cuenta := coalesce(nullif(btrim(to_jsonb(v_rol)->>'commission_account_code'), ''), public._conta_hoja(p_company, '623'));
     if v_cuenta is not null then
       select name into v_nombre from public.company_account where company_id = p_company and code = v_cuenta;
       return jsonb_build_object('cuenta', v_cuenta, 'nombre', v_nombre, 'de', 'plataforma',
