@@ -9,11 +9,12 @@
 //      llamada a conta_banco_a_mano con el banco de la 57200001, la 430 del cliente, «Cobro factura <n>» y 121); el
 //      «después», el que deja la pantalla nueva. La misma vara a los dos lados: serie, estado y cada apunte.
 //      (Primera pasada, run 44906222306: buscaba el «antes» en un cobro del K05 de antes de hoy, y en el carril, que
-//      se clona en cada run, no hay ninguno.)
+//      se clona en cada run, no hay ninguno. Segunda, run 44906960709: la 57200001 se leía sin su empresa —regla 9—
+//      y salía la de otra, sin banco.)
 // Números inventados (T11), uno por pasada.
 
 import { test, expect, type Page } from '@playwright/test'
-import { STAGING_URL, anonKey, type Sesion, entrarComo } from '../sesion'
+import { STAGING_URL, anonKey, enCarril, type Sesion, entrarComo } from '../sesion'
 import { abierta, GESTORIA, NUCLEO } from '../k02/comun'
 
 test.use({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
@@ -21,6 +22,8 @@ test.use({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
 const DIR = 'docs/conta/capturas/x23'
 const CLIENTE = '43000081'
 const OTRA = '43000082'
+// La empresa de la gestoría del núcleo (la de las K05 y K06), en el carril. Regla 9: toda lectura por código, con su empresa.
+const EMPRESA = () => enCarril('c0e20000-0000-4000-8000-0000000000e3')
 const ficha = (page: Page) => page.locator('.k-zona[data-activa="si"] [data-prueba="ficha-emitida-nucleo"]')
 const aviso = (page: Page) => ficha(page).locator('[data-prueba="aviso-ficha"]')
 
@@ -118,8 +121,10 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(aviso(page)).toContainText('Cobro apuntado en la 57200001', { timeout: 60_000 })
     const despues = huella(await cobroDe(s, num2))
     // El «antes»: lo que hace main al cobrar al banco (servicio.ts de main, apuntarCobro, rama «banco»), con la misma factura de ejemplo.
-    const [c572] = await rest<{ id: string }[]>(s, `company_account?select=id&account_id=eq.${NUCLEO.id}&code=eq.57200001`)
-    const [enlace] = await rest<{ entity_id: string }[]>(s, `company_account_link?select=entity_id&account_id=eq.${NUCLEO.id}&company_account_id=eq.${c572.id}&entity=eq.bank_account&role=eq.principal`)
+    const [c572] = await rest<{ id: string }[]>(s, `company_account?select=id&account_id=eq.${NUCLEO.id}&company_id=eq.${EMPRESA()}&code=eq.57200001`)
+    expect(c572, 'la 57200001 de la gestoría').toBeTruthy()
+    const [enlace] = await rest<{ entity_id: string }[]>(s, `company_account_link?select=entity_id&account_id=eq.${NUCLEO.id}&company_id=eq.${EMPRESA()}&company_account_id=eq.${c572.id}&entity=eq.bank_account&role=eq.principal`)
+    expect(enlace, 'el banco de la 57200001').toBeTruthy()
     const num0 = `X23-${ancho}-${n}-0`
     const r0 = await rest<{ asiento_id: string }>(s, 'rpc/conta_banco_a_mano', { p_banco: enlace.entity_id, p_fecha: '2026-10-01', p_cuenta: CLIENTE, p_concepto: `Cobro factura ${num0}`, p_importe: 121, p_quien_nombre: 'Prueba e2e X23' })
     const [a0] = await rest<Asiento[]>(s, `journal_entry?${SELECT}&account_id=eq.${NUCLEO.id}&id=eq.${r0.asiento_id}`)
