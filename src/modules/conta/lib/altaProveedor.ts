@@ -9,10 +9,12 @@
 // Un solo sitio para las dos pantallas y para la lista de Proveedores de
 // Cocina: el alta no puede comprobar distinto según desde dónde se haga.
 
-import { normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
+import { nifClave, normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
 
 /** Lo que ya hay en la cuenta, para no dar dos veces el mismo NIF. */
 export interface ProveedorExistente {
+  /** Para «Abrirlo» (X24); sin él, la frase va sin enlace. */
+  id?: string
   name: string
   taxId: string | null
 }
@@ -45,6 +47,13 @@ export interface RevisionAlta {
   errores: { nombre?: string; nif?: string }
   /** El NIF normalizado que se guarda, o null si se deja vacío. */
   nif: string | null
+  /** X24 · El que ya tiene ese NIF (comparado como la base: nifClave), para «Ya tienes a … con este NIF: abrirlo». */
+  repetido: ProveedorExistente | null
+}
+
+/** X24 · «Ya tienes a Frutas Inventadas con este NIF.» (con «Abrirlo» al lado, si se sabe cuál es). */
+export function textoNifRepetido(nombre: string): string {
+  return `Ya tienes a ${nombre.trim()} con este NIF.`
 }
 
 /** Lo que hay que corregir antes de crear: el nombre, el NIF y el NIF que ya tiene otro proveedor. */
@@ -54,9 +63,11 @@ export function revisarAlta(v: ValoresAlta, otros: readonly ProveedorExistente[]
   const aviso = avisoNifAlta(v.nif)
   if (aviso) errores.nif = aviso
   const nif = v.nif.trim() ? normalizarNif(v.nif) : null
-  const repe = nif && !aviso ? otros.find((o) => o.taxId && normalizarNif(o.taxId) === nif) : null
-  if (repe) errores.nif = `Ese NIF ya lo tiene ${repe.name}.`
-  return { errores, nif }
+  // X24 · Comparado con la misma clave que la base (la del índice único): «B-00000000» es «B00000000».
+  const clave = nif && !aviso ? nifClave(nif) : null
+  const repe = clave ? otros.find((o) => nifClave(o.taxId) === clave) ?? null : null
+  if (repe) errores.nif = textoNifRepetido(repe.name)
+  return { errores, nif, repetido: repe }
 }
 
 /** «Proveedor Hermanos Ruiz dado de alta. Ya puedes subir sus facturas.» (Contactos). */

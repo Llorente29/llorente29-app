@@ -38,6 +38,17 @@ const LETRAS_DNI = 'TRWAGMYFPDXBNJZSQVHLCKE'
 const LETRAS_CIF = 'JABCDEFGHI'
 
 /** Quita espacios, guiones y puntos, y pasa a mayúsculas. Un "ES" delante se quita. */
+/**
+ * X24 · La clave del NIF para comparar, la MISMA que la base (_conta_nif_clave, la del índice único
+ * ux_supplier_account_nif_clave): sin nada que no sea letra o cifra, en mayúsculas, sin el prefijo
+ * (EUVAT, NIF-IVA, VAT, NIF, CIF, TVA…) y sin «ES» delante de un NIF español. «B-00000000», «ES B00000000» y
+ * «b00000000» son la misma. null si no queda nada.
+ */
+export function nifClave(entrada: string | null | undefined): string | null {
+  const s = (entrada ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().replace(/^(EUVAT|NIFIVA|VATNO|VAT|NIF|CIF|TVA)/, '').replace(/^ES(?=[A-Z0-9]{9}$)/, '')
+  return s || null
+}
+
 export function normalizarNif(entrada: string): string {
   const s = entrada.toUpperCase().replace(/[\s.\-_/]/g, '')
   return s.startsWith('ES') && s.length === 11 ? s.slice(2) : s

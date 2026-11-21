@@ -141,7 +141,7 @@ export default function TercerosPage() {
   const recargar = () => setVuelta((v) => v + 1)
   // El NIF repetido del alta de proveedor: el de otro proveedor para; el de un cliente u otro papel
   // se avisa (la base lo hace también proveedor, en ese mismo tercero: un NIF, un tercero).
-  const proveedoresYa = useMemo(() => (filas ?? []).filter((t) => t.papeles.includes('supplier')).map((t) => ({ name: t.nombre, taxId: t.nif })), [filas])
+  const proveedoresYa = useMemo(() => (filas ?? []).filter((t) => t.papeles.includes('supplier')).map((t) => ({ id: t.supplierId ?? undefined, name: t.nombre, taxId: t.nif })), [filas])
   const notaNifProveedor = useMemo(() => (nif: string) => {
     const m = mismoNif(filas ?? [], normalizarNif(nif), 'supplier')
     return m && !m.yaLoEs ? `Ese NIF es de ${m.tercero.nombre}: al crearlo pasa a ser también proveedor (una sola ficha para las dos cosas).` : null

@@ -145,7 +145,7 @@ export default function RecibidaAMano() {
   const altaDebajo = <>
     {altaAbierta && accountId && (
       <div className="cxf-alta" data-prueba="formulario-alta-a-mano">
-        <FormularioAltaProveedor accountId={accountId} otros={proveedores.datos.map((p) => ({ name: p.nombre, taxId: p.nif }))} sinForm
+        <FormularioAltaProveedor accountId={accountId} otros={proveedores.datos.map((p) => ({ id: p.id, name: p.nombre, taxId: p.nif }))} sinForm
           textoCrear="Darlo de alta y elegirlo" alCancelar={() => setAltaAbierta(false)}
           alCrear={(p) => { setAltaAbierta(false); poner({ proveedorId: p.id }); setAvisoAlta(fraseAltaEnFactura(p.name)); proveedores.recargar() }} />
       </div>
