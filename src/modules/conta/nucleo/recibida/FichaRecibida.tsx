@@ -71,8 +71,9 @@ import { Buscador } from '../ficha/Buscador'
 import { cuentasQueEncajan, queHaceIntro, type CuentaDelPlan } from '../ficha/teclas'
 import { origenes } from './origen'
 import { casillasVacias, comprobacionesDe, dondeVaElFoco, dudaDelGasto, emisorDesconocido, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
-import { calendarioDe, cuentasAMano, delProveedor, gastoAprendido, marcaDeLaFactura, mayorDelProveedor, subcuentasDeProveedores, textoOperacion } from './servicio'
+import { calendarioDe, cuentasAMano, delProveedor, gastoAprendido, marcaDeLaFactura, mayorDelProveedor, noEsLaMisma, otrasDelProveedor, subcuentasDeProveedores, textoOperacion } from './servicio'
 import { cuentaDelProveedorEnElAsiento } from './proveedorEnAsiento'
+import { faltasParaValidar, laRepetida, textoNoSeValida, textoRepetida } from './validarSoloLoCompleto'
 import { fechaDelPago, propuestaDelPago, queHaceElPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
 import { apuntarPago, cuentasDePago, hayLiquidacion, pagoDelProveedor } from './pagoServicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
@@ -227,6 +228,13 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const [verHistorial, setVerHistorial] = useState<string | null>(null)
   const historial = useLeer(accountId && id && verHistorial === id ? () => leerHistorial(accountId, id) : null, `${accountId}:${id}:historial:${verHistorial === id ? 'si' : 'no'}:${vuelta}`)
   const [confirmarDoc, setConfirmarDoc] = useState<{ de: string; file: File } | null>(null)
+  // ── K09 · La repetida: otra ya contabilizada del mismo proveedor con su número (y si ya se dijo que no es la misma) ──
+  const otrasL = useLeer(accountId && id && provId && modo === 'escribir' ? () => otrasDelProveedor(accountId, id, provId) : null, `${accountId}:${id}:${provId}:otras:${modo}:${vuelta}`).datos ?? null
+  const [noEs, setNoEs] = useState<{ de: string; motivo: string } | null>(null)
+  const [anotando, setAnotando] = useState(false)
+  // K09 · Lo que falta y la repetida, lo mismo que dirá la base.
+  const faltas = !aMano && modo === 'escribir' && fac ? faltasParaValidar(b) : []
+  const repetida = otrasL && modo === 'escribir' ? laRepetida({ id: invoiceId, numero: b.numero, confirmada: otrasL.confirmada, otras: otrasL.otras }) : null
   const [cambiandoDoc, setCambiandoDoc] = useState(false)
   const plataforma = pagoProv?.plataforma ? { ...pagoProv.plataforma, hayLiquidacion: conLiquidacion } : null
   const propuestaPago = pagoProv ? propuestaDelPago({ plataforma, ultimas: pagoProv.ultimas }) : null
@@ -326,6 +334,18 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     catch (e) { return `El pago no se ha apuntado (${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}): queda pendiente de pagar.` }
   }
 
+  /** K09 · «No es la misma: …», escrita: la base la guarda con su motivo y queda en el historial; ya se puede validar. */
+  async function anotarNoEsLaMisma(otraId: string, motivo: string) {
+    if (!fac || anotando || !motivo.trim()) return
+    setAnotando(true)
+    try {
+      const texto = await noEsLaMisma(fac.id, otraId, motivo.trim(), userName)
+      setAviso({ tono: 'ok', texto }); setNoEs(null); setVuelta((v) => v + 1)
+    } catch (e) {
+      setAviso({ tono: 'mal', texto: `No se ha anotado: ${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}. Sigue sin validarse.` })
+    } finally { setAnotando(false) }
+  }
+
   /** K07 · «Cambiar el documento»: en una de por revisar se pone al guardar (sin perder lo escrito); en una contabilizada, confirmando. */
   function alCambiarDocumento(file: File) {
     if (modo === 'contabilizada') { setConfirmarDoc({ de: invoiceId, file }); return }
@@ -394,6 +414,14 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     try {
       if (aMano) { await guardarNueva(); return }
       if (!fac) return
+      // K09 · Lo que falta, o la repetida: se guarda lo escrito si se puede, y no se valida (la base tampoco la
+      // validaría). Se dice qué falta aunque guardar no haya podido (sin la cuenta de gasto, por ejemplo).
+      const noValeAntes = textoNoSeValida({ faltas, repetida, guardada: false })
+      if (noValeAntes) {
+        const hubo = ed.hay
+        const g0 = hubo ? await guardarCambios().catch(() => false as const) : false
+        setAviso({ tono: 'falta', texto: textoNoSeValida({ faltas, repetida, guardada: hubo && g0 === true }) ?? noValeAntes }); setVuelta((v) => v + 1); return
+      }
       const g = await guardarCambios()
       if (g !== true) { setAviso({ tono: 'mal', texto: g }); return }
       // K04b · Sin proveedor no se valida: se dice, y no se pasa.
@@ -559,7 +587,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const puede = puedeGuardar({ guardando, validada, descartada })
   // K07 · La franja, el asiento y «Más» de la contabilizada y la descartada.
   const pagada = fac?.estado === 'pagada' || !!extra?.pagada
-  const franja = modo === 'contabilizada' ? franjaContabilizada({ numero: fac?.asiento?.numero ?? null, pagada, enErp10 })
+  const franja = repetida ? { tono: 'ambar' as const, fuerte: 'Mira esto ·', resto: `Repetida: ${textoRepetida(repetida)}` }
+    : modo === 'contabilizada' ? franjaContabilizada({ numero: fac?.asiento?.numero ?? null, pagada, enErp10 })
     : modo === 'descartada' ? franjaDescartada({ motivo: descarte?.motivo ?? null, quien: descarte?.quien ?? null }) : estado
   const lineasValidado = (asientoReal?.apuntes ?? []).map((x) => ({ codigo: x.cuenta, nombre: x.nombreCuenta, debe: x.debe || null, haber: x.haber || null }))
   const hayDocumento = !!documento
@@ -593,6 +622,16 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
         </div>
       </header>
       {aviso && <p className="kf-aviso" data-tono={aviso.tono} role="status" data-prueba="aviso-ficha">{aviso.texto}</p>}
+      {repetida && (
+        <p className="kf-aviso kf-repetida" data-tono="falta" data-prueba="repetida">
+          <strong>Mira esto ·</strong> {textoRepetida(repetida)} <Link className="kf-enlace" to={rutaRevisarFactura(repetida.id)}>Abrirla</Link>
+          <label className="kf-no-es"><input type="checkbox" checked={noEs?.de === invoiceId} onChange={(e) => setNoEs(e.target.checked ? { de: invoiceId, motivo: '' } : null)} /> No es la misma:</label>
+          {noEs?.de === invoiceId && <>
+            <input aria-label="Por qué no es la misma" placeholder="por qué (otro ejercicio…)" value={noEs.motivo} onChange={(e) => setNoEs({ de: invoiceId, motivo: e.target.value })} />
+            <button type="button" className="kf-enlace" disabled={anotando || !noEs.motivo.trim()} onClick={() => void anotarNoEsLaMisma(repetida.id, noEs.motivo)}>{anotando ? 'Anotando…' : 'Anotarlo'}</button>
+          </>}
+        </p>
+      )}
       {confirmarDoc?.de === invoiceId && (
         <div data-prueba="confirmar-documento"><Duda fuerte="Confirma." texto={<>{docAccion?.que === 'cambiar_contabilizada' ? docAccion.confirmar : ''} El nuevo: «{confirmarDoc.file.name}». El asiento no cambia.</>}
           principal={{ texto: 'Cambiarlo', hacer: () => void cambiarYa(confirmarDoc.file) }}
@@ -717,7 +756,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 {b.gastos.map((g, i) => (
                   <div className="kf-gasto" key={i} data-una={b.gastos.length === 1 ? 'si' : undefined}>
                     <Buscador id={`kf-cuenta-${i}`} etiqueta={`Cuenta de gasto ${i + 1}`} cargando={cuentasGastoL === null} valor={textoCuenta[i] ?? g.cuenta} cuenta={g.cuenta || null} duda={!!duda && i === 0}
-                      ponerTexto={(t) => setTextoCuenta((x) => ({ ...x, [i]: t }))} lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8)}
+                      ponerTexto={(t) => { setTextoCuenta((x) => ({ ...x, [i]: t })); if (!t.trim()) ponerGasto(i, { cuenta: '' }) }} lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8)}
                       texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }} />
                     <NombreDeCuenta etiqueta={`Nombre de la cuenta ${i + 1}`} valor={g.cuenta ? nombreGasto(g.cuenta) : ''} duda={!!duda && i === 0} />
                     <input className="kf-cifra" data-casilla={b.gastos.length > 1 ? '' : undefined} aria-label={`Importe del gasto ${i + 1}`} placeholder={i === b.gastos.length - 1 ? importeEs(totales.base) : ''}
