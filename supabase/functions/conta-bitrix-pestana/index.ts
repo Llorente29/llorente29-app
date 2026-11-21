@@ -33,7 +33,7 @@ import {
   direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, porqueApp, porqueUsuario, TITULO_PESTANA, usuarioDeBitrix,
   type TipoFicha,
 } from './puro.ts'
-import { leerLlegadaDelCampo, NOMBRE_DEL_CAMPO, notaDeLaDevolucion, queHacerConElCampo, registrarCampoFijo, campoFijoEnEstePortal, valorDelCampo } from './campo.ts'
+import { retirarCampoFijo } from './campo.ts'
 import { choquesDe, cuotaEnBitrix, estadoDelCobro, mesEnPalabras, mesSiguiente, notaDelCambio, queHacerConElTexto, queHacerConLaCuota, totalDelRecibo, trabajadoresDelRecibo } from './escribir.ts'
 
 const CORS = {
@@ -46,8 +46,6 @@ const json = (status: number, body: unknown) =>
 const irA = (donde: string) => new Response(null, { status: 303, headers: { Location: donde, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } })
 
 const PAGINA = Deno.env.get('BITRIX_PESTANA_PAGINA') ?? 'https://app.sumied.com/bitrix-pestana.html'
-/** GBc · La página que dibuja el campo fijo «Cuota mensual (Sumied)» (solo en el Bitrix24 de pruebas). */
-const PAGINA_CAMPO = PAGINA.replace(/bitrix-pestana\.html$/, 'bitrix-campo.html')
 /** Se lee en cada llamada: un cambio del secreto vale desde la siguiente, sin depender de que la función arranque de nuevo. */
 const clientId = () => (Deno.env.get('BITRIX_PESTANA_CLIENT_ID') ?? '').trim()
 
@@ -133,48 +131,6 @@ async function leer(cuerpo: Record<string, unknown>): Promise<Response> {
   if (!m.ok) return m.respuesta
   const l = await lectura(baseDeDatos(), m)
   return l.ok ? json(200, l.d) : l.respuesta
-}
-
-/**
- * GBc · El campo fijo «Cuota mensual (Sumied)» (solo en el Bitrix24 de pruebas):
- * lo que dice Sumied (la cuota del mes que viene, la misma de la «Cuota
- * mensual») y la red de seguridad: si en Bitrix24 pone otra cosa, se devuelve a
- * lo de Sumied con el token de quien mira y se apunta en el historial con quién
- * la cambió por última vez. Nada de cobros ni recibos: solo se lee.
- */
-async function campo(cuerpo: Record<string, unknown>): Promise<Response> {
-  const m = await quienMira({ ...cuerpo, t: 'empresa' })
-  if (!m.ok) return m.respuesta
-  if (!campoFijoEnEstePortal(m.portal)) return json(200, { estado: 'no', valor: null })
-  const l = await lectura(baseDeDatos(), m)
-  if (!l.ok) return json(200, { estado: 'ok', valor: null, hecho: 'nada' })
-  const clienteId = String(l.d.cliente ?? '')
-  const filas = ((l.d.clientes as { clientes?: unknown[] } | null)?.clientes ?? []) as Record<string, unknown>[]
-  const empresaId = String(filas.find((f) => String(f.cliente_id) === clienteId)?.empresa_id ?? '')
-  const sumied = clienteId && empresaId ? valorDelCampo(totalDelRecibo(l.d.clientes, clienteId, empresaId, mesSiguiente(hoyEnMadrid()))) : null
-  try {
-    const ficha = await bitrix(m.portal, 'crm.company.get', m.auth, { id: m.id }) as { result?: Record<string, unknown> } | null
-    if (!ficha?.result) return json(200, { estado: 'ok', valor: sumied, hecho: 'nada' })
-    const antes = String(ficha.result[NOMBRE_DEL_CAMPO] ?? '')
-    const q = queHacerConElCampo(antes, sumied)
-    if (q.hacer === 'nada') return json(200, { estado: 'ok', valor: sumied, hecho: 'nada' })
-    const u = await bitrix(m.portal, 'crm.company.update', m.auth, { id: m.id, fields: { [NOMBRE_DEL_CAMPO]: q.valor } }) as { result?: unknown } | null
-    if (!u?.result) return json(200, { estado: 'ok', valor: sumied, hecho: 'no_se_pudo' })
-    if (q.hacer === 'devolver') {
-      const quienId = String(ficha.result.MODIFY_BY_ID ?? '')
-      const quien = /^[0-9]+$/.test(quienId)
-        ? await bitrix(m.portal, 'user.get', m.auth, { FILTER: { ID: quienId } }).then((r) => {
-            const u0 = ((r as { result?: Record<string, unknown>[] } | null)?.result ?? [])[0]
-            return u0 ? [u0.NAME, u0.LAST_NAME].filter((x) => typeof x === 'string' && x.trim()).join(' ') || null : null
-          }).catch(() => null)
-        : null
-      await notaEnLaFicha(m, notaDeLaDevolucion(antes, quien, q.valor!))
-      console.log(JSON.stringify({ gbc: 'devuelto', ficha: m.id }))
-    }
-    return json(200, { estado: 'ok', valor: sumied, hecho: q.hacer === 'devolver' ? 'devuelto' : 'puesto' })
-  } catch {
-    return json(200, { estado: 'ok', valor: sumied, hecho: 'nada' })
-  }
 }
 
 /** nº 9, punto 5 · «Su portal»: quién entra, lo que pide el cliente y los mensajes sin leer (conta_portal_ficha, de Code 3, como la persona). */
@@ -529,24 +485,17 @@ Deno.serve(async (req) => {
   const url = new URL(req.url)
   const paso = url.searchParams.get('paso')
   try {
-    if (paso === 'campo') {
-      // GBc · Bitrix24 dibuja el campo fijo: a la página, con el modo y lo guardado detrás del «#». Solo en el portal de pruebas.
-      const form = await formulario(req)
-      const l = leerLlegada(form, url.searchParams)
-      const c = leerLlegadaDelCampo(form)
-      const h = new URLSearchParams({ m: c.modo, v: c.guardado })
-      if (l.auth && l.portal && portalPermitido(l.portal) && campoFijoEnEstePortal(l.portal) && c.id) { h.set('a', l.auth); h.set('p', l.portal); h.set('id', c.id) }
-      return irA(`${PAGINA_CAMPO}#${h.toString()}`)
-    }
     if (paso === 'pestana' || paso === 'instalar') {
       const l = leerLlegada(await formulario(req), url.searchParams)
       if (paso === 'instalar') {
         if (l.auth && l.portal && portalPermitido(l.portal)) {
           const aqui = `${Deno.env.get('SUPABASE_URL')}/functions/v1/conta-bitrix-pestana`
           const fallos = await engancharPestana(l.portal, l.auth, aqui)
-          // GBc · El tipo de campo «Sumied» y «Cuota mensual (Sumied)»: solo en el Bitrix24 de pruebas (campo.ts).
+          // GBd · Se retira el campo fijo del GBc (el campo y su tipo): solo en el Bitrix24 de pruebas (campo.ts).
           const portal = l.portal, auth = l.auth
-          fallos.push(...await registrarCampoFijo(portal, aqui, (metodo, c) => bitrix(portal, metodo, auth, c)))
+          const retirada = await retirarCampoFijo(portal, (metodo, c) => bitrix(portal, metodo, auth, c))
+          console.log(JSON.stringify({ gbd: 'retirada_gbc', fallos: retirada }))
+          fallos.push(...retirada)
           if (fallos.length) return irA(`${PAGINA}#instalar=fallo&que=${encodeURIComponent(fallos.join(' · '))}`)
         }
         return irA(direccionDeLaPagina(PAGINA, { ...l, tipo: null, id: null }, true))
@@ -555,7 +504,6 @@ Deno.serve(async (req) => {
     }
     const cuerpo = await req.json().catch(() => null) as Record<string, unknown> | null
     if (cuerpo?.paso === 'leer') return await leer(cuerpo)
-    if (cuerpo?.paso === 'campo') return await campo(cuerpo)
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'devuelto') return await devuelto(cuerpo, req.headers.get('origin'))
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'suelto') return await suelto(cuerpo)
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'servicio') return await anadir(cuerpo)

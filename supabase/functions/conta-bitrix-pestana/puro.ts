@@ -50,17 +50,14 @@ export function leerLlegada(form: URLSearchParams, query: URLSearchParams): Lleg
   const portal = portalLimpio(query.get('DOMAIN') ?? form.get('DOMAIN') ?? form.get('auth[domain]'))
   const hueco = form.get('PLACEMENT')
   let id: string | null
-  let tipoAbierto: TipoFicha | null = null
   try {
-    const o = JSON.parse(form.get('PLACEMENT_OPTIONS') ?? 'null') as { ID?: unknown; TIPO?: unknown } | null
+    const o = JSON.parse(form.get('PLACEMENT_OPTIONS') ?? 'null') as { ID?: unknown } | null
     const v = o && (typeof o.ID === 'string' || typeof o.ID === 'number') ? String(o.ID) : null
     id = v && /^[0-9]{1,18}$/.test(v) ? v : null
-    // GBc · «Cambiar en Sumied» abre la aplicación (BX24.openApplication, hueco DEFAULT) con la ficha en sus opciones.
-    if (hueco === 'DEFAULT' && (o?.TIPO === 'empresa' || o?.TIPO === 'contacto')) tipoAbierto = o.TIPO
   } catch { id = null }
   return {
     auth: auth && /^[A-Za-z0-9._-]{8,200}$/.test(auth) ? auth : null,
-    portal, hueco, tipo: hueco ? HUECOS[hueco] ?? tipoAbierto : null, id,
+    portal, hueco, tipo: hueco ? HUECOS[hueco] ?? null : null, id,
   }
 }
 
