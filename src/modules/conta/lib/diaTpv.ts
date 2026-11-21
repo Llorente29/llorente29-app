@@ -56,3 +56,38 @@ export function textoSubida(d: { subido_por: string | null; subido_en: string | 
 
 /** El asiento con su número: «nº 12» o «sin número». */
 export const numeroAsiento = (a: { numero: number | null } | null) => (a?.numero != null ? `nº ${a.numero.toLocaleString('es-ES')}` : 'sin número')
+
+// ── R15b · El día en el libro de IVA ─────────────────────────────────────────
+
+/** Una fila del libro de IVA de un día (conta_tpv_dia_libro). */
+export interface FilaLibroDia {
+  tipo_factura: string; serie: string | null; numero: string | null; hasta: string | null; documentos: number
+  nif: string | null; nombre: string | null; tipo: number; base: number; cuota: number; total: number
+}
+export type ClaseFilaLibro = 'serie' | 'nif' | 'r5'
+export const claseFilaLibro = (f: Pick<FilaLibroDia, 'tipo_factura'>): ClaseFilaLibro =>
+  f.tipo_factura === 'F1' ? 'nif' : f.tipo_factura.startsWith('R') ? 'r5' : 'serie'
+
+/**
+ * Lo que dice cada fila del libro de un día:
+ *   serie: «Tickets 5097 a 5144 · Barra» (o «Ticket 5097» si es uno solo);
+ *   factura con NIF: «Factura 5103 · Cliente de ejemplo 7»;
+ *   devolución: «Devolución 5047».
+ */
+export function textoFilaLibro(f: Pick<FilaLibroDia, 'tipo_factura' | 'serie' | 'numero' | 'hasta' | 'nombre'>): string {
+  const c = claseFilaLibro(f)
+  if (c === 'nif') return `Factura ${f.numero ?? '—'}${f.nombre ? ` · ${f.nombre}` : ''}`
+  if (c === 'r5') return `Devolución ${f.numero ?? '—'}`
+  const uno = !f.hasta || f.hasta === f.numero
+  return `${uno ? 'Ticket' : 'Tickets'} ${f.numero ?? '—'}${uno ? '' : ` a ${f.hasta}`}${f.serie ? ` · ${f.serie}` : ''}`
+}
+
+/** El tipo de factura del libro, en palabras: F4 «Resumen de tickets», F2 «Ticket», F1 «Factura», R5 «Rectificativa». */
+export const NOMBRE_TIPO_FACTURA: Record<string, string> = { F4: 'Resumen de tickets', F2: 'Ticket', F1: 'Factura', R5: 'Rectificativa' }
+
+/** Las filas del libro, en el orden en que se leen: las series, las facturas con NIF y las devoluciones. */
+export function ordenarLibro<T extends Pick<FilaLibroDia, 'tipo_factura' | 'serie' | 'numero' | 'tipo'>>(fs: readonly T[]): T[] {
+  const peso = { serie: 1, nif: 2, r5: 3 } as const
+  return [...fs].sort((a, b) => peso[claseFilaLibro(a)] - peso[claseFilaLibro(b)] || (a.serie ?? '').localeCompare(b.serie ?? '')
+    || Number(a.numero ?? 0) - Number(b.numero ?? 0) || a.tipo - b.tipo)
+}

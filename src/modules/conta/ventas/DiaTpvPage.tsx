@@ -28,10 +28,10 @@ import { Boton } from '@/modules/conta/diseno'
 import { AsientoQueSeCrea, BloqueFicha, CampoFicha, DocumentoFicha, Ficha, FilaCampos } from '@/modules/conta/diseno/plantillas'
 import { leerAsiento } from '@/modules/conta/services/diarioService'
 import { urlDocumento } from '@/modules/conta/services/conDiezService'
-import { leerFichaDia } from '@/modules/conta/services/tpvSubirService'
+import { leerFichaDia, leerLibroDia } from '@/modules/conta/services/tpvSubirService'
 import { validarDiaTpv } from '@/modules/conta/services/tpvDiaService'
 import { esperaPorCuenta } from '@/modules/conta/lib/subirTpv'
-import { NOMBRE_ESTADO_DIA, avisoLimite, fraseDiaTpv, numeroAsiento, textoSubida, tituloDiaTpv } from '@/modules/conta/lib/diaTpv'
+import { NOMBRE_ESTADO_DIA, NOMBRE_TIPO_FACTURA, avisoLimite, claseFilaLibro, fraseDiaTpv, numeroAsiento, ordenarLibro, textoFilaLibro, textoSubida, tituloDiaTpv } from '@/modules/conta/lib/diaTpv'
 import { textoDeNumero } from '@/modules/conta/lib/facturasVenta'
 import { FormasDePago } from './tpv/FormasDePago'
 
@@ -52,6 +52,8 @@ export default function DiaTpvPage() {
   const factura = useLeer(accountId && d?.factura ? () => leerAsiento(accountId, d.factura!.id) : null, `${accountId}:${d?.factura?.id}:asiento`)
   const cobro = useLeer(accountId && d?.cobro ? () => leerAsiento(accountId, d.cobro!.id) : null, `${accountId}:${d?.cobro?.id}:asiento-cobro`)
   const pdf = useLeer(d?.pdf ? () => urlDocumento(d.pdf!.ruta) : null, `${d?.pdf?.ruta}:pdf`)
+  // R15b · El día en el libro de IVA: por serie, cada factura con NIF y cada devolución.
+  const libro = useLeer(accountId && diaId ? () => leerLibroDia(diaId) : null, `${accountId}:${diaId}:dia-tpv-libro:${vuelta}`)
   const volver = <Link to={`${rutaCierres()}${search}`} className="s-boton s-boton-secundario">Volver a los cierres</Link>
 
   if (ficha.error) return <div className="s-pagina"><EncabezadoPagina titulo="Día del TPV" /><p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido leer el día: {ficha.error} <button type="button" className="s-boton s-boton-enlace" onClick={ficha.recargar}>Reintentar</button></p></div>
@@ -149,6 +151,29 @@ export default function DiaTpvPage() {
           </p>
         )}
       </BloqueFicha>
+
+      {libro.datos && libro.datos.filas.length > 0 && (
+        <BloqueFicha titulo={libro.datos.enLibro ? 'En el libro de IVA' : 'Cómo irá al libro de IVA'}>
+          <table className="cxv-tabla" aria-label="En el libro de IVA" data-prueba="libro-del-dia">
+            <thead><tr><th>Qué</th><th>Tipo</th><th>NIF</th><th className="s-cifra">IVA</th><th className="s-cifra">Base</th><th className="s-cifra">Cuota</th><th className="s-cifra">Total</th></tr></thead>
+            <tbody>{ordenarLibro(libro.datos.filas).map((f) => {
+              const c = claseFilaLibro(f)
+              return (
+                <tr key={`${f.tipo_factura}|${f.serie ?? ''}|${f.numero ?? ''}|${f.tipo}`} data-clase={c} data-tono={c === 'r5' ? 'falta' : undefined}>
+                  <td>{c === 'r5' ? <span className="s-tarjeta-apoyo" data-tono="falta">{textoFilaLibro(f)}</span> : textoFilaLibro(f)}</td>
+                  <td>{f.tipo_factura}<span className="s-tarjeta-apoyo"> · {NOMBRE_TIPO_FACTURA[f.tipo_factura] ?? f.tipo_factura}</span></td>
+                  <td>{f.nif ?? '—'}</td>
+                  <td className="s-cifra">{tipo(f.tipo)}</td>
+                  <td className="s-cifra">{eurosExactos(f.base)}</td>
+                  <td className="s-cifra">{eurosExactos(f.cuota)}</td>
+                  <td className="s-cifra">{eurosExactos(f.total)}</td>
+                </tr>
+              )
+            })}</tbody>
+          </table>
+          <p className="s-apoyo">Cada serie del TPV va en su fila, con su primer y su último número; cada factura con NIF, en la suya, con su cliente; y cada devolución, aparte, como rectificativa (RIVA, art. 63.4 y 63.6). El asiento del día no cambia.</p>
+        </BloqueFicha>
+      )}
 
       <BloqueFicha titulo="Base e IVA">
         <table className="cxv-tabla" aria-label="Base e IVA por tipo" data-prueba="iva">

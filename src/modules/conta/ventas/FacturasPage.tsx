@@ -171,10 +171,14 @@ export default function FacturasPage() {
   }
 
   // R15 · Un día del TPV: sus tickets y su PDF; una factura con NIF de un día, en qué día va (y no suma otra vez).
+  // R15b · Un día del TPV como va en el libro de IVA: cada serie (sus tickets y su PDF), cada factura con NIF y cada
+  // devolución (R5, en rojo, con su número). Lo del R15 (antes del libro por serie): la factura con NIF, dentro del día.
   const apoyoTpv = (t: NonNullable<FacturaVenta['tpv']>) => t.clase === 'dia'
-    ? <span className="s-tarjeta-apoyo" data-prueba="emitida-dia-tpv">Tickets del TPV{t.pdf && <> · <button type="button" className="s-boton s-boton-enlace"
+    ? <span className="s-tarjeta-apoyo" data-prueba="emitida-dia-tpv">Tickets del TPV{t.serie ? ` · ${t.serie}` : ''}{t.pdf && <> · <button type="button" className="s-boton s-boton-enlace"
         onClick={(e) => { e.stopPropagation(); void urlDocumento(t.pdf!).then((u) => window.open(u, '_blank', 'noopener')).catch((er: unknown) => setErrorPdf(er instanceof Error ? er.message : String(er))) }}>PDF</button></>}</span>
-    : <span className="s-tarjeta-apoyo" data-prueba="emitida-nif-tpv">Dentro del día del TPV del {diaMes(t.dia)}</span>
+    : t.clase === 'r5'
+      ? <span className="s-tarjeta-apoyo" data-tono="falta" data-prueba="emitida-r5-tpv">Devolución del día del TPV del {diaMes(t.dia)}</span>
+      : <span className="s-tarjeta-apoyo" data-prueba="emitida-nif-tpv">{t.dentro ? 'Dentro del día' : 'Del día'} del TPV del {diaMes(t.dia)}</span>
   const cliente = (x: FacturaVenta) => x.cliente ?? (x.fuente === 'libro' ? 'Ventas a consumidor final' : 'Sin cliente')
   const estado = (x: FacturaVenta) => {
     const e = NOMBRE_ESTADO[estadoDe(x, hoy)]
@@ -189,7 +193,7 @@ export default function FacturasPage() {
   const columnas: ColumnaLista<FacturaVenta>[] = [
     {
       id: 'numero', titulo: 'Número', ordenable: true, prioridad: 1, minimo: 120,
-      celda: (x) => <span className="s-lista-texto-doble"><span className="s-cifra">{x.numero ?? 'Borrador'}</span>{x.rectificativa && <span className="s-tarjeta-apoyo">Rectificativa</span>}{x.tpv && apoyoTpv(x.tpv)}</span>,
+      celda: (x) => <span className="s-lista-texto-doble"><span className="s-cifra">{x.numero ?? 'Borrador'}</span>{x.rectificativa && !x.tpv && <span className="s-tarjeta-apoyo">Rectificativa</span>}{x.tpv && apoyoTpv(x.tpv)}</span>,
     },
     { id: 'fecha', titulo: 'Fecha', ordenable: true, ancho: '80px', prioridad: 2, minimo: 80, celda: (x) => <span className="s-cifra">{diaMes(x.fecha)}</span> },
     {

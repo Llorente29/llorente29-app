@@ -20,7 +20,7 @@ import { leerLibroRegistro } from '@/modules/conta/services/librosService'
 import { leerEnviosDiez, leerEnvioEmpresa } from '@/modules/conta/services/envioDiezService'
 import { MAX_FILAS, facturasDeAnotaciones, mesesDeLaVentana } from '@/modules/conta/facturacion/emitidas'
 import type { AnotacionLibro } from '@/modules/conta/lib/libroRegistro'
-import { cifrasGuardadas, conDiasTpv, diezDeFactura, diferenciaDe, type EstadoCobroBase, type FacturaVenta, type FilaEmitidaTpv, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
+import { cifrasGuardadas, conDiasTpv, conLibroTpv, diezDeFactura, diferenciaDe, type EstadoCobroBase, type FacturaVenta, type FilaEmitidaTpv, type FilaLibroTpv, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
 import { jsPDF } from 'jspdf'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
 import { facturaSumiedPdf, type DatosFacturaSumied } from '../../../../supabase/functions/_shared/facturaSumiedPdf.ts'
@@ -74,6 +74,28 @@ function delLibro(anot: readonly AnotacionLibro[]): Omit<FacturaVenta, 'diez'>[]
   }))
 }
 
+/**
+ * Los días del TPV contabilizados para «Facturas emitidas». R15b: con las filas de su libro de IVA
+ * (conta_tpv_emitidas_libro, de la 20261121T2347: por serie, facturas con NIF y devoluciones). Sin ella (antes de
+ * aplicarse), los del R15 (conta_tpv_emitidas, de la 20261121T1712); sin ninguna, la lista sale como siempre.
+ */
+async function leerDiasTpvEmitidos(companyId: string, desde: string, hasta: string): Promise<{ libro: true; filas: FilaLibroTpv[] } | { libro: false; filas: FilaEmitidaTpv[] }> {
+  const n = (x: unknown) => Number(x ?? 0)
+  try {
+    const r = await rpc<FilaLibroTpv[] | null>('conta_tpv_emitidas_libro', { p_company: companyId, p_desde: desde, p_hasta: hasta })
+    return { libro: true, filas: (r ?? []).map((x) => ({ ...x, base: n(x.base), cuota: n(x.cuota), total: n(x.total), documentos: n(x.documentos) })) }
+  } catch (e) {
+    // Solo si la base aún no la tiene; otro error se dice, no se esconde.
+    if (!/PGRST202|could not find the function|does not exist/i.test(e instanceof Error ? e.message : String(e))) throw e
+    try {
+      const r = await rpc<FilaEmitidaTpv[] | null>('conta_tpv_emitidas', { p_company: companyId, p_desde: desde, p_hasta: hasta })
+      return { libro: false, filas: (r ?? []).map((x) => ({ ...x, base: n(x.base), cuota: n(x.cuota), total: n(x.total) }) as FilaEmitidaTpv) }
+    } catch {
+      return { libro: false, filas: [] }
+    }
+  }
+}
+
 export interface DatosFacturas { facturas: FacturaVenta[]; cobros: { fecha: string; importe: number }[]; envioEncendido: boolean; alTope: string[] }
 
 /** La lista entera: las de Sumied y, de la ventana (un mes o los últimos 12), las del libro. */
@@ -82,10 +104,7 @@ export async function leerFacturasVenta(accountId: string, companyId: string, de
     deSumied(accountId, companyId),
     Promise.all(mesesDeLaVentana(desde, hasta).map(async (m) => ({ m, anot: await leerLibroRegistro(accountId, companyId, ['issued'], m.desde, m.hasta) }))),
     leerEnvioEmpresa(accountId, companyId).catch(() => ({ encendido: false, mensual: false })),
-    // R15 · Los días del TPV contabilizados (conta_tpv_emitidas, de la 20261121T1712). Sin ella, la lista sale como siempre.
-    rpc<FilaEmitidaTpv[] | null>('conta_tpv_emitidas', { p_company: companyId, p_desde: desde, p_hasta: hasta })
-      .then((r) => (r ?? []).map((x) => ({ ...x, base: Number(x.base), cuota: Number(x.cuota), total: Number(x.total) }) as FilaEmitidaTpv))
-      .catch(() => [] as FilaEmitidaTpv[]),
+    leerDiasTpvEmitidos(companyId, desde, hasta),
   ])
   const libro = porMes.flatMap((x) => x.anot)
   // Un mes que llega al tope puede tener más: se dice cuál (regla 7).
@@ -104,7 +123,8 @@ export async function leerFacturasVenta(accountId: string, companyId: string, de
   })
   // Lo de Sumied ya está por su factura: su anotación del libro no se repite.
   const deSumiedEnLibro = new Set(propias.map((f) => f.entryId).filter(Boolean))
-  const ajenas = conDiasTpv(delLibro(libro.filter((a) => !deSumiedEnLibro.has(a.entryId) && a.sourceType !== 'customer_invoice')), tpv)
+  const delLibroSinSumied = delLibro(libro.filter((a) => !deSumiedEnLibro.has(a.entryId) && a.sourceType !== 'customer_invoice'))
+  const ajenas = tpv.libro ? conLibroTpv(delLibroSinSumied, tpv.filas) : conDiasTpv(delLibroSinSumied, tpv.filas)
   const todas = [...propias, ...ajenas]
   const ids = todas.map((f) => f.entryId).filter((x): x is string => !!x)
   const { envios } = ids.length ? await leerEnviosDiez(accountId, ids) : { envios: new Map() }
