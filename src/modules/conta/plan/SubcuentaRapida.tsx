@@ -71,7 +71,7 @@ export function SubcuentaRapida({ companyId, digitos, serie, cuentas, quien, alC
         <label className="cx-subcuenta-casilla cx-subcuenta-codigo">
           <span>Código</span>
           <input className="cx-input cx-cifra" inputMode="decimal" autoComplete="off" value={codigo} autoFocus={foco} disabled={guardando}
-            placeholder={`43000030, 430.30 o 430`} aria-describedby="cx-subcuenta-frase"
+            placeholder="430.30" aria-describedby="cx-subcuenta-frase"
             onChange={(e) => { setCodigo(e.target.value); setFallo(null) }} onBlur={escribirEntero} onKeyDown={(e) => teclas(e, 'codigo')} />
         </label>
         <label className="cx-subcuenta-casilla cx-subcuenta-nombre">

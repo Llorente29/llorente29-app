@@ -3,7 +3,7 @@
 //   1. En Plan contable, dos casillas: «572» → la siguiente libre (57200NNN), «Banco del datáfono», Intro; y
 //      «430» → Intro la deja escrita (4300NNNN), «Glovo», Intro. Cada una, con su ficha al lado (banco, cliente).
 //   2. La que ya existe lo dice, con «Ábrela».
-//   3. Desde «A qué cuenta va cada forma de pago», un código que no está: «No está: crear la …», el nombre e
+//   3. Desde «A qué cuenta va cada forma de pago» (su buscador de la factura del día), un código que no está: «No está: crear la …», el nombre e
 //      Intro, sin salir de la ventana; y queda elegida (no se guarda: la ventana sigue como estaba).
 // Los códigos, los siguientes libres de staging en cada pasada; los nombres, inventados con un número (T11).
 
@@ -91,8 +91,9 @@ for (const tam of TAMANOS) {
     await page.goto('/conta/ajustes/ventas-por-dia', { waitUntil: 'load' })
     await page.getByRole('button', { name: 'A qué cuenta va cada forma de pago' }).click({ timeout: 30_000 })
     const v = page.getByRole('dialog', { name: 'A qué cuenta va cada forma de pago' })
-    await expect(v.getByRole('table', { name: 'A qué cuenta va cada forma de pago' })).toBeVisible({ timeout: 30_000 })
-    const boton = v.getByRole('button', { name: /^Cuenta de / }).first()
+    // El buscador de la ventana: el de «La factura del día» (está siempre; las formas de pago, solo con un día subido).
+    const boton = v.getByRole('button', { name: 'Cuenta de la factura del día' })
+    await expect(boton).toBeVisible({ timeout: 30_000 })
     await boton.click()
     const otra = await libre(s, '4300')
     await v.getByRole('combobox', { name: 'Número o nombre de la cuenta' }).fill(otra)
