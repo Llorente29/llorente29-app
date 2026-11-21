@@ -1,0 +1,10 @@
+# R14 · el proveedor nuevo se da de alta solo, con su cuenta de gasto.
+# 1110 (solo añade: desde la rama, de verdad, W05: la e2e usa sus funciones) y, justo
+# detrás, la semilla de su e2e (W07: lo que va delante de una semilla va de verdad).
+supabase/migrations/20261121T1110_r14_proveedor_solo_anade.sql
+supabase/seeds/conta/seed_r14_proveedor_solo_staging.sql
+# 1120 (cambia: el disparador al leer; desde la rama, solo en ROLLBACK).
+supabase/migrations/20261121T1120_r14_proveedor_solo_al_leer.sql
+# 1130 (escribe: completa las leídas; desde la rama, solo en ROLLBACK).
+supabase/migrations/20261121T1130_r14_proveedor_solo_completar.sql
+supabase/staging/sql/20261121_r14_proveedor_solo_prueba.sql
