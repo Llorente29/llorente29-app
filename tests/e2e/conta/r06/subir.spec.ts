@@ -126,7 +126,8 @@ test('subir los ficheros del TPV: lo que cuadra se contabiliza, lo que no lo dic
   const f = page.getByRole('dialog', { name: 'A qué cuenta va cada forma de pago' })
   await expect(f.locator('[data-prueba="aviso-forma-nueva"]')).toHaveText(
     'Hay una forma de pago nueva: Too Good To Go. Dime a qué cuenta va y no te lo vuelvo a preguntar. Hasta entonces, los días que la llevan no se pueden validar.', { timeout: 60_000 })
-  const asiento = f.getByRole('table', { name: 'Cómo queda el asiento de un día' })
+  // Con la 0900 en staging el día va en dos asientos («La factura del día» y su cobro); sin ella, en uno.
+  const asiento = f.getByRole('table', { name: /^(Cómo queda el asiento de un día|La factura del día)$/ })
   await expect(asiento.getByRole('row').filter({ hasText: 'Too Good To Go · sin cuenta' })).toContainText('17,24', { timeout: 30_000 })
   await expect(asiento).toContainText('Ejemplo: el 10/11')
   await expect(f.getByRole('button', { name: 'Guardar' })).toBeDisabled()

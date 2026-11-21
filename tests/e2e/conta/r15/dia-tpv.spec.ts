@@ -95,7 +95,8 @@ async function crearHosteleria(s: Sesion, que: string): Promise<string> {
  * asiento, que son de cada empresa. Igual en dos empresas recién creadas = los mismos asientos.
  */
 async function huella(s: Sesion, empresa: string, dia: string): Promise<string> {
-  const d = await rest<{ id: string }[]>(s, 'GET', `conta_tpv_dia?select=id&company_id=eq.${empresa}&dia=eq.${dia}`)
+  const d = await rest<{ id: string }[]>(s, 'POST', 'rpc/conta_tpv_dias', { p_company: empresa, p_desde: dia, p_hasta: dia })
+  expect(d.datos?.[0]?.id, `el ${dia} está en la empresa: ${JSON.stringify(d.datos).slice(0, 200)}`).toBeTruthy()
   const f = await rest<{ factura: { id: string } | null; cobro: { id: string } | null }>(s, 'POST', 'rpc/conta_tpv_dia_ficha', { p_dia: d.datos[0].id })
   expect(f.datos.factura, `el ${dia} tiene su factura del día`).toBeTruthy()
   const partes: string[] = []
@@ -128,9 +129,14 @@ async function contarPantalla(page: Page, que: string) {
 async function subirYContabilizar(page: Page, info: TestInfo, captura: string | null) {
   await page.goto('/conta/ventas/cierres?ver=todos', { timeout: 30_000 })
   const zona = zonaActiva(page)
+  // Antes de abrir la ventana, la lista de la empresa nueva cargada: si la empresa llega después, la ventana se monta otra vez y pierde los ficheros.
+  await expect(zona.getByRole('tab', { name: /^Todos \d+/ })).toBeVisible({ timeout: 40_000 })
+  await cargada(page, 'Cierres del día de la empresa nueva')
   await zona.getByRole('button', { name: 'Subir las ventas del TPV' }).click({ timeout: 40_000 })
   const v = page.getByRole('dialog', { name: 'Subir las ventas del TPV' })
+  await expect(v.getByText('Suelta aquí los cuatro ficheros que te da Revo')).toBeVisible({ timeout: 30_000 })
   await v.locator('input[type=file]').setInputFiles(ficheros(info))
+  await expect(v.getByRole('list', { name: 'Los ficheros' })).toBeVisible({ timeout: 30_000 })
   await expect(v.getByRole('heading', { name: 'Lo que he leído · 3 días' })).toBeVisible({ timeout: 30_000 })
   const tabla = v.getByRole('table', { name: 'Lo que he leído' })
   for (const [dia, rango] of [['13/10', '5001 a 5048'], ['14/10', '5049 a 5096'], ['15/10', '5097 a 5144']])
