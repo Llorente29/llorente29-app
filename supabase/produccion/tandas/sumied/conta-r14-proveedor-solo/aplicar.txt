@@ -1,0 +1,21 @@
+# R14 · El proveedor nuevo se da de alta solo, con su cuenta de gasto (encargo R14, 21/11).
+# Rama conta/r14-proveedor-solo. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   1110  Solo añade: la tabla de «por lo que vende» (conta_gasto_por_venta), la cuenta
+#         de gasto propuesta (conta_gasto_propuesto), lo que Sumied hace con el proveedor
+#         de cada recibida (conta_proveedor_solo), el alta sola (_conta_proveedor_solo) y
+#         «Deshacer» (conta_proveedor_solo_deshacer).
+#   1120  Cambia en caliente supplier_invoice: un disparador diferido que, al leer una
+#         recibida sin proveedor, lo busca o lo da de alta. Nunca para la lectura.
+#   1130  Une a su plataforma las fichas de proveedor sueltas que son una plataforma (por su NIF
+#         o, con un NIF de fuera o sin NIF, por su nombre: Julio, 21/11). Y completa las recibidas ya leídas sin proveedor, en todas las cuentas (lo
+#         validado, pagado, descartado o anulado no se toca). ESCRIBE sobre lo que existe
+#         (supplier_invoice.supplier_id) llamando a _conta_proveedor_solo: el analizador
+#         no lo ve dentro de la llamada y lo da por «sigue»; va declarado aquí.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r14-proveedor-solo.sql
+supabase/migrations/20261121T1110_r14_proveedor_solo_anade.sql
+supabase/migrations/20261121T1120_r14_proveedor_solo_al_leer.sql
+supabase/migrations/20261121T1130_r14_proveedor_solo_completar.sql
