@@ -12,7 +12,7 @@
 // número empieza el código (43000030 cuelga de la 4300). Si no hay ninguna, lo dice con el número que falta
 // y no inventa nada. Si el código ya existe, lo dice («Ya existe: ábrela»). Puro.
 
-import { codigoEscrito } from '@/modules/conta/nucleo/ficha/teclas'
+import { codigoEscrito, cuentasQueEncajan } from '@/modules/conta/nucleo/ficha/teclas'
 import { siguienteLibre } from '@/modules/conta/lib/planEmpresa'
 
 export type SeriePlan = { code: string; name: string; isLeaf: boolean }
@@ -84,4 +84,38 @@ export function fraseCodigo(l: LecturaCodigo): string | null {
   if (l.tipo === 'mal' || l.tipo === 'no_esta') return l.porque
   if (l.tipo === 'existe') return `Ya existe: la ${l.codigo} · ${l.nombre}.`
   return `Será la ${l.codigo}, bajo la ${l.hoja.code} · ${l.hoja.name}.`
+}
+
+/**
+ * X21b (Julio, 21/11) · «No está» solo si no está en el PLAN ENTERO, nunca en la lista filtrada de un buscador
+ * (regla 30: la lista con la que se elige no es la lista con la que se lee). Lo escrito, contra todas las subcuentas
+ * de la empresa: un código entero, corto o con punto (como en la ficha: codigoEscrito), o un nombre (las mismas
+ * palabras que el buscador, cuentasQueEncajan). La raíz sola («430») no cuenta: con ella se crea la siguiente libre.
+ * Devuelve la primera que encaja y cuántas más, o null si no está.
+ */
+export function yaEnElPlan(texto: string, cuentas: readonly { code: string; name: string; status?: string | null }[], digitos: number):
+  { code: string; name: string; cerrada: boolean; mas: number } | null {
+  const t = texto.trim()
+  if (!t) return null
+  const subcuentas = cuentas.filter((c) => c.code.length === digitos)
+  const de = (code: string, mas: number) => {
+    const c = subcuentas.find((x) => x.code === code)
+    return c ? { code: c.code, name: c.name, cerrada: c.status === 'cerrada', mas } : null
+  }
+  const escrito = t.replace(/\s/g, '')
+  if (/^[\d.]+$/.test(escrito)) {
+    if (!escrito.includes('.') && escrito.length < 4) return null
+    const completo = codigoEscrito(escrito, digitos)
+    return completo ? de(completo, 0) : null
+  }
+  const encajan = cuentasQueEncajan(t, subcuentas.map((c) => ({ codigo: c.code, nombre: c.name })), digitos)
+  return encajan.length ? de(encajan[0].codigo, encajan.length - 1) : null
+}
+
+/** La frase cuando existe pero no sale en ese buscador: «La 43000004 · Cliente existe, pero aquí solo van bancos y caja.» */
+export function textoYaEnElPlan(c: { code: string; name: string; cerrada: boolean; mas: number }, porque: string | null): string {
+  const cual = `La ${c.code} · ${c.name}`
+  const otras = c.mas > 0 ? ` (y ${c.mas} más con ese nombre)` : ''
+  if (c.cerrada) return `${cual}${otras} existe, pero está cerrada: ábrela en Plan contable para usarla.`
+  return `${cual}${otras} existe, pero aquí ${porque ?? 'no sale en esta lista'}.`
 }
