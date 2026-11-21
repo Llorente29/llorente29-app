@@ -21,7 +21,7 @@
 
 import { useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { CONTA, rutaCierre, rutaConta, rutaFacturaVenta, rutaFacturasVenta } from '@/config/navegacion'
+import { CONTA, rutaCierre, rutaConta, rutaDiaTpv, rutaFacturaVenta, rutaFacturasVenta } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -39,7 +39,7 @@ import { leerCierres, validarCierre, validarCierreTpv } from '@/modules/conta/se
 import { LoQueDejaElCierre } from './LoQueDejaElCierre'
 import { SubirVentasTpv } from './tpv/SubirVentasTpv'
 import { FormasDePago } from './tpv/FormasDePago'
-import { faltaPorSubir, ultimaSubida } from '@/modules/conta/lib/subirTpv'
+import { etiquetaUltimoDia, faltaPorSubir, ultimaSubida } from '@/modules/conta/lib/subirTpv'
 import { LoQueNoHePodido } from '@/modules/conta/ui/LoQueNoHePodido'
 import { DONDE } from '@/modules/conta/lib/noPropuesto'
 
@@ -108,7 +108,7 @@ export default function CierresPage() {
   const ayer = resumenDeAyer(todos)
   const lista = rutaConta(CONTA.rutas.cierres)
   const cifras = ayer ? [
-    { etiqueta: `Ayer · ${diaMes(ayer.dia)}`, valor: eurosExactos(ayer.total), apoyo: plural(ayer.tiques, 'tique', 'tiques'), a: `${lista}?ver=todos&q=${ayer.dia}` },
+    { etiqueta: etiquetaUltimoDia(ayer.dia, hoyTpv, todos.some((x) => x.fuente === 'tpv')), valor: eurosExactos(ayer.total), apoyo: plural(ayer.tiques, 'tique', 'tiques'), a: `${lista}?ver=todos&q=${ayer.dia}` },
     ...ayer.porCanal.slice(0, 3).map((c) => ({ etiqueta: c.canal, valor: eurosExactos(c.total), apoyo: `el ${diaMes(ayer.dia)}`, a: `${lista}?ver=todos&q=${encodeURIComponent(c.canal)}` })),
     { etiqueta: 'Por validar', valor: (pestanas.find((p) => p.id === 'por-validar')?.n ?? 0).toLocaleString('es-ES'), apoyo: plural(preparados.length, 'listo', 'listos'), a: `${lista}?ver=por-validar` },
   ] : []
@@ -258,7 +258,7 @@ export default function CierresPage() {
         <TablaLista<Cierre>
           etiqueta={`Cierres del día · ${nombrePestana}`}
           columnas={columnas} filas={filas} clave={(x) => x.id ?? `sin:${x.localId}:${x.dia}`} nombre={nombreCierre}
-          alAbrir={(x) => { if (x.id) navegar(`${rutaCierre(x.id)}${search}`); else if (x.facturaId) navegar(rutaFacturaVenta(x.facturaId)) }}
+          alAbrir={(x) => { if (x.fuente === 'tpv' && x.tpv) navegar(`${rutaDiaTpv(x.tpv.diaId)}${search}`); else if (x.id) navegar(`${rutaCierre(x.id)}${search}`); else if (x.facturaId) navegar(rutaFacturaVenta(x.facturaId)) }}
           movil={movil} tarjeta={tarjeta}
           vacio={todos.length === 0
             ? <><strong>Aún no hay cierres.</strong> El cierre del día propone cada hora las ventas de los días ya cerrados, una por local y canal, y salen aquí.</>

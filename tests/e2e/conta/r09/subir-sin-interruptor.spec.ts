@@ -5,7 +5,7 @@
 // company_tax_profile.ventas_por_dia: ni la prueba ni la semilla encienden nada a mano.
 //   1. A 1456 × 816: por el menú (Facturación › Ventas › Ventas del día) se ve «Subir las ventas
 //      del TPV»; se sueltan los cuatro CSV INVENTADOS de tests/e2e/conta/r06/ficheros (T11), se
-//      guardan los días que cuadran y «Decir a qué cuenta va» abre «A qué cuenta va cada forma de pago».
+//      contabilizan los días que cuadran y, como ninguna forma tiene cuenta, primero se abre «A qué cuenta va cada forma de pago» (R15).
 //   2. A 1366 × 768 (la cinta nace plegada: «Ver los botones»), el mismo camino hasta el botón, y la página no rueda.
 
 import { test, expect, type Page } from '@playwright/test'
@@ -80,11 +80,10 @@ test('una empresa de hostelería recién creada sube las ventas del TPV sin ence
   const v = page.getByRole('dialog', { name: 'Subir las ventas del TPV' })
   await v.locator('input[type=file]').setInputFiles(csv())
   await expect(v.getByRole('heading', { name: 'Lo que he leído · 3 días' })).toBeVisible({ timeout: 30_000 })
-  const guardar = v.getByRole('button', { name: /^Guardar \d+ días?$/ })
+  // R15 · «Contabilizar N días»: en una empresa recién creada ninguna forma tiene cuenta, así que primero se abre «A qué cuenta va».
+  const guardar = v.getByRole('button', { name: /^Contabilizar \d+ días?$/ })
   await expect(guardar).toBeEnabled({ timeout: 30_000 })
   await guardar.click()
-  await expect(v.locator('[data-prueba="resultado-subir"]')).toContainText(/^Guardados? \d+ días?/, { timeout: 60_000 })
-  await v.getByRole('button', { name: 'Decir a qué cuenta va' }).click()
   const f = page.getByRole('dialog', { name: 'A qué cuenta va cada forma de pago' })
   await expect(f.getByRole('table', { name: 'A qué cuenta va cada forma de pago' })).toBeVisible({ timeout: 30_000 })
   await page.screenshot({ path: `${DIR}/formas-1456.png` })

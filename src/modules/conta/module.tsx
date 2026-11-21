@@ -51,6 +51,7 @@ import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
 import VentasPage from '@/modules/conta/ventas/VentasPage'
 import CierresPage from '@/modules/conta/ventas/CierresPage'
 import CierrePage from '@/modules/conta/ventas/CierrePage'
+import DiaTpvPage from '@/modules/conta/ventas/DiaTpvPage'
 import LiquidacionesVentasPage from '@/modules/conta/ventas/LiquidacionesVentasPage'
 import NovedadesPage from '@/shell/version/NovedadesPage'
 import PagosPage from '@/modules/conta/compras/PagosPage'
@@ -214,6 +215,8 @@ export const contaModule: ModuleDefinition = {
     // V01 · Entrega 2 · Ventas › Cierres del día (con «Vendo en hostelería») y la ficha de un cierre.
     { path: CONTA.rutas.cierres, element: enMarco(<CierresPage />, '¿Cuánto vendí ayer?', true) },
     { path: CONTA.rutas.cierre, element: enMarco(<CierrePage />, '¿Por qué este cierre no cuadra?', true) },
+    // R15 · La ficha de un día del TPV de fuera, con el diseño de la del cierre.
+    { path: CONTA.rutas.diaTpv, element: enMarco(<DiaTpvPage />, '¿Qué lleva este día del TPV?', true) },
     // V01 · Entrega 3 · Ventas › Liquidaciones (con «Vendo en hostelería»): plataformas y socios de marca, y la ficha de una fila de plataforma.
     { path: CONTA.rutas.liquidacionesVentas, element: enMarco(<LiquidacionesVentasPage />, '¿Me han pagado lo que vendí?', true) },
     // NV1 · Ayuda › Novedades: lo que cambia en cada versión.
