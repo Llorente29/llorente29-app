@@ -1,0 +1,7 @@
+# R15b · la vuelta atrás, en orden inverso: la 2350 devuelve los días que rehízo a su libro de
+# antes; la 2347, sus dos funciones a como estaban; la 2346, el libro de los demás días y quita lo
+# que añadió.
+cuenta: scripts/conta/produccion/cuentas/r15b-libro-del-dia.sql
+supabase/vuelta-atras/20261121T2350_r15b_rehacer_dias.down.sql
+supabase/vuelta-atras/20261121T2347_r15b_libro_del_dia.down.sql
+supabase/vuelta-atras/20261121T2346_r15b_libro_del_dia_anade.down.sql

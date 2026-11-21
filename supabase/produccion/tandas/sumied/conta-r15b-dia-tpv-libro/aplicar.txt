@@ -1,0 +1,17 @@
+# R15b · El día del TPV en el libro de IVA, como manda la ley (encargo R15b, 21/11). Rama
+# conta/r15b-dia-tpv-libro. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2346  Solo añade: conta_tpv_libro_antes, las piezas que reparten y juntan el libro de un día,
+#         sus filas para la ficha, «Facturas emitidas» con ellas y la consulta preparada para el 347.
+#   2347  Cambia en caliente, por trozos y con su respaldo: conta_tpv_dia_validar (reparte el libro
+#         al validar) y conta_impuesto_303_cajas (la R5 de un día del TPV, a la [14] y la [15]: el
+#         resultado del 303 no cambia).
+#   2350  Rehace en el libro los días ya contabilizados (los 31 de octubre de Frango y los que
+#         haya): escribe sobre lo que existe, pide autorizo. Su asiento NO cambia: mismo número
+#         y su PDF. Regla 31 por día dentro (si un día no da la misma base y cuota, para).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r15b-libro-del-dia.sql
+supabase/migrations/20261121T2346_r15b_libro_del_dia_anade.sql
+supabase/migrations/20261121T2347_r15b_libro_del_dia.sql
+supabase/migrations/20261121T2350_r15b_rehacer_dias.sql
