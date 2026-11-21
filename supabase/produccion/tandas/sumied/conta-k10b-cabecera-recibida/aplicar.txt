@@ -3,9 +3,11 @@
 #
 #   2150  Añade tres columnas que admiten nulos a supplier_invoice (vat_operation, deduct_from, entry_concept), que
 #         nacen vacías: no escribe en ninguna recibida (vacío = lo de siempre). Añade conta_recibida_cabecera,
-#         conta_operacion_clase y conta_operacion_nombre. Cambia cuatro trozos de conta_motivos_para_validar: la
-#         regla 11 lee el tipo de operación de la factura si lo tiene. Lo cuenta k10b-cabecera-recibida.sql (regla 31).
+#         conta_operacion_clase y conta_operacion_nombre.
+#   2151  Cambia cuatro trozos de conta_motivos_para_validar: la regla 11 lee el tipo de operación de la factura si
+#         lo tiene. Lo cuenta k10b-cabecera-recibida.sql (regla 31).
 #
 # Nada en el camino del pedido. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/k10b-cabecera-recibida.sql
 supabase/migrations/20261121T2150_k10b_cabecera_recibida.sql
+supabase/migrations/20261121T2151_k10b_regla_11_lee_la_factura.sql

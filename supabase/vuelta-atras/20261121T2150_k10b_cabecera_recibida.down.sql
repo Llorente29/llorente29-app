@@ -1,8 +1,6 @@
--- K10b · vuelta atrás de 20261121T2150: conta_motivos_para_validar desde su respaldo (la regla 11 con el tipo de su
--- ficha, como antes), fuera conta_recibida_cabecera y las dos funciones del tipo de operación, y las tres columnas
+-- K10b · vuelta atrás de 20261121T2150 (después de la de la 2151, que devuelve la regla 11): fuera conta_recibida_cabecera y las dos funciones del tipo de operación, y las tres columnas
 -- nuevas de supplier_invoice solo si nadie las ha usado (con algo escrito, se quedan: son de quien lo escribió, y
 -- sin las funciones nadie las lee). Las observaciones (notes) y la marca (brand_id) ya existían: no se tocan.
-select public._restaurar_funcion('public.conta_motivos_para_validar(uuid)', '20261121T2150_k10b_cabecera_recibida');
 drop function if exists public.conta_recibida_cabecera(uuid, jsonb, text);
 drop function if exists public.conta_operacion_nombre(text);
 drop function if exists public.conta_operacion_clase(text);

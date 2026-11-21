@@ -1,7 +1,7 @@
 -- supabase/staging/sql/20261121_k10b_cabecera_recibida_prueba.sql
 --
--- SOLO STAGING. Prueba del K10b (20261121T2150_k10b_cabecera_recibida), que el ensayo de staging pone
--- delante en la misma sesión. Todo en una transacción con ROLLBACK: staging no cambia. Nombra el objeto
+-- SOLO STAGING. Prueba del K10b (20261121T2150_k10b_cabecera_recibida y 20261121T2151_k10b_regla_11_lee_la_factura),
+-- que el ensayo de staging pone delante en la misma sesión. Todo en una transacción con ROLLBACK: staging no cambia. Nombra el objeto
 -- que cambia: public.conta_motivos_para_validar (la regla 11, tres trozos); y los nuevos:
 -- public.conta_recibida_cabecera, public.conta_operacion_clase y public.conta_operacion_nombre.
 --
@@ -9,7 +9,7 @@
 -- facturas y el 303 presentado son inventados, dentro de la transacción (T11).
 --
 -- Regla 10: un cambio de IVA se ensaya por sus CAMINOS, validando, no por su fórmula.
---   0. La 2150 está delante.
+--   0. La 2150 y la 2151 están delante.
 --   1. Lo de antes no cambia: una factura normal (IVA general) y una con inversión del sujeto pasivo,
 --      con el tipo vacío (el de su ficha, lo de siempre) y con el mismo tipo escrito en la factura: los
 --      mismos motivos y la misma huella del asiento y del libro de IVA, y las dos se validan.
@@ -35,10 +35,11 @@ grant select, insert, update on _k10b to authenticated;
 
 -- 0 · Lo de antes.
 do $$ begin
-  if to_regprocedure('public.conta_recibida_cabecera(uuid,jsonb,text)') is null then
-    raise exception 'PRUEBA K10b · 0: falta la 2150 delante (la pone el ensayo de staging).';
+  if to_regprocedure('public.conta_recibida_cabecera(uuid,jsonb,text)') is null
+     or strpos(pg_get_functiondef('public.conta_motivos_para_validar(uuid)'::regprocedure), 'K10b: el tipo de operación') = 0 then
+    raise exception 'PRUEBA K10b · 0: falta la 2150 o la 2151 delante (las pone el ensayo de staging).';
   end if;
-  raise notice '0 · la 2150 delante.';
+  raise notice '0 · la 2150 y la 2151 delante.';
 end $$;
 
 -- Lo inventado: dos proveedores de España (uno normal y uno con inversión del sujeto pasivo en su ficha), sus
@@ -253,6 +254,7 @@ end $$;
 reset role;
 
 -- 5 · Deshacer.
+\i supabase/vuelta-atras/20261121T2151_k10b_regla_11_lee_la_factura.down.sql
 \i supabase/vuelta-atras/20261121T2150_k10b_cabecera_recibida.down.sql
 do $$ begin
   if strpos(pg_get_functiondef('public.conta_motivos_para_validar(uuid)'::regprocedure), 'K10b') > 0 then

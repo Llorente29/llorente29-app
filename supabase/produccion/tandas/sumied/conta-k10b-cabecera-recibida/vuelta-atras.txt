@@ -1,3 +1,4 @@
 # K10b · la vuelta atrás: conta_motivos_para_validar desde su respaldo, fuera las funciones nuevas, y las columnas solo si no se han usado.
 cuenta: scripts/conta/produccion/cuentas/k10b-cabecera-recibida.sql
+supabase/vuelta-atras/20261121T2151_k10b_regla_11_lee_la_factura.down.sql
 supabase/vuelta-atras/20261121T2150_k10b_cabecera_recibida.down.sql
