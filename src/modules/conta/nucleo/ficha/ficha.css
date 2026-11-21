@@ -83,6 +83,10 @@
 .kf-aviso[data-tono='ok'] { background: var(--kf-verde-fondo); color: var(--kf-verde-tinta); }
 .kf-aviso[data-tono='falta'] { background: var(--kf-ambar-fondo); color: var(--kf-ambar-tinta); }
 .kf-aviso[data-tono='mal'] { background: #fde8e6; color: var(--k-rojo); }
+/* K09 · La repetida: «Ya está la …», «Abrirla» y «No es la misma: …», en una línea dentro de la franja ámbar. */
+.kf-repetida { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.kf-repetida .kf-no-es { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.kf-repetida input:not([type='checkbox']) { flex: 1 1 220px; min-width: 160px; padding: 2px 6px; border: 1px solid var(--k-raya); border-radius: 4px; font: inherit; }
 
 /* ── El cuerpo: la ficha a la izquierda, el documento a la derecha ───── */
 .kf-cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.29fr) minmax(0, 1fr); border-top: 1px solid var(--k-borde); }
