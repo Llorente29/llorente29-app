@@ -1,0 +1,3 @@
+# X20 · Crear una subcuenta como en ERP10 (añade company_account_add_codigo).
+supabase/migrations/20261121T0930_x20_subcuenta_con_codigo.sql
+supabase/staging/sql/20261121_x20_subcuenta_con_codigo_prueba.sql

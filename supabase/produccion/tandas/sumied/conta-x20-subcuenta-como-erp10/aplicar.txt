@@ -1,0 +1,9 @@
+# X20 · Crear una subcuenta como en ERP10 (encargo del 21/11). Rama conta/x20-subcuenta-como-erp10.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0930  Añade company_account_add_codigo: la subcuenta con el código que se escribe; la cuenta de la que
+#         cuelga la busca la base. company_account_add no se toca.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x20-subcuenta-con-codigo.sql
+supabase/migrations/20261121T0930_x20_subcuenta_con_codigo.sql
