@@ -61,8 +61,11 @@ import { useUltimo } from '../ficha/useUltimo'
 import { Buscador } from '../ficha/Buscador'
 import { cuentasQueEncajan, queHaceIntro, type CuentaDelPlan } from '../ficha/teclas'
 import { origenes } from './origen'
-import { casillasVacias, comprobacionesDe, dondeVaElFoco, dudaDelGasto, emisorDesconocido, estadoDeLaFicha, etiquetaDelAsiento, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
-import { calendarioDe, cuentasAMano, delProveedor, gastoAprendido, marcaDeLaFactura, mayorDelProveedor, textoOperacion } from './servicio'
+import { crearProveedor } from '@/modules/conta/services/proveedorService'
+import { revisarAlta } from '@/modules/conta/lib/altaProveedor'
+import { tipoEntidadPorNif } from '@/modules/conta/lib/nif'
+import { casillasVacias, comprobacionesDe, dondeVaElFoco, dudaDelGasto, emisorDesconocido, estadoDeLaFicha, etiquetaDelAsiento, franjaProveedorSolo, gastoEnAmbar, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
+import { calendarioDe, cuentasAMano, delProveedor, deshacerProveedorSolo, gastoAprendido, gastoPropuesto as leerGastoPropuesto, marcaDeLaFactura, mayorDelProveedor, proveedorSolo, textoOperacion } from './servicio'
 import { fechaDelPago, propuestaDelPago, queHaceElPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
 import { apuntarPago, cuentasDePago, hayLiquidacion, pagoDelProveedor } from './pagoServicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
@@ -188,6 +191,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const mayor = useUltimo(useLeer(accountId && empresa && delProv?.subcuenta ? () => mayorDelProveedor(accountId, empresa, delProv.subcuenta!.id, hoy) : null, `${accountId}:${empresa}:${delProv?.subcuenta?.id}:mayor:${vuelta}`).datos, `${id}:${provId}`)
   const aprendido = useUltimo(useLeer(empresa && provId && !aMano ? () => gastoAprendido(empresa, provId) : null, `${empresa}:${provId}:${invoiceId}:aprendido:${vuelta}`).datos, `${id}:${provId}`)
   const sinPropuesta = aMano || propuesta === null
+  // R14 · Lo que hizo Sumied con el proveedor al leerla, y la cuenta propuesta sin historial (en ámbar, con su porqué).
+  const solo = useLeer(id && !aMano ? () => proveedorSolo(id) : null, `${id}:solo:${vuelta}`).datos ?? null
+  const propuestoGasto = useLeer(empresa && provId && !aMano && aprendido && !aprendido.cuenta ? () => leerGastoPropuesto(empresa, provId, id ?? null) : null, `${empresa}:${provId}:${invoiceId}:propuesto:${vuelta}`).datos ?? null
   // Una vez por empresa: la subcuenta del proveedor sale de delProveedor (ya leído), no de volver a leer el contexto entero.
   const aManoCuentas = useLeer(accountId && empresa && sinPropuesta ? () => cuentasAMano(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-a-mano`).datos ?? null
 
@@ -241,6 +247,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   })
   const faltaDoc = !aMano && fac ? faltaDocumento({ tieneDocumento: !!(fac.llegada || fac.papel || ficha?.lectura?.ruta || fichero), sinPdf: b.sinPdf, fuente: ficha?.fuente ?? null }) : null
   if (faltaDoc) comprobaciones.push({ id: 'documento', tono: 'rojo', texto: faltaDoc.replace(/\.$/, '') })
+  const ambarGasto = gastoEnAmbar({ aMano, propuesto: propuestoGasto, aprendida: aprendido?.cuenta ?? null, cuentaAhora: b.gastos[0]?.cuenta ?? '' })
+  if (ambarGasto) comprobaciones.push(ambarGasto)
   // K04b · El emisor que no se reconoce, y lo que falta: la franja no dice «Rellenada» con casillas vacías.
   const leidoEmisor = leido ? { nombre: leido.proveedor.nombre ?? fac?.propuesto?.nombre ?? null, nif: leido.proveedor.nif ?? fac?.propuesto?.nif ?? null }
     : fac?.propuesto ? { nombre: fac.propuesto.nombre, nif: fac.propuesto.nif } : null
@@ -248,6 +256,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const vacias = aMano ? [] : casillasVacias({ proveedor: !!provId, numero: b.numero, fecha: b.fecha, total: totales.total, cuentaGasto: b.gastos.some((g) => g.cuenta.trim() !== '') })
   const estado = estadoDeLaFicha({ aMano, leida: !!fac?.lectura, comprobaciones, hayDudaGasto: !!duda || !!dudaPago, desconocido: emisor?.que === 'alta', vacias })
   const [altaAbierta, setAltaAbierta] = useState<string | null>(null)
+  const franja = franjaProveedorSolo({ aMano, solo, proveedorId: provId, nombre: prov?.nombre ?? fac?.proveedor?.nombre ?? null, validada: !!fac?.asiento })
   const [abrirProveedor, setAbrirProveedor] = useState(0)
   useNombreDePestana(nombreDePestana(aMano ? prov?.nombre : prov?.nombre ?? fac?.proveedor?.nombre ?? emisor?.nombre, !aMano))
 
@@ -265,6 +274,31 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const [propio, setPropio] = useState<{ k: string; a: Aviso | null } | null>(null)
   const aviso: Aviso | null = propio && propio.k === claveAviso ? propio.a : avisoDeAntes ? { tono: 'ok', texto: avisoDeAntes } : null
   const setAviso = (a: Aviso | null) => setPropio({ k: claveAviso, a })
+  const [deshaciendo, setDeshaciendo] = useState(false)
+  const deshacerSolo = async () => {
+    if (!id || deshaciendo) return
+    setDeshaciendo(true)
+    try {
+      const texto = await deshacerProveedorSolo(id, userName)
+      ed.reiniciar({ ...b, proveedorId: '' })
+      setAviso({ tono: 'ok', texto }); setVueltaProv((v) => v + 1); setVuelta((v) => v + 1)
+    } catch (e) { setAviso({ tono: 'mal', texto: `No he podido deshacerlo: ${e instanceof Error ? e.message : String(e)}` }) } finally { setDeshaciendo(false) }
+  }
+  // R14 · «+ Nuevo proveedor» en la de a mano: el NIF y el nombre en la misma fila, sin salir y sin perder lo escrito.
+  const [nuevo, setNuevo] = useState<{ nif: string; nombre: string; fallo: string | null; ocupado: boolean } | null>(null)
+  const crearNuevo = async () => {
+    if (!nuevo || nuevo.ocupado || !accountId) return
+    const r = revisarAlta({ nombre: nuevo.nombre, nif: nuevo.nif }, proveedores.map((p) => ({ name: p.nombre, taxId: p.nif })))
+    const fallo = r.errores.nombre ?? r.errores.nif ?? null
+    if (fallo) { setNuevo({ ...nuevo, fallo }); return }
+    setNuevo({ ...nuevo, ocupado: true, fallo: null })
+    try {
+      const creado = await crearProveedor({ accountId, name: nuevo.nombre, taxId: r.nif, taxIdType: r.nif ? 'nif_es' : null, nifComprobado: !!r.nif,
+        entityKind: r.nif ? tipoEntidadPorNif(r.nif) : null, createdBy: userId ?? null, createdByName: userName ?? null })
+      ed.poner('proveedorId', creado.id); setTextoProv(null); setNuevo(null); setVueltaProv((v) => v + 1)
+      setAviso({ tono: 'ok', texto: `Dado de alta ${creado.name}${creado.taxId ? ` (${creado.taxId})` : ''} y elegido en esta factura. Su subcuenta se crea al validarla.` })
+    } catch (e) { setNuevo({ ...nuevo, ocupado: false, fallo: e instanceof Error ? e.message : String(e) }) }
+  }
   const [guardando, setGuardando] = useState(false)
   useEffect(() => () => { if (fichero) URL.revokeObjectURL(fichero.url) }, [fichero])
 
@@ -515,12 +549,34 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                   ponerTexto={setTextoProv} lista={(t) => { const q = t.toLowerCase(); return proveedores.filter((p) => !q || p.nombre.toLowerCase().includes(q) || (p.nif ?? '').toLowerCase().includes(q)) }}
                   texto={(p) => `${p.nombre}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { if (emisor) void elegirYGuardar(p.id, p.nombre, `Elegido ${p.nombre}.`); else { ed.poner('proveedorId', p.id); setTextoProv(null) } }} />
               </Casilla>
-              <Casilla rotulo="N.I.F." origen={origen.nif} htmlFor="kf-nif"><input id="kf-nif" readOnly tabIndex={-1} value={prov?.nif ?? emisor?.nif ?? ''} /></Casilla>
-              <Casilla rotulo="Nombre" origen={origen.nombre} htmlFor="kf-nombre"><input id="kf-nombre" readOnly tabIndex={-1} value={prov?.nombre ?? emisor?.nombre ?? ''} title={prov?.nombre ?? emisor?.nombre ?? undefined} /></Casilla>
+              {nuevo ? (<>
+                <Casilla rotulo="N.I.F." htmlFor="kf-nif"><input id="kf-nif" data-casilla autoCapitalize="characters" autoFocus value={nuevo.nif}
+                  onChange={(e) => setNuevo({ ...nuevo, nif: e.target.value, fallo: null })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); void crearNuevo() } }} /></Casilla>
+                <Casilla rotulo="Nombre" htmlFor="kf-nombre"><input id="kf-nombre" data-casilla value={nuevo.nombre}
+                  onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value, fallo: null })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); void crearNuevo() } }} /></Casilla>
+              </>) : (<>
+                <Casilla rotulo="N.I.F." origen={origen.nif} htmlFor="kf-nif"><input id="kf-nif" readOnly tabIndex={-1} value={prov?.nif ?? emisor?.nif ?? ''} /></Casilla>
+                <Casilla rotulo="Nombre" origen={origen.nombre} htmlFor="kf-nombre"><input id="kf-nombre" readOnly tabIndex={-1} value={prov?.nombre ?? emisor?.nombre ?? ''} title={prov?.nombre ?? emisor?.nombre ?? undefined} /></Casilla>
+              </>)}
               <Casilla rotulo="Tipo de operación" origen={origen.tipoOperacion} htmlFor="kf-operacion"><input id="kf-operacion" readOnly tabIndex={-1} value={textoOperacion(delProv?.regimen ?? null) ?? ''} /></Casilla>
             </div>
+            {aMano && !provId && !nuevo && (
+              <button type="button" className="kf-enlace-plano kf-nuevo-proveedor" data-prueba="nuevo-proveedor" onClick={() => setNuevo({ nif: '', nombre: textoProv?.trim() ?? '', fallo: null, ocupado: false })}>+ Nuevo proveedor</button>
+            )}
+            {nuevo && (
+              <div className="kf-nuevo-proveedor" role="group" aria-label="Nuevo proveedor" data-prueba="nuevo-proveedor-abierto">
+                <span className="kf-gasto-ayuda">Escribe su NIF y su nombre arriba y pulsa Intro. Lo demás de la factura no se pierde.</span>
+                <button type="button" className="kf-enlace-plano" disabled={nuevo.ocupado} onClick={() => void crearNuevo()}>{nuevo.ocupado ? 'Dando de alta…' : 'Darlo de alta y elegirlo'}</button>
+                <button type="button" className="kf-enlace-plano" disabled={nuevo.ocupado} onClick={() => setNuevo(null)}>Cancelar</button>
+                {nuevo.fallo && <p className="kf-error" role="alert">{nuevo.fallo}</p>}
+              </div>
+            )}
+            {franja && (
+              <Duda fuerte={franja.fuerte} texto={franja.texto}
+                secundario={franja.deshacer ? { texto: deshaciendo ? 'Deshaciendo…' : 'Deshacer', hacer: () => void deshacerSolo() } : undefined} />
+            )}
             {emisor?.que === 'alta' && altaAbierta !== invoiceId && (
-              <Duda texto={`No conozco al que la emite${emisor.nombre ? `: ${emisor.nombre}` : ''}${emisor.nif ? ` · NIF ${emisor.nif}` : ''}. Hasta que tenga proveedor no se valida.`}
+              <Duda texto={`No conozco al que la emite${emisor.nombre ? `: ${emisor.nombre}` : ''}${emisor.nif ? ` · NIF ${emisor.nif}` : ''}. ${solo?.que === 'no' && solo.motivo ? `${solo.motivo} ` : ''}Hasta que tenga proveedor no se valida.`}
                 principal={{ texto: 'Darlo de alta', hacer: () => setAltaAbierta(invoiceId) }}
                 secundario={{ texto: 'Es uno que ya tengo', hacer: () => setAbrirProveedor((n) => n + 1) }} />
             )}
