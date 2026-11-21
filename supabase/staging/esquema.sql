@@ -27784,7 +27784,7 @@ CREATE FUNCTION public.bank_saldos_cuentas(p_company uuid, p_hasta date, p_prefi
     LANGUAGE sql STABLE
     SET search_path TO 'public'
     AS $$
-  select ca.code, coalesce(ca.plain_name, ca.name), coalesce(sum(jl.debit - jl.credit), 0),
+  select ca.code, ca.name, coalesce(sum(jl.debit - jl.credit), 0),
          (select l.entity from public.company_account_link l where l.company_account_id = ca.id and l.entity in ('supplier', 'customer') limit 1),
          (select l.entity_id from public.company_account_link l where l.company_account_id = ca.id and l.entity in ('supplier', 'customer') limit 1)
     from public.company_account ca
@@ -35207,7 +35207,7 @@ begin
     raise exception 'Ese banco no es de tu cuenta.' using errcode = '42501';
   end if;
   -- La 572 del banco (regla 9: de su empresa y su cuenta).
-  select a.code, coalesce(a.plain_name, a.name) into v_572, v_nombre572
+  select a.code, a.name into v_572, v_nombre572
     from public.company_account_link l join public.company_account a on a.id = l.company_account_id and a.company_id = t.company_id
    where l.account_id = t.account_id and l.company_id = t.company_id and l.entity = 'bank_account' and l.entity_id = t.id::text and l.role = 'principal'
    limit 1;
@@ -35218,7 +35218,7 @@ begin
    where a.company_id = t.company_id and a.account_id = t.account_id and a.code = btrim(coalesce(p_cuenta, ''));
   if v_cta.id is null then raise exception 'La cuenta % no está en el plan de la empresa.', coalesce(nullif(btrim(p_cuenta), ''), '(vacía)') using errcode = '22023'; end if;
   if v_cta.code = v_572 then raise exception 'La cuenta no puede ser la del propio banco (%).', v_572 using errcode = '22023'; end if;
-  v_concepto := coalesce(v_concepto, coalesce(v_cta.plain_name, v_cta.name));
+  v_concepto := coalesce(v_concepto, v_cta.name);
   -- Ingreso: el banco al debe; pago: al haber. La otra cuenta, al revés.
   v_lineas := jsonb_build_array(
     jsonb_build_object('cuenta', v_572, 'debe', case when v_imp > 0 then v_imp else 0 end, 'haber', case when v_imp > 0 then 0 else -v_imp end,
@@ -48601,7 +48601,7 @@ begin
            -- El perceptor: el tercero de la línea de la 4751 o, si no, la subcuenta del proveedor (40 o 41).
            coalesce(max(l.party_id::text) filter (where ca.code like '4751%'),
                     max(ca.id::text) filter (where ca.code ~ '^(40|41)')) as perceptor,
-           max(ca.code || ' · ' || coalesce(nullif(ca.plain_name, ''), ca.name)) filter (where ca.code ~ '^(40|41)') as perceptor_nombre
+           max(ca.code || ' · ' || ca.name) filter (where ca.code ~ '^(40|41)') as perceptor_nombre
       from e
       join public.journal_line l on l.entry_id = e.id
       join public.company_account ca on ca.id = l.company_account_id
@@ -48679,7 +48679,7 @@ begin
      and je.entry_date between v_desde and v_hasta and ca.code like '621%';
   select coalesce(jsonb_agg(jsonb_build_object('cuenta', q.code, 'nombre', q.nombre, 'haber', q.haber, 'debe', q.debe) order by q.code), '[]')
     into v_4751
-    from (select ca.code, coalesce(nullif(ca.plain_name, ''), ca.name) as nombre, round(sum(l.credit), 2) as haber, round(sum(l.debit), 2) as debe
+    from (select ca.code, ca.name as nombre, round(sum(l.credit), 2) as haber, round(sum(l.debit), 2) as debe
             from public.journal_line l join public.journal_entry je on je.id = l.entry_id
             join public.company_account ca on ca.id = l.company_account_id
            where je.account_id = c.account_id and je.company_id = p_company and je.status in ('validado', 'anulado')
@@ -58593,7 +58593,7 @@ begin
   if v_pend <= 0 then raise exception 'A la factura % no le queda nada por pagar.', v_numero using errcode = '23514'; end if;
 
   select party_id into v_party from public.party_role where account_id = v_cuenta and supplier_id = v_s.id and role = 'supplier' order by created_at limit 1;
-  v_nombre := coalesce(nullif(v_ca.plain_name, ''), v_ca.name);
+  v_nombre := v_ca.name;
   v_concepto := 'Pago factura ' || v_numero;
   insert into public.supplier_invoice_payment (account_id, company_id, invoice_id, paid_on, amount, method, note, created_by, created_by_name)
   values (v_cuenta, p_company, v_inv.id, p_fecha, v_pend, null, format('Pagada con la %s (%s), desde su ficha', v_ca.code, v_nombre), auth.uid(), v_quien)
@@ -60689,7 +60689,7 @@ begin
      where x.code ~ '^4[0134]'
      group by x.company_account_id
   )
-  select ca.code, coalesce(ca.plain_name, ca.name),
+  select ca.code, ca.name,
          coalesce(
            (select p.id from public.company_account_link l join public.party p on p.account_id = v_acc and p.id::text = l.entity_id
              where l.account_id = v_acc and l.company_id = p_company and l.company_account_id = ca.id
@@ -61755,7 +61755,7 @@ begin
                                           'debe', (l ->> 'debe')::numeric, 'haber', (l ->> 'haber')::numeric, 'concepto', l ->> 'concepto')
                   else jsonb_build_object('cuenta', l ->> 'cuenta', 'sin_cuenta', false, 'forma', l ->> 'forma', 'canal', l -> 'canal', 'tipo', l -> 'tipo',
                                           'contado', l ->> 'cuenta' = v_contado,
-                                          'nombre', (select coalesce(a.plain_name, a.name) from public.company_account a where a.company_id = v_d.company_id and a.code = l ->> 'cuenta'),
+                                          'nombre', (select a.name from public.company_account a where a.company_id = v_d.company_id and a.code = l ->> 'cuenta'),
                                           'debe', (l ->> 'debe')::numeric, 'haber', (l ->> 'haber')::numeric, 'concepto', l ->> 'concepto') end
              order by o) as lineas
       from (values ('factura', v_p -> 'lineas'), ('cobro', v_p -> 'cobro' -> 'lineas')) q(que, ls)
@@ -62292,7 +62292,7 @@ declare v_acc uuid; v jsonb;
 begin
   select account_id into v_acc from public.company where id = p_company;
   if v_acc is null or not public.belongs_to_account(v_acc) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
-  select jsonb_build_object('cuenta', a.code, 'nombre', coalesce(a.plain_name, a.name), 'desde', coalesce(f.desde, (f.created_at at time zone 'Europe/Madrid')::date),
+  select jsonb_build_object('cuenta', a.code, 'nombre', a.name, 'desde', coalesce(f.desde, (f.created_at at time zone 'Europe/Madrid')::date),
            'mes', coalesce((select sum(l.debit) from public.journal_line l join public.journal_entry e on e.id = l.entry_id
                              where l.company_account_id = a.id and e.status = 'validado' and e.source_type = 'sales_day'
                                and e.entry_date >= date_trunc('month', coalesce(p_mes, current_date))::date
@@ -62301,7 +62301,7 @@ begin
    where f.company_id = p_company and f.account_id = v_acc;
   return jsonb_build_object('factura', v,
     -- Lo que propone Sumied si no hay ninguna: una 430 que ya se llame «contado».
-    'propuesta', (select jsonb_build_object('cuenta', a.code, 'nombre', coalesce(a.plain_name, a.name)) from public.company_account a
+    'propuesta', (select jsonb_build_object('cuenta', a.code, 'nombre', a.name) from public.company_account a
                    where a.company_id = p_company and a.account_id = v_acc and a.code like '430%' and length(a.code) >= 8
                      and (a.name ilike '%contado%' or a.plain_name ilike '%contado%') and a.status is distinct from 'cerrada'
                    order by a.code limit 1));
@@ -62328,9 +62328,9 @@ begin
   values (v_acc, p_company, v_a.id, coalesce(p_quien_nombre, public.conta_nombre_actor()), (now() at time zone 'Europe/Madrid')::date)
   on conflict (company_id) do update set company_account_id = excluded.company_account_id, created_by_name = excluded.created_by_name
   returning coalesce(desde, (created_at at time zone 'Europe/Madrid')::date) into v_desde;
-  return jsonb_build_object('cuenta', v_a.code, 'nombre', coalesce(v_a.plain_name, v_a.name), 'desde', v_desde,
+  return jsonb_build_object('cuenta', v_a.code, 'nombre', v_a.name, 'desde', v_desde,
     'texto', format('La factura del día va a la %s · %s. Desde el %s, cada día va en dos asientos: la factura del día y su cobro.',
-                    v_a.code, coalesce(v_a.plain_name, v_a.name), to_char(v_desde, 'DD/MM/YYYY')));
+                    v_a.code, v_a.name, to_char(v_desde, 'DD/MM/YYYY')));
 end $$;
 
 
