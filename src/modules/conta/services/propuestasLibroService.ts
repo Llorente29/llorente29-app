@@ -423,6 +423,13 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       deLoAprendido = aprendido.get(sup) ?? null
       if (deLoAprendido?.cuenta) gasto = String(deLoAprendido.cuenta)
     }
+    // R14 · Sin historia en esta empresa: la cuenta propuesta desde la primera factura (la de la
+    // plataforma, la de sus facturas en otra sociedad o la de lo que vende), en ámbar con su porqué.
+    let propuestoR14: Fila | null = null
+    if (!gasto && cuentaProv && (soloFactura || ver)) {
+      propuestoR14 = await rpc<Fila>('conta_gasto_propuesto', { p_company: companyId, p_supplier: sup, p_invoice: String(f.id) }).catch(() => null)
+      if (propuestoR14?.cuenta) gasto = String(propuestoR14.cuenta)
+    }
     const que = `Factura ${s(prov.name) ?? 'de proveedor'}${f.invoice_number ? ` · ${f.invoice_number}` : ''}`
     if (!cuentaProv) { r.sinPropuesta.push({ id: String(f.id), que, porque: 'El proveedor no tiene su cuenta (Contabilidad de su ficha).' }); continue }
     const rr = ret.find((x) => String(x.id) === s(f.withholding_rate_id))
@@ -511,6 +518,10 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     if (deLoAprendido?.cuenta) {
       res.propuesta.razones.push({ decision: `Gasto: ${s(deLoAprendido.nombre) ?? 'la cuenta'} · ${deLoAprendido.cuenta}`, porque: `${s(deLoAprendido.porque) ?? ''} (${s(deLoAprendido.origen) ?? 'aprendido'})` })
       if (deLoAprendido.confianza !== 'seguro') res.propuesta.confianza = peor(res.propuesta.confianza, 'probable')
+    }
+    if (propuestoR14?.cuenta) {
+      res.propuesta.razones.push({ decision: `Gasto: ${s(propuestoR14.nombre) ?? 'la cuenta'} · ${propuestoR14.cuenta}`, porque: s(propuestoR14.porque) ?? 'Propuesta' })
+      res.propuesta.confianza = peor(res.propuesta.confianza, 'probable')
     }
     // D03 · 0790: el gasto repartido y el asiento a mano de la ficha mandan sobre lo aprendido.
     const reparto = ((f.supplier_invoice_expense ?? []) as Fila[]).sort((a, b) => n(a.position) - n(b.position))
