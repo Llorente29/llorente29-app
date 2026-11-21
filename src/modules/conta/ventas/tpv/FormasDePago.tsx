@@ -28,6 +28,9 @@ import {
   type AsientoDelDia, type CuentaElegible, type DiaEjemplo, type Eleccion, type FacturaDelDia, type Formas, type LineaDiaEjemplo,
 } from '@/modules/conta/services/tpvSubirService'
 import { VentanaAncha } from './VentanaAncha'
+import { CrearDesdeBuscador } from '@/modules/conta/plan/CrearDesdeBuscador'
+import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import type { CuentaHoja } from '@/modules/conta/diseno/plantillas/valores'
 
 const clave = (f: Pick<FormaCuenta, 'forma' | 'canal'>) => `${f.forma.trim().toLowerCase()}|${f.canal ?? ''}`
 const FACTURA = '__factura_del_dia__'
@@ -90,6 +93,14 @@ export function FormasDePago({ companyId, quien, diaId = null, alCerrar, alGuard
   const [guardando, setGuardando] = useState(false)
   const [dandoDeAlta, setDandoDeAlta] = useState(false)
   const [hecho, setHecho] = useState<string | null>(null)
+  const { accountId } = useCuentaConta()
+  // X20 · Lo que no está en el buscador se crea aquí mismo (código y nombre) y queda elegido.
+  const crear = (q: string, elegir: (c: CuentaHoja) => void) => (
+    <CrearDesdeBuscador accountId={accountId} companyId={companyId} q={q} quien={quien}
+      alCrear={(c) => { const nueva: CuentaElegible = { id: c.id, codigo: c.code, nombre: c.name }; setCuentas((xs) => [...xs, nueva]); elegir(nueva) }} />
+  )
+  /** La cuenta elegida en el buscador, por su id (una recién creada aún no está en `cuentas`). */
+  const idDe = (c: CuentaHoja) => ('id' in c ? (c as CuentaElegible).id : cuentas.find((y) => y.codigo === c.codigo)?.id ?? null)
 
   useEffect(() => {
     let vivo = true
@@ -201,7 +212,7 @@ export function FormasDePago({ companyId, quien, diaId = null, alCerrar, alGuard
                     {buscando === FACTURA && (
                       <BuscarCuentaHoja cuentas={cuentas} inicial=""
                         alElegir={(c) => { setFacturaElegida(c.codigo); setBuscando(null); setHecho(null) }}
-                        alCerrar={() => setBuscando(null)} />
+                        alCerrar={() => setBuscando(null)} crear={crear} />
                     )}
                   </td>
                   <td className="tpv-cifra">{cifra(factura.factura?.mes ?? 0)}</td>
@@ -250,8 +261,8 @@ export function FormasDePago({ companyId, quien, diaId = null, alCerrar, alGuard
                       </button>
                       {buscando === k && (
                         <BuscarCuentaHoja cuentas={cuentas} inicial=""
-                          alElegir={(c) => { const x = cuentas.find((y) => y.codigo === c.codigo); setEleccion((e) => ({ ...e, [k]: x?.id ?? null })); setBuscando(null); setHecho(null) }}
-                          alCerrar={() => setBuscando(null)} />
+                          alElegir={(c) => { setEleccion((e) => ({ ...e, [k]: idDe(c) })); setBuscando(null); setHecho(null) }}
+                          alCerrar={() => setBuscando(null)} crear={crear} />
                       )}
                     </td>
                     <td className="tpv-cifra">{cifra(f.en_mes)}</td>
