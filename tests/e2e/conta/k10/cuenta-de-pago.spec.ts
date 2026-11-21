@@ -87,10 +87,11 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
 
     // ── 5 · La barra, con el logo. ──
     const logo = await logoBien(page, '[data-prueba="logo-barra"]')
-    const barra = await page.locator('[data-prueba="logo-barra"]').evaluate((el) => (el.closest('header, nav, [class*="arriba"]') ?? el.parentElement!).getBoundingClientRect().height)
-    expect(logo.alto, 'el logo cabe en la barra').toBeLessThanOrEqual(barra)
-    if (t === 1) { await cargada(page, 'la barra'); await page.screenshot({ path: `${DIR}/barra-${ancho}.png`, clip: { x: 0, y: 0, width: ancho, height: Math.ceil(barra) + 8 } }) }
-    else await page.screenshot({ path: `${DIR}/barra-${ancho}.png`, clip: { x: 0, y: 0, width: ancho, height: Math.ceil(barra) + 8 } })
+    // La barra es la fila que lleva el logo (su padre): el logo cabe en ella, y la captura llega hasta su borde de abajo.
+    const barra = await page.locator('[data-prueba="logo-barra"]').evaluate((el) => { const r = el.parentElement!.getBoundingClientRect(); return { alto: r.height, abajo: r.bottom } })
+    expect(logo.alto, 'el logo cabe en la barra').toBeLessThanOrEqual(barra.alto)
+    if (t === 1) await cargada(page, 'la barra')
+    await page.screenshot({ path: `${DIR}/barra-${ancho}.png`, clip: { x: 0, y: 0, width: ancho, height: Math.ceil(barra.abajo) + 4 } })
 
     // ── 1 · En la ficha del proveedor, «Cuenta de pago»: la 43000002. ──
     await page.goto(`/conta/clientes-y-proveedores/proveedor/${PROVEEDOR(t)}/pago`, { timeout: 30_000 })
@@ -125,12 +126,16 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     expect(await loQueSeCorta(page, FICHA), `lo que se corta, la factura, a ${ancho}`).toEqual([])
     await page.screenshot({ path: `${DIR}/factura-${ancho}.png` })
 
-    // ── 4 · El proveedor, por su código. ──
+    // ── 4 · El proveedor, por su código: el del OTRO proveedor de prueba (la casilla ya enseña el código del suyo,
+    //    y escribir lo mismo no abre la lista: e2e 44924628489). Solo en la lista del proveedor (no los <select> del IVA). ──
+    const otro = t === 1 ? 2 : 1
     const prov = ficha(page).locator('#kf-proveedor')
-    await prov.fill(SUBCUENTA(t))
-    await expect(page.getByRole('option').first()).toContainText(NOMBRE(t), { timeout: 30_000 })
-    await expect(page.getByRole('option').first()).toContainText(SUBCUENTA(t))
-    await page.keyboard.press('Escape')
+    await prov.fill('')
+    await prov.pressSequentially(SUBCUENTA(otro))
+    const opciones = ficha(page).locator('#kf-proveedor-lista [role="option"]')
+    await expect(opciones.first()).toContainText(NOMBRE(otro), { timeout: 30_000 })
+    await expect(opciones.first()).toContainText(SUBCUENTA(otro))
+    await prov.press('Escape')
 
     expect(errores, 'errores de la página').toEqual([])
   })
