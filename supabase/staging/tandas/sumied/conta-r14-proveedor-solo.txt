@@ -1,8 +1,11 @@
 # R14 · el proveedor nuevo se da de alta solo, con su cuenta de gasto.
-# 1110 (solo añade: desde la rama, de verdad, W05: la e2e usa sus funciones) y, justo
-# detrás, la semilla de su e2e (W07: lo que va delante de una semilla va de verdad).
-supabase/migrations/20261121T1110_r14_proveedor_solo_anade.sql
+# La semilla de su e2e, DELANTE (W07): su función solo llama a _conta_proveedor_solo al
+# ejecutarse, y esa ya está de verdad en staging (la 1110 fue de verdad en el primer push,
+# 61b5ceb7). Detrás de la 1110 no podía ir de verdad: desde que la 1110 cambió (el
+# combustible a la 602), en staging ya «reemplaza funciones» y solo va en ROLLBACK.
 supabase/seeds/conta/seed_r14_proveedor_solo_staging.sql
+# 1110 (solo añade en producción; en staging, ya existe: en ROLLBACK).
+supabase/migrations/20261121T1110_r14_proveedor_solo_anade.sql
 # 1120 (cambia: el disparador al leer; desde la rama, solo en ROLLBACK).
 supabase/migrations/20261121T1120_r14_proveedor_solo_al_leer.sql
 # 1130 (escribe: completa las leídas; desde la rama, solo en ROLLBACK).
