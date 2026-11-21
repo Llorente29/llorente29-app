@@ -207,8 +207,10 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const aprendido = useUltimo(useLeer(empresa && provId && !aMano ? () => gastoAprendido(empresa, provId) : null, `${empresa}:${provId}:${invoiceId}:aprendido:${vuelta}`).datos, `${id}:${provId}`)
   const sinPropuesta = aMano || propuesta === null
   // R14 · Lo que hizo Sumied con el proveedor al leerla, y la cuenta propuesta sin historial (en ámbar, con su porqué).
+  // La clave cambia cuando llega lo aprendido: useLeer solo vuelve a leer si cambia la clave, y al pintarse la
+  // primera vez lo aprendido aún no está (sin esto, la propuesta no se pedía nunca: e2e 1670).
   const solo = useLeer(id && !aMano ? () => proveedorSolo(id) : null, `${id}:solo:${vuelta}`).datos ?? null
-  const propuestoGasto = useLeer(empresa && provId && !aMano && aprendido && !aprendido.cuenta ? () => leerGastoPropuesto(empresa, provId, id ?? null) : null, `${empresa}:${provId}:${invoiceId}:propuesto:${vuelta}`).datos ?? null
+  const propuestoGasto = useLeer(empresa && provId && !aMano && aprendido && !aprendido.cuenta ? () => leerGastoPropuesto(empresa, provId, id ?? null) : null, `${empresa}:${provId}:${invoiceId}:propuesto:${aprendido ? aprendido.cuenta ?? 'sin-historia' : 'esperando'}:${vuelta}`).datos ?? null
   // Una vez por empresa: la subcuenta del proveedor sale de delProveedor (ya leído), no de volver a leer el contexto entero.
   const aManoCuentas = useLeer(accountId && empresa && sinPropuesta ? () => cuentasAMano(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-a-mano`).datos ?? null
 
