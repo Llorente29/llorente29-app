@@ -31,8 +31,14 @@
 // el mismo camino que payroll-inbound (employee-documents y payroll-extract en
 // modo interno).
 //
-// Mientras Julio no dé de alta el dominio entrada.folvy.app en Resend, aquí no
-// llega nada; y aunque llegara, las direcciones nacen apagadas.
+// E01 · LAS DOS CUENTAS DE RESEND (16/11): Folvy (entrada.folvy.app:
+// RESEND_FACTURAS_WEBHOOK_SECRET y RESEND_API_KEY) y Sumied (entrada.sumied.com:
+// RESEND_SUMIED_FACTURAS_WEBHOOK_SECRET y RESEND_SUMIED_API_KEY) avisan aquí. Cada
+// aviso es de la cuenta cuyo secreto valida la firma (nunca se elige por el
+// destinatario), y lo que se pida después de ese correo se pide con la clave de
+// esa cuenta, que queda apuntada en inbound_email_log.resend_account. «Volver a
+// leer» y «Poner el PDF» lo piden otra vez a esa misma; los de antes, a la de
+// Folvy. Basta una pareja completa para arrancar.
 //
 // verify_jwt = false (config.toml): es un webhook externo; la seguridad la da
 // la firma de svix, como en payroll-inbound.
@@ -40,13 +46,19 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as XLSX from "npm:xlsx@0.18.5";
 import { corsHeaders } from "../_shared/cors.ts";
-import { comprobarFirma, recibirCorreo, releerCorreos, resumenReleidos, type AdjuntoResend, type ClaseDireccion, type CorreoResend, type PuertoEntrada, type QueEs, type Sobre } from "../_shared/facturasEntrada.ts";
+import { jsPDF } from "npm:jspdf@4.2.1";
+import { nombrePdfCorreo, pdfDelCorreo, type PdfMinimo } from "../_shared/correoPdf.ts";
+import { falloDeLlamada, type ClaseFallo } from "../_shared/lecturaFallo.ts";
+import { cuentaDelAviso, parejaDelCorreo, parejasResend, ponerPapelesDelCorreo, recibirCorreo, releerCorreos, resumenPapeles, resumenReleidos, type AdjuntoResend, type ClaseDireccion, type CorreoResend, type PapelPuesto, type ParejaResend, type PuertoEntrada, type QueEs, type Releido, type Sobre } from "../_shared/facturasEntrada.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-const RESEND = Deno.env.get("RESEND_API_KEY") ?? "";
-const SECRETO = Deno.env.get("RESEND_FACTURAS_WEBHOOK_SECRET") ?? "";
+// E01 · Las cuentas de Resend configuradas (solo las parejas completas).
+const PAREJAS = parejasResend({
+  folvy: { secreto: Deno.env.get("RESEND_FACTURAS_WEBHOOK_SECRET"), clave: Deno.env.get("RESEND_API_KEY") },
+  sumied: { secreto: Deno.env.get("RESEND_SUMIED_FACTURAS_WEBHOOK_SECRET"), clave: Deno.env.get("RESEND_SUMIED_API_KEY") },
+});
 const BUCKET = "receipt-uploads";
 const BUCKET_NOMINAS = "employee-documents"; // el de payroll-inbound
 
@@ -54,8 +66,10 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
 
 // El puerto de la entrada: la base, Resend y el almacén (lo usan el aviso de Resend y «Volver a leer»).
+// E01 · Con la cuenta de Resend del correo: su clave para todo lo que se pide, y su nombre en el registro.
 // deno-lint-ignore no-explicit-any
-function puertoDe(sb: any): PuertoEntrada {
+function puertoDe(sb: any, pareja: ParejaResend): PuertoEntrada {
+  const RESEND = pareja.clave;
   const rpc = async <T>(f: string, a: Record<string, unknown>): Promise<T> => {
     const { data, error } = await sb.rpc(f, a);
     if (error) throw new Error(`${f}: ${error.message}`);
@@ -73,7 +87,7 @@ function puertoDe(sb: any): PuertoEntrada {
     registrarCorreo: async (r) => {
       // Si se enrutó por el sobre (el To: era otro), queda dicho en el detalle.
       const detalle = r.porSobre ? { ...(r.detalle as Record<string, unknown> ?? {}), por_sobre: true } : r.detalle;
-      await rpc("conta_entrada_correo", { p: { email_id: r.emailId, to: r.to, from: r.from, subject: r.subject, company_id: r.companyId, resultado: r.resultado, detalle } });
+      await rpc("conta_entrada_correo", { p: { email_id: r.emailId, to: r.to, from: r.from, subject: r.subject, company_id: r.companyId, resultado: r.resultado, detalle, cuenta_resend: pareja.cuenta } });
     },
     adjuntos: async (id) => {
       const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}/attachments`, { headers: { Authorization: `Bearer ${RESEND}` } });
@@ -150,6 +164,27 @@ function puertoDe(sb: any): PuertoEntrada {
       const h = libro.Sheets[libro.SheetNames[0]];
       return h ? XLSX.utils.sheet_to_json(h, { defval: null }) as Record<string, unknown>[] : [];
     },
+    // S01p·20 · 1 · La fila «por aclarar» de un correo de plataforma del que no salió nada (regla 8).
+    sinFactura: async (x) => {
+      const r = await rpc<{ id: string; ya_estaba: boolean }>("conta_entrada_sin_factura", {
+        p: { account_id: x.accountId, company_id: x.companyId, email_id: x.emailId, to: x.to, from: x.from, subject: x.subject, recibido: x.recibido, porque: x.porque },
+      });
+      return { id: r.id, yaEstaba: r.ya_estaba };
+    },
+    // S01p·20 · 1b · El PDF de la factura escrita en el correo (Just Eat): se hace del correo, se guarda
+    // en receipt-uploads junto a lo demás que llegó por correo y queda como el papel de su factura.
+    papelDelCorreo: async (x) => {
+      const bytes = pdfDelCorreo(jsPDF as unknown as new (o?: Record<string, unknown>) => PdfMinimo, { asunto: x.asunto, de: x.de, recibido: x.recibido, html: x.html, text: x.text });
+      const ruta = `${x.accountId}/_correo/${x.emailId.replace(/[^A-Za-z0-9-]/g, "")}/${nombrePdfCorreo(x.numero, x.asunto)}`;
+      const { error } = await sb.storage.from(BUCKET).upload(ruta, bytes, { contentType: "application/pdf", upsert: true });
+      if (error) throw new Error(`no se ha podido guardar el PDF: ${error.message}`);
+      const r = await rpc<{ puesto: boolean; texto: string }>("conta_factura_papel_del_correo", { p_invoice: x.facturaId, p_ruta: ruta });
+      return { puesto: r.puesto, texto: r.texto };
+    },
+    // S01p·20 · 1 · Al volver a leer el correo y entrar, su fila sale de «Por aclarar».
+    sinFacturaResuelta: async (companyId, emailId) => {
+      await rpc("conta_entrada_sin_factura_resuelta", { p_company: companyId, p_email_id: emailId, p_texto: null });
+    },
     // S01j · La factura de comisión escrita en el correo (Just Eat), como recibida.
     facturaComision: async ({ settlementId, datos, emailId }) => {
       const r = await rpc<{ factura_id: string | null; estado: string; texto: string }>("conta_comision_del_correo", { p_settlement: settlementId, p: { ...datos, email_id: emailId } });
@@ -157,20 +192,64 @@ function puertoDe(sb: any): PuertoEntrada {
     },
     leer: async (inboxId) => {
       const { data: l } = await sb.from("document_inbox").select("account_id, file_path").eq("id", inboxId).single();
-      const r = await fetch(`${SUPABASE_URL}/functions/v1/ocr-albaran`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICIO}`, "x-internal-key": SERVICIO },
-        body: JSON.stringify({ account_id: l!.account_id, file_paths: [l!.file_path], modo: "factura" }),
-      });
-      const j = await r.json().catch(() => ({})) as { session_id?: string; error?: string };
-      if (!r.ok || !j.session_id) {
-        await sb.from("document_inbox").update({ status: "error", reason: `No se ha podido leer: ${j.error ?? r.status}`, updated_at: new Date().toISOString() }).eq("id", inboxId);
-        return { estado: "error", texto: `No se ha podido leer (${j.error ?? r.status}).` };
+      // E02 · Si la llamada no contesta (red, la plataforma corta la función), es una caída, no un 500 de todo el correo.
+      let http: number | null = null;
+      let j: { session_id?: string; error?: string; clase?: string; causa?: string } = {};
+      try {
+        const r = await fetch(`${SUPABASE_URL}/functions/v1/ocr-albaran`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICIO}`, "x-internal-key": SERVICIO },
+          body: JSON.stringify({ account_id: l!.account_id, file_paths: [l!.file_path], modo: "factura" }),
+        });
+        http = r.status;
+        j = await r.json().catch(() => ({})) as typeof j;
+        if (!r.ok) j.session_id = undefined;
+      } catch { http = null; }
+      if (!j.session_id) {
+        // E02 · La clase del fallo, en la llegada: la lectura está caída o este documento no se ha podido leer.
+        const f = falloDeLlamada(http, j);
+        const motivo: Record<ClaseFallo, string> = {
+          caida: "No se ha podido leer: en ese momento no se podía leer ninguna factura. Está guardada.",
+          documento: "No se ha podido leer este documento.",
+        };
+        await sb.from("document_inbox").update({
+          status: "error", reason: motivo[f.clase], read_failure: f.clase, read_failure_cause: f.causa, read_failure_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq("id", inboxId);
+        return { estado: "error", texto: motivo[f.clase] };
       }
       const f = await rpc<{ estado: string; texto: string }>("conta_factura_desde_lectura", { p_inbox: inboxId, p_session: j.session_id });
       return { estado: f.estado, texto: f.texto };
     },
   };
+}
+
+// E01 · Pedir otra vez un correo a la cuenta de Resend por la que entró.
+const SIN_CUENTA = "Este correo entró por una cuenta de correo que no está configurada: no se puede volver a pedir.";
+function pedirA(pareja: ParejaResend) {
+  return async (id: string) => {
+    const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${pareja.clave}` } });
+    if (r.status === 404 || r.status === 410) return null;
+    if (!r.ok) throw new Error(`Resend contesta ${r.status}`);
+    return { ...(await r.json() as CorreoResend & Sobre), email_id: id };
+  };
+}
+// E01 · Los correos, agrupados por la cuenta por la que entraron (inbound_email_log.resend_account; vacía = Folvy).
+// Sin la columna (la tanda del E01 aún sin aplicar), todos de Folvy, como antes.
+// deno-lint-ignore no-explicit-any
+async function porCuenta(sb: any, ids: string[]): Promise<Map<ParejaResend | null, string[]>> {
+  const apuntada = new Map<string, string | null>();
+  if (ids.length) {
+    const { data, error } = await sb.from("inbound_email_log").select("email_id, resend_account").in("email_id", ids);
+    if (error && error.code !== "42703") throw new Error(`inbound_email_log: ${error.message}`);
+    for (const x of (data ?? []) as { email_id: string; resend_account: string | null }[]) apuntada.set(x.email_id, x.resend_account);
+  }
+  const grupos = new Map<ParejaResend | null, string[]>();
+  for (const id of ids) {
+    const p = parejaDelCorreo(apuntada.get(id) ?? null, PAREJAS);
+    grupos.set(p, [...(grupos.get(p) ?? []), id]);
+  }
+  return grupos;
 }
 
 // S01j · «Volver a leer» desde Correo de facturas (POST ?releer=1): con la sesión de la
@@ -185,36 +264,69 @@ async function releer(req: Request): Promise<Response> {
   const comoPersona = createClient(SUPABASE_URL, ANON, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${jwt}` } } });
   const { data: ids, error } = await comoPersona.rpc("conta_correo_releer_lista", { p_company: b.company_id ?? null, p_email_ids: b.email_ids ?? null, p_remitente: b.remitente ?? null });
   if (error) return json(error.code === "42501" ? 403 : 400, { error: error.message });
-  const puerto = puertoDe(createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } }));
-  const rs = await releerCorreos((ids as string[] | null) ?? [], puerto, async (id) => {
-    const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${RESEND}` } });
-    if (r.status === 404 || r.status === 410) return null;
-    if (!r.ok) throw new Error(`Resend contesta ${r.status}`);
-    return { ...(await r.json() as CorreoResend & Sobre), email_id: id };
-  });
+  const sb = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
+  const lista = (ids as string[] | null) ?? [];
+  // E01 · Cada correo, a la cuenta de Resend por la que entró.
+  const rs: Releido[] = [];
+  for (const [pareja, grupo] of await porCuenta(sb, lista)) {
+    if (!pareja) { rs.push(...grupo.map((id) => ({ emailId: id, estado: "error" as const, resultado: null, texto: SIN_CUENTA }))); continue; }
+    rs.push(...await releerCorreos(grupo, puertoDe(sb, pareja), pedirA(pareja)));
+  }
+  rs.sort((a, b) => lista.indexOf(a.emailId) - lista.indexOf(b.emailId));
   return json(200, { texto: resumenReleidos(rs), correos: rs });
+}
+
+// S01p·20 · 1b · «Poner el PDF a las facturas de Just Eat que no lo tienen» (POST ?pdfs=1), desde
+// Correo de facturas, con la sesión de la persona. La base dice cuáles (conta_correo_papeles_que_faltan:
+// administración o encargado; solo las que entraron por correo como liquidación y siguen sin papel).
+// Cada correo se pide otra vez a Resend; solo se pone el PDF, nada más.
+async function papeles(req: Request): Promise<Response> {
+  const jwt = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!jwt) return json(401, { error: "Falta la sesión." });
+  let b: { company_id?: string };
+  try { b = await req.json(); } catch { return json(400, { error: "cuerpo no es JSON" }); }
+  const comoPersona = createClient(SUPABASE_URL, ANON, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${jwt}` } } });
+  const { data, error } = await comoPersona.rpc("conta_correo_papeles_que_faltan", { p_company: b.company_id ?? null });
+  if (error) return json(error.code === "42501" ? 403 : 400, { error: error.message });
+  const filas = (data as { email_id: string; factura_id: string; numero: string | null; account_id: string }[] | null) ?? [];
+  const sb = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
+  const destino = { accountId: filas[0]?.account_id ?? "", companyId: b.company_id ?? "" };
+  // E01 · Cada correo, a la cuenta de Resend por la que entró.
+  const rs: PapelPuesto[] = [];
+  for (const [pareja, grupo] of await porCuenta(sb, filas.map((f) => f.email_id))) {
+    const suyas = filas.filter((f) => grupo.includes(f.email_id));
+    if (!pareja) { rs.push(...suyas.map((f) => ({ emailId: f.email_id, facturaId: f.factura_id, estado: "error" as const, texto: SIN_CUENTA }))); continue; }
+    rs.push(...await ponerPapelesDelCorreo(suyas.map((f) => ({ emailId: f.email_id, facturaId: f.factura_id, numero: f.numero })), destino, puertoDe(sb, pareja), pedirA(pareja)));
+  }
+  const orden = filas.map((f) => f.factura_id);
+  rs.sort((a, b) => orden.indexOf(a.facturaId) - orden.indexOf(b.facturaId));
+  return json(200, { texto: resumenPapeles(rs), facturas: rs });
 }
 
 Deno.serve(async (req) => {
   // S01j · «Volver a leer» llega de la pantalla (?releer=1), con su CORS; el aviso de Resend, sin él.
-  const esReleer = new URL(req.url).searchParams.get("releer") === "1";
+  // S01p·20 · 1b · Y «Poner el PDF…» (?pdfs=1), igual.
+  const esPapeles = new URL(req.url).searchParams.get("pdfs") === "1";
+  const esReleer = new URL(req.url).searchParams.get("releer") === "1" || esPapeles;
   if (esReleer && req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "usa POST" });
-  if (!SECRETO || !RESEND || !SERVICIO) return json(500, { error: "falta configurar el secreto del webhook, la clave de Resend o la de servicio" });
+  // E01 · Basta una cuenta de Resend completa (secreto y clave), no las dos.
+  if (!PAREJAS.length || !SERVICIO) return json(500, { error: "falta configurar una cuenta de Resend (el secreto del webhook y su clave) o la clave de servicio" });
   if (esReleer) {
-    const r = await releer(req);
+    const r = esPapeles ? await papeles(req) : await releer(req);
     return new Response(r.body, { status: r.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   const cuerpo = await req.text();
-  const mal = await comprobarFirma(SECRETO, { id: req.headers.get("svix-id"), timestamp: req.headers.get("svix-timestamp"), firma: req.headers.get("svix-signature") }, cuerpo, Math.floor(Date.now() / 1000));
-  if (mal) return json(401, { error: mal });
+  // E01 · La cuenta del aviso es la cuyo secreto valida la firma; si ninguna, 401 como siempre.
+  const { pareja, mal } = await cuentaDelAviso(PAREJAS, { id: req.headers.get("svix-id"), timestamp: req.headers.get("svix-timestamp"), firma: req.headers.get("svix-signature") }, cuerpo, Math.floor(Date.now() / 1000));
+  if (!pareja) return json(401, { error: mal });
 
   let ev: { type?: string; data?: CorreoResend & Sobre };
   try { ev = JSON.parse(cuerpo); } catch { return json(400, { error: "cuerpo no es JSON" }); }
   if (ev.type !== "email.received" || !ev.data?.email_id) return json(200, { ignorado: ev.type ?? "sin tipo" });
 
-  const puerto = puertoDe(createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } }));
+  const puerto = puertoDe(createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } }), pareja);
 
   try {
     const r = await recibirCorreo(ev.data, puerto);

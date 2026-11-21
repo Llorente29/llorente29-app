@@ -41,9 +41,16 @@ describe('el informe de la noche', () => {
     expect(f.some((x) => x.fichero.endsWith('s01g/ancho.spec.ts'))).toBe(false)
   })
 
-  it('con un fallo de verdad: avisar a la primera, aunque haya otros de staging', () => {
+  it('Q02: con un fallo de verdad y otros de staging, se repiten los de staging (una vez); el aviso lo da la repetición', () => {
     const d = decidir({ informe: INFORME, trozos: 'failure', repeticion: '' })
-    expect(d.accion).toBe('avisar')
+    expect(d.accion).toBe('repetir')
+    expect(d.ficheros).toEqual(['tests/e2e/conta/b01/conciliar.spec.ts', 'tests/e2e/conta/compras/compras.spec.ts'])
+    expect(d.porque).toMatch(/los otros 1 en rojo se avisan al acabar la repetición/)
+  })
+
+  it('sin nada de staging, avisar a la primera', () => {
+    const sinStaging = { ...INFORME, suites: INFORME.suites.filter((s: { file: string }) => /despacho/.test(s.file)) }
+    expect(decidir({ informe: sinStaging, trozos: 'failure', repeticion: '' }).accion).toBe('avisar')
   })
 
   it('si todo lo que falló es de staging: repetir esos ficheros, una vez', () => {

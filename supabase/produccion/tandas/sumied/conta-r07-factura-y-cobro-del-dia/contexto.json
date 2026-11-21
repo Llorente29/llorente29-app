@@ -1,0 +1,21 @@
+{
+ "_que": "R07 · el día en dos asientos · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging), en SOLO LECTURA: esta sesión no lee producción. 1405 añade conta_tpv_factura_cuenta; 0810 añade conta_dia_cobro, la columna desde (admite nulos) y sus funciones; 0900 amplía el CHECK de journal_entry.source_type, pone un disparador en journal_entry y cambia en caliente cinco funciones (misma firma, por trozos exactos, con respaldo). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-20T08:30Z",
+ "tanda": {
+  "supabase/migrations/20261119T1405_r07_cuenta_factura_del_dia.sql": "ed546b15762d5b1395f4a325ca5df2f5",
+  "supabase/migrations/20261120T0810_r07_factura_del_dia_anade.sql": "91e83f52722d0b1c4f312dd6b071ddd6",
+  "supabase/migrations/20261120T0900_r07_factura_y_cobro_del_dia.sql": "0005caac86fd606d304bdccdc9d4f367"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

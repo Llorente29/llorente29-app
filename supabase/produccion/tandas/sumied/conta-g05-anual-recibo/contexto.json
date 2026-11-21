@@ -1,0 +1,21 @@
+{
+ "_que": "G05 · Una anual, entera y solo en su mes · contexto de producción, medido en SOLO LECTURA el 10/11 a las 16:22Z (analizar.mjs sql-contexto, con el camino del pedido del workflow). conta_linea_al_mes existe con la misma firma (se cambia en caliente, con su respaldo y su prueba; huella de antes bd10750c…), sin sobrecargas, sin disparadores ni trabajos de cron que la usen. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T16:22Z",
+ "tanda": {
+  "supabase/migrations/20261110T1622_g05_anual_en_su_mes.sql": "66bd804187e5661252fc8e2bd2676322"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_linea_al_mes(uuid,date)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

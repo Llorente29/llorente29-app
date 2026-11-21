@@ -1,0 +1,11 @@
+# E04 · La factura de otra sociedad del grupo se pasa sola. La 1950 solo añade (va de
+# verdad desde la rama, W05: la e2e usa sus funciones) y, justo detrás, la semilla de
+# su e2e (W07: lo que va delante de una semilla tiene que ir de verdad). La 1951
+# cambia en caliente y la 1952 escribe: las dos, solo en ROLLBACK hasta el real. Su
+# prueba (ROLLBACK: se pasa sola con su llegada, «Deshacer», lo que no se mueve,
+# «Pasarla» sobre lo común, las que esperaban al aplicar y las vueltas atrás).
+supabase/migrations/20261118T1950_e04_pasar_sola.sql
+supabase/seeds/conta/seed_e04_otra_sociedad_sola_staging.sql
+supabase/migrations/20261118T1951_e04_pasar_sola_al_leer.sql
+supabase/migrations/20261118T1952_e04_las_que_esperan_se_pasan.sql
+supabase/staging/sql/20261118_e04_pasar_sola_prueba.sql

@@ -1,0 +1,34 @@
+# B01r·24 · Los 6 de noviembre que la 0155 dejó fuera, ya decididos por Julio
+# (13/11), y la recarga de Catcher de hoy. Rama claude/b01-noviembre-fuera. Se
+# ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0955  Como Julio y por el camino de la aplicación (bank_casar, _dl1_validar,
+#         bank_ignorar), en Foodint:
+#         · casa los tres recobros de la línea Click & Pay como los de agosto
+#           (52010000; el de 30,00, 62600000), el butano del 08/11 (62800000,
+#           sin justificante), el pago a QBO del 12/11 (41000008, sin factura
+#           enlazada) y la recarga de Catcher del 13/11 (40700001), y valida sus
+#           asientos;
+#         · aparta el −1.210,00 del 02/11: el traspaso ya está en el libro por su
+#           entrada en Revolut (lo comprueba antes).
+#         Noviembre (01/11–13/11) queda sin nada por casar, y cada 572, igual que
+#         su banco. Nada del 1T al 3T cambia.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/b01r24-noviembre-fuera.sql
+supabase/migrations/20261113T0955_b01r24_noviembre_fuera.sql
+sin-vuelta-atras: supabase/migrations/20261113T0955_b01r24_noviembre_fuera.sql · motivo: un asiento validado se anula con un contraasiento, un casado se deshace en Bancos y un apartado, con «Deshacer».
+esperado: b01r24-noviembre-fuera · Movimientos de noviembre (01/11–13/11) sin casar = 0
+esperado: b01r24-noviembre-fuera · Los 6 de la B01r24 casados con su asiento validado, menos 6 = 0
+esperado: b01r24-noviembre-fuera · Apartados como traspaso a Revolut ya apuntado, menos 1 = 0
+esperado: b01r24-noviembre-fuera · Lo que apuntan los 6 en la 52010000, menos 617,43 = 0.00
+esperado: b01r24-noviembre-fuera · Lo que apuntan los 6 en la 62600000, menos 30,00 = 0.00
+esperado: b01r24-noviembre-fuera · Lo que apuntan los 6 en la 62800000, menos 18,00 = 0.00
+esperado: b01r24-noviembre-fuera · Lo que apuntan los 6 en la 41000008, menos 537,60 = 0.00
+esperado: b01r24-noviembre-fuera · Lo que apuntan los 6 en la 40700001, menos 200,00 = 0.00
+esperado: b01r24-noviembre-fuera · 57200001 a 13/11 menos el banco = 0.00
+esperado: b01r24-noviembre-fuera · 57200002 a 11/11 menos el banco = 0.00
+esperado: b01r24-noviembre-fuera · 57200003 a 09/11 menos el banco = 0.00
+esperado: b01r24-noviembre-fuera · 57200004 a 13/11 menos el banco = 0.00
+esperado: b01r24-noviembre-fuera · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
+esperado: b01r24-noviembre-fuera · IVA de Foodint 477 del 1T al 3T de 2026 = como antes

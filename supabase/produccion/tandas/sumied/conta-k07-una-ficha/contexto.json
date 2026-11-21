@@ -1,0 +1,19 @@
+{
+ "_que": "K07 · cambiar el documento de una recibida contabilizada · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción (esta sesión no lee producción). 2004 añade una tabla y una función nuevas; no cambia ninguna que exista. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-20T19:07Z",
+ "tanda": {
+  "supabase/migrations/20261120T2004_k07_cambiar_documento.sql": "23443845c542034b872a0ccc75742141"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

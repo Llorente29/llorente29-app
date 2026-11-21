@@ -1,0 +1,9 @@
+# B01r·26 · El traspaso del mes con los dos Excel y su PDF: dónde queda cada
+# subcuenta que Sumied crea en Diez con «Crearlas en Diez». Rama
+# claude/b01-traspaso-excel. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   1850  SOLO AÑADE: conta_diez_subcuenta_creada (la escribe solo el servidor;
+#         la leen los de la cuenta). Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/b01r26-subcuentas-creadas.sql
+supabase/migrations/20261113T1850_b01r26_subcuentas_creadas.sql

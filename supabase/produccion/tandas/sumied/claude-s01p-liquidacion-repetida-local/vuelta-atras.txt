@@ -1,0 +1,3 @@
+# S01p·21b · la vuelta atrás: conta_liquidacion_dejar_esta desde su respaldo.
+cuenta: scripts/conta/produccion/cuentas/s01p-liquidacion-repetida-local.sql
+supabase/vuelta-atras/20261113T1914_s01p_liquidacion_repetida_local.down.sql

@@ -1,0 +1,10 @@
+# S01p·18 · punto 6 · Las liquidaciones de Uber sin tienda asignada, en la pantalla (Julio, 13/11).
+# Rama claude/s01p-uber-sin-tienda. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1136  conta_liquidaciones_sin_tienda y conta_liquidacion_asignar_tienda (añaden): las del mes
+#         sin local o marca, con lo que les da su tienda, y su botón «Asignar», una a una.
+#
+# Solo añade. Nada en el camino del pedido. No mueve ninguna fila: las 8 de Foodint las arregla
+# D en su DL1_24 (o quien pulse «Asignar»). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-uber-sin-tienda.sql
+supabase/migrations/20261113T1136_s01p_uber_sin_tienda.sql

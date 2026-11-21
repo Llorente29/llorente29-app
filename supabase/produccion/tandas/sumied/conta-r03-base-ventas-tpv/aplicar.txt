@@ -1,0 +1,15 @@
+# R03 · La base de las ventas de un TPV de fuera (Revo, el primero). Rama
+# conta/r03-base-ventas-tpv. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   0950  Cinco tablas nuevas (conta_tpv_dia, _documento, _impuesto, _cobro y
+#         _forma_cuenta), con sus permisos por fila, y el interruptor
+#         company_tax_profile.ventas_por_dia (apagado en todas). Solo añade.
+#   0951  conta_tpv_dia_guardar (la única puerta de las tablas del día),
+#         conta_tpv_dia_leer y _conta_tpv_lista. Solo añade; no las llama nadie.
+#
+# Nada en el camino del pedido: ni sale ni sales_* (las tablas van con conta_tpv_).
+# El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r03-ventas-tpv.sql
+supabase/migrations/20261117T0950_r03_ventas_tpv_tablas.sql
+supabase/migrations/20261117T0951_r03_ventas_tpv_funciones.sql

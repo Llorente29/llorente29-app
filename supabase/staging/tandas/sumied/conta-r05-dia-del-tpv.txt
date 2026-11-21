@@ -1,0 +1,10 @@
+# R05 · el día del TPV se propone y se valida. Primero la medida de ANTES, en su
+# sesión y sin las migraciones (regla 31); después las dos migraciones y su
+# prueba (ROLLBACK: tres empresas en una cuenta; el día del ejemplo de Revo
+# propuesto y validado; un día de Folvy propuesto y validado), que toma la
+# medida de DESPUÉS.
+supabase/staging/sql/20261117_r05_medida_antes.sql
+supabase/migrations/20261117T1601_r05_dia_tpv_asiento.sql
+supabase/migrations/20261117T1602_r05_dia_tpv_funciones.sql
+supabase/migrations/20261117T1603_r05_dia_tpv_anulado.sql
+supabase/staging/sql/20261117_r05_dia_tpv_prueba.sql

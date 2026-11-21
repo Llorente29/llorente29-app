@@ -1,0 +1,31 @@
+# DL1 · Cerrar octubre de Llorente29 (Julio, DL1·17 y DL1·18, 12/11). Rama
+# claude/dl1-octubre-bancos. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   1842  Añade _dl1_casar y, como Julio y por el camino de la aplicación:
+#         A · a 01/01, la caja (3.998,88 a la 113), la apertura de la ···4525
+#             (290,00 a la 113) y «Glovo Ventas» (884,74 a la 43000001). La 1.6
+#             (liquidaciones del IVA duplicadas en la serie 9) se queda fuera:
+#             su contraasiento no pasa la regla 5 de la validación;
+#         B · casa los 33 movimientos de octubre que quedaban (bank_casar) y
+#             valida sus asientos: facturas (AMIRSA, Orange, Europastry), cuenta
+#             y, sin justificante y sin IVA, los gastos sin factura ni ticket.
+#         Nada del 1T al 3T cambia. Octubre queda con 0 sin casar.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-octubre-bancos.sql
+supabase/migrations/20261112T1842_dl1_octubre_bancos.sql
+sin-vuelta-atras: supabase/migrations/20261112T1842_dl1_octubre_bancos.sql · motivo: un asiento validado se anula con un contraasiento, y un casado se deshace en Bancos.
+esperado: dl1-octubre-bancos · Movimientos de octubre sin casar = 0
+esperado: dl1-octubre-bancos · Casados de octubre por Julio con su asiento validado, menos 33 = 0
+esperado: dl1-octubre-bancos · 11300000 a 01/01, más 824,34 = 0.00
+esperado: dl1-octubre-bancos · 43000001 a 01/01, menos 546,59 = 0.00
+esperado: dl1-octubre-bancos · 43000101 en 2026 = 0.00
+esperado: dl1-octubre-bancos · 57000000 a 01/01 = 0.00
+esperado: dl1-octubre-bancos · 57200002 a 01/01, menos 1.607,10 = 0.00
+esperado: dl1-octubre-bancos · Lo que falta por pagar de las 24056932 y 24093211 de Europastry = 0.00
+esperado: dl1-octubre-bancos · 57200001 a 31/10 menos su extracto = 0.00
+esperado: dl1-octubre-bancos · 57200002 a 31/10 menos su extracto, más 4,00 = 0.00
+esperado: dl1-octubre-bancos · 57200003 a 31/10 menos su extracto = 0.00
+esperado: dl1-octubre-bancos · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
+esperado: dl1-octubre-bancos · IVA de Foodint 477 del 1T al 3T de 2026 = como antes

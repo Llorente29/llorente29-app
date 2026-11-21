@@ -1,0 +1,8 @@
+{
+ "_que": "B01·20 · el cargo que el banco anula · contexto de producción, medido en SOLO LECTURA el 07/11 a las 00:10Z: la 0055 añade dos columnas que admiten nulos a bank_movement (no existen) y cinco funciones que no existen (_bank_cargos_anulados, bank_cargos_anulados, bank_anulado_quitar, bank_anulado_es_bueno, bank_desapartar). Probada contra la población real en una transacción revertida: 0 avisos hoy en las 7 empresas; con los tres del 30/10 devueltos a por aclarar, 3 (esos dos y el −21,16 del 05/11, casado). Nada en el camino del pedido.",
+ "medido": "2026-11-07T00:10Z",
+ "tanda": {
+  "supabase/migrations/20261107T0055_b01s_cargo_anulado.sql": "b5510732a143d52e2bc74122b13289f1"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

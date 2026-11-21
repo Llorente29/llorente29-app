@@ -1,0 +1,29 @@
+[
+ {
+  "id": "758-1",
+  "pr": 758,
+  "fecha": "2026-11-20T17:21:09Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "los días del TPV salen por la conexión: la factura del día, con su rango, «Clientes de contado» y su IVA, y su cobro. Valen los días de uno y de dos asientos.",
+  "ruta": null
+ },
+ {
+  "id": "758-2",
+  "pr": 758,
+  "fecha": "2026-11-20T17:21:09Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "el primer día de cada sociedad sale solo, y nada sale dos veces. El paso 3 casa día a día con los números que dio ERP10.",
+  "ruta": null
+ },
+ {
+  "id": "758-3",
+  "pr": 758,
+  "fecha": "2026-11-20T17:21:09Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "ya no dice «Los días del TPV siguen con el Excel». El día que no puede salir se dice con su local y su porqué.",
+  "ruta": null
+ }
+]

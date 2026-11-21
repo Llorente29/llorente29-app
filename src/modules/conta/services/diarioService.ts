@@ -114,6 +114,19 @@ export async function leerPropuestosDe(accountId: string, companyId: string, ori
   return ((data ?? []) as Fila[]).map(aAsiento)
 }
 
+/**
+ * S01p·18 · 2 · Lo propuesto (y lo empezado) fuera de unas fechas: «Para revisar»
+ * lo enseña sea cual sea su fecha (un asiento de otro ejercicio también espera).
+ */
+export async function leerPropuestosFuera(accountId: string, companyId: string, desde: string, hasta: string): Promise<AsientoDiario[]> {
+  const { data, error } = await tabla('journal_entry').select(CAMPOS_ASIENTO)
+    .eq('account_id', accountId).eq('company_id', companyId).in('status', ['propuesto', 'borrador'])
+    .or(`entry_date.lt.${desde},entry_date.gt.${hasta}`)
+    .order('entry_date', { ascending: false }).limit(5000)
+  if (error) throw new Error(mensaje('No se han podido leer los asientos por revisar de otras fechas', error))
+  return ((data ?? []) as Fila[]).map(aAsiento)
+}
+
 export async function leerAsiento(accountId: string, entryId: string): Promise<AsientoDiario | null> {
   const { data, error } = await tabla('journal_entry').select(`${CAMPOS_ASIENTO}, company_id`).eq('account_id', accountId).eq('id', entryId).maybeSingle()
   if (error) throw new Error(mensaje('No se ha podido leer el asiento', error))

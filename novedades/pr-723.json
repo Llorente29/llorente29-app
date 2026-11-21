@@ -1,0 +1,29 @@
+[
+ {
+  "id": "723-1",
+  "pr": 723,
+  "fecha": "2026-11-18T16:38:07Z",
+  "producto": "sumied",
+  "apartado": "Documentos y Facturas recibidas",
+  "frase": "si no se puede leer ninguna factura, sale arriba una franja ámbar que lo dice, que están guardadas y cuántas esperan. Se quita sola cuando vuelve.",
+  "ruta": null
+ },
+ {
+  "id": "723-2",
+  "pr": 723,
+  "fecha": "2026-11-18T16:38:07Z",
+  "producto": "sumied",
+  "apartado": "Llegada sin leer",
+  "frase": "la ventana dice si es ese documento el que no se ha podido leer o si no se podía leer ninguno, sin mensajes en inglés ni «albarán» en una factura.",
+  "ruta": null
+ },
+ {
+  "id": "723-3",
+  "pr": 723,
+  "fecha": "2026-11-18T16:38:07Z",
+  "producto": "sumied",
+  "apartado": "Aviso",
+  "frase": "un vigía cada 10 minutos avisa cuando la lectura se cae (el tope de gasto, a la primera) y cuando vuelve.",
+  "ruta": null
+ }
+]

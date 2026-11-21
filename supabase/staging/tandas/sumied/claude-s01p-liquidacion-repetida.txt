@@ -1,0 +1,6 @@
+# S01p·21 · La liquidación de IVA apuntada dos veces (1822: añade la tabla y dos funciones; cambia la regla 5 y las
+# tres que suman la 477/472 del periodo). Su prueba (ROLLBACK, cuenta A): las dos repetidas; sin registrar, la regla 5
+# para su contraasiento; «Dejar solo esta» enlaza el 303 y hace el contraasiento validado del 01/10; no hace otro ni
+# una tercera liquidación; el contraasiento no cuenta en el periodo; sin cuenta no; la vuelta atrás.
+supabase/migrations/20261113T1822_s01p_liquidacion_repetida.sql
+supabase/staging/sql/20261113_s01p_liquidacion_repetida_prueba.sql

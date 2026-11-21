@@ -1,0 +1,27 @@
+{
+ "_que": "R05 · el día del TPV se propone y se valida · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging b00e3ac, 17/11 14:39Z) y sus semillas, en SOLO LECTURA, el 17/11: no en producción (esta sesión no lee producción). Las filas son las de la base local: el contexto de verdad lo mide el workflow en el ensayo. journal_entry y conta_tpv_dia existen; las funciones y el disparador nuevos, no. journal_entry no está en el camino del pedido.",
+ "medido": "2026-11-17T15:15Z",
+ "tanda": {
+  "supabase/migrations/20261117T1601_r05_dia_tpv_asiento.sql": "14358f470438ec6eb6e2cb1b72a3dc8d",
+  "supabase/migrations/20261117T1602_r05_dia_tpv_funciones.sql": "00c7b30aa05c123064ab3b1c96135fef",
+  "supabase/migrations/20261117T1603_r05_dia_tpv_anulado.sql": "da69d91bc632c0f955d5652daa2c0914"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_tpv_dia",
+   "public.journal_entry"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_tpv_dia": 0,
+   "public.journal_entry": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -126,6 +126,8 @@ async function despachar(lector: SupabaseClient, srv: SupabaseClient, j: Cabecer
     const p: PuertoApunte = {
       ...comun, clienteApuntes: (c, op) => clienteDiez(srv, c, op),
       enlazados: (companyId, menosEntry) => enlazadosEnDiez(srv, j.account_id, companyId, menosEntry),
+      // B01r26 (14/11): dentro del traspaso del mes, un igual de Diez que no es de Sumied no se enlaza.
+      noEnlazarAjenos: !!traspaso,
     }
     return enviarApunteADiez(asiento, p)
   }
@@ -233,6 +235,18 @@ export async function clienteDiezParaLeer(srv: SupabaseClient, accountId: string
   const c = await puertoComun(srv, accountId).conexion(companyId)
   if (!c) return null
   return { cliente: await clienteDiez(srv, c, { real: false, escribir: false }), nombreBd: c.nombreBd }
+}
+
+/**
+ * B01r26 · El cliente de Diez de una empresa para el traspaso con Excel: crear
+ * las subcuentas que faltan (solo cuando un administrador lo confirma en la
+ * pantalla, con el traspaso del mes confirmado: la autorización de Julio del
+ * C12) y leer las facturas importadas. Sin conexión, null.
+ */
+export async function clienteDiezDelTraspaso(srv: SupabaseClient, accountId: string, companyId: string): Promise<{ cliente: ClienteDiez; nombreBd: string } | null> {
+  const c = await puertoComun(srv, accountId).conexion(companyId)
+  if (!c) return null
+  return { cliente: await clienteDiez(srv, c, { real: true, escribir: true }), nombreBd: c.nombreBd }
 }
 
 /** El cliente de Diez de una conexión (escribir: sí; escribirEnReal solo con autorización, que el núcleo ya ha mirado). */

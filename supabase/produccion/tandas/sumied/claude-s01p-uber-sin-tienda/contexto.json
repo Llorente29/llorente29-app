@@ -1,0 +1,8 @@
+{
+ "_que": "S01p·18 · punto 6 · las liquidaciones sin tienda · contexto de producción, medido en SOLO LECTURA el 2026-11-13T10:41Z: no existen conta_liquidaciones_sin_tienda ni conta_liquidacion_asignar_tienda (tampoco en staging); existen conta_tienda_en y _conta_liquidacion_marcar, que llaman sin cambiarlas. channel_settlement con 475 filas y platform_store con 52, fuera del camino del pedido. Solo añade. No mueve ninguna fila. Nada de la tanda en el historial.",
+ "medido": "2026-11-13T10:41Z",
+ "tanda": {
+  "supabase/migrations/20261113T1136_s01p_uber_sin_tienda.sql": "731b399d1c5dcd20ed496517e65c1d18"
+ },
+ "contexto": {"tablas": ["public.channel_settlement", "public.platform_store"], "funciones": ["public.conta_tienda_en(uuid,date)", "public._conta_liquidacion_marcar(uuid)"], "filas": {"public.channel_settlement": 475, "public.platform_store": 52}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

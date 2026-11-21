@@ -1,0 +1,20 @@
+# DL1 · Tres pagos de octubre casados «sin justificante» que pagan facturas que
+# ya estaban en los libros (Julio, 13/11). Rama claude/dl1-reclasifica-pagos.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0915  Reclasifica como Julio, con la fecha de cada pago: Iberdrola 10,94 y
+#         378,96 contra la 41000023 (facturas 2/2553 y 2/2554) y Masmovil 29,99
+#         contra la 41000011 (Xfera). Debe el acreedor / Haber el gasto, con su
+#         local y sin IVA. El banco y su casado no se tocan. No crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-reclasifica-pagos.sql
+supabase/migrations/20261113T0915_dl1_reclasifica_pagos.sql
+sin-vuelta-atras: supabase/migrations/20261113T0915_dl1_reclasifica_pagos.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-reclasifica-pagos · Reclasificaciones validadas por Julio, menos 3 = 0
+esperado: dl1-reclasifica-pagos · Gasto de los tres pagos con su reclasificación = 0.00
+esperado: dl1-reclasifica-pagos · 41000023 a 31/10, más 330,12 = 0.00
+esperado: dl1-reclasifica-pagos · 41000011 a 31/10, más 29,99 = 0.00
+esperado: dl1-reclasifica-pagos · 572 a 31/10 = como antes
+esperado: dl1-reclasifica-pagos · IVA 472 del 4T = como antes
+esperado: dl1-reclasifica-pagos · IVA 477 del 4T = como antes

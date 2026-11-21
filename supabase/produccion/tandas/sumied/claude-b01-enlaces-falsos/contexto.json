@@ -1,0 +1,8 @@
+{
+ "_que": "B01r26 · los enlaces falsos de octubre · contexto de producción, medido en SOLO LECTURA el 14/11 a las 20:10Z: la 2041 no añade ni cambia objetos; en Foodint cambia 330 filas de external_send (conexión de la C0008, tipo asiento, 2026) a «pendiente», sin referencia de Diez: 275 «enlazado» de la serie 4 (4/3160 … 4/3692) y 55 «enviado» (42 de la serie 4, 4/3693 … 4/3734, y 13 de la serie 1, 1/1953 … 1/1965). La factura FV-02931 («enviado», 2/3365) no se toca. 0 «pendiente» por enlace falso. external_send no tiene disparadores. Foodint en modo mensual; el traspaso de octubre está en «con_fallos». Nada en el camino del pedido; la 2041 no está en el historial.",
+ "medido": "2026-11-14T20:10Z",
+ "tanda": {
+  "supabase/migrations/20261114T2041_b01r26_enlaces_falsos.sql": "6ae3fbeb3edc1d57cf047ea50abdc7ba"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

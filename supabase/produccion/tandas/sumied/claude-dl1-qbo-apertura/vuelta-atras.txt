@@ -1,0 +1,2 @@
+# DL1 · apertura de QBO: la 1035 no tiene vuelta atrás (se declara en aplicar.txt): un asiento validado se anula con un contraasiento.
+cuenta: scripts/conta/produccion/cuentas/dl1-qbo-apertura.sql

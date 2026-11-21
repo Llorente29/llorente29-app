@@ -524,10 +524,10 @@ export const COMO_SE_GUARDA: Record<CampoFicha, ComoSeGuarda> = {
   documento: { con: 'conta_recibida_papel_poner' },
   sinPdf: { con: 'conta_recibida_sin_papel' },
   motivoSinPdf: { con: 'conta_recibida_sin_papel' },
-  estadoPago: { falta: 'una factura sin validar no se puede marcar pagada: mark_supplier_invoice_paid pide que esté aprobada. Se marca al validarla, o la casa el banco' },
+  estadoPago: { falta: 'una factura sin validar no se puede marcar pagada: primero se valida. Queda pagada al validarla, o cuando el banco la casa' },
 }
 
-const SIN_TANDA = 'la base aún no tiene la función que lo guarda (la tanda D03, 0790, no está aplicada)'
+const SIN_TANDA = 'la base de datos aún no está preparada para guardarlo'
 /**
  * Lo de antes de la 0790, para cuando la base aún no tiene sus funciones (staging antes
  * de aplicarla): el proveedor y el vencimiento con lo que ya existía; lo demás se dice.

@@ -151,7 +151,7 @@ describe('la ficha · un servicio que empieza más adelante', () => {
     }
     const f = modeloFicha(conAnual, suyo(), EMPRESAS, '1', Q, '2026-11-10', [])!
     const s = f.servicios.find((x) => x.lineaId === 'soc')!
-    expect([s.texto, s.detalle]).toEqual(['Impuesto de sociedades', 'Precio de tarifa · 300,00 € al año, 25,00 € al mes · desde jun. 2027'])
+    expect([s.texto, s.detalle]).toEqual(['Impuesto de sociedades', 'Precio de tarifa · 300,00 € al año, se cobra en junio · desde jun. 2027'])
     expect(f.servicios.some((x) => x.texto === 'Servicio')).toBe(false)
   })
 })

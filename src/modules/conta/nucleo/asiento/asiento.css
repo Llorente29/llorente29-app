@@ -1,0 +1,56 @@
+/* src/modules/conta/nucleo/asiento/asiento.css
+ *
+ * N08 · Lo propio de la ficha del asiento (maqueta nucleo_5_asiento). El marco de la ficha, la
+ * cabecera, los botones, el estado, el aviso, la ayuda de teclas y el panel del documento son las
+ * piezas comunes del núcleo (nucleo/ficha/ficha.css, K04): aquí solo la rejilla de ERP10 (filas
+ * finas, sin tarjetas, las cifras a la derecha y el total con su raya), la serie con su número,
+ * la columna «Local» y la pregunta de «Anular». Los colores, los del núcleo (--k-*, --kf-*);
+ * escritos aquí, solo el velo y la sombra de la pregunta.
+ */
+
+/* Lo de la izquierda: la cabecera del asiento y la rejilla, que ocupa lo que queda. */
+.cxa-izq { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 8px 16px; }
+.cxa-cabecera { flex-shrink: 0; grid-template-columns: 110px 130px minmax(0, 1fr); }
+.cxa-serie-doc { display: flex; align-items: center; height: 24px; border: 1px solid var(--kf-casilla-borde); border-radius: 3px; background: var(--k-blanco); }
+.kf-ficha .cxa-serie-doc select { height: 22px; border: 0; padding: 0 2px 0 6px; outline-offset: -2px; }
+.cxa-doc { padding: 0 6px; color: var(--k-apoyo); white-space: nowrap; }
+
+/* La rejilla: filas finas, la cuenta antes del texto y en negrita, cifras a la derecha. */
+.cxa-rejilla-marco { flex: 1; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--k-borde); border-radius: 4px; }
+.cxa-rueda { flex: 1; min-height: 0; overflow: auto; padding: 0 8px; position: relative; }
+.cxa-rejilla { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: fixed; }
+.cxa-rejilla th { position: sticky; top: 0; z-index: 1; background: var(--k-blanco); text-align: left; font-weight: 400; color: var(--k-apoyo); font-size: 12.5px; padding: 6px 8px 4px; }
+.cxa-rejilla td { padding: 0 8px; height: 25px; border-bottom: 1px solid var(--k-gris); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cxa-rejilla .cxa-num { text-align: right; font-variant-numeric: tabular-nums; }
+.cxa-rejilla .cxa-c-cuenta { width: 104px; font-weight: 600; overflow: visible; }
+.cxa-rejilla .cxa-c-nombre { width: 32%; }
+.cxa-rejilla th:nth-child(4), .cxa-rejilla th:nth-child(5) { width: 124px; }
+.cxa-rejilla .cxa-c-local { width: 110px; }
+.cxa-rejilla tr.cxa-elegida td { background: var(--k-azul-claro); }
+.cxa-rejilla td a { color: inherit; text-decoration: none; }
+.kf-ficha .cxa-rejilla input:not([type='checkbox']), .kf-ficha .cxa-rejilla select { width: 100%; height: 23px; border: 0; padding: 0; background: transparent; font: inherit; color: inherit; }
+.kf-ficha .cxa-rejilla .cxa-num input { text-align: right; font-variant-numeric: tabular-nums; }
+.kf-ficha .cxa-rejilla input:focus, .kf-ficha .cxa-rejilla select:focus { outline: 1px solid var(--k-azul); outline-offset: 1px; background: var(--k-blanco); }
+.cxa-gris, .kf-ficha .cxa-rejilla input.cxa-gris { color: var(--k-apoyo); }
+.cxa-celda { display: flex; align-items: center; gap: 4px; }
+.cxa-celda .kf-origen { font-size: 11px; }
+.cxa-otra { margin: 6px 0 8px 8px; }
+.cxa-rueda .s-hoja-buscar { position: absolute; left: 8px; z-index: 3; width: 420px; }
+
+/* El total, con su raya. */
+.cxa-total { flex-shrink: 0; display: grid; grid-template-columns: auto auto minmax(0, 1fr) 124px 124px; align-items: center; gap: 12px; padding: 7px 16px; border-top: 2px solid var(--k-tinta); }
+.cxa-total-nota { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxa-total-cifra { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* El mayor de la cuenta, en la segunda pestaña del panel. */
+.cxa-mayor-cabeza { display: flex; align-items: baseline; gap: 6px; padding: 0 0 8px; }
+.cxa-mayor-cabeza a { margin-left: auto; font-size: 12.5px; }
+.cxa-mayor-cabeza kbd { font: inherit; font-size: 11px; padding: 0 4px; border: 1px solid var(--k-raya); border-radius: 3px; }
+
+/* Anular: la pregunta, con sus dos botones del mismo tamaño. */
+.cxa.kf-ficha { position: relative; }
+.cxa-velo { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgba(31, 41, 51, 0.28); }
+.cxa-confirmar { width: 420px; padding: 18px 20px; background: var(--k-blanco); border-radius: 8px; box-shadow: 0 10px 30px rgba(31, 41, 51, 0.2); display: flex; flex-direction: column; gap: 12px; }
+.cxa-confirmar h2 { margin: 0; font-size: 16px; }
+.cxa-confirmar-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cxa-confirmar-botones button { justify-content: center; }

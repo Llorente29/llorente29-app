@@ -235,7 +235,7 @@ export async function catalogosFactura(accountId: string, companyId: string): Pr
     }),
     tipos: tipos.filter((t) => !t.valid_to || String(t.valid_to) >= hoy).map((t) => ({ id: String(t.id), nombre: String(t.name), tipo: n(t.rate), recargo: t.surcharge_rate == null ? null : n(t.surcharge_rate), sinIva: t.treatment === 'exempt' })),
     // Las de ventas: la 700 a la 705 (descuentos, devoluciones y rappels, 706 a 709, no son líneas de una factura).
-    cuentas: cuentas.filter((c) => /^70[0-5]/.test(String(c.code))).map((c) => ({ id: String(c.id), code: String(c.code), nombre: s(c.plain_name) ?? String(c.name) })),
+    cuentas: cuentas.filter((c) => /^70[0-5]/.test(String(c.code))).map((c) => ({ id: String(c.id), code: String(c.code), nombre: String(c.name) })),
     retenciones: retenciones.map((r) => ({ id: String(r.id), nombre: String(r.name), tipo: n(r.rate) })),
     formas: formas.map((f) => ({ id: String(f.id), nombre: String(f.name), code: String(f.code) })),
   }

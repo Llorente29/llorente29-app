@@ -1,0 +1,7 @@
+# G06 · Tarea 2 · El enlace en un solo sitio. La 0938 solo añade: desde la rama va de verdad después del ensayo (W05),
+# porque se puede pasar dos veces (create … if not exists, create or replace view, insert … on conflict do nothing).
+# Su prueba (ROLLBACK): el relleno caso a caso (los que coinciden, el de los 108, un conflicto y el de una persona),
+# la vista del elegido, «atado» sin ficha no se guarda, quién lee (tabla y vista) y la vuelta atrás con la huella de
+# los dos enlaces de ahora.
+supabase/migrations/20261112T0938_g06_enlace_gocardless.sql
+supabase/staging/sql/20261112_g06_enlace_gocardless_prueba.sql

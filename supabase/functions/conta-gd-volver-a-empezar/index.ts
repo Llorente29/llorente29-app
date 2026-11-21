@@ -25,7 +25,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { crearSiembra, PORTAL_DE_PRUEBAS } from '../_shared/gd/siembra.ts'
-import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, HISTORIA, historiaDeTalleres, inicioDeLaAnual, inicioDeLasCuotas, porqueNo, ACCESOS_DE_LA_DEMO, PORTAL_DE_LA_DEMO, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
+import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, HISTORIA, historiaDeTalleres, inicioDeLasCuotas, porqueNo, ACCESOS_DE_LA_DEMO, PORTAL_DE_LA_DEMO, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -111,19 +111,20 @@ Deno.serve(async (req) => {
       }
       case 'tarifa': {
         // nº63 · Los clientes de la demo son de antes: sus cuotas mensuales de GoCardless empiezan en enero, no en
-        // el primer cargo de una suscripción recién creada en el sandbox. Solo esta cuenta demo; ni las manuales. Las anuales, abajo.
+        // el primer cargo de una suscripción recién creada en el sandbox. Solo esta cuenta demo; ni las manuales ni las anuales.
         const hoy = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
         const desde = inicioDeLasCuotas(hoy)
         const { data: movidas, error: eL } = await admin.from('conta_linea').update({ desde })
           .eq('account_id', cuenta).eq('origen', 'gocardless').eq('periodo', 'mes').gt('desde', desde).select('id')
         if (eL) throw new Error(`No se han podido poner las cuotas desde enero: ${eL.message}`)
         dicho.push(`${(movidas ?? []).length} cuotas mensuales de GoCardless, desde el ${desde.split('-').reverse().join('/')}.`)
-        // nº102 · Y las anuales (el impuesto de sociedades), desde el último junio: no desde el junio que viene.
-        const desdeAnual = inicioDeLaAnual(hoy)
-        const { data: anuales, error: eA } = await admin.from('conta_linea').update({ desde: desdeAnual })
-          .eq('account_id', cuenta).eq('origen', 'gocardless').eq('periodo', 'anio').gt('desde', desdeAnual).select('id')
-        if (eA) throw new Error(`No se han podido poner las anuales desde junio: ${eA.message}`)
-        dicho.push(`${(anuales ?? []).length} cuotas anuales de GoCardless, desde el ${desdeAnual.split('-').reverse().join('/')}.`)
+        // nº109 · Y sus tarifas mensuales, igual: la lectura las pone desde el primer cargo de la suscripción recién creada
+        // (el mes que viene), y la demo cobra el mes en curso (nº100). Sin esto, el cobro del mes no cobra nada, ni el alta.
+        // nº110 · Las anuales (el impuesto de sociedades) se quedan como las cobra GoCardless: desde el junio que viene.
+        const { data: tarifas, error: eT } = await admin.from('conta_tarifa').update({ desde })
+          .eq('account_id', cuenta).eq('origen', 'gocardless').eq('periodo', 'mes').gt('desde', desde).select('id')
+        if (eT) throw new Error(`No se han podido poner las tarifas desde enero: ${eT.message}`)
+        dicho.push(`${(tarifas ?? []).length} tarifas mensuales de GoCardless, desde el ${desde.split('-').reverse().join('/')}.`)
         const t = await admin.rpc('demo_gestoria_tarifa_sembrar', { p_cuenta: cuenta })
         if (t.error) throw new Error(t.error.message)
         const i = await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: cuenta })
@@ -147,7 +148,7 @@ Deno.serve(async (req) => {
         const { data: lab } = await admin.from('conta_servicio').select('id').eq('company_id', empresa).eq('clave', 'gestion_laboral').maybeSingle()
         const { data: tr } = await admin.from('conta_linea').select('empleado_nombre').eq('account_id', cuenta).eq('party_id', talleres)
           .eq('servicio_id', (lab as { id: string } | null)?.id ?? '').not('empleado_nombre', 'is', null).is('hasta', null).order('empleado_nombre')
-        const trabajadores = ((tr ?? []) as { empleado_nombre: string }[]).map((x) => x.empleado_nombre).filter((n) => n !== CAMBIOS_DEL_MES.alta.trabajador)
+        const trabajadores = ((tr ?? []) as { empleado_nombre: string }[]).map((x) => x.empleado_nombre).filter((n) => n.toLowerCase() !== CAMBIOS_DEL_MES.alta.trabajador.toLowerCase())
         if (!trabajadores.length) throw new Error(`${HISTORIA.cliente} no tiene trabajadores en la demo: no se siembra su historia.`)
         const hoy = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
         const meses = historiaDeTalleres(hoy, trabajadores)
@@ -231,8 +232,16 @@ Deno.serve(async (req) => {
         const talleres = await parte(CAMBIOS_DEL_MES.alta.cliente)
         const alta = await persona.rpc('conta_gestoria_alta_empleado', { p_company: empresa, p_party: talleres, p_servicio: laboral, p_empleado: CAMBIOS_DEL_MES.alta.trabajador, p_desde: f.altaEl })
         if (alta.error && !yaHecho(alta.error)) throw new Error(`El alta en ${CAMBIOS_DEL_MES.alta.cliente}: ${alta.error.message}`)
-        await admin.from('conta_linea').update({ alta_el: f.altaEl }).eq('account_id', cuenta).eq('party_id', talleres).eq('servicio_id', laboral).eq('empleado_nombre', CAMBIOS_DEL_MES.alta.trabajador)
-        dicho.push(alta.error ? `${CAMBIOS_DEL_MES.alta.cliente}: el alta ya estaba.` : String((alta.data as { frase?: string } | null)?.frase ?? ''))
+        // nº109 · El alta guarda el nombre en mayúsculas («LUCAS FERRER GIL»): en la demo, como lo escribe la gestoría, igual
+        // que los trabajadores que vienen de GoCardless. Se busca sin distinguir mayúsculas (antes no lo encontraba y
+        // `alta_el` se quedaba sin poner).
+        const { trabajador } = CAMBIOS_DEL_MES.alta
+        const eAlta = await admin.from('conta_linea').update({ alta_el: f.altaEl, empleado_nombre: trabajador }).eq('account_id', cuenta)
+          .eq('party_id', talleres).eq('servicio_id', laboral).ilike('empleado_nombre', trabajador).select('id')
+        if (eAlta.error) throw new Error(`El alta de ${trabajador}: ${eAlta.error.message}`)
+        if (!(eAlta.data ?? []).length) throw new Error(`No está la línea del alta de ${trabajador} en ${CAMBIOS_DEL_MES.alta.cliente}.`)
+        dicho.push(alta.error ? `${CAMBIOS_DEL_MES.alta.cliente}: el alta ya estaba.`
+          : String((alta.data as { frase?: string } | null)?.frase ?? '').replace(trabajador.toUpperCase(), trabajador))
         // 2 · Imprenta Rápida Sol, de Básica a Premium desde este mes.
         const mensual = await servicio('gestoria_mensual')
         const imprenta = await parte(CAMBIOS_DEL_MES.nivel.cliente)

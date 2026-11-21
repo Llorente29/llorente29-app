@@ -300,7 +300,7 @@ export function leerQuincena(ficheros: Fichero[], o: { tiendas: Record<string, s
   const periodos = [...new Set(facturas.map((f) => `${f.desde ?? '?'}|${f.hasta ?? '?'}`))]
   if (periodos.length > 1) problemas.push(`Las facturas son de ${periodos.length} periodos distintos: sube una quincena cada vez.`)
   const [desde, hasta] = periodos[0].split('|')
-  if (desde === '?' || hasta === '?') problemas.push('Hay facturas sin el periodo (date_from / date_to).')
+  if (desde === '?' || hasta === '?') problemas.push('Hay facturas sin el periodo: les falta la fecha de inicio o la de fin.')
   const enPedidos = new Set(pedidos.map((p) => p.factura))
   for (const n of [...enPedidos].filter((n) => n && !facturas.some((f) => f.numero === n))) avisos.push(`PEDIDOS trae pedidos de la factura ${n}, que no está en FACTURAS.`)
 

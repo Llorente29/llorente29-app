@@ -1,0 +1,29 @@
+[
+ {
+  "id": "730-1",
+  "pr": 730,
+  "fecha": "2026-11-18T20:44:39Z",
+  "producto": "sumied",
+  "apartado": "Facturas recibidas",
+  "frase": "una factura que va a nombre de otra sociedad de tu cuenta se pasa sola a ella, con su PDF, y lo dice en verde en su ficha, con «Deshacer».",
+  "ruta": null
+ },
+ {
+  "id": "730-2",
+  "pr": 730,
+  "fecha": "2026-11-18T20:44:39Z",
+  "producto": "sumied",
+  "apartado": "¿De quién es?",
+  "frase": "cuando no se sabe de quién es, eliges la sociedad en un desplegable y la pasas; los botones del IVA ya no invitan a pulsar sin pensar.",
+  "ruta": null
+ },
+ {
+  "id": "730-3",
+  "pr": 730,
+  "fecha": "2026-11-18T20:44:39Z",
+  "producto": "sumied",
+  "apartado": "Inicio",
+  "frase": "«Lo que he hecho yo desde ayer» dice cuántas facturas he pasado solas a su sociedad, con un enlace para verlas.",
+  "ruta": null
+ }
+]

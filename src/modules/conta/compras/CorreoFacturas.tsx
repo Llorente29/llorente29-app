@@ -18,8 +18,8 @@ import { Boton, Tarjeta } from '@/modules/conta/diseno'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { eurosExactos } from '@/modules/conta/lib/formato'
-import { crearCorreoFacturas, leerCorreoFacturas, leerLineasFactura, releerCorreos, type ComparacionLineas, type LlegadaCorreo } from '@/modules/conta/services/comprasService'
-import { accionesDeLlegada, cuandoEnPalabras, lineaEnPalabras, nombrePlataforma, queSalio, resumenLineas } from '@/modules/conta/lib/correoFacturas'
+import { crearCorreoFacturas, leerCorreoFacturas, leerLineasFactura, ponerPdfsJustEat, releerCorreos, type ComparacionLineas, type LlegadaCorreo } from '@/modules/conta/services/comprasService'
+import { NOTA_DIRECCION, accionesDeLlegada, cuandoEnPalabras, lineaEnPalabras, nombrePlataforma, queSalio, resumenLineas } from '@/modules/conta/lib/correoFacturas'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -61,6 +61,7 @@ export function CorreoFacturasAjustes() {
             catch { setAviso({ ok: false, texto: 'No se ha podido copiar: selecciónala y cópiala a mano.' }) }
           }}>Copiar</Boton>
         </div>
+        <p className="cx-ayuda" data-prueba="direccion-nota" style={{ marginTop: 0 }}>{NOTA_DIRECCION}</p>
         <p className="cx-ayuda" data-prueba="estado">
           {d.activa === false ? 'Apagada: lo que llegue no se lee.'
             : d.ultimo ? `Recibiendo · último correo ${cuandoEnPalabras(d.ultimo, hoy)}.` : 'Aún no ha llegado ningún correo.'}
@@ -128,6 +129,15 @@ export function LlegadasPorCorreo({ llegadas, max, companyId, releido = null, al
     } catch (e) { setFallo(`No se ha vuelto a leer: ${msg(e)}`) }
     finally { setLeyendo(null) }
   }
+  const ponerPdfs = async () => {
+    if (!companyId) return
+    setAbierto(null); setLeyendo('pdfs'); setFallo(null)
+    try {
+      const r = await ponerPdfsJustEat(companyId)
+      alReleer?.({ ok: !r.facturas.some((f) => f.estado === 'error' || f.estado === 'ya_no_esta' || f.estado === 'no_cuadra'), texto: r.texto })
+    } catch (e) { setFallo(`No se ha puesto el PDF: ${msg(e)}`) }
+    finally { setLeyendo(null) }
+  }
   return (
     <>
       {plataformas.length > 0 && (
@@ -137,6 +147,12 @@ export function LlegadasPorCorreo({ llegadas, max, companyId, releido = null, al
               {leyendo === p ? 'Leyendo otra vez…' : `Volver a leer todo lo de ${nombrePlataforma(p)}`}
             </Boton>
           ))}
+          {/* S01p·20 · 1b · Sus facturas vienen escritas en el correo: el PDF se hace del correo. */}
+          {plataformas.includes('justeat') && (
+            <Boton variante="secundario" disabled={leyendo !== null} data-prueba="poner-pdfs" onClick={() => void ponerPdfs()}>
+              {leyendo === 'pdfs' ? 'Poniendo el PDF…' : 'Poner el PDF a las facturas de Just Eat que no lo tienen'}
+            </Boton>
+          )}
         </div>
       )}
       {aviso && <p className={aviso.ok ? 'cx-guardado' : 'cx-error'} role={aviso.ok ? 'status' : 'alert'} data-prueba="releer-aviso">{aviso.texto}</p>}

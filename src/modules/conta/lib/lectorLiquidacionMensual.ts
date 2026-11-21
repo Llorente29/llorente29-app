@@ -18,7 +18,6 @@
 import type { Celda, PaginaPdf } from '@/modules/conta/lib/lectorDiez'
 import { normalizarNif } from '@/modules/conta/lib/nif'
 import { eurosExactos } from '@/modules/conta/lib/formato'
-import { MARCA } from '../cuenta/marca'
 
 export type TipoDocumento = 'factura' | 'transaccion' | 'ventas' | 'inventario' | 'desconocido'
 
@@ -231,6 +230,57 @@ export function leerInventario(filas: readonly Fila[]): InventarioLeido {
 
 // ── Todo junto ──────────────────────────────────────────────────────────────
 
+/**
+ * S01p·18 · Lo que es una línea de la transacción que no es ninguna de las dos
+ * facturas (Julio, 12/11). Se pregunta, no bloquea:
+ *   · pendiente_facturar: «Género que te cobrará el mes que viene» (Debe su 430 /
+ *     Haber 4009);
+ *   · cancela_pendiente: «Género del mes pasado que ya te cobra» (el contrario,
+ *     nunca por más de lo pendiente);
+ *   · a_mano: «Otra cosa: la apunto yo a mano» (sin asiento).
+ */
+export type QueEsLinea = 'pendiente_facturar' | 'cancela_pendiente' | 'a_mano'
+export const QUE_ES_LINEA: readonly QueEsLinea[] = ['pendiente_facturar', 'cancela_pendiente', 'a_mano']
+export interface LineaSocio {
+  concepto: string
+  importe: number
+  /** null: aún no se sabe; se pregunta. */
+  queEs: QueEsLinea | null
+  /** De dónde salió lo que es: lo recordado, lo pendiente que cuadra solo o lo que se acaba de contestar. */
+  porque?: 'regla' | 'solo' | 'contestada'
+  /** No viene como línea: el saldo cuadra restando lo pendiente del mes pasado. */
+  implicita?: boolean
+  /** Por qué lo recordado no vale esta vez (se vuelve a preguntar). */
+  nota?: string
+}
+/** Lo que el lector necesita saber del socio: lo que ya sé de sus líneas y lo pendiente de facturar en ese local. */
+export interface ContextoSocio { reglas?: Readonly<Record<string, QueEsLinea>>; pendiente?: number; socio?: string }
+
+/** La clave de un concepto: en minúsculas y con un solo espacio (como _socio_linea_clave en la base). */
+export const claveLinea = (concepto: string): string => concepto.trim().replace(/\s+/g, ' ').toLowerCase()
+
+/** Si una respuesta vale para una línea, o por qué no (no se fuerza el cuadre). */
+export function puedeSer(l: Pick<LineaSocio, 'importe'>, q: QueEsLinea, pendiente: number, socio = 'el socio'): string | null {
+  const imp = cent(l.importe)
+  if (q === 'pendiente_facturar' && imp <= 0) return 'Viene en negativo: no es género nuevo sin facturar.'
+  if (q === 'cancela_pendiente') {
+    if (imp >= 0) return 'Viene en positivo: no te cobra nada del mes pasado.'
+    if (-imp > cent(pendiente)) return cent(pendiente) === 0
+      ? `No hay género pendiente de facturar con ${socio} en este local.`
+      : `Con ${socio} en este local solo quedan ${eurosExactos(pendiente)} pendientes de facturar.`
+  }
+  return null
+}
+
+/** Las líneas que aún hay que contestar. */
+export const sinContestar = (r: Pick<LiquidacionLeida, 'lineasSocio'>): LineaSocio[] => (r.lineasSocio ?? []).filter((l) => l.queEs === null)
+
+/** Contesta una línea (la de ese concepto e importe) y devuelve la lectura nueva. */
+export function contestar(r: LiquidacionLeida, i: number, q: QueEsLinea | null): LiquidacionLeida {
+  const lineas = (r.lineasSocio ?? []).map((l, j) => (j === i ? { ...l, queEs: q, porque: q ? 'contestada' as const : undefined, nota: undefined } : l))
+  return { ...r, lineasSocio: lineas }
+}
+
 export interface LiquidacionLeida {
   /** La que extiende él en tu nombre: tú le facturas. */
   emitida: FacturaLeida | null
@@ -246,15 +296,18 @@ export interface LiquidacionLeida {
   avisos: string[]
   /** Los ficheros que no se han reconocido. */
   noReconocidos: string[]
+  /** S01p·18 · Las líneas de la transacción que no son ninguna de las dos facturas. */
+  lineasSocio: LineaSocio[]
 }
 
 export interface DocumentoLiquidacion { nombre: string; paginas: readonly PaginaPdf[] }
 
 const eur = eurosExactos
 
-export function leerLiquidacion(docs: readonly DocumentoLiquidacion[], nifEmpresa: string): LiquidacionLeida {
+export function leerLiquidacion(docs: readonly DocumentoLiquidacion[], nifEmpresa: string, ctx: ContextoSocio = {}): LiquidacionLeida {
   const nif = normalizarNif(nifEmpresa)
-  const r: LiquidacionLeida = { emitida: null, recibida: null, transaccion: null, ventas: null, inventario: null, periodo: null, bloqueos: [], avisos: [], noReconocidos: [] }
+  const pendiente = ctx.pendiente ?? 0
+  const r: LiquidacionLeida = { emitida: null, recibida: null, transaccion: null, ventas: null, inventario: null, periodo: null, bloqueos: [], avisos: [], noReconocidos: [], lineasSocio: [] }
   for (const d of docs) {
     const filas = filasDe(d.paginas)
     const tipo = reconocer(filas)
@@ -282,7 +335,7 @@ export function leerLiquidacion(docs: readonly DocumentoLiquidacion[], nifEmpres
   for (const [p, que] of [[r.recibida?.periodo, 'su factura'], [r.transaccion?.periodo, 'la transacción'], [r.ventas?.periodo, 'las ventas'], [r.inventario?.periodo, 'el inventario']] as const) {
     if (p && r.periodo && (p.desde !== r.periodo.desde || p.hasta !== r.periodo.hasta)) r.bloqueos.push(`El periodo de ${que} no es el mismo que el de la factura que le haces.`)
   }
-  // La transacción: cada línea, a su factura; una línea que no se sabe qué es y trae importe, para.
+  // La transacción: cada línea, a su factura; una línea que no es ninguna de las dos se pregunta (S01p·18).
   if (r.transaccion) {
     let neto = 0
     for (const l of r.transaccion.lineas) {
@@ -292,13 +345,18 @@ export function leerLiquidacion(docs: readonly DocumentoLiquidacion[], nifEmpres
       } else if (l.referencia && l.referencia === r.recibida?.numero) {
         if (r.recibida.total !== null && cent(l.importe) !== -cent(r.recibida.total)) r.bloqueos.push(`La transacción dice ${eur(l.importe)} de ${l.referencia}, y su factura ${eur(r.recibida.total)}.`)
       } else if (cent(l.importe) !== 0) {
-        r.bloqueos.push(`«${l.concepto}» trae ${eur(l.importe)} y ${MARCA.nombre} no sabe qué es: dímelo antes de proponer nada.`)
+        r.lineasSocio.push(lineaSocio(l.concepto, l.importe, ctx, pendiente))
       } else {
         r.avisos.push(`«${l.concepto}» viene a cero.`)
       }
     }
     if (!r.transaccion.saldo) r.bloqueos.push('La transacción no dice el saldo.')
-    else if (cent(r.transaccion.saldo.importe) !== neto) r.bloqueos.push(`La transacción dice ${eur(r.transaccion.saldo.importe)} de saldo y sus líneas suman ${eur(neto / 100)}.`)
+    else if (cent(r.transaccion.saldo.importe) !== neto) {
+      // Sin línea: si el saldo cuadra restando lo pendiente del mes pasado, es que ya te lo cobra.
+      if (cent(pendiente) > 0 && cent(r.transaccion.saldo.importe) === neto - cent(pendiente)) {
+        r.lineasSocio.push({ concepto: 'Género del mes pasado que ya te cobra', importe: -pendiente, queEs: 'cancela_pendiente', porque: 'solo', implicita: true })
+      } else r.bloqueos.push(`La transacción dice ${eur(r.transaccion.saldo.importe)} de saldo y sus líneas suman ${eur(neto / 100)}.`)
+    }
   } else r.avisos.push('No está el detalle de la transacción: el saldo sale de las dos facturas.')
   if (r.inventario?.repetidas) r.avisos.push(`El inventario repite ${r.inventario.repetidas} fila(s) idéntica(s): se cuentan una vez.`)
   if (r.inventario && r.inventario.totalDocumento !== null) {
@@ -306,4 +364,18 @@ export function leerLiquidacion(docs: readonly DocumentoLiquidacion[], nifEmpres
     if (suma !== cent(r.inventario.totalDocumento)) r.avisos.push(`El inventario dice ${eur(r.inventario.totalDocumento)} de total; producto a producto, sin repetir, suman ${eur(suma / 100)}.`)
   }
   return r
+}
+
+/** Una línea que no es ninguna de las dos facturas: lo recordado, si vale; si no, lo pendiente que cuadra solo; si no, se pregunta. */
+function lineaSocio(concepto: string, importe: number, ctx: ContextoSocio, pendiente: number): LineaSocio {
+  const recordada = ctx.reglas?.[claveLinea(concepto)]
+  if (recordada) {
+    const no = puedeSer({ importe }, recordada, pendiente, ctx.socio)
+    if (!no) return { concepto, importe, queEs: recordada, porque: 'regla' }
+    return { concepto, importe, queEs: null, nota: `${no} Lo de otras veces no vale esta vez.` }
+  }
+  if (cent(importe) < 0 && cent(pendiente) > 0 && -cent(importe) === cent(pendiente)) {
+    return { concepto, importe, queEs: 'cancela_pendiente', porque: 'solo' }
+  }
+  return { concepto, importe, queEs: null }
 }

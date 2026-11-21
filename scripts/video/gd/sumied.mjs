@@ -45,8 +45,10 @@ const CUENTA = 'de000000-0000-4000-8000-0000000000a0'
 const SOCIEDAD = 'de000000-0000-4000-8000-0000000000a9'
 const JULIO = 'e298629b-9d34-4d62-9a00-ff7c3fa29a1a'
 const CLIENTE = 'Talleres Ruiz, S.L.'
-const DEVUELTO = { cliente: 'Electricidad Voltio, S.L.', correo: 'felipe.herrera@electricidadvoltio.example' }
-const PORTAL = { cliente: CLIENTE, correo: 'tomas.ruiz@talleresruiz.example' }
+const DEVUELTO = { cliente: 'Electricidad Voltio, S.L.', correo: 'felipe.herrera@electricidadvoltio.example', nombre: 'Felipe' }
+const PORTAL = { cliente: CLIENTE, correo: 'tomas.ruiz@talleresruiz.example', nombre: 'Tomás' }
+// El alta del mes (la deja «Volver a empezar», CAMBIOS_DEL_MES en pasos.ts).
+const TRABAJADOR_NUEVO = 'Lucas Ferrer Gil'
 const W = 1920; const H = 1080
 const REF = new URL(SUPABASE_URL || 'https://x.supabase.co').hostname.split('.')[0]
 
@@ -77,7 +79,7 @@ async function usuarioDelPortal(a) {
   const { data: cli } = await admin.from('party').select('id').eq('account_id', CUENTA).eq('name', a.cliente).maybeSingle()
   if (!cli) return null
   const { data: acc } = await admin.from('conta_portal_acceso').select('user_id').eq('account_id', CUENTA).eq('party_id', cli.id).ilike('correo', a.correo).is('revocado_at', null).maybeSingle()
-  return acc?.user_id ? { party: cli.id, user: acc.user_id } : null
+  return acc?.user_id ? { party: cli.id, user: acc.user_id, nombre: a.nombre } : null
 }
 const reciboDe = async (party) => (await admin.from('conta_recibo').select('id, estado, gc_estado, invoice_id, gc_cobro_id').eq('account_id', CUENTA).eq('party_id', party).eq('mes', MES).maybeSingle()).data
 
@@ -134,7 +136,9 @@ await julio.cliente.rpc('cambiar_empresa', { p_account_id: CUENTA })
 const { data: perfil } = await admin.from('user_profiles').select('display_name').eq('account_id', CUENTA).eq('user_id', JULIO).maybeSingle()
 
 const dirVideo = join(salida, 'video-tmp')
+// nº123 · Como desde España: idioma es-ES (también en lo que pide al servidor, que Stripe mira) y hora de Madrid.
 const ctx = await navegador.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, locale: 'es-ES', timezoneId: 'Europe/Madrid', acceptDownloads: true,
+  extraHTTPHeaders: { 'Accept-Language': 'es-ES,es;q=0.9' },
   ...(GRABA ? { recordVideo: { dir: dirVideo, size: { width: W, height: H } } } : {}) })
 await ctx.addInitScript(`(() => { try {
   localStorage.setItem(${JSON.stringify(`sb-${REF}-auth-token`)}, ${JSON.stringify(JSON.stringify(julio.sesion))});
@@ -173,21 +177,52 @@ async function a(loc, ms = 800) {
   await ra.a(l, ms)
 }
 /** Pulsa, o en ensayo solo señala, lo que ESCRIBE en la demo. */
-async function pulsaQueEscribe(loc, ms = 800) {
+async function pulsaQueEscribe(loc, ms = 800, efecto = null) {
   const l = loc.first()
   await l.waitFor({ state: 'visible', timeout: 15_000 })
-  if (GRABA) await ra.clic(l, ms); else await ra.a(l, ms)
+  if (!GRABA) { await ra.a(l, ms); return }
+  await ra.clic(l, ms)
+  // nº120 · El ratón va hasta donde ESTABA el botón y pulsa allí: si la página se mueve mientras va (la franja verde
+  // «Aprobado el recibo de…» empuja todo hacia abajo), el clic cae fuera y no pasa nada (run 21: «Aprobar los 23» no
+  // aprobó y el cobro no se envió). Se comprueba lo que tiene que pasar; si no pasa, se pulsa el botón de verdad, fuera
+  // del montaje, y si aun así no, se dice.
+  if (!efecto) return
+  const paso = () => efecto.first().waitFor({ state: 'visible', timeout: 8_000 }).then(() => true).catch(() => false)
+  if (await paso()) return
+  let ok = false
+  await R.sinVer(async () => { await l.click({ timeout: 15_000 }).catch(() => {}); ok = await paso() })
+  if (!ok) throw new Error('el clic no ha hecho lo que tenía que hacer')
 }
 /** Pulsa lo que solo navega o abre (también en ensayo). */
 async function pulsa(loc, ms = 800) { const l = loc.first(); await l.waitFor({ state: 'visible', timeout: 15_000 }); await ra.clic(l, ms) }
+/**
+ * nº118 · Ir a una pantalla y no seguir hasta que se vea lo que se espera. La primera pantalla del run 19 no salió a
+ * tiempo y fallaron las cinco escenas de la 01 una detrás de otra. Ahora: hasta 3 intentos, recargando, dentro del
+ * corte (no se graba). Si no sale, lo dice el RESUMEN (antes solo el registro, y se veían los «timeout» de las
+ * escenas) con lo que se ve; y grabando, si aún no se ha enviado el cobro, para: la grabación no se repite a medias.
+ */
 async function ir(ruta, espera) {
+  const url = ruta.startsWith('http') ? ruta : `${APP}${ruta}`
+  const loc = espera ? (typeof espera === 'string' ? page.getByText(espera).first() : espera.first()) : null
+  let salio = false
   await R.sinVer(async () => {
-    await page.goto(ruta.startsWith('http') ? ruta : `${APP}${ruta}`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-    await page.locator('.cx-hueso').first().waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {})
-    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
-    if (espera) await (typeof espera === 'string' ? page.getByText(espera).first() : espera).waitFor({ timeout: 30_000 }).catch(() => fallo(`${ruta}: no ha salido lo que se esperaba`))
-    await sinCargar()
+    for (let intento = 1; intento <= 3 && !salio; intento++) {
+      if (intento === 1) await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {})
+      else { decir(`  · ${ruta}: no ha salido a tiempo; se recarga (intento ${intento} de 3)`); await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {}) }
+      await page.locator('.cx-hueso').first().waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {})
+      await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
+      salio = loc ? await loc.waitFor({ state: 'visible', timeout: 45_000 }).then(() => true).catch(() => false) : true
+    }
+    if (salio) await sinCargar()
   })
+  if (salio) return
+  const seVe = await page.evaluate(() => `${location.pathname}${location.hash} · ${(document.querySelector('h1')?.textContent ?? document.body?.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 80)}`).catch(() => '')
+  const t = `${ruta}: no ha salido lo que se esperaba en 3 intentos (se ve: ${seVe})`
+  resumen.push(`✗ v0 · la pantalla no ha salido: ${t}`.slice(0, 230))
+  await foto(`x-pantalla-${Date.now()}`)
+  // Grabando y antes de enviar el cobro, se para (no queda nada a medias en la demo); después, se sigue y se dice.
+  if (GRABA && !enviado) throw new Error(t)
+  fallo(t)
 }
 /**
  * La prueba del nº99 grabó «Sumied · Cargando…» al volver de un corte: la app vuelve a pintar su pantalla de carga
@@ -221,6 +256,21 @@ async function ponerTomas(fs) {
   })
 }
 
+/** nº120 · Casa, como el agente de Conciliación, cada liquidación pagada del mes del cobro que ya tiene su ingreso en el banco. */
+async function casarLiquidaciones() {
+  const { data: pos } = await admin.from('conta_gc_payout').select('gc_id, importe, llegada').eq('account_id', CUENTA).eq('company_id', SOCIEDAD)
+    .eq('estado', 'paid').is('match_id', null).gte('llegada', `${MES}-01`)
+  for (const po of pos ?? []) {
+    const { data: mov } = await admin.from('bank_movement').select('id').eq('account_id', CUENTA).eq('company_id', SOCIEDAD)
+      .eq('op_date', po.llegada).eq('amount', po.importe).limit(1).maybeSingle()
+    if (!mov) continue
+    const euros = Number(po.importe).toFixed(2).replace('.', ',')
+    const { error } = await julio.cliente.rpc('conta_abono_gocardless_casar', { p_movement: mov.id, p_payout: po.gc_id, p_confianza: 'seguro',
+      p_porque: `Pago de GoCardless que llegaba el ${po.llegada.slice(8, 10)}/${po.llegada.slice(5, 7)}: ${euros} € netos, exactos.`, p_por: 'folvy' })
+    if (error) decir(`  · no se ha casado la liquidación ${po.gc_id}: ${error.message}`)
+  }
+}
+
 let inicio = 0
 let enviado = false
 const esperaHasta = async (que, fn, min) => {
@@ -235,7 +285,7 @@ try {
   let ing = null
   // ── 01 · Clientes y cuotas ─────────────────────────────────────────────────
   if (pide('01')) {
-    await ir('/conta/ventas/clientes-y-cuotas', 'Cuotas al mes')
+    await ir('/conta/ventas/clientes-y-cuotas', page.locator('.g4-cifra').filter({ hasText: 'Cuotas al mes' }))
     inicio = R.t()
     escena('01 Clientes y cuotas')
     const cifra = (t) => page.locator('.g4-cifra').filter({ hasText: t })
@@ -254,7 +304,9 @@ try {
     await di('02.1', () => mirar(page.getByText('Se le cobra al mes'), page.getByText(/Sumied calcula/)))
     await di('02.2', () => a(page.getByText(/Así le llegará el recibo/)))
     await di('02.3', () => pulsa(page.getByRole('button', { name: 'Ver trabajadores' })))
-    await di('02.4', () => a(page.getByText(/^Alta (en|el)/)))
+    // nº116 · El trabajador nuevo, en la lista de «Ver trabajadores» con su «desde…»: sale siempre (el «Alta en…» del
+    // recibo solo sale con el cobro del mes preparado).
+    await di('02.4', () => a(page.locator('.g4-cliente-textos').filter({ hasText: TRABAJADOR_NUEVO })))
     await di('02.5', async () => { await pulsa(page.getByRole('tab', { name: 'Cobros', exact: true })); await quieto(1500); await pulsa(page.getByRole('tab', { name: 'Contacto', exact: true })) })
     await di('02.6', () => pulsa(page.getByRole('tab', { name: /^Datos de / })))
     await foto('02')
@@ -314,7 +366,7 @@ try {
       await di('06.2', () => mirar(page.getByText('Lo que cambia').first(), page.locator('li.g5-cambio').first()))
       await di('06.3', () => a(cambio('Imprenta Rápida Sol').locator('.g5-cambio-porque')))
       await di('06.4', () => a(cambio('Talleres Ruiz').locator('.g5-cambio-porque')))
-      await di('06.5', async () => { await libre(); await pulsaQueEscribe(cambio('Reformas Atalaya').getByRole('button', { name: 'Este mes no' })) })
+      await di('06.5', async () => { await libre(); await pulsaQueEscribe(cambio('Reformas Atalaya').getByRole('button', { name: 'Este mes no' }), 800, cambio('Reformas Atalaya').getByText('Fuera de este cobro')) })
       await di('06.6', async () => {
         const pendiente = () => page.locator('li.g5-cambio .g4-boton[data-tipo="primario"]:not([disabled])').first()
         if (!GRABA) { await a(pendiente()); return }
@@ -326,19 +378,23 @@ try {
           if (i < 2) { await ra.clic(b, 700); await quieto(1200) } else { await b.click(); await quieto(500) }
         }
       })
-      await di('06.7', async () => { await libre(); await pulsaQueEscribe(page.getByRole('button', { name: /^Aprobar (el que no cambia|los \d+)/ })) })
+      await di('06.7', async () => { await libre(); await pulsaQueEscribe(page.getByRole('button', { name: /^Aprobar (el que no cambia|los \d+)/ }), 800, page.locator('.g5-hecho').filter({ hasText: 'Aprobados' })) })
       await di('06.8', () => a(page.getByText('No entran')))
       const enviar = page.locator('button.g5-enviar')
       await di('06.9', async () => {
         if (GRABA) await page.waitForFunction((el) => el && !el.disabled, await enviar.elementHandle(), { timeout: 30_000 }).catch(() => {})
-        await pulsaQueEscribe(enviar)
+        await pulsaQueEscribe(enviar, 800, page.getByRole('dialog'))
       })
       await di('06.10', async () => {
         if (!GRABA) return
         const dlg = page.getByRole('dialog')
         await dlg.first().waitFor({ timeout: 10_000 }); await mirar(dlg)
         await quieto(2500)
-        await ra.clic(dlg.getByRole('button', { name: /^Sí, enviar/ }), 700)
+        const si = dlg.getByRole('button', { name: /^Sí, enviar/ })
+        await ra.clic(si, 700)
+        // nº120 · Y si el clic no ha caído en el botón, el diálogo sigue abierto: se pulsa de verdad, fuera del montaje.
+        const cerrado = () => dlg.first().waitFor({ state: 'hidden', timeout: 10_000 }).then(() => true).catch(() => false)
+        if (!(await cerrado())) await R.sinVer(async () => { await si.first().click({ timeout: 15_000 }).catch(() => {}); if (!(await cerrado())) throw new Error('el diálogo de enviar sigue abierto') })
       })
       await foto('06')
     } else noToca(['06.2', '06.3', '06.4', '06.5', '06.6', '06.7', '06.8', '06.9', '06.10'], mes0?.enviado_at ? 'el cobro ya está enviado' : 'sin preparar; en ensayo no se prepara')
@@ -381,8 +437,11 @@ try {
       await di('07.4', () => a(page.getByText('En la contabilidad')))
       let png = null
       await R.sinVer(async () => {
-        const b = page.getByText('Descargar PDF').first()
-        const [d] = await Promise.all([page.waitForEvent('download', { timeout: 30_000 }), b.click()]).catch(() => [null])
+        // nº120 · El PDF se hace después de emitir la factura: el botón sale apagado un rato (run 22). Se espera a que se
+        // encienda, recargando si hace falta, antes de pulsar.
+        const b = page.getByRole('button', { name: 'Descargar PDF' }).first()
+        for (let i = 0; i < 12 && !(await b.isEnabled().catch(() => false)); i++) { await quieto(5000); if (i % 4 === 3) { await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {}); await sinCargar() } }
+        const [d] = await Promise.all([page.waitForEvent('download', { timeout: 30_000 }), b.click({ timeout: 15_000 })]).catch(() => [null])
         if (!d) { fallo('07.5: el PDF no se ha bajado'); return }
         const f = join(salida, 'factura.pdf'); await d.saveAs(f)
         execFileSync('pdftoppm', ['-png', '-r', '150', '-f', '1', '-l', '1', f, join(salida, 'factura')])
@@ -412,10 +471,15 @@ try {
     ing = await ingresoDe(tr.id)
     if (GRABA && enviado) {
       await R.sinVer(async () => {
+        // nº120 · El agente de Conciliación pasa después de cada extracto y, si hoy no ha pasado, la primera vez que
+        // alguien abre Bancos (bancosPantallas.ts, pasarAgente). En la demo ya había pasado ese día y nadie lo casaba:
+        // el run 22 esperó 45 min en balde. Lo hace el guion como lo haría él («seguro», por Folvy), con las mismas
+        // funciones que «Volver a empezar» en la historia de Talleres: cada liquidación pagada del mes con su ingreso.
         await esperaHasta(`ingreso de ${CLIENTE} casado en el banco`, async () => {
           await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: CUENTA }).then(() => {}, () => {})
+          await casarLiquidaciones()
           ing = await ingresoDe(tr.id); return !!ing?.casado
-        }, 45)
+        }, 10)
         await validarIngresosFacturados(julio.cliente, perfil?.display_name ?? null)
       })
     }
@@ -457,9 +521,15 @@ try {
       await R.sinVer(async () => {
         await page.goto(`${APP}/portal.html`, { waitUntil: 'domcontentloaded' })
         await page.evaluate(([ses, cli]) => { localStorage.setItem('sumied-portal', ses); localStorage.setItem('sumied-portal-cliente', cli) }, [JSON.stringify(s.sesion), u.party])
+        // nº116 · Ir a «portal.html#…» desde «portal.html» solo cambia el «#»: no recarga, y el portal se quedaba con lo
+        // que leyó al abrirse, sin esta sesión. Se recarga, para que entre con la sesión que se acaba de guardar.
         await page.goto(`${APP}/portal.html#${pestana}`, { waitUntil: 'domcontentloaded' })
+        await page.reload({ waitUntil: 'domcontentloaded' })
         await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => fallo(`11: el portal no ha cargado (${pestana})`))
         await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {}); await sinCargar()
+        // Y se dice si no es quien tenía que entrar (en vez de un «timeout» en la escena siguiente).
+        const hola = (await page.locator('h1.pt-h1').first().textContent().catch(() => '')) ?? ''
+        if (pestana === 'inicio' && !hola.includes(u.nombre)) fallo(`11: el portal no ha entrado como ${u.nombre} (dice «${hola.trim().slice(0, 60)}»)`)
       })
     }
     const pestanaPortal = async (p) => { await R.sinVer(async () => { await page.goto(`${APP}/portal.html#${p}`); await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => {}); await sinCargar() }) }
@@ -485,12 +555,25 @@ try {
         await ra.clic(pagar, 600)
         await R.sinVer(async () => { await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 }).catch(() => fallo('11.3: no se ha abierto la página de pago de Stripe')); await page.waitForLoadState('networkidle').catch(() => {}); await quieto(800) })
         try {
+          // nº120 · GitHub graba desde Estados Unidos: Stripe propone dólares, país «Estados Unidos» (pide el código
+          // postal) y Link marcado (pide un teléfono), y «Pagar» no seguía (run 22). En euros, España y sin Link.
+          await R.sinVer(async () => {
+            const eur = page.locator('button, [role="radio"], label').filter({ hasText: /\d,\d{2}\s*€/ }).first()
+            if (await eur.isVisible().catch(() => false)) { await eur.click().catch(() => {}); await quieto(800) }
+          })
           const tarjetaBtn = page.locator('[data-testid="card-accordion-item-button"]')
           if (await tarjetaBtn.isVisible().catch(() => false)) await ra.clic(tarjetaBtn, 600)
           for (const [sel, v] of [['#cardNumber', '4242 4242 4242 4242'], ['#cardExpiry', '12 / 34'], ['#cardCvc', '123'], ['#billingName', 'Felipe Herrera']]) {
             const c = page.locator(sel)
             if (await c.isVisible().catch(() => false)) { await ra.clic(c, 500); await c.pressSequentially(v, { delay: 45 }) }
           }
+          await R.sinVer(async () => {
+            const pais = page.locator('#billingCountry')
+            if (await pais.isVisible().catch(() => false)) await pais.selectOption('ES').catch(() => {})
+            const link = page.locator('#enableStripePass')
+            if (await link.isChecked().catch(() => false)) await link.uncheck({ force: true }).catch(() => {})
+            await quieto(500)
+          })
           await ra.clic(page.locator('[data-testid="hosted-payment-submit-button"], button[type="submit"]').first(), 700)
           await R.sinVer(async () => { await page.waitForURL(/portal\.html/, { timeout: 90_000 }); await page.waitForLoadState('networkidle').catch(() => {}); await quieto(2500) })
           await foto('11-pagado')

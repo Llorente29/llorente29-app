@@ -14,12 +14,13 @@ import { hojaDelProveedor, siguienteLibre } from '@/modules/conta/lib/planEmpres
 import { leerNoDeducibles, type IvaNoDeducible } from '@/modules/conta/services/ivaNoDeducibleService'
 import { porQueNoDeducible } from '@/modules/conta/lib/ivaNoDeducible'
 import { aplicarAsientoAMano, aplicarReparto, cuentaDelReparto, lineasYCuotas } from '@/modules/conta/lib/recibidaGuardada'
+import { supabase } from '@/lib/supabase'
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
   unidadesDelDia, type UnidadVentas, devolucionSinCobrar, facturaProveedor, deLaFacturaDeLote,
   type Correccion, type SerieTesoreria, comoAbono, plantillaDevolucion,
 } from '@/modules/conta/lib/asientosPropuestos'
-import { avisoPeriodoCerrado, diaAbierto, diaDeEntrada, fechaDeLaRecibida, fechaPropuesta, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta, type Razon } from '@/modules/conta/lib/libro'
+import { avisoPeriodoCerrado, diaAbierto, fechaPropuesta, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta, type Razon } from '@/modules/conta/lib/libro'
 import { claseIva, nombrePais, tipoDeLaClase, type ClaseIva, type FichaIva } from '@/modules/conta/lib/ivaProveedor'
 
 type Fila = Record<string, unknown>
@@ -298,6 +299,22 @@ export async function apuntarCorreccion(accountId: string, companyId: string, cl
  * soloFactura, solo esa (N23 «Está bien · apuntar»). Es el mismo bloque de
  * proponerPendientes, sacado para que una factura se apunte igual que en la tanda.
  */
+/** S01p·18.2 · La fecha con la que se apunta una recibida, según la base (conta_recibida_fecha, 0913). */
+interface FechaDeLaBase { fecha: string | null; aviso: string | null }
+async function fechaEnLaBase(companyId: string, fecha: string, cache: Map<string, Promise<FechaDeLaBase | null>>): Promise<FechaDeLaBase | null> {
+  if (!cache.has(fecha)) {
+    const cliente = supabase as unknown as { rpc: (n: string, a: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { code?: string; message: string } | null }> }
+    cache.set(fecha, Promise.resolve(cliente.rpc('conta_recibida_fecha', { p_company: companyId, p_fecha: fecha })).then(({ data, error }) => {
+      // Sin la 0913 aplicada (la función no existe): null, y se sigue con la regla de antes.
+      if (error && (error.code === 'PGRST202' || error.code === '42883')) return null
+      if (error) throw new Error(`No he podido saber con qué fecha se apunta la factura del ${fecha.split('-').reverse().join('/')}: ${error.message}`)
+      const x = (data ?? {}) as { fecha?: string | null; aviso?: string | null }
+      return { fecha: x.fecha ? String(x.fecha).slice(0, 10) : null, aviso: x.aviso ?? null }
+    }))
+  }
+  return cache.get(fecha)!
+}
+
 async function facturasDeProveedor(accountId: string, companyId: string, desde: string, hasta: string, ctx: ContextoLibro, r: ResultadoProponer,
   quien: string | null, abierto: (f: string) => boolean, soloFactura?: string, ver?: (p: Propuesta) => void, localPropuesto?: string | null) {
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
@@ -336,32 +353,39 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
   const idsNd = facturas.filter((f) => f.vat_non_deductible === true).map((f) => String(f.id))
   const noDeducibles = idsNd.length ? await leerNoDeducibles(accountId, idsNd).catch(() => new Map<string, IvaNoDeducible>()) : new Map<string, IvaNoDeducible>()
   const aprendido = new Map<string, Fila | null>()
+  const fechasBase = new Map<string, Promise<FechaDeLaBase | null>>()
   for (const f of facturas) {
     if (deLiquidacion.has(String(f.id))) continue
     const sup = String(f.supplier_id); const prov = (f.supplier ?? {}) as Fila
     const fechaFactura = String(f.invoice_date)
-    // V04 (Julio, 27/10): nunca antes del día en que entró, aunque el mes esté abierto.
-    const entrada = fechaDeLaRecibida(fechaFactura, diaDeEntrada(s(f.created_at)))
-    let fecha = entrada.fecha
-    // Que entró después no es una duda: va en sus razones, sin bajar la confianza (lo seguro se sigue apuntando solo).
-    let razonEntrada = entrada.aviso
+    // S01p·18.2 (Julio, 04/11 y 13/11): va con la fecha de la factura, salvo que su
+    // trimestre tenga el IVA presentado (o su día no esté abierto: el corte con Diez,
+    // un ejercicio cerrado). Lo decide la base (conta_recibida_fecha, la misma regla
+    // que aplica al proponer): ni el día en que entró (la V04 del 27/10) ni un mes
+    // cerrado por una persona (se marca «entró después del cierre», no se mueve).
+    let fecha = fechaFactura
     let avisoFecha: string | null = null
-    if (!abierto(fecha)) {
-      // D07b (Julio, 23/10): la de un periodo cerrado se asienta el PRIMER DÍA
-      // ABIERTO, conserva su fecha de factura (el libro de IVA la lleva) y su
-      // IVA va al periodo del asiento; un aviso ámbar dice las dos fechas. Solo
-      // al mirarla o validarla una a una (o en bloque): la tanda de pendientes
-      // no las arrastra, como siempre (lo traído de Diez ya está allí).
+    const enLaBase = await fechaEnLaBase(companyId, fechaFactura, fechasBase)
+    if (enLaBase) {
+      if (!enLaBase.fecha) {
+        if (soloFactura || ver) r.sinPropuesta.push({ id: String(f.id), que: `Factura${f.invoice_number ? ` ${String(f.invoice_number)}` : ''}`, porque: enLaBase.aviso ?? 'No hay ningún día abierto para apuntarla.' })
+        continue
+      }
+      if (enLaBase.fecha !== fechaFactura) {
+        // Como siempre, la tanda de pendientes no arrastra la de un periodo presentado:
+        // se apunta al mirarla o validarla una a una (o en bloque), con su aviso.
+        if (!(soloFactura || ver)) continue
+        fecha = enLaBase.fecha
+        avisoFecha = enLaBase.aviso ?? avisoPeriodoCerrado(fechaFactura, enLaBase.fecha)
+      }
+    } else if (!abierto(fecha)) {
+      // Sin conta_recibida_fecha (la 0913 sin aplicar): lo de antes, el primer día abierto (D07b).
       const fp = soloFactura || ver ? fechaPropuesta(fecha, ctx.calendario) : { fecha: null, aviso: null }
       if (!fp.fecha) {
         if (soloFactura || ver) r.sinPropuesta.push({ id: String(f.id), que: `Factura${f.invoice_number ? ` ${String(f.invoice_number)}` : ''}`, porque: fp.aviso ?? 'Su fecha cae en un periodo cerrado o antes del primer día abierto: no se apunta ahí.' })
         continue
       }
-      // Entró en un periodo cerrado: el primer día abierto desde ese día, y lo dice.
-      razonEntrada = null
-      avisoFecha = entrada.aviso
-        ? `Esta factura entró el ${entrada.fecha.slice(8, 10)}/${entrada.fecha.slice(5, 7)}: se contabiliza el ${fp.fecha.slice(8, 10)}/${fp.fecha.slice(5, 7)}, el primer día abierto.`
-        : avisoPeriodoCerrado(fechaFactura, fp.fecha)
+      avisoFecha = avisoPeriodoCerrado(fechaFactura, fp.fecha)
       fecha = fp.fecha
     }
     let cuentaProv = ctx.enlace('supplier', sup, 'principal')
@@ -471,10 +495,11 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
         porque: `${nombreProv} no tenía cuenta contable: ${ver ? 'al validar, le creo' : 'le he creado'} la siguiente libre de la ${cuentaNueva.hoja} (${cuentaNueva.hoja === '4000' ? 'proveedores' : 'acreedores'}) y queda en su ficha` })
     }
     if (avisoFecha) { res.propuesta.avisos.push(avisoFecha); res.propuesta.confianza = peor(res.propuesta.confianza, 'probable') }
-    if (razonEntrada) {
-      res.propuesta.razones.push({ decision: razonEntrada,
-        porque: `Una factura recibida no se contabiliza antes del día en que entró: su IVA se deduce desde ese día, y así el asiento y su IVA caen en el mismo trimestre. Su fecha de factura (${fechaFactura.split('-').reverse().join('/')}) no cambia` })
-    }
+    res.propuesta.razones.push(fecha === fechaFactura
+      ? { decision: `Fecha: ${fechaFactura.split('-').reverse().join('/')}, la de la factura`,
+          porque: 'Una factura recibida se apunta con su fecha de factura mientras su trimestre no tenga el IVA presentado' }
+      : { decision: `Fecha: ${fecha.split('-').reverse().join('/')}, no la de la factura (${fechaFactura.split('-').reverse().join('/')})`,
+          porque: avisoFecha ?? 'Su día no está abierto en el libro' })
     if (clase === 'intracomunitaria' && ficha.vies !== 'valid') {
       res.propuesta.avisos.push(`El NIF-IVA de ${nombreProv} está sin comprobar en VIES: ábrelo en su ficha y se vuelve a preguntar.`)
       res.propuesta.confianza = peor(res.propuesta.confianza, 'probable')

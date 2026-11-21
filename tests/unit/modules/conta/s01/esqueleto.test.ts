@@ -47,6 +47,7 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     libroDiario: 'contabilidad.asientos', nuevoAsiento: 'contabilidad.asientos', asiento: 'contabilidad.asientos',
     libros: 'contabilidad.listados', diarioResumido: 'contabilidad.listados', librosArea: 'contabilidad.listados', librosAccion: 'contabilidad.listados',
     pendientesDiez: 'contabilidad.importar',
+    traerErp10: 'contabilidad.importar',   // N07
     terceros: 'contactos.todos', tercero: 'contactos.todos', terceroApartado: 'contactos.todos',
     comoTeFactura: 'contactos.todos', fichaProveedor: 'contactos.todos', fichaProveedorApartado: 'contactos.todos',
     // S02: las recepciones del local cuelgan de Facturas recibidas.
@@ -75,6 +76,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     ventas: 'facturacion.cierres',
     // V01 · Ventas › Facturas: la lista, una nueva y la ficha.
     facturasVenta: 'facturacion.emitidas', nuevaFacturaVenta: 'facturacion.emitidas', facturaVenta: 'facturacion.emitidas',
+    // K05 · La emitida del núcleo: desde su asiento, a mano (la contable) y Asientos › «Emitidas»: cuelgan de las facturas emitidas.
+    emitidaAsiento: 'facturacion.emitidas', emitidaAMano: 'facturacion.emitidas', emitidasPorRevisar: 'facturacion.emitidas',
     cierres: 'facturacion.cierres', cierre: 'facturacion.cierres',
     // V01 · Entrega 3 · Ventas › Liquidaciones y la ficha de una fila de plataforma.
     liquidacionesVentas: 'facturacion.liquidacionesVentas', liquidacionPlataforma: 'facturacion.liquidacionesVentas',
@@ -184,9 +187,9 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(productosVisibles(NADA, conPantalla).map((p) => p.id)).not.toContain('laboral')
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_laboral']) }, conPantalla).map((p) => p.id)).toContain('laboral')
   })
-  it('las pestañas de Contabilidad, y «Importar» solo con Diez', () => {
+  it('las pestañas de Contabilidad; «Importar», para todas desde el N07 («Traer de ERP10»)', () => {
     const c = PRODUCTOS.find((p) => p.id === 'contabilidad')!
-    expect(pestanasVisibles(c, NADA).map((t) => t.etiqueta)).toEqual(['Asientos', 'Libros y listados', 'Definiciones', 'Cierre y Registro'])
+    expect(pestanasVisibles(c, NADA).map((t) => t.etiqueta)).toEqual(['Asientos', 'Libros y listados', 'Definiciones', 'Cierre y Registro', 'Importar'])
     expect(pestanasVisibles(c, CON_DIEZ).map((t) => t.etiqueta)).toEqual(['Asientos', 'Libros y listados', 'Definiciones', 'Cierre y Registro', 'Importar'])
   })
   it('PC01 · Compras y gastos: Facturas recibidas · Pagos · Repartidores; Repartidores solo con hostelería; Tickets, fuera hasta el S07', () => {
@@ -207,12 +210,17 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     // V03 E2 (26/10): entra Facturación › Verifactu (tablero 25), con pantalla: sale también en el producto solo.
     // PC01 E4 (27/10): entra Facturación › Cobros (los recordatorios), con pantalla.
     // S01c (29/10): entra Compras › Correo de facturas (la dirección, la confirmación de Gmail y lo que ha llegado), con pantalla.
-    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Apuntar solo lo seguro', 'Certificados y accesos', 'Correo de facturas', 'Verifactu', 'Cobros', 'Usuarios', 'Tu cuenta', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
+    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Apuntar solo lo seguro', 'Certificados y accesos', 'Correo de facturas', 'Verifactu', 'Cobros', 'Ventas por día', 'Usuarios', 'Tu cuenta', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
     // S01o (01/11): entra Contabilidad › Apuntar solo lo seguro (el interruptor de la empresa), con pantalla.
     // DM1 · PR 1 (30/10): entra Usuarios (quién entra e «Invitar a una persona»), con pantalla.
     expect(pestanasVisibles(a, { ...NADA, solo: true }).map((t) => t.id)).toEqual(['empresa', 'impuestos', 'socios', 'ejercicio', 'apuntar-solo', 'correo-facturas', 'verifactu', 'cobros', 'personas', 'folvy'])
     // GD (nº71): «Tu cuenta» solo en una cuenta de demostración.
     expect(pestanasVisibles(a, { ...NADA, solo: true, demo: true }).map((t) => t.id)).toContain('cuenta')
+    // R06 (17/11): Ventas › Ventas por día, solo con «ventas por día» encendido (no basta con ser de hostelería).
+    expect(pestanasVisibles(a, { ...NADA, solo: true, ventasPorDia: true }).map((t) => t.id)).toContain('ventas-por-dia')
+    // R09 (20/11): una empresa de hostelería tiene «Ventas por día» sin interruptor.
+    expect(pestanasVisibles(a, { ...NADA, solo: true, hosteleria: true }).map((t) => t.id)).toContain('ventas-por-dia')
+    expect(pestanasVisibles(a, { ...NADA, solo: true }).map((t) => t.id)).not.toContain('ventas-por-dia')
     expect(de('/conta/ajustes')).toBe('ajustes.empresa')
     expect(de('/conta/ajustes/plan')).toBe('contabilidad.definiciones')
     expect(de('/conta/ajustes/tablas/numeracion')).toBe('contabilidad.definiciones')
@@ -244,24 +252,30 @@ describe('el catálogo de órdenes', () => {
     ])
     expect(cintaDe('contabilidad', null, NADA)).toEqual([])
   })
-  it('paso 3: las acciones de Libros, en la cinta de su pestaña; Importar (Diez), solo con Diez', () => {
+  it('paso 3: las acciones de Libros, en la cinta de su pestaña; Importar: «Traer de ERP10» siempre (N07) y lo de Diez, solo con Diez', () => {
     expect(cintaDe('contabilidad', 'listados', NADA).map((g) => [g.titulo, g.ordenes.length])).toEqual([['Diario', 1], ['Mayor', 3], ['Estados', 3], ['IVA', 6], ['Retenciones', 1]])
     expect(cintaDe('contabilidad', 'cierre', NADA).map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([
       ['Cierre', ['Ejercicios', 'Cerrar el mes', 'Regularización, cierre y apertura']],
       ['Cuentas anuales', ['Cuentas anuales del ejercicio', 'Qué cuentas alimentan cada línea']],
     ])
-    expect(cintaDe('contabilidad', 'importar', NADA)).toEqual([])
-    expect(cintaDe('contabilidad', 'importar', CON_DIEZ).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Pendientes de adjuntar en Diez']])
+    expect(cintaDe('contabilidad', 'importar', NADA).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Traer de ERP10']])
+    expect(cintaDe('contabilidad', 'importar', CON_DIEZ).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Traer de ERP10'], ['Pendientes de adjuntar en Diez']])
   })
   it('regla 31, contra AREAS_LIBROS: cada acción con pantalla está en UNA cinta, y su orden lleva a su dirección de Libros', () => {
     const enCintas = Object.values(CINTAS).flatMap((gs) => gs.flatMap((g) => g.ordenes))
     const conPantalla = AREAS_LIBROS.flatMap((a) => a.grupos.flatMap((g) => g.acciones)).filter((x) => !x.c05b && !['libro-diario', 'balances-pdf', 'balances-excel'].includes(x.id))
-    expect(conPantalla.length).toBe(20)   // diario 2 · mayor 3 · IVA 7 · estados 3 · cuentas anuales 2 · cierre 3
+    expect(conPantalla.length).toBe(22)   // diario 3 (N07: «Traer de ERP10») · mayor 3 · IVA 7 · estados 3 · cuentas anuales 2 · cierre 4 (X04: «Salida a ERP10»)
     for (const x of conPantalla) expect(enCintas.filter((id) => id === `libros.${x.id}`), x.id).toHaveLength(1)
     for (const x of conPantalla) {
       const o = ordenPorId(`libros.${x.id}`)!
       expect(de(rutaConta(('ruta' in o.a ? o.a.ruta : ''))), x.id).toBe(`contabilidad.${o.pestana}`)
     }
+  })
+  it('X04 · «Salida a ERP10» va en Cierre, detrás de «Cerrar el mes», y solo la ve la empresa con la salida encendida', () => {
+    const ids = (ctx: Contexto) => cintaDe('contabilidad', 'cierre', ctx).flatMap((g) => g.ordenes.map((o) => o.id))
+    expect(ids(NADA)).not.toContain('libros.salida-erp10')
+    expect(ids({ ...NADA, erp10: true }).slice(0, 4)).toEqual(['libros.ejercicios', 'libros.cerrar-mes', 'libros.salida-erp10', 'libros.cierre-ejercicio'])
+    expect(ordenPorId('libros.salida-erp10')?.solo).toBe('erp10')
   })
   it('S02 · PR 2: Bancos pinta su encabezado (bancos/acciones.ts): el catálogo no le pone fila; sus órdenes siguen para el buscador y Favoritos', () => {
     for (const t of ['movimientos', 'reglas', 'cuentas', 'cierre']) expect(cintaDe('bancos', t, NADA), t).toEqual([])

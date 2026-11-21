@@ -1,0 +1,2 @@
+# B01r26 · el token de la C0009: la 2256 no tiene vuelta atrás (se declara en aplicar.txt): el token era de la C0009 y los motivos se escribieron comparando con la C0009.
+cuenta: scripts/conta/produccion/cuentas/b01r26-token-de-la-c0009.sql

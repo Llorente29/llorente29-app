@@ -1,0 +1,3 @@
+# S01p·18 · la vuelta atrás: conta_propuestas_socio desde su respaldo, y fuera las reglas y lo pendiente.
+cuenta: scripts/conta/produccion/cuentas/s01p-linea-socio.sql
+supabase/vuelta-atras/20261112T1755_s01p_linea_socio.down.sql

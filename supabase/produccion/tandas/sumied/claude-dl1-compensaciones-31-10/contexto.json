@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · compensaciones del 16–31/10 a 31/10 · contexto de producción, medido en SOLO LECTURA el 13/11 a las 11:30Z: la 1500 no crea ni cambia ningún objeto; anula 11 asientos validados con _dl1_anular, los vuelve a proponer a 31/10 con _journal_entry_proponer y valida con _dl1_validar (todas en producción). Las 11 compensaciones son las de la 0935 (Glovo 1.402,45 a 01/11; Just Eat 111,75 a 07/11). Nada en el camino del pedido; la 1500 no está en el historial.",
+ "medido": "2026-11-13T11:30Z",
+ "tanda": {
+  "supabase/migrations/20261113T1500_dl1_compensaciones_a_31_10.sql": "cf8593ffe3388c6927a07c6a1e8e1653"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

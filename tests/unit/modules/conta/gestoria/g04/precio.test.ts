@@ -192,3 +192,42 @@ describe('G04 · altas y bajas a mitad de mes: un ajuste de la gestoría', () =>
     expect(r.totalCent).toBe(10000)
   })
 })
+
+// nº 89 · Una anual (300 € al año) va entera en su mes y no está en los demás. Un Talleres inventado como el de la
+// demo: gestoría 150 € al mes, laboral 3 × 25 € y el impuesto de sociedades anual desde junio: 225 € once meses, 525 € en junio.
+describe('nº 89 · la anual, entera y solo en su mes', () => {
+  const SOCIEDADES = { tipo: 'servicio', servicioId: 'sociedades' } as const
+  const c: Catalogo = {
+    ...catalogo([
+      p('g', GESTORIA, { tipo: 'fijo', periodo: 'mes', importeCent: 15000 }),
+      p('l', LABORAL, { tipo: 'por_trabajador', importeCent: 2500 }),
+      p('s', SOCIEDADES, { tipo: 'fijo', periodo: 'anio', importeCent: 30000 }),
+    ]),
+  }
+  c.servicios.push({ id: 'sociedades', empresaId: E, nombre: 'Impuesto de sociedades' })
+  const asig: Asignacion[] = [
+    { id: 'a1', clienteId: 'c', empresaId: E, objetivo: GESTORIA, desde: '2026-01', hasta: null },
+    { id: 'a2', clienteId: 'c', empresaId: E, objetivo: LABORAL, desde: '2026-01', hasta: null, trabajadores: trabajadores(3) },
+    { id: 'a3', clienteId: 'c', empresaId: E, objetivo: SOCIEDADES, desde: '2026-06', hasta: null },
+  ]
+  it.each([['2026-11', 22500, false], ['2026-12', 22500, false], ['2027-05', 22500, false], ['2027-06', 52500, true], ['2027-07', 22500, false]])(
+    '%s: %i céntimos (la anual en el recibo: %s)', (mes, total, conAnual) => {
+      const r = reciboDelMes(c, asig, 'c', E, mes)
+      expect(r.totalCent).toBe(total)
+      expect(r.lineas.some((l) => l.asignacionId === 'a3')).toBe(conAnual)
+    })
+  it('en su mes, entera y con su porqué', () => {
+    const l = reciboDelMes(c, asig, 'c', E, '2027-06').lineas.find((x) => x.asignacionId === 'a3')!
+    expect([l.importeCent, l.cuenta, l.dePrecio]).toEqual([30000, '300,00 € al año, se cobra en junio', 'tarifa'])
+  })
+  it('una anual con su propio importe (como las de GoCardless), igual: solo en el mes de su «desde»', () => {
+    const propio = catalogo([p('x', SOCIEDADES, { tipo: 'fijo', periodo: 'anio', importeCent: 14520 }, '2025-02', 'c')])
+    const a: Asignacion[] = [{ id: 'b1', clienteId: 'c', empresaId: E, objetivo: SOCIEDADES, desde: '2025-02', hasta: null }]
+    expect(['2026-11', '2027-01', '2027-02', '2027-03'].map((m) => reciboDelMes(propio, a, 'c', E, m).totalCent)).toEqual([0, 0, 14520, 0])
+  })
+  it('una anual no se prorratea aunque empiece a mitad de mes', () => {
+    const prop: Catalogo = { ...c, ajustes: { mitadDeMes: 'proporcional' } as Catalogo['ajustes'] }
+    const a: Asignacion[] = [{ id: 'a3', clienteId: 'c', empresaId: E, objetivo: SOCIEDADES, desde: '2026-06', hasta: null, altaEl: '2026-06-20' }]
+    expect(reciboDelMes(prop, a, 'c', E, '2026-06').totalCent).toBe(30000)
+  })
+})

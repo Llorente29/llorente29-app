@@ -1,0 +1,12 @@
+# S01p·18 · punto 1 · Una línea que la liquidación del socio no conoce ya no bloquea:
+# se pregunta («¿Qué es esta línea?») y se apunta (Julio, 12/11; Respuesta S01p·18.1).
+# Rama claude/s01p-linea-socio. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1755  socio_linea_regla y sus RPC (lo que se contesta, por socio y concepto);
+#         lo pendiente de facturar con un socio en un local (la 4009);
+#         conta_propuestas_socio (con respaldo): el saldo cuadra con las dos facturas
+#         MÁS las líneas contestadas, y propone el asiento de la 4009 (o su contrario).
+#
+# Nada en el camino del pedido. No mueve ninguna fila. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-linea-socio.sql
+supabase/migrations/20261112T1755_s01p_linea_socio.sql

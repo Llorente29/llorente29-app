@@ -1,0 +1,11 @@
+# Q05 · «Pantallas nuevas (en pruebas)» en la ficha de la cuenta (Julio, 18/11): el interruptor del
+# núcleo, conta_nucleo, al lado de Contabilidad, Impuestos y Laboral. Rama conta/q05-interruptor-nucleo.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2029  cambia, con la misma firma, conta_interruptores_de_cuenta (enseña el cuarto) y
+#         conta_interruptor_cambiar (lo admite; sin contabilidad no se enciende; apagar la
+#         contabilidad lo apaga también, como Impuestos y Laboral).
+#
+# No toca ningún dato. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/q05-interruptor-nucleo.sql
+supabase/migrations/20261118T2029_q05_interruptor_nucleo.sql

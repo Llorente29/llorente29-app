@@ -172,12 +172,14 @@ describe('el número del asiento lleva su serie', () => {
   })
 })
 
-// Respuesta 3, punto 3. Filas REALES del plan de la cuenta A en staging-conta
-// (company_account, 12/10), con su kind, name y plain_name tal cual.
-describe('la cuenta por su nombre de uso', () => {
+// Filas REALES del plan de la cuenta A en staging-conta (company_account, 12/10), con su kind, name y
+// plain_name tal cual. K08 (Julio, 21/11): siempre el nombre guardado, nunca la explicación (antes, la
+// respuesta 3 daba a las hojas de serie su «qué se apunta aquí»).
+describe('la cuenta por su nombre guardado, nunca su explicación', () => {
   const REALES = [
-    { code: '62300000', kind: 'template', name: 'Servicios de profesionales independientes', plainName: 'Asesoría, abogado, notario.', uso: 'Asesoría, abogado, notario' },
-    { code: '64000000', kind: 'template', name: 'Sueldos y salarios', plainName: 'Nóminas, en bruto.', uso: 'Nóminas, en bruto' },
+    { code: '62300000', kind: 'template', name: 'Servicios de profesionales independientes', plainName: 'Asesoría, abogado, notario.', uso: 'Servicios de profesionales independientes' },
+    { code: '64000000', kind: 'template', name: 'Sueldos y salarios', plainName: 'Nóminas, en bruto.', uso: 'Sueldos y salarios' },
+    { code: '60000000', kind: 'template', name: 'Compras de mercaderías', plainName: 'Bebidas y producto que vendes tal cual.', uso: 'Compras de mercaderías' },
     { code: '40000002', kind: 'own', name: 'Proveedores · Hermanos Ruiz', plainName: null, uso: 'Proveedores · Hermanos Ruiz' },
     { code: '47200021', kind: 'own', name: 'IVA soportado 21 %', plainName: null, uso: 'IVA soportado 21 %' },
     // Hoja de serie sin «qué se apunta aquí»: su título, nunca un literal de reserva (regla 30).

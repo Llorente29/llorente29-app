@@ -42,6 +42,13 @@ T7. **Cada sesión vigila sus propias ejecuciones** (e2e, ensayo, staging,
    Vercel) hasta el final y da el resultado con su enlace. *(W12, 29/10:
    sustituye a «abrir o actualizar un PR acaba el turno», del 26/10.)* *No lo
    comprueba una máquina: es lo que hace la sesión después de lanzar.*
+   **Cuando tu e2e sale en rojo, lo primero es leer en el registro del job lo
+   que había en pantalla** (cada prueba que falla, con su «── Falló: … ──»:
+   qué esperaba, el árbol de la pantalla, lo que contestó la base y los errores
+   de la página; Q03, `scripts/e2e/reporter-pantalla.mjs`). **No se propone un
+   arreglo sin haberlo leído.** *(18/11: la K03 cayó tres veces en la misma
+   prueba y las dos primeras hipótesis, hechas sin ver la pantalla, eran
+   falsas; la pantalla decía «Ninguna cuenta encaja con lo que buscas».)*
 T8. **Merge, nunca rebase**, en las ramas de los PR: para traer `main`,
    `git merge origin/main` y un push normal; nunca un push forzado. Reiniciar
    una rama cuyo PR ya se fusionó es empezar otra desde `main` con un PR nuevo.
@@ -432,8 +439,17 @@ existir. Salió al ir a desplegar el cinturón y comparar los dos lados.)*
 
 - **La descripción de todo PR a `main` lleva `## Funciones a desplegar a mano`**
   con las funciones que toca —las carpetas de `supabase/functions` cambiadas y
-  **cada función que importa un `_shared` cambiado**, porque
-  `deploy-edge-functions` se salta `_shared`—, o «ninguna».
+  **cada función que importa un `_shared` cambiado**—, o «ninguna». Es la lista
+  de lo que sale con la fusión, y `pr-a-main.yml` la compara con el diff.
+  *Desde el W06 (22/10), `deploy-edge-functions` ya no se salta `_shared`: al
+  fusionar, despliega solas las carpetas cambiadas y cada función que usa lo
+  cambiado de `_shared`, directa o indirectamente
+  (`scripts/pr/funciones-del-push.mjs`). El 18/11, el #715 solo tocó
+  `_shared/bancos/libro.ts` y el run 44240210286 dijo «Cambiaron (con las que
+  usan lo cambiado de _shared): conta-banco-agregador», y la desplegó. «A mano»
+  queda en el nombre de la sección por historia: hoy solo se despliega a mano
+  `hubrise-webhook`, que nunca sale sola (la puerta, regla 1), y lo que se
+  quiera sacar sin fusionar.*
 - **El título nunca lleva `[skip ci]`** ni sus hermanas, y **el mensaje de la
   fusión tampoco**: con la marca, el push a `main` no lanza
   `deploy-edge-functions` y lo fusionado queda sin efecto.
@@ -483,12 +499,13 @@ y en un PR solo con la etiqueta **`e2e-entera`**, cuando Julio la pide.
 - **Las unitarias, también en la CI** (N1, 23/10): `unitarias.yml` corre en
   cada PR a `main` las del producto que toca (`scripts/pruebas/unitarias.mjs`).
   En local, `antes-de-subir.sh` las sigue corriendo enteras.
-- **Y cada noche sobre `main`**, a las 03:00 de Madrid, la entera en 2 trozos.
+- **Y cada noche sobre `main`**, a las 03:00 de Madrid, la entera en 3 trozos.
   - Si falla por staging (no poder entrar, un 520, una página HTML de la base),
     la repite una vez.
   - Si no es por staging, o si vuelve a fallar, abre la incidencia «e2e de la
     noche en rojo» (`scripts/e2e/noche.mjs`).
-- **La entera lanzada a mano va siempre en 2 trozos**, también con una carpeta
+- **La entera lanzada a mano va siempre en 3 trozos** (19/11: en 2, el trozo
+  mayor pasaba de 60 min), también con una carpeta
   («tests/e2e/conta»). En un trozo solo van los ficheros sueltos.
 
 *(26/10. La entera corría en casi todos los PR, porque tocar el menú o

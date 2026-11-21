@@ -1,0 +1,8 @@
+{
+ "_que": "SP · traspasar el mes en curso · contexto medido en SOLO LECTURA el 2026-11-15: conta_traspaso_confirmar(uuid,date) md5 8f6dc7795d6c45b09a80f690ebc8e1cd y conta_traspaso_terminar(uuid,jsonb,boolean) md5 194164ea192eaa1155ff4a352f4925e1, las mismas huellas en la base local del W09; cada trozo que cambia está una sola vez. Ningún disparador ni trabajo de cron las llama. La 1954 no está en el historial.",
+ "medido": "2026-11-15T19:00Z",
+ "tanda": {
+  "supabase/migrations/20261115T1954_sp_traspaso_mes_en_curso.sql": "bb26938a10ae9f36f372510151c48a5a"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

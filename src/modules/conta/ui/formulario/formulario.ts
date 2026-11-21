@@ -7,9 +7,11 @@
 //     siendo lo propuesto y nadie lo ha aceptado);
 //   · qué hace cada tecla. Las de la maqueta: Tab e Intro, siguiente campo;
 //     F4, buscar subcuenta; Ctrl S, guardar; Ctrl Intro, validar y pasar al
-//     siguiente; Av Pág y Re Pág, documento siguiente o anterior. NUNCA F5,
-//     F10, F11 ni F12: son del navegador (recargar, menú, pantalla completa,
-//     herramientas). Lo comprueba una prueba;
+//     siguiente; Av Pág y Re Pág, documento siguiente o anterior. NUNCA F10,
+//     F11 ni F12: son del navegador (menú, pantalla completa, herramientas).
+//     Lo comprueba una prueba. K03 (decisión 10 de Julio, 17/11): F5 deja de
+//     ser solo del navegador y abre el mayor de la cuenta, como en ERP10; con
+//     Ctrl o Mayúsculas sigue recargando (la salida a mano);
 //   · buscar una subcuenta por su número o por su nombre.
 
 import { miles } from '@/modules/conta/ui/tabla/tablaDensa'
@@ -27,10 +29,10 @@ export function estadoCampo(valor: string, propuesto: string | undefined, acepta
   return aceptado ? 'aceptado' : 'propuesto'
 }
 
-export type AccionTecla = 'siguiente' | 'buscar' | 'guardar' | 'validar' | 'documento-siguiente' | 'documento-anterior'
+export type AccionTecla = 'siguiente' | 'buscar' | 'guardar' | 'validar' | 'documento-siguiente' | 'documento-anterior' | 'mayor'
 
-/** Las que la maqueta prohíbe, porque son del navegador. */
-export const TECLAS_DEL_NAVEGADOR = ['F5', 'F10', 'F11', 'F12'] as const
+/** Las que la maqueta prohíbe, porque son del navegador. K03: F5 ya no (es el mayor). */
+export const TECLAS_DEL_NAVEGADOR = ['F10', 'F11', 'F12'] as const
 
 /**
  * Qué hace una tecla dentro del formulario. Tab no se toca (el navegador ya
@@ -43,6 +45,8 @@ export function accionDeTecla(e: { key: string; ctrlKey?: boolean; metaKey?: boo
   if (ctrl && e.key === 'Enter') return 'validar'
   if (ctrl && (e.key === 's' || e.key === 'S')) return 'guardar'
   if (ctrl || e.altKey) return null
+  // K03 · F5, el mayor de la cuenta; con Mayúsculas (o Ctrl, arriba), del navegador.
+  if (e.key === 'F5') return e.shiftKey ? null : 'mayor'
   if (e.key === 'F4') return 'buscar'
   if (e.key === 'PageDown') return 'documento-siguiente'
   if (e.key === 'PageUp') return 'documento-anterior'

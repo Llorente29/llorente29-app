@@ -1,0 +1,18 @@
+# G06 · GoCardless casado con Bitrix24 · Tarea 2: el enlace en un solo sitio. Rama conta/g06-casado. Se ensaya y
+# se aplica antes de fusionar, desde main nombrando la rama (lo lanza Julio, T10).
+#
+#   1. 0938 — AÑADE, sin tocar nada de lo que existe:
+#      · conta_gc_enlace (el sitio único: cliente de GoCardless → ficha, por qué y en qué estado), con su RLS;
+#      · conta_gc_enlace_elegido (el cliente de GoCardless de cada ficha y empresa, uno, con la regla de plan.ts);
+#      · el relleno, solo en la tabla nueva, con lo de hoy: lo enlazado a mano, conta_gc_cliente.party_id y
+#        conta_cobro_cliente.gc_cliente_id; si los dos dicen fichas distintas, «conflicto» para una persona.
+#      Los dos enlaces de ahora no se tocan y se siguen escribiendo (cautela del nº 140). No toca recibos, cobros ni
+#      facturas. Nada en el camino del pedido.
+#
+# Sin «autorizo»: no toca datos de lo que existe ni destruye nada.
+# Medido en solo lectura el 12/11 (QBO): el relleno deja 1.138 atados y 63 en conflicto (27 en la demo, por NIF).
+# Antes de fusionar, también se despliega conta-gocardless-leer (lee por páginas y escribe conta_gc_enlace): el
+# real de esta tanda va ANTES del despliegue, porque la función nueva escribe en la tabla nueva.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261112T0938_g06_enlace_gocardless.sql
+cuenta: scripts/conta/produccion/cuentas/g06-casado.sql

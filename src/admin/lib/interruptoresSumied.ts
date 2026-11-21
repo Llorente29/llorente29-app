@@ -1,20 +1,29 @@
 // src/admin/lib/interruptoresSumied.ts
 //
 // S01f · Los interruptores de Sumied de una cuenta (feature_flags conta,
-// conta_impuestos y conta_laboral), tal como los enseña la ficha de la cuenta
+// conta_impuestos, conta_laboral y, desde el Q05, conta_nucleo: «Pantallas
+// nuevas (en pruebas)»), tal como los enseña la ficha de la cuenta
 // en la administración de la plataforma. Aquí solo lo que se puede probar
 // sin pantalla: la regla «sin Contabilidad no hay Impuestos ni Laboral», la
 // línea de estado de cada fila y las frases (regla 8: confirmar con contenido).
 
-export type ClaveSumied = 'conta' | 'conta_impuestos' | 'conta_laboral'
+export type ClaveSumied = 'conta' | 'conta_impuestos' | 'conta_laboral' | 'conta_nucleo'
 
-export const CLAVES_SUMIED: readonly ClaveSumied[] = ['conta', 'conta_impuestos', 'conta_laboral']
+export const CLAVES_SUMIED: readonly ClaveSumied[] = ['conta', 'conta_impuestos', 'conta_laboral', 'conta_nucleo']
 
 /** El nombre de cada interruptor en palabras de todos los días. */
 export const NOMBRE_INTERRUPTOR: Record<ClaveSumied, string> = {
   conta: 'Contabilidad',
   conta_impuestos: 'Impuestos',
   conta_laboral: 'Laboral',
+  // Q05 (Julio, 18/11): el marco nuevo, detrás de conta_nucleo. «En pruebas» se ve, para que nadie
+  // lo encienda en un cliente sin saber que está a medias.
+  conta_nucleo: 'Pantallas nuevas (en pruebas)',
+}
+
+/** Lo que explica la fila debajo del nombre, si hace falta (Q05). */
+export const EXPLICACION_INTERRUPTOR: Partial<Record<ClaveSumied, string>> = {
+  conta_nucleo: 'El marco nuevo y las pantallas que ya estén hechas. Solo en el ordenador; en el móvil sigue lo de hoy.',
 }
 
 export interface Interruptor {
@@ -33,7 +42,7 @@ export interface DatosCuenta { asientos: number; facturasRecibidas: number; impu
 
 export const FRASE_BLOQUEADA = 'Enciende antes la contabilidad.'
 
-/** «Impuestos» y «Laboral» no se encienden con «Contabilidad» apagada. */
+/** «Impuestos», «Laboral» y «Pantallas nuevas» no se encienden con «Contabilidad» apagada. */
 export function bloqueada(i: Interruptor, todos: readonly Interruptor[]): boolean {
   if (i.clave === 'conta' || i.encendida) return false
   return !todos.some((x) => x.clave === 'conta' && x.encendida)
@@ -63,6 +72,7 @@ const LO: Record<ClaveSumied, { cosa: string; encendida: string; apagada: string
   conta: { cosa: 'la contabilidad', encendida: 'Encendida', apagada: 'Apagada', sale: 'Ya sale Sumied en su menú.', noSale: 'Sumied ya no sale en su menú.' },
   conta_impuestos: { cosa: 'los impuestos', encendida: 'Encendidos', apagada: 'Apagados', sale: 'Ya salen en su Sumied.', noSale: 'ya no salen en su Sumied.' },
   conta_laboral: { cosa: 'lo laboral', encendida: 'Encendido', apagada: 'Apagado', sale: 'Ya sale en su Sumied.', noSale: 'ya no sale en su Sumied.' },
+  conta_nucleo: { cosa: 'las pantallas nuevas', encendida: 'Encendidas', apagada: 'Apagadas', sale: 'En el ordenador ya sale el marco nuevo; en el móvil sigue lo de hoy.', noSale: 'vuelve a salir lo de hoy.' },
 }
 
 function lista(xs: string[]): string {
@@ -81,7 +91,9 @@ export function fraseConfirmacion(cuenta: string, clave: ClaveSumied, encender: 
   if (cambiados.length === 0) return `No ha cambiado nada: el interruptor «${NOMBRE_INTERRUPTOR[clave]}» de ${cuenta} ya estaba ${encender ? 'encendido' : 'apagado'}.`
   if (encender) return `${l.encendida} ${l.cosa} de ${cuenta}. ${l.sale}`
   const otras = cambiados.filter((c) => c.clave !== clave).map((c) => LO[c.clave].cosa)
-  return `${l.apagada} ${l.cosa} de ${cuenta}: ${l.noSale}${otras.length ? ` También se ha${otras.length > 1 || otras[0] === 'los impuestos' ? 'n' : ''} apagado ${lista(otras)}.` : ''} No se ha borrado nada.`
+  // «se han» con más de una o con una en plural («los impuestos», «las pantallas nuevas»).
+  const plural = otras.length > 1 || /^(los|las) /.test(otras[0] ?? '')
+  return `${l.apagada} ${l.cosa} de ${cuenta}: ${l.noSale}${otras.length ? ` También se ha${plural ? 'n' : ''} apagado ${lista(otras)}.` : ''} No se ha borrado nada.`
 }
 
 const n = (x: number, uno: string, varios: string) => `${new Intl.NumberFormat('es-ES').format(x)} ${x === 1 ? uno : varios}`

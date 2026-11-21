@@ -1,0 +1,11 @@
+[
+ {
+  "id": "673-1",
+  "pr": 673,
+  "fecha": "2026-11-14T07:46:14Z",
+  "producto": "sumied",
+  "apartado": "Traspasar a Diez",
+  "frase": "los Excel de facturas llevan la fecha sin hora y el número de la factura. El traspaso va en tandas cortas, de una en una y sin mandar nada dos veces, y avisa desde el principio.",
+  "ruta": null
+ }
+]

@@ -19,7 +19,7 @@
 //   · En el móvil (plantillas.css), cada línea es una tarjeta con la etiqueta
 //     de cada campo encima (data-titulo en la celda).
 
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import { Icono } from '../Icono'
 import { buscarCuentasHoja, type CuentaHoja } from './valores'
 
@@ -82,23 +82,30 @@ export function HojaDeLineas({ cabecera, columnas, children, totales, cuadra, te
  * ↑ ↓ e Intro eligen, Esc vuelve al campo. Las teclas no salen de aquí (Intro
  * no pasa de campo en la hoja mientras se busca).
  */
-export function BuscarCuentaHoja({ cuentas, inicial, alElegir, alCerrar }: {
+export function BuscarCuentaHoja({ cuentas, inicial, alElegir, alCerrar, crear }: {
   cuentas: readonly CuentaHoja[]
   inicial: string
   alElegir: (c: CuentaHoja) => void
   /** `volver`: con Esc, el foco vuelve al campo; si se sale pulsando en otro sitio, no se le quita. */
   alCerrar: (volver: boolean) => void
+  /**
+   * X20 · Si no hay ninguna: «No está: crear la …», sin salir de aquí. Lo pinta quien sabe de qué empresa es
+   * (plan/CrearDesdeBuscador); al crearla, la elige.
+   */
+  crear?: (q: string, elegir: (c: CuentaHoja) => void) => ReactNode
 }) {
   const [q, setQ] = useState(inicial)
   const [i, setI] = useState(0)
   const r = buscarCuentasHoja(cuentas, q)
   const id = useId()
+  const caja = useRef<HTMLDivElement>(null)
   return (
-    <div className="s-hoja-buscar" role="dialog" aria-label="Buscar la cuenta">
+    <div className="s-hoja-buscar" role="dialog" aria-label="Buscar la cuenta" ref={caja}>
       <input className="s-control" autoFocus value={q} aria-label="Número o nombre de la cuenta" role="combobox" aria-expanded="true" aria-controls={id}
         aria-activedescendant={r[i] ? `${id}-${i}` : undefined}
         onChange={(e) => { setQ(e.target.value); setI(0) }}
-        onBlur={() => alCerrar(false)}
+        // X20: pasar a las casillas de «crear» (dentro de esta misma caja) no la cierra.
+        onBlur={(e) => { if (!caja.current?.contains(e.relatedTarget as Node | null)) alCerrar(false) }}
         onKeyDown={(e) => {
           e.stopPropagation()
           if (e.key === 'ArrowDown') { e.preventDefault(); setI((x) => Math.min(r.length - 1, x + 1)) }
@@ -107,13 +114,14 @@ export function BuscarCuentaHoja({ cuentas, inicial, alElegir, alCerrar }: {
           else if (e.key === 'Escape') { e.preventDefault(); alCerrar(true) }
         }} />
       <ul id={id} role="listbox" className="s-hoja-buscar-lista">
-        {r.length === 0 && <li className="s-hoja-buscar-nada">Ninguna cuenta se llama así.</li>}
+        {r.length === 0 && <li className="s-hoja-buscar-nada">{crear && q.trim() ? 'No está.' : 'Ninguna cuenta se llama así.'}</li>}
         {r.map((c, k) => (
           <li key={c.codigo} id={`${id}-${k}`} role="option" aria-selected={k === i} onMouseDown={(e) => { e.preventDefault(); alElegir(c) }}>
             <span className="s-cifra">{c.codigo}</span> <span>{c.nombre}</span>
           </li>
         ))}
       </ul>
+      {crear && r.length === 0 && q.trim() !== '' && <div className="s-hoja-buscar-crear" onKeyDown={(e) => e.stopPropagation()}>{crear(q.trim(), alElegir)}</div>}
     </div>
   )
 }

@@ -43,6 +43,7 @@ import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { cuadreMano, importeMano, problemasMano, type LineaMano } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE, SERIES, type Serie } from '@/modules/conta/lib/libro'
 import { asientoEnPalabras, lineasDePredefinido, predefinidoDeMano, tipoDeAsiento, type Predefinido } from '@/modules/conta/lib/tipoAsiento'
+import { CrearDesdeBuscador } from '@/modules/conta/plan/CrearDesdeBuscador'
 import {
   cuentasDeApunte, guardarAMano, guardarPredefinido, leerEjercicios, leerPredefinidos, localesDeLaCuenta, validar,
   type CuentaPlan, type EjercicioLibro, type LocalEmpresa,
@@ -55,6 +56,7 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { TextoConImpuesto } from '@/modules/conta/ui/TextoConImpuesto'
 import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
 import { mensajePresentado, presentadoDe } from '@/modules/conta/lib/ivaPresentado'
+import { useSeVe } from '@/modules/conta/diseno/plantillas/pestana'
 
 const vacia = (localId: string | null): LineaMano => ({ cuenta: '', debe: '', haber: '', localId, comun: false, concepto: '' })
 /** Los totales del pie, como se escriben en la hoja («1.234,56»). */
@@ -230,15 +232,17 @@ export default function NuevoAsientoPage({ tipo }: { tipo?: string } = {}) {
   // La función cambia en cada pintada; el oyente lee siempre la última.
   const validarConTecla = useRef<() => void>(() => undefined)
   useEffect(() => { validarConTecla.current = () => { if (!ocupado && base) void guardar(true) } })
+  // K03 · En una pestaña escondida del núcleo, esta pantalla no escucha el teclado.
+  const seVe = useSeVe()
   useEffect(() => {
     const oir = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
+      if (!seVe() || e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
       e.preventDefault()
       validarConTecla.current()
     }
     window.addEventListener('keydown', oir)
     return () => window.removeEventListener('keydown', oir)
-  }, [])
+  }, [seVe])
 
   const textoPrincipal = adjuntando ? 'Adjuntando la factura…' : ocupado ? 'Guardando…' : 'Guardar y validar'
   const principal = (
@@ -323,7 +327,10 @@ export default function NuevoAsientoPage({ tipo }: { tipo?: string } = {}) {
           {buscando === i && (
             <BuscarCuentaHoja cuentas={paraBuscar} inicial={l.cuenta}
               alElegir={(x) => { cambia(i, { cuenta: x.codigo }); setBuscando(null); siguienteCampo(cuentaDe(i)) }}
-              alCerrar={(volver) => { setBuscando(null); if (volver) cuentaDe(i)?.focus() }} />
+              alCerrar={(volver) => { setBuscando(null); if (volver) cuentaDe(i)?.focus() }}
+              // X21 · Lo que no está, se crea aquí (código y nombre) y queda elegido; las cuentas se vuelven a leer.
+              crear={activa ? (q, elegir) => <CrearDesdeBuscador accountId={accountId} companyId={activa.id} q={q} quien={userName ?? null}
+                alCrear={(c) => { setVuelta((v) => v + 1); elegir({ codigo: c.code, nombre: c.name }) }} /> : undefined} />
           )}
         </td>
         <td data-titulo="Concepto">

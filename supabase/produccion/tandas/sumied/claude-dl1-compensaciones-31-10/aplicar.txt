@@ -1,0 +1,18 @@
+# DL1 · Las compensaciones del 16–31/10 de Just Eat y Glovo, a 31/10 (Julio,
+# DL1·24, 13/11, punto 3). Rama claude/dl1-compensaciones-31-10. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1500  Anula en su fecha las 11 compensaciones de la 0935 del 16–31/10 (Glovo
+#         9 a 01/11, 1.402,45; Just Eat 2 a 07/11, 111,75) y las vuelve a
+#         proponer igual a 31/10, enlazadas a su liquidación; validadas como
+#         Julio. No crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-compensaciones-a-31-10.sql
+supabase/migrations/20261113T1500_dl1_compensaciones_a_31_10.sql
+sin-vuelta-atras: supabase/migrations/20261113T1500_dl1_compensaciones_a_31_10.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-compensaciones-a-31-10 · Las 11 con su compensación validada a 31/10, menos 11 = 0
+esperado: dl1-compensaciones-a-31-10 · Las 11 con compensación viva en noviembre = 0
+esperado: dl1-compensaciones-a-31-10 · Lo que compensan a 31/10, menos 1.514,20 = 0.00
+esperado: dl1-compensaciones-a-31-10 · IVA 472 del 4T = como antes
+esperado: dl1-compensaciones-a-31-10 · IVA 477 del 4T = como antes

@@ -1,0 +1,3 @@
+# K07 · la vuelta atrás: quita la función nueva (y la tabla, solo si está vacía).
+cuenta: scripts/conta/produccion/cuentas/k07-cambiar-documento.sql
+supabase/vuelta-atras/20261120T2004_k07_cambiar_documento.down.sql

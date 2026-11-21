@@ -1,0 +1,11 @@
+# S01p·18.2 · punto 2 · El asiento de una factura recibida, con la fecha de la factura (Julio, 13/11).
+# Rama claude/s01p-fecha-recibida. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0913  conta_recibida_fecha: la fecha con la que se apunta una recibida (la suya, salvo
+#         el 303 presentado), la misma regla que la base al proponer; la pantalla la enseña
+#         y deja de moverla al día en que entró.
+#
+# Solo añade. Nada en el camino del pedido. No mueve ninguna fila (los 40 asientos ya
+# hechos los cambia D con la DL1_23). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-recibida-fecha.sql
+supabase/migrations/20261113T0913_s01p_recibida_fecha.sql

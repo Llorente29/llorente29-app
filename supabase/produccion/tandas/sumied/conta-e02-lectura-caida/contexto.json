@@ -1,0 +1,25 @@
+{
+ "_que": "E02 · la lectura caída · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA, el 18/11: no en producción (esta sesión no lee producción). document_inbox y goods_receipt_ai_session existen (aquí, 0 filas; las de producción las mide el ensayo); las tres funciones y la tabla conta_lectura_estado son nuevas. Nada del camino del pedido.",
+ "medido": "2026-11-18T06:10Z",
+ "tanda": {
+  "supabase/migrations/20261118T0600_e02_lectura_caida.sql": "85a503a796356a279b0f6a3dac9e2de3"
+ },
+ "contexto": {
+  "tablas": [
+   "public.document_inbox",
+   "public.goods_receipt_ai_session"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.document_inbox": 0,
+   "public.goods_receipt_ai_session": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

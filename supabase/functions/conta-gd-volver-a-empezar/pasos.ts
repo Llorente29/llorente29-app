@@ -65,17 +65,6 @@ export function inicioDeLasCuotas(hoyMadrid: string): string {
 }
 
 /**
- * nº102 · Desde cuándo cuenta la anual (el impuesto de sociedades): el sandbox no deja empezar una suscripción en el
- * pasado y la crea para el junio que viene, así que la ficha decía «desde jun. 2027» en un cliente que cobra desde
- * enero. Los clientes de la demo son de antes: su anual empezó el último junio ya pasado (este año desde junio; antes,
- * el del año pasado). No cambia ningún cobro: la anual solo se cobra en junio.
- */
-export function inicioDeLaAnual(hoyMadrid: string): string {
-  const a = Number(hoyMadrid.slice(0, 4)); const m = Number(hoyMadrid.slice(5, 7))
-  return `${m >= 6 ? a : a - 1}-06-01`
-}
-
-/**
  * Los cambios que tiene que enseñar el cobro de la demo (nº68, como la maqueta). nº100: la demo cobra el MES EN
  * CURSO (antes, el siguiente: el portal decía «Diciembre · cobrado el 10 de noviembre»), así que los cambios son de
  * este mes frente al anterior. Se hacen con las mismas funciones que la ficha del cliente, con la sesión de quien pulsa:

@@ -1,0 +1,3 @@
+# S01p·20 · 1b · la vuelta atrás: fuera las dos funciones.
+cuenta: scripts/conta/produccion/cuentas/s01p-pdf-just-eat.sql
+supabase/vuelta-atras/20261113T1706_s01p_pdf_del_correo.down.sql

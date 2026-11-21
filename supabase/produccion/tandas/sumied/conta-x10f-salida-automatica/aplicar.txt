@@ -1,0 +1,13 @@
+# X10f · Lo validado sale solo a ERP10 (encargo del 20/11). Rama conta/x10f-salida-automatica.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2010  Añade: «como» en conta_erp10_envio (admite nulos), conta_erp10_cola (solo el servidor),
+#         conta_erp10_despertar y conta_erp10_atascados, y el cron conta-erp10-despertar (solo donde
+#         está el secreto de los vigías). No cambia nada que exista.
+#   2011  Cambia la guarda de conta_erp10_lote_apuntar: sin sesión (el servidor), no pide ser
+#         administrador; con sesión, como siempre. Declarado en su cabecera, con su prueba de staging.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x10f-cola-erp10.sql
+supabase/migrations/20261120T2010_x10f_cola_erp10.sql
+supabase/migrations/20261120T2011_x10f_lote_desde_el_servidor.sql

@@ -29,7 +29,7 @@ describe('GD · comprobar la demo: solo lee', () => {
 
   it('el workflow: su propio job, desde «despliegue», y el de grabar no corre con «comprobar»', () => {
     const w = readFileSync('.github/workflows/gd-video-qbo.yml', 'utf8')
-    expect(w).toMatch(/options: \[ensayo, grabar, comprobar, muestras-voz, video\]/)
+    expect(w).toMatch(/options: \[ensayo, grabar, comprobar, muestras-voz, video, montar\]/)
     const job = w.slice(w.indexOf('  comprobar:'), w.indexOf('  video:'))
     expect(job).toContain("if: inputs.modo == 'comprobar'")
     expect(job).toContain('environment: despliegue')

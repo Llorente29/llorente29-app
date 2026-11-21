@@ -7,9 +7,11 @@
 // —«7 conexiones»— no dice nada: siete conexiones de las que dos están rotas es
 // una noticia mala disfrazada de inventario.
 //
-// `AccountConnectorStatus` tiene seis valores y solo uno es «va»: `connected`.
-// `error` y `paused` son problemas distintos y se cuentan aparte —una pausa la
-// puso alguien, un error no— y `available`/`requested`/`connecting` no son
+// `AccountConnectorStatus` tiene siete valores y solo uno es «va»: `connected`.
+// `error`/`down` y `paused` son problemas distintos y se cuentan aparte —una
+// pausa la puso alguien, un error no; `down` es la renovación del token que
+// falló (B01r26, 15/11), y sin contarla la tarjeta decía «Todas las conexiones
+// responden» con Diez caída— y `available`/`requested`/`connecting` no son
 // fallos: son conexiones a medio montar, y decir que están rotas sería mentir
 // sobre un trabajo en curso.
 import { useCallback, useMemo } from 'react'
@@ -32,7 +34,7 @@ export default function SaludConexionesCard({ accountId, drillTo }: HomeCardProp
     // rotas dejaría la tarjeta en rojo para siempre por algo ya resuelto.
     const cs = (datos ?? []).filter(c => c.isActive && !c.archivedAt)
     const conectadas = cs.filter(c => c.status === 'connected')
-    const conError = cs.filter(c => c.status === 'error')
+    const conError = cs.filter(c => c.status === 'error' || c.status === 'down')
     const pausadas = cs.filter(c => c.status === 'paused')
     const montando = cs.filter(c => ['available', 'requested', 'connecting'].includes(c.status))
 
@@ -44,7 +46,7 @@ export default function SaludConexionesCard({ accountId, drillTo }: HomeCardProp
           etiqueta: c.connectorId,
           // El error de verdad, recortado. «Con error» a secas obliga a entrar
           // para saber si es el token o la red.
-          valor: (c.lastError ?? 'con error').slice(0, 40),
+          valor: (c.lastError ?? (c.status === 'down' ? 'caída' : 'con error')).slice(0, 40),
           tono: 'bad' as const,
         })),
         ...pausadas.map(c => ({

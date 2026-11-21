@@ -47,7 +47,7 @@ on:
         description: 'ensayo = no escribe nada; grabar = envía el cobro de la demo al sandbox; comprobar = recorre la demo sin grabar y solo lee'
         required: true
         type: choice
-        options: [ensayo, grabar, comprobar, muestras-voz, video]
+        options: [ensayo, grabar, comprobar, muestras-voz, video, montar]
       escenas:
         description: '«todas», o las que se regraban, separadas por comas (01,02,03,04,05,05b,06,07,07b,07c,08,09,10)'
         required: true
@@ -56,6 +56,18 @@ on:
         description: 'El mes del cobro: «este» (el mes en curso, nº100) o AAAA-MM'
         required: true
         default: 'este'
+      desde_run:
+        description: 'Solo con «montar»: el número del run de «video» cuya grabación en bruto se vuelve a montar (sin grabar)'
+        required: false
+        default: ''
+      quitar:
+        description: 'Al montar: las frases que no entran, con su tramo (p. ej. «07.5»)'
+        required: false
+        default: ''
+      insertar:
+        description: 'Al montar: una toma de video-tomas/gd-qbo, sus frases y antes de qué escena («07b-buzon.gif|07b|08»)'
+        required: false
+        default: ''
 
 concurrency:
   group: gd-video-qbo
@@ -63,6 +75,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: read
 
 defaults:
   run:
@@ -159,8 +172,9 @@ jobs:
           retention-days: 14
 
   # nº96 · Fase 3: el vídeo de Sumied para gestorías, con la máquina del V01. Solo en la demo y sus pruebas.
+  # nº123 · «montar»: vuelve a montar la grabación en bruto de un run de «video» (artefacto gd-sumied-crudo), sin grabar.
   video:
-    if: inputs.modo == 'video'
+    if: inputs.modo == 'video' || inputs.modo == 'montar'
     environment: despliegue
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -171,6 +185,7 @@ jobs:
         run: |
           [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::Este vídeo graba en producción: solo se lanza desde main."; exit 1; }
           [[ "${{ inputs.mes }}" =~ ^(este|20[0-9]{2}-(0[1-9]|1[0-2]))$ ]] || { echo "::error::«mes» es «este» o AAAA-MM."; exit 1; }
+          if [ "${{ inputs.modo }}" = "montar" ]; then [[ "${{ inputs.desde_run }}" =~ ^[0-9]+$ ]] || { echo "::error::«montar» necesita «desde_run»: el número del run de «video»."; exit 1; }; fi
           [[ "${{ inputs.escenas }}" =~ ^(todas|[0-9b ,]+)$ ]] || { echo "::error::«escenas»: «todas» o una lista como 01,02,03."; exit 1; }
 
       - uses: actions/checkout@v4
@@ -211,6 +226,7 @@ jobs:
           if git fetch -q --depth=1 origin video-tomas/gd-qbo 2>/dev/null; then git archive FETCH_HEAD tomas 2>/dev/null | tar -x -C "$RUNNER_TEMP" || true; fi
 
       - name: La voz (antes de grabar) y grabar
+        if: inputs.modo == 'video'
         timeout-minutes: 100
         env:
           MODO: grabar
@@ -226,14 +242,58 @@ jobs:
           python3 scripts/video/voz_nube.py "$SALIDA/voz/frases.json" > gd-sumied/voz.txt 2>&1
           node scripts/video/gd/sumied.mjs "$SALIDA" > gd-sumied/salida.txt 2>&1
 
+      # nº123 · La grabación en bruto se guarda SIEMPRE, antes de montar: un fallo del montaje (run 22: E2BIG) no puede
+      # volver a costar una grabación. Con ella, «montar» la vuelve a montar sin grabar.
+      - name: Guardar la grabación en bruto (antes de montar)
+        if: always() && inputs.modo == 'video'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gd-sumied-crudo
+          path: |
+            gd-sumied/crudo.webm
+            gd-sumied/tramos.json
+            gd-sumied/voz
+            gd-sumied/portada.png
+            gd-sumied/cierre.png
+            gd-sumied/registro.txt
+            gd-sumied/resumen.txt
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: La grabación en bruto de otro run («montar»)
+        if: inputs.modo == 'montar'
+        uses: actions/download-artifact@v4
+        with:
+          name: gd-sumied-crudo
+          path: gd-sumied
+          run-id: ${{ inputs.desde_run }}
+          github-token: ${{ github.token }}
+
+      # nº128 · «quitar» e «insertar» (la 07b, el correo, que se graba aparte): solo en el montaje, sin grabar.
       - name: Montar con ffmpeg
         if: always()
         env:
           VIDEO_NOMBRE: gd-sumied
+          MONTAR_QUITAR: ${{ inputs.quitar }}
+          INSERTAR: ${{ inputs.insertar }}
+          # nº131 · Las tomas de Bitrix24 (04 y 05), a pantalla completa y recortadas a su frase.
+          MONTAR_TOMAS: '04.1=05-bitrix.gif,04.2=05-sumied.gif,05.1=05-pestana-resumen.gif,05.2=05-pestana-resumen.gif,05.3=05-pestana-cuotas.gif,05.4=05-pestana-laboral.gif,05.5=05-pestana-portal.gif'
         run: |
           set -euo pipefail
           [ -f "$SALIDA/crudo.webm" ] || exit 0
-          node scripts/video/montar.mjs "$SALIDA" > gd-sumied/montaje.txt 2>&1
+          # nº129 · Las expresiones, en variables: con un espacio dentro, bash no las lee en [[ =~ ]] (run 25).
+          RE_QUITAR='^[0-9b., ]*$'
+          RE_INSERTAR='^[0-9a-z-]+\.gif\|[0-9b]+\|[0-9b]+$'
+          [[ "$MONTAR_QUITAR" =~ $RE_QUITAR ]] || { echo "::error::«quitar»: ids de frases, como 07.5"; exit 1; }
+          if [ -n "$INSERTAR" ]; then
+            [[ "$INSERTAR" =~ $RE_INSERTAR ]] || { echo "::error::«insertar»: toma.gif|frases|escena, como 07b-buzon.gif|07b|08"; exit 1; }
+            export MONTAR_INSERTO="$RUNNER_TEMP/tomas/$INSERTAR"
+          fi
+          # nº135 · Las carátulas hechas (entrada, seis antes de su escena y cierre) y la música, de video-tomas/gd-qbo.
+          export MONTAR_CARATULAS="$RUNNER_TEMP/tomas"
+          for mu in musica.mp3.mp3 musica.mp3; do [ -f "$RUNNER_TEMP/tomas/$mu" ] && export MONTAR_MUSICA="$RUNNER_TEMP/tomas/$mu" && break; done
+          # nº131 · El de gestorías, ajustado a la voz: sin imagen parada sin voz, subtítulos en su franja, y los silencios medidos.
+          TOMAS_DIRS="$RUNNER_TEMP/tomas" node scripts/video/montar-ajustado.mjs "$SALIDA" > gd-sumied/montaje.txt 2>&1
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -243,6 +303,8 @@ jobs:
             gd-sumied/gd-sumied.mp4
             gd-sumied/gd-sumied-sin-voz.mp4
             gd-sumied/subtitulos.ass
+            gd-sumied/silencios.txt
+            gd-sumied/montaje.txt
             gd-sumied/registro.txt
             gd-sumied/capturas
             gd-sumied/pasos
@@ -342,6 +404,7 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Proyecto y claves (enmascaradas)
+        if: inputs.modo == 'video'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |

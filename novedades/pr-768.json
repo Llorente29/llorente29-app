@@ -1,0 +1,20 @@
+[
+ {
+  "id": "768-1",
+  "pr": 768,
+  "fecha": "2026-11-21T08:37:32Z",
+  "producto": "sumied",
+  "apartado": "Plan contable",
+  "frase": "el código corto se escribe como en la ficha de la factura: 4301 da la 43000001 y 6001, la 60000001. Vale para «Añadir subcuenta» y para «No está: crear la …».",
+  "ruta": null
+ },
+ {
+  "id": "768-2",
+  "pr": 768,
+  "fecha": "2026-11-21T08:37:32Z",
+  "producto": "sumied",
+  "apartado": "Fichas",
+  "frase": "en la cuenta de gasto de la recibida y en los demás buscadores de cuentas, «No está: crear la …» crea la subcuenta sin salir de la ficha. Queda elegida, con su nombre.",
+  "ruta": null
+ }
+]

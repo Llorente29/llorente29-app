@@ -8,6 +8,12 @@
 import type { ComparacionLineas, LineaComparada, LlegadaCorreo } from '@/modules/conta/services/comprasService'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 
+/**
+ * E01 · La línea de oficina debajo de la dirección de la empresa, igual en
+ * Ajustes › Correo de facturas y en la tarjeta de Documentos.
+ */
+export const NOTA_DIRECCION = 'Reenvía aquí las facturas de tus proveedores. Llegan solas a Compras.'
+
 const HORA = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' })
 const DIA = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'long' })
 const diaMadrid = (d: Date) => d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })

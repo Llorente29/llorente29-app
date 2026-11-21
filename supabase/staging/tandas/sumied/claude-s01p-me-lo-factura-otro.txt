@@ -1,0 +1,7 @@
+# S01p·20·2 · «Me lo factura otro» (1910: añade la columna y el botón, de verdad desde la rama; 0033: cambia los caminos,
+# la ficha, «Qué tienes que mirar» y elegir otra forma, en ROLLBACK). Su prueba (cuenta A): antes la ficha pregunta y sale
+# en «Qué tienes que mirar»; con «Me lo factura otro», no pregunta, sale, y su recepción va con el que lo factura; lo que
+# no se puede; elegir otra forma lo quita; sin cuenta no; la vuelta atrás.
+supabase/migrations/20261113T1910_s01p_me_lo_factura_otro.sql
+supabase/migrations/20261114T0033_s01p_me_lo_factura_otro_caminos.sql
+supabase/staging/sql/20261113_s01p_me_lo_factura_otro_prueba.sql

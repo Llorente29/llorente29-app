@@ -1,0 +1,19 @@
+# B01r26 · Los enlaces a la C0009 (15/11). Rama claude/b01-enlaces-c0009-tanda.
+# Se ensaya y se aplica desde main nombrando esta rama, ANTES de volver a pulsar
+# «Ya lo he importado» (paró a las 23:55 con external_send_ext_uq).
+#
+#   0016  Los 301 envíos de octubre que apuntan a la C0009 (284 facturas de los
+#         Excel y 16 asientos «enlazado», y FV-02931 «enviado») vuelven a
+#         «pendiente», sin la referencia de Diez y con la de antes en el motivo.
+#         Y los 16 asientos parados por la C0009 (13 ajustes de ventas y 3 pagos
+#         a proveedor), sin el motivo y fuera del detalle del traspaso. Los 332
+#         de esta noche en la C0008 no se tocan.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/b01r26-enlaces-de-la-c0009.sql
+supabase/migrations/20261115T0016_b01r26_enlaces_de_la_c0009.sql
+sin-vuelta-atras: supabase/migrations/20261115T0016_b01r26_enlaces_de_la_c0009.sql · motivo: devolverlos a «enlazado» o «enviado» diría que están en la C0008 y no están; la referencia de la C0009 queda en el motivo.
+esperado: b01r26-enlaces-de-la-c0009 · Envíos enlazados o enviados de antes de las 22:00 UTC del 14/11 = 0
+esperado: b01r26-enlaces-de-la-c0009 · Envíos pendientes con el motivo Enlace a la C0009, menos 301 = 0
+esperado: b01r26-enlaces-de-la-c0009 · Ajustes de ventas y pagos a proveedor parados por la C0009 = 0
+esperado: b01r26-enlaces-de-la-c0009 · Envíos de esta noche en la C0008, menos 332 = 0

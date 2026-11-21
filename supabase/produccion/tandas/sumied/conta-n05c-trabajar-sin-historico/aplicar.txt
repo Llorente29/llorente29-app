@@ -1,0 +1,12 @@
+# N05c · Empezar a trabajar sin el histórico. Rama conta/n05c-trabajar-sin-historico.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1655  Añade la decisión por ejercicio (fiscal_year.works_without_history_*, que admiten
+#         nulos) y cinco funciones nuevas (tomarla, retirarla, el motivo y dos ayudantes).
+#   1656  Cambia en caliente conta_motivos_para_validar, con la misma firma, su respaldo y un
+#         solo trozo: «falta_historico» pregunta su porqué a _conta_falta_historico_motivo.
+#
+# No cambia ni una fila. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/n05c-sin-historico.sql
+supabase/migrations/20261117T1655_n05c_sin_historico_decision.sql
+supabase/migrations/20261117T1656_n05c_sin_historico_validar.sql

@@ -1,0 +1,6 @@
+# E03 · la vuelta atrás, en orden inverso: la 1836 (cada recibida tocada, como
+# estaba), la 1835 (las seis funciones, a su respaldo) y la 1833 (lo nuevo, fuera).
+cuenta: scripts/conta/produccion/cuentas/e03-de-quien-es.sql
+supabase/vuelta-atras/20261118T1836_e03_lo_marcado_vuelve_a_pregunta.down.sql
+supabase/vuelta-atras/20261118T1835_e03_no_decide_solo.down.sql
+supabase/vuelta-atras/20261118T1833_e03_de_quien_es.down.sql

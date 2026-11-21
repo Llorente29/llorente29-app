@@ -1,0 +1,20 @@
+# DL1 · Just Eat del 01–15/10: las 3 liquidaciones que no entraron y los cargos
+# GL de la campaña (Julio, DL1·24, 13/11). Rama claude/dl1-justeat-octubre. Se
+# ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1615  Crea las liquidaciones 4126424, 4126364 y 4126341 con su factura de
+#         comisión apuntada, por el camino de la aplicación, y un asiento por
+#         liquidación (también la 4126387): su factura compensada con la
+#         43000003 y su cargo GL, sin IVA, como gasto. Validado como Julio. No
+#         crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-justeat-octubre.sql
+supabase/migrations/20261113T1615_dl1_justeat_octubre.sql
+sin-vuelta-atras: supabase/migrations/20261113T1615_dl1_justeat_octubre.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-justeat-octubre · Las 4 liquidaciones del 01–15/10 con asiento validado, menos 4 = 0
+esperado: dl1-justeat-octubre · Las 3 facturas nuevas con asiento validado, menos 3 = 0
+esperado: dl1-justeat-octubre · 43000003 a 31/10, menos 404,52 = 0.00
+esperado: dl1-justeat-octubre · 41000004 a 31/10 = 0.00
+esperado: dl1-justeat-octubre · IVA soportado de las 3 facturas, menos 2,80 = 0.00
+esperado: dl1-justeat-octubre · IVA 477 del 4T = como antes

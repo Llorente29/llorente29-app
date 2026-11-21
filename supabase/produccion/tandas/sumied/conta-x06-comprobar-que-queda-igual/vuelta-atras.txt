@@ -1,0 +1,3 @@
+# X06 · la vuelta atrás: quita las cuatro funciones y las dos tablas.
+cuenta: scripts/conta/produccion/cuentas/x06-comprobar-erp10.sql
+supabase/vuelta-atras/20261118T0515_x06_comprobar_salida.down.sql

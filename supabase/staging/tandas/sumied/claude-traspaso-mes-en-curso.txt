@@ -1,0 +1,5 @@
+# SP · Traspasar a Diez el mes en curso (1954: cambia conta_traspaso_confirmar y conta_traspaso_terminar). Su prueba (ROLLBACK,
+# cuenta A, como su administrador): sin la 1954 el mes en curso no se confirma; con ella sí, el siguiente no, el mes en curso no
+# se cierra al terminar y lo dice, un mes pasado sigue igual; la vuelta atrás deja las dos funciones con la misma huella.
+supabase/migrations/20261115T1954_sp_traspaso_mes_en_curso.sql
+supabase/staging/sql/20261115_sp_traspaso_mes_en_curso_prueba.sql

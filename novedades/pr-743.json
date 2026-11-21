@@ -1,0 +1,29 @@
+[
+ {
+  "id": "743-1",
+  "pr": 743,
+  "fecha": "2026-11-20T12:11:52Z",
+  "producto": "sumied",
+  "apartado": "Ventas › Cierres del día",
+  "frase": "desde que eliges la cuenta de «La factura del día va a», cada día va en dos asientos unidos: la factura del día, con su primer y su último ticket, y su cobro. Los días ya validados no cambian.",
+  "ruta": null
+ },
+ {
+  "id": "743-2",
+  "pr": 743,
+  "fecha": "2026-11-20T12:11:52Z",
+  "producto": "sumied",
+  "apartado": "A qué cuenta va cada forma de pago",
+  "frase": "arriba, «La factura del día» (Sumied propone la 430 que ya se llama «contado», o se da de alta desde ahí); a la derecha, los dos asientos de un día. Sin esa cuenta, el día no se valida y lo dice.",
+  "ruta": null
+ },
+ {
+  "id": "743-3",
+  "pr": 743,
+  "fecha": "2026-11-20T12:11:52Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "la factura del día sale como expedida, igual que antes, y su cobro va con los asientos, siempre junto a ella; los días de un solo asiento salen como siempre.",
+  "ruta": null
+ }
+]
