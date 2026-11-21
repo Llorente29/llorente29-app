@@ -1,0 +1,11 @@
+[
+ {
+  "id": "770-1",
+  "pr": 770,
+  "fecha": "2026-11-21T15:16:00Z",
+  "producto": "sumied",
+  "apartado": "Facturas recibidas",
+  "frase": "no se valida una factura a la que le falte un dato obligatorio ni una que ya esté contabilizada con su número; la ficha dice cuál falta o cuál es la otra, con «Abrirla».",
+  "ruta": null
+ }
+]
