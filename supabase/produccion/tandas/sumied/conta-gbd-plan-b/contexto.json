@@ -1,0 +1,19 @@
+{
+ "_que": "GBd · el plan B, en pruebas · contexto de producción, medido en SOLO LECTURA el 12/11 a las 09:59Z. La 0955 crea la tabla conta_bitrix_red y las funciones conta_bitrix_red_leer(uuid,text) y conta_bitrix_red_apuntar(uuid,jsonb): no existe ninguna (ni otra con esos nombres). Lee conta_crm, conta_gestoria_ficha, conta_gestoria_cliente, user_profiles y conta_pantalla_clientes, que existen. De las 2 conexiones con un CRM (tabla entera), 1 está en entorno «pruebas». Nada en el camino del pedido.",
+ "medido": "2026-11-12T09:59Z",
+ "tanda": {
+  "supabase/migrations/20261112T0955_gbd_red_cuota.sql": "8e9bc1041eb40e11647c00eacf1e7caa"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

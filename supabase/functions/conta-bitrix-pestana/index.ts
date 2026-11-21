@@ -33,7 +33,9 @@ import {
   direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, porqueApp, porqueUsuario, TITULO_PESTANA, usuarioDeBitrix,
   type TipoFicha,
 } from './puro.ts'
-import { retirarCampoFijo } from './campo.ts'
+import { camposDeSumied, ponerSeccionSumied, seccionEnEstePortal } from './seccion.ts'
+import { correoDeLaRed, cuandoEnMadrid, decidirRed, enlaceDeLaFicha, notaDeLaRed, quienDeLaRed, redEnEstePortal, resultadoDelCorreo } from './red.ts'
+import { BUZON_FACTURAS } from '../_shared/facturaVentaCorreo.ts'
 import { choquesDe, cuotaEnBitrix, estadoDelCobro, mesEnPalabras, mesSiguiente, notaDelCambio, queHacerConElTexto, queHacerConLaCuota, totalDelRecibo, trabajadoresDelRecibo } from './escribir.ts'
 
 const CORS = {
@@ -131,6 +133,92 @@ async function leer(cuerpo: Record<string, unknown>): Promise<Response> {
   if (!m.ok) return m.respuesta
   const l = await lectura(baseDeDatos(), m)
   return l.ok ? json(200, l.d) : l.respuesta
+}
+
+/**
+ * GBd · El plan B, en PRUEBAS: la red de la «Cuota mensual». La llama el aviso
+ * de cambios (conta-crm-aviso, G01d) con la clave del servidor, ANTES de meter
+ * la ficha en Sumied: si la cuota de Bitrix24 no es la de Sumied, se devuelve
+ * (con el webhook de la conexión), se apunta en el historial de la ficha y se
+ * avisa por correo a quien la cambió y a la persona responsable. Todo queda en
+ * conta_bitrix_red. Solo en el Bitrix24 de pruebas (red.ts) y con la conexión
+ * en entorno «pruebas» (conta_bitrix_red_leer). Nada de cobros ni recibos.
+ */
+async function red(cuerpo: Record<string, unknown>, req: Request): Promise<Response> {
+  const clave = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  if (!clave || req.headers.get('x-sumied-red') !== clave) return json(401, { estado: 'no' })
+  const cuenta = typeof cuerpo.cuenta === 'string' && /^[0-9a-f-]{36}$/i.test(cuerpo.cuenta) ? cuerpo.cuenta : null
+  const id = typeof cuerpo.id === 'string' && /^[0-9]{1,18}$/.test(cuerpo.id) ? cuerpo.id : null
+  if (!cuenta || !id) return json(400, { estado: 'no', porque: 'falta la cuenta o la ficha' })
+  const db = baseDeDatos()
+  const { data: leido, error } = await db.rpc('conta_bitrix_red_leer', { p_account: cuenta, p_id: id })
+  const l = (leido ?? {}) as Record<string, unknown>
+  if (error || l.estado !== 'ok') return json(200, { estado: 'ok', hecho: 'nada', porque: String(l.estado ?? 'error') })
+  const portal = String(l.portal ?? '')
+  if (!redEnEstePortal(portal)) return json(200, { estado: 'ok', hecho: 'nada', porque: 'no es el Bitrix24 de pruebas' })
+  const { data: sec } = await db.rpc('conta_crm_secreto', { p_account: cuenta, p_crm: 'bitrix24' })
+  const url = ((sec ?? []) as { url?: string }[])[0]?.url
+  if (!url) return json(200, { estado: 'ok', hecho: 'nada', porque: 'sin conexión con Bitrix24' })
+  const llamar = async (metodo: string, c: Record<string, unknown>) => {
+    const r = await fetch(`${url.trim().replace(/\/?$/, '/')}${metodo}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) })
+    return await r.json().catch(() => null) as { result?: unknown; error?: string } | null
+  }
+
+  const campo = String(l.campo)
+  const clienteId = String(l.cliente)
+  const filas = ((l.clientes as { clientes?: unknown[] } | null)?.clientes ?? []) as Record<string, unknown>[]
+  const empresaId = String(filas.find((f) => String(f.cliente_id) === clienteId)?.empresa_id ?? '')
+  const sumiedCent = empresaId ? totalDelRecibo(l.clientes, clienteId, empresaId, mesSiguiente(hoyEnMadrid())) : null
+  const ficha = await llamar('crm.company.get', { id }) as { result?: Record<string, unknown> } | null
+  if (!ficha?.result) return json(200, { estado: 'ok', hecho: 'nada', porque: 'Bitrix24 no ha dejado leer la ficha' })
+  const d = decidirRed({ actual: ficha.result[campo], sumiedCent, recientes: Number(l.recientes ?? 0) })
+  if (d.hacer === 'nada') return json(200, { estado: 'ok', hecho: 'nada', porque: d.porque })
+  if (d.hacer === 'parar') {
+    console.warn(JSON.stringify({ gbd: 'red_parada', ficha: id }))
+    return json(200, { estado: 'ok', hecho: 'parada', porque: 'ya se ha devuelto varias veces en 10 minutos' })
+  }
+
+  const u = await llamar('crm.company.update', { id, fields: { [campo]: d.despues } })
+  if (!u?.result) {
+    console.warn(JSON.stringify({ gbd: 'red_no_escribe', ficha: id, porque: String(u?.error ?? 'sin respuesta').slice(0, 40) }))
+    return json(200, { estado: 'ok', hecho: 'no_se_pudo' })
+  }
+  // Quién: el último que modificó la empresa. Y la persona responsable. Con sus correos de Bitrix24 (permiso «Usuarios»).
+  const persona = async (x: unknown) => {
+    const pid = String(x ?? '')
+    if (!/^[0-9]+$/.test(pid)) return { id: null, nombre: null, correo: null }
+    const r = await llamar('user.get', { FILTER: { ID: pid } }).catch(() => null) as { result?: Record<string, unknown>[] } | null
+    const u0 = (r?.result ?? [])[0]
+    const nombre = u0 ? [u0.NAME, u0.LAST_NAME].filter((v) => typeof v === 'string' && v.trim()).join(' ') || null : null
+    const correo = u0 && typeof u0.EMAIL === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(u0.EMAIL.trim()) ? u0.EMAIL.trim().toLowerCase() : null
+    return { id: pid, nombre, correo }
+  }
+  const [quien, responsable] = await Promise.all([persona(ficha.result.MODIFY_BY_ID), persona(ficha.result.ASSIGNED_BY_ID)])
+  const nota = await llamar('crm.timeline.comment.add', { fields: { ENTITY_ID: Number(id), ENTITY_TYPE: 'company', COMMENT: notaDeLaRed(d.antes, d.despues) } }).catch(() => null)
+
+  const para = [...new Set([quien.correo, responsable.correo].filter((x): x is string => !!x))]
+  let correo: { correo: 'enviado' | 'cupo' | 'no_enviado' | 'sin_correo'; porque: string | null } = { correo: 'sin_correo', porque: 'Bitrix24 no ha dado ningún correo' }
+  const resend = Deno.env.get('RESEND_API_KEY')
+  if (para.length && !resend) correo = { correo: 'no_enviado', porque: 'falta la clave de Resend' }
+  else if (para.length) {
+    const c = correoDeLaRed({ empresa: String(ficha.result.TITLE ?? 'la empresa'), antes: d.antes, despues: d.despues,
+      quien: quienDeLaRed(quien.nombre), cuando: cuandoEnMadrid(new Date()), enlace: enlaceDeLaFicha(portal, id) })
+    try {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST', headers: { Authorization: `Bearer ${resend}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: `Sumied <${BUZON_FACTURAS}>`, to: para, subject: c.asunto, html: c.html, text: c.texto }),
+      })
+      correo = resultadoDelCorreo(r.status, await r.json().catch(() => null))
+    } catch (e) {
+      correo = { correo: 'no_enviado', porque: `Resend no contesta (${e instanceof Error ? e.name : 'error'}).` }
+    }
+  }
+  await db.rpc('conta_bitrix_red_apuntar', { p_account: cuenta, p_fila: {
+    id_externo: id, campo, antes: d.antes, despues: d.despues, quien_id: quien.id, quien: quienDeLaRed(quien.nombre),
+    correo: correo.correo, correo_a: para, correo_porque: correo.porque, nota: (nota as { result?: unknown } | null)?.result ? 'escrita' : 'no',
+  } })
+  console.log(JSON.stringify({ gbd: 'red_devuelta', ficha: id, correo: correo.correo }))
+  return json(200, { estado: 'ok', hecho: 'devuelta', correo: correo.correo })
 }
 
 /** nº 9, punto 5 · «Su portal»: quién entra, lo que pide el cliente y los mensajes sin leer (conta_portal_ficha, de Code 3, como la persona). */
@@ -491,11 +579,15 @@ Deno.serve(async (req) => {
         if (l.auth && l.portal && portalPermitido(l.portal)) {
           const aqui = `${Deno.env.get('SUPABASE_URL')}/functions/v1/conta-bitrix-pestana`
           const fallos = await engancharPestana(l.portal, l.auth, aqui)
-          // GBd · Se retira el campo fijo del GBc (el campo y su tipo): solo en el Bitrix24 de pruebas (campo.ts).
-          const portal = l.portal, auth = l.auth
-          const retirada = await retirarCampoFijo(portal, (metodo, c) => bitrix(portal, metodo, auth, c))
-          console.log(JSON.stringify({ gbd: 'retirada_gbc', fallos: retirada }))
-          fallos.push(...retirada)
+          // GBd · El plan B, en pruebas: la ficha común con la sección «Cuota y facturación (la pone Sumied)» (seccion.ts).
+          if (seccionEnEstePortal(l.portal)) {
+            const portal = l.portal, auth = l.auth
+            const { data: con } = await baseDeDatos().from('conta_crm').select('mapa, campos_medidos').eq('crm', 'bitrix24').eq('portal', portal).maybeSingle()
+            const c0 = (con ?? {}) as { mapa?: unknown; campos_medidos?: unknown }
+            const seccion = await ponerSeccionSumied(portal, camposDeSumied(c0.mapa, c0.campos_medidos), (metodo, c) => bitrix(portal, metodo, auth, c))
+            console.log(JSON.stringify({ gbd: 'seccion_sumied', fallos: seccion }))
+            fallos.push(...seccion)
+          }
           if (fallos.length) return irA(`${PAGINA}#instalar=fallo&que=${encodeURIComponent(fallos.join(' · '))}`)
         }
         return irA(direccionDeLaPagina(PAGINA, { ...l, tipo: null, id: null }, true))
@@ -504,6 +596,7 @@ Deno.serve(async (req) => {
     }
     const cuerpo = await req.json().catch(() => null) as Record<string, unknown> | null
     if (cuerpo?.paso === 'leer') return await leer(cuerpo)
+    if (cuerpo?.paso === 'red') return await red(cuerpo, req)
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'devuelto') return await devuelto(cuerpo, req.headers.get('origin'))
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'suelto') return await suelto(cuerpo)
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'servicio') return await anadir(cuerpo)

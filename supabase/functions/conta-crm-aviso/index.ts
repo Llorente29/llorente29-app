@@ -176,7 +176,7 @@ async function trabajarCuenta(db: SupabaseClient, cuenta: string, crm: string) {
   for (const t of trabajos) {
     try {
       await esperar(500)
-      const frase = await trabajarFicha(db, { cuenta, crm, url: s.url, mapa, mapaContactos, unir, guardadas, principales, gocardless, lectura }, t)
+      const frase = await trabajarFicha(db, { cuenta, crm, url: s.url, entorno: s.entorno, mapa, mapaContactos, unir, guardadas, principales, gocardless, lectura }, t)
       guardadas = frase.guardadas
       await cerrar(t.claves, { estado: 'hecho', hecho_at: new Date().toISOString(), frase: frase.texto, porque: null })
       frases.push(frase.texto); hechos++
@@ -189,8 +189,27 @@ async function trabajarCuenta(db: SupabaseClient, cuenta: string, crm: string) {
 }
 
 interface Ctx {
-  cuenta: string; crm: string; url: string; mapa: MapaBitrix; mapaContactos: MapaContactos | null; unir: boolean
+  cuenta: string; crm: string; url: string; entorno: Entorno; mapa: MapaBitrix; mapaContactos: MapaContactos | null; unir: boolean
   guardadas: FichaGuardada[]; principales: Map<string, ClienteGuardado>; gocardless: { nifs: Set<string>; correos: Set<string> }; lectura: string
+}
+
+/**
+ * GBd · La red de la «Cuota mensual» (solo pruebas): se le pide a conta-bitrix-pestana,
+ * con la clave del servidor, y se espera. Si falla, se dice en el registro y el aviso sigue
+ * como siempre: la red no para la lectura.
+ */
+async function pedirRed(cuenta: string, id: string): Promise<void> {
+  const clave = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  try {
+    const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/conta-bitrix-pestana`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clave}`, apikey: clave, 'x-sumied-red': clave },
+      body: JSON.stringify({ paso: 'red', cuenta, id }),
+    })
+    const d = await r.json().catch(() => null) as { hecho?: string } | null
+    console.log(JSON.stringify({ gbd: 'red', ficha: id, hecho: d?.hecho ?? `http ${r.status}` }))
+  } catch (e) {
+    console.warn(JSON.stringify({ gbd: 'red_sin_respuesta', ficha: id, porque: e instanceof Error ? e.name : 'error' }))
+  }
 }
 
 /** Una ficha: leerla, decidir con las reglas de la lectura entera y guardar solo lo tocado. */
@@ -199,6 +218,10 @@ async function trabajarFicha(db: SupabaseClient, c: Ctx, t: TrabajoCrm): Promise
   let nueva: FichaGuardada | null = null
   if (t.tipo === 'leer_ficha') {
     if (t.tipoFicha === 'empresa') {
+      // GBd · El plan B, en pruebas: ANTES de meter la ficha en Sumied, la red de la «Cuota mensual»
+      // (conta-bitrix-pestana, paso «red») devuelve el valor de Sumied si alguien lo ha cambiado.
+      // Esta función sigue sin escribir nunca en el CRM: la que escribe es la de la pestaña.
+      if (c.crm === 'bitrix24' && c.entorno === 'pruebas') await pedirRed(c.cuenta, t.idExterno)
       nueva = (await leerEmpresaSuelta(fetch, c.url, c.mapa, t.idExterno)).ficha
     } else {
       // La negociación, la de la última lectura entera (Julio, 08/11): las nuevas entran con la de la noche.
