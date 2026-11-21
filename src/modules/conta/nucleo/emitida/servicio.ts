@@ -26,6 +26,7 @@ import { validar } from '@/modules/conta/services/diarioService'
 import { leerExpedidaPdf } from '@/modules/conta/services/documentosService'
 import { urlDelPdf } from '@/modules/conta/services/ventasService'
 import type { Apunte } from '@/modules/conta/lib/cuentasProveedor'
+import { cuentasParaMover } from '@/modules/conta/lib/cuentasParaMover'
 import { lineasParaLaBase, type BorradorEmitida, type CuentasEmitida, type QueHaceElCobro } from './asiento'
 
 type Fila = Record<string, unknown>
@@ -59,7 +60,7 @@ export interface DeLaEmpresa {
   /** Los tipos de IVA repercutido con su 477 (el enlace tax_rate → repercutido, o la 477 de su % por el nombre, como conta_venta_emitir). */
   tipos: Map<number, { tipoId: string; codigo: string | null; nombre: string }>
   ventas: { id: string; codigo: string; nombre: string }[]
-  /** Las cuentas a las que se puede cobrar (57x), con el id del banco si es la de una tesorería. */
+  /** Las cuentas a las que se puede cobrar (X23: todas las subcuentas abiertas, bancos y caja primero), con el id del banco si es la de una tesorería. */
   cobros: { codigo: string; nombre: string; bancoId: string | null }[]
   retencion: { codigo: string; nombre: string } | null
   retenciones: { id: string; tipo: number; nombre: string }[]
@@ -73,7 +74,7 @@ export async function deLaEmpresa(accountId: string, companyId: string, hoy: str
     leer(tabla('party').select('id, name, tax_id').eq('account_id', accountId).is('archived_at', null), 'los contactos'),
     leer(tabla('customer_fiscal').select('party_id, legal_name, operation_scope, equivalence_surcharge, withholding_rate_id, payment_terms_days, collection_treasury_id').eq('account_id', accountId), 'los datos fiscales'),
     leer(tabla('company_account_link').select('entity, entity_id, role, company_account_id').eq('account_id', accountId).eq('company_id', companyId).in('entity', ['customer', 'tax_rate', 'bank_account']), 'los enlaces del plan'),
-    leer(tabla('company_account').select('id, code, name, plain_name, kind, template_code').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
+    leer(tabla('company_account').select('id, code, name, plain_name, kind, template_code, status').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
     leer(tabla('tax_rate').select('id, rate, treatment, valid_to, tax_system, company_id').eq('treatment', 'taxed').or(`company_id.is.null,company_id.eq.${companyId}`), 'los tipos de IVA'),
     leer(tabla('withholding_rate').select('id, name, rate, code, company_id').or(`company_id.is.null,company_id.eq.${companyId}`).neq('code', 'trabajo').order('rate', { ascending: false }), 'las retenciones'),
     leer(tabla('treasury_account').select('id, name, kind').eq('account_id', accountId).eq('company_id', companyId), 'las cuentas de tesorería'),
@@ -115,8 +116,9 @@ export async function deLaEmpresa(accountId: string, companyId: string, hoy: str
   const hojas = plan.filter((c) => c.kind !== 'group')
   const ventas = hojas.filter((c) => /^70/.test(String(c.code)) && String(c.code).length >= 8).map((c) => ({ id: String(c.id), codigo: String(c.code), nombre: nombreDe(c) })).sort((a, b) => a.codigo.localeCompare(b.codigo))
   const bancoDe = new Map([...deTeso.entries()].filter(([, c]) => c).map(([id, c]) => [String(c!.code), id]))
-  const cobros = hojas.filter((c) => /^57/.test(String(c.code)) && String(c.code).length >= 8)
-    .map((c) => ({ codigo: String(c.code), nombre: nombreDe(c), bancoId: bancoDe.get(String(c.code)) ?? null })).sort((a, b) => a.codigo.localeCompare(b.codigo))
+  // X23 (Julio, 19/11) · Se cobra con cualquier subcuenta del plan, como se paga (X21b, la misma pieza): bancos y caja primero.
+  const cobros = cuentasParaMover(hojas, { tesorerias: new Set(bancoDe.keys()), delante: (c) => /^57/.test(String(c.code)) })
+    .map((c) => ({ codigo: String(c.code), nombre: nombreDe(c), bancoId: bancoDe.get(String(c.code)) ?? null }))
   const r473 = plan.filter((c) => /^473/.test(String(c.template_code ?? c.code))).sort((a, b) => String(a.code).localeCompare(String(b.code)))[0] ?? null
   return {
     clientes, tipos, ventas, cobros, nombres,
@@ -275,7 +277,7 @@ export async function documentoDeLaEmitida(accountId: string, entryId: string): 
 /**
  * El cobro APUNTADO de una emitida (la hecha sola): el apunte al haber de su 430
  * con el número de la factura en un asiento validado, y la cuenta de su debe
- * (la 57x). null si no hay ninguno: está pendiente de cobrar (Julio, 19/11:
+ * (desde el X23, cualquiera que no sea la del propio cliente). null si no hay ninguno: está pendiente de cobrar (Julio, 19/11:
  * «vacío quiere decir pendiente de cobrar»; nunca la propuesta de su ficha).
  */
 export async function cobroDeLaFactura(accountId: string, companyId: string, subcuentaId: string, numero: string): Promise<{ cuenta: string; nombre: string; fecha: string; importe: number } | null> {
@@ -287,8 +289,9 @@ export async function cobroDeLaFactura(accountId: string, companyId: string, sub
     .eq('journal_entry.status', 'validado').limit(20), 'su cobro')
   const ultimo = haber.sort((a, b) => String((b.journal_entry as Fila).entry_date).localeCompare(String((a.journal_entry as Fila).entry_date)))[0]
   if (!ultimo) return null
-  const debe = await leer(tabla('journal_line').select('company_account(code, name, plain_name)').eq('account_id', accountId).eq('entry_id', String(ultimo.entry_id)).gt('debit', 0), 'la cuenta de su cobro')
-  const c = debe.map((x) => x.company_account as Fila | null).find((x) => x && /^57/.test(String(x.code)))
+  const debe = await leer(tabla('journal_line').select('company_account_id, company_account(code, name, plain_name)').eq('account_id', accountId).eq('entry_id', String(ultimo.entry_id)).gt('debit', 0), 'la cuenta de su cobro')
+  // X23 · Se cobra con cualquier cuenta (no solo las 57): la del debe que no es la del propio cliente.
+  const c = debe.filter((x) => String(x.company_account_id) !== subcuentaId).map((x) => x.company_account as Fila | null).find((x) => x && String(x.code))
   if (!c) return null
   return { cuenta: String(c.code), nombre: String(c.name ?? ''), fecha: String((ultimo.journal_entry as Fila).entry_date), importe: n(ultimo.credit) }
 }
