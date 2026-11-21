@@ -96,6 +96,35 @@ export async function gastoAprendido(companyId: string, supplierId: string): Pro
   return { cuenta: s(r?.cuenta), confianza: conf, facturas: Number(r?.facturas ?? 0), reparto }
 }
 
+/**
+ * R14 · Lo que Sumied hizo con el proveedor de esta recibida al leerla (conta_proveedor_solo):
+ * lo dio de alta (alta), era uno que ya estaba (existente) o una plataforma; o por qué no.
+ * null si no hizo nada (una a mano, o leída antes del R14).
+ */
+export interface ProveedorSolo { que: 'alta' | 'existente' | 'plataforma' | 'no'; supplierId: string | null; motivo: string | null; deshecho: boolean }
+
+export async function proveedorSolo(invoiceId: string): Promise<ProveedorSolo | null> {
+  const { data, error } = await tabla('conta_proveedor_solo').select('que, supplier_id, motivo, deshecho_at').eq('invoice_id', invoiceId).maybeSingle()
+  if (error) throw new Error(`No se ha podido leer quién le puso el proveedor: ${error.message}`)
+  if (!data) return null
+  const r = data as Fila
+  return { que: String(r.que) as ProveedorSolo['que'], supplierId: s(r.supplier_id), motivo: s(r.motivo), deshecho: r.deshecho_at != null }
+}
+
+/** R14 · «Deshacer»: la factura vuelve a no tener proveedor; lo que Sumied dio de alta sin nada más, se va. Devuelve lo que dice la base. */
+export async function deshacerProveedorSolo(invoiceId: string, quien: string | null): Promise<string> {
+  const r = await rpc<Fila>('conta_proveedor_solo_deshacer', { p_invoice: invoiceId, p_quien_nombre: quien })
+  return String(r?.texto ?? 'Deshecho.')
+}
+
+/** R14 · La cuenta de gasto propuesta para un proveedor sin historial en esta empresa, con su porqué (en ámbar). */
+export interface GastoPropuesto { cuenta: string | null; nombre: string | null; porque: string; de: 'plataforma' | 'otra_sociedad' | 'lo_que_vende' | null }
+
+export async function gastoPropuesto(companyId: string, supplierId: string, invoiceId: string | null): Promise<GastoPropuesto> {
+  const r = await rpc<Fila | null>('conta_gasto_propuesto', { p_company: companyId, p_supplier: supplierId, p_invoice: invoiceId })
+  return { cuenta: s(r?.cuenta), nombre: s(r?.nombre), porque: String(r?.porque ?? ''), de: (s(r?.de) as GastoPropuesto['de']) ?? null }
+}
+
 /** Las cuentas del asiento de una recibida escrita a mano (aún sin propuesta), con los enlaces de la propuesta: la 472 de cada tipo y la 4751. Una vez por empresa. */
 export async function cuentasAMano(accountId: string, companyId: string): Promise<{ cuentas: CuentasFicha; nombres: Map<string, string>; mesesCerrados: string[]; ejercicios: { inicio: string; fin: string; abierto: boolean }[] }> {
   const ctx = await cargarContexto(accountId, companyId)
@@ -147,4 +176,35 @@ export async function marcaDeLaFactura(accountId: string, invoiceId: string): Pr
   if (error) throw new Error(`No se ha podido leer la marca de la factura: ${error.message}`)
   const b = (data as Fila | null)?.brand as Fila | null | undefined
   return b ? s(b.name) : null
+}
+
+/**
+ * K09 · Las otras recibidas del mismo proveedor, con su asiento si está validado: para decir cuál es la
+ * repetida (laRepetida) y abrirla. Y si en esta ya se dijo «No es la misma» o «No es repetida».
+ */
+export async function otrasDelProveedor(accountId: string, invoiceId: string, supplierId: string): Promise<{ otras: { id: string; numero: string; proveedor: string; asiento: string; validada: boolean }[]; confirmada: boolean }> {
+  const [o, yo] = await Promise.all([
+    tabla('supplier_invoice').select('id, invoice_number, status, supplier:supplier_id(name)').eq('account_id', accountId).eq('supplier_id', supplierId).not('status', 'in', '(anulada,descartada)').neq('id', invoiceId),
+    tabla('supplier_invoice').select('not_duplicate_confirmed_at').eq('account_id', accountId).eq('id', invoiceId).maybeSingle(),
+  ])
+  if (o.error) throw new Error(`No se ha podido mirar si está repetida: ${o.error.message}`)
+  const filas = (o.data ?? []) as Fila[]
+  const ids = filas.map((f) => String(f.id))
+  const asientos = new Map<string, string>()
+  if (ids.length) {
+    const { data, error } = await tabla('journal_entry').select('source_id, series, number').eq('account_id', accountId).eq('source_type', 'supplier_invoice').eq('status', 'validado').in('source_id', ids)
+    if (error) throw new Error(`No se ha podido mirar si está repetida: ${error.message}`)
+    for (const e of (data ?? []) as Fila[]) asientos.set(String(e.source_id), `${e.series}/${e.number ?? '—'}`)
+  }
+  const confirmada = !!(yo.data as Fila | null)?.not_duplicate_confirmed_at
+  return {
+    otras: filas.map((f) => ({ id: String(f.id), numero: String(f.invoice_number ?? ''), proveedor: String((f.supplier as Fila | null)?.name ?? 'su proveedor'), asiento: asientos.get(String(f.id)) ?? '', validada: asientos.has(String(f.id)) })),
+    confirmada,
+  }
+}
+
+/** K09 · «No es la misma: …»: lo guarda la base, con su motivo, y queda en el historial (conta_recibida_no_es_la_misma). */
+export async function noEsLaMisma(invoiceId: string, otraId: string, motivo: string, quien: string | null): Promise<string> {
+  const r = await rpc<{ texto?: string }>('conta_recibida_no_es_la_misma', { p_invoice: invoiceId, p_otra: otraId, p_motivo: motivo, p_quien_nombre: quien })
+  return r?.texto ?? 'Anotado: no es la misma. Ya se puede validar.'
 }

@@ -1,0 +1,23 @@
+{
+ "_que": "K09 · validar solo lo completo y no repetido · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. 0945 añade funciones y una tabla, amplía un CHECK y añade un trozo a conta_motivos_para_validar. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-21T08:41Z",
+ "tanda": {
+  "supabase/migrations/20261121T0945_k09_validar_solo_lo_completo.sql": "66b69967ff54a1ff8f37f2c829c7b934"
+ },
+ "contexto": {
+  "tablas": [
+   "public.supplier_invoice_change"
+  ],
+  "funciones": [
+   "public.conta_motivos_para_validar(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
