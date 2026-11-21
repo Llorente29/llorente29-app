@@ -113,3 +113,16 @@ export function textoDudaPago(duda: { cuentas: readonly string[] }, nombre: (c: 
 
 /** Lo que se dice después de guardar, cuando queda pendiente (regla 8: con su porqué). */
 export const textoPendiente = (porque: string) => `Queda pendiente de pagar (${porque}).`
+
+/**
+ * X21b (Julio, 21/11) · «Cómo se paga» admite cualquier subcuenta del plan. Si la elegida no es una tesorería (banco,
+ * tarjeta, caja) ni la 430 de la plataforma, una línea dice qué asiento hará al validar, sin bloquear: el del pago,
+ * con la del proveedor al debe y la elegida al haber (conta_recibida_pagar_con_cuenta). Null si no toca decirlo.
+ */
+export function textoAsientoDelPago(q: QueHaceElPago, o: { nombre: (c: string) => string; cuentaProveedor: string | null; importe: string }): string | null {
+  if (q.que !== 'otra') return null
+  const nombre = o.nombre(q.cuenta)
+  const elegida = `la ${q.cuenta}${nombre ? ` · ${nombre}` : ''}`
+  const proveedor = o.cuentaProveedor ? `la ${o.cuentaProveedor} del proveedor` : 'la del proveedor'
+  return `No es un banco ni la caja: al validar, un asiento del pago con ${proveedor} al debe y ${elegida} al haber, por ${o.importe}, y la factura queda pagada.`
+}

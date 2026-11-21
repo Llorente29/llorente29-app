@@ -259,6 +259,7 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 
 /* K06 · «Cómo se paga» en la recibida: debajo de la cuenta, cuándo vence, el día del pago y el importe, cada uno con su rótulo. */
 .kf-pago-fechas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.kf-pago-asiento { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--k-apoyo); }
 .kf-rotulo-chico { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; min-width: 0; font-size: 11px; color: var(--k-apoyo); white-space: nowrap; }
 
 /* K06 · La raya entre el formulario y el documento: fina (la del borde del panel), con el cursor de arrastrar y sin adornos.
@@ -302,3 +303,7 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 .kf-recibida .kf-asiento { padding: 4px 10px; }
 .kf-recibida .kf-asiento header { margin-bottom: 1px; }
 .kf-recibida .kf-asiento td { padding: 1px 6px; }
+
+/* X21 · «No está: crear la …» debajo de una casilla que busca cuentas: las dos casillas de «Añadir subcuenta». */
+.kf-crear { min-width: 420px; max-height: none; overflow: visible; padding: 8px 10px; white-space: normal; }
+.kf-crear .cx-subcuenta { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }

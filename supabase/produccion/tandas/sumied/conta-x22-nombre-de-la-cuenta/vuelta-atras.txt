@@ -1,0 +1,4 @@
+# X22 · la vuelta atrás: primero las reglas (de su registro), después las ocho funciones (de su respaldo).
+cuenta: scripts/conta/produccion/cuentas/x22-nombre-de-la-cuenta.sql
+supabase/vuelta-atras/20261121T1610_x22_reglas_con_nombre.down.sql
+supabase/vuelta-atras/20261121T1600_x22_nombre_de_la_cuenta.down.sql

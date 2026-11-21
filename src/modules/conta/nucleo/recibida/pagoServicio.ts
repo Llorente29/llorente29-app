@@ -3,9 +3,10 @@
 // K06 · Lo que la ficha de la recibida del núcleo lee y hace para «Cómo se
 // paga» (la cuenta del pago). Cada lectura filtra por la cuenta (regla 9).
 //
-//   · Las cuentas que valen para pagar (F4): las subcuentas del plan del grupo 5
-//     (bancos, caja, tarjetas, socios…) y las 430 de las plataformas; y cuáles
-//     son una tesorería (banco, tarjeta o caja), que van por Bancos.
+//   · Las cuentas que valen para pagar (F4): desde el X21b (Julio, 21/11),
+//     cualquier subcuenta del plan que no esté cerrada, con las tesorerías
+//     (banco, tarjeta o caja, que van por Bancos) primero, después el resto del
+//     grupo 5 y las 430 de las plataformas, y después las demás.
 //   · Del proveedor: si es una plataforma (su papel «platform»), con su 430; y
 //     las cuentas de sus últimos pagos (los de supplier_invoice_payment con su
 //     asiento, y los «Ya la he pagado» que esperan el cargo, con su banco).
@@ -28,10 +29,11 @@ async function leer(q: PromiseLike<{ data: unknown; error: { message: string } |
   if (error) throw new Error(mensaje(`No se ha podido leer ${que}`, error))
   return (data ?? []) as Fila[]
 }
-const nombreDe = (c: Fila) => String(c.plain_name ?? c.name ?? '')
+// K08 · El nombre guardado en el plan, nunca su explicación (Julio, 21/11).
+const nombreDe = (c: Fila) => String(c.name ?? '')
 
 export interface CuentasDePago {
-  /** Las que salen con F4: grupo 5 y las 430 de las plataformas. */
+  /** Las que salen con F4: todas las subcuentas abiertas; tesorerías, grupo 5 y las 430 de las plataformas primero. */
   lista: CuentaDelPlan[]
   /** El nombre de cada cuenta del plan, por su código. */
   nombres: Map<string, string>
@@ -42,7 +44,7 @@ export interface CuentasDePago {
 /** Las cuentas del pago de la empresa, una vez por empresa. */
 export async function cuentasDePago(accountId: string, companyId: string): Promise<CuentasDePago> {
   const [plan, enlaces, roles] = await Promise.all([
-    leer(tabla('company_account').select('id, code, name, plain_name, kind').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
+    leer(tabla('company_account').select('id, code, name, kind, status').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
     leer(tabla('company_account_link').select('entity, entity_id, role, company_account_id').eq('account_id', accountId).eq('company_id', companyId).in('entity', ['bank_account', 'customer']).eq('role', 'principal'), 'los enlaces del plan'),
     leer(tabla('party_role').select('party_id').eq('account_id', accountId).eq('role', 'platform'), 'las plataformas'),
   ])
@@ -54,10 +56,12 @@ export async function cuentasDePago(accountId: string, companyId: string): Promi
     const c = porId.get(String(l.company_account_id))
     if (c) tesorerias.set(String(c.code), String(l.entity_id))
   }
+  // X21b · El plan entero (regla 30): «No está» solo si no existe. Primero lo de siempre para pagar.
+  const orden = (c: Fila) => tesorerias.has(String(c.code)) ? 0 : /^5/.test(String(c.code)) || de430.has(String(c.id)) ? 1 : 2
   const lista = plan
-    .filter((c) => c.kind !== 'group' && String(c.code).length >= 8 && (/^5/.test(String(c.code)) || de430.has(String(c.id))))
+    .filter((c) => c.kind !== 'group' && String(c.code).length >= 8 && c.status !== 'cerrada')
+    .sort((a, b) => orden(a) - orden(b) || String(a.code).localeCompare(String(b.code)))
     .map((c) => ({ codigo: String(c.code), nombre: nombreDe(c) }))
-    .sort((a, b) => a.codigo.localeCompare(b.codigo))
   return { lista, nombres: new Map(plan.map((c) => [String(c.code), nombreDe(c)])), tesorerias }
 }
 

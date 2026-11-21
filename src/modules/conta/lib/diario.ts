@@ -272,15 +272,15 @@ export function estadoDe(a: AsientoDiario): { texto: string; tono: TonoEstado } 
 }
 
 /**
- * Cómo se llama una cuenta en el libro y en el asiento (respuesta 3): una
- * subcuenta de la empresa, por su nombre («Comisiones de plataformas»); una
- * hoja de serie, por su «qué se apunta aquí» del C02 («Nóminas, en bruto»).
- * El título del BOE va al Mayor y a «Detalle contable». Sin nada de eso, el
- * título (nunca un literal de reserva: regla 30).
+ * Cómo se llama una cuenta en el libro y en el asiento. K08 (Julio, 21/11):
+ * SIEMPRE su nombre guardado en el plan («Compras de mercaderías»), nunca su
+ * explicación («Bebidas y producto que vendes tal cual»): la explicación solo
+ * sale como ayuda, si se pide. Sustituye a la respuesta 3 (12/10), que daba a
+ * las hojas de serie su «qué se apunta aquí». Se queda la firma: quien la llama
+ * no cambia.
  */
 export function nombreDeUso(c: { kind: string | null; name: string; plainName: string | null }): string {
-  if (c.kind === 'own' || !c.plainName?.trim()) return c.name
-  return c.plainName.trim().replace(/\.$/, '')
+  return c.name
 }
 
 /** El importe del asiento: lo que suma su Debe. */

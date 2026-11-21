@@ -93,7 +93,7 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
       .catch((e: unknown) => { console.warn('[bancos] no se pudieron leer las cuentas conectadas', e); return [] as Fila[] }),
   ])
   const nombres: Record<string, string> = {}
-  for (const c of cuentas) nombres[String(c.code)] = String(c.plain_name ?? c.name).trim().replace(/[.\s]+$/, '')
+  for (const c of cuentas) nombres[String(c.code)] = String(c.name).trim().replace(/[.\s]+$/, '')
   const ext: Extracto[] = extractos.map((e) => ({
     id: String(e.id), cuentaId: String(e.treasury_account_id), fichero: s(e.file_name), formato: String(e.format), desde: String(e.period_from), hasta: String(e.period_to),
     saldoInicialCent: e.opening_balance === null ? null : cent(e.opening_balance), saldoFinalCent: e.closing_balance === null ? null : cent(e.closing_balance), movimientos: Number(e.movements_count), nuevos: Number(e.new_count), repetidos: Number(e.repeated_count),
@@ -185,7 +185,7 @@ export async function cuentasPasarela(accountId: string, companyId: string, hoy:
   const saldos = await saldosContables(companyId, hoy, filas.map((f) => String(f.code)))
   return filas.map((f) => {
     const ca = f.company_account as Fila | null
-    return { proveedor: f.proveedor === 'redsys' ? 'redsys' as const : 'stripe' as const, codigo: String(f.code), nombre: String(ca?.plain_name ?? ca?.name ?? ''), saldoCent: saldos[String(f.code)] ?? 0 }
+    return { proveedor: f.proveedor === 'redsys' ? 'redsys' as const : 'stripe' as const, codigo: String(f.code), nombre: String(ca?.name ?? ''), saldoCent: saldos[String(f.code)] ?? 0 }
   }).sort((a, b) => a.codigo.localeCompare(b.codigo))
 }
 
@@ -395,7 +395,7 @@ export async function leerBancosDelCierre(accountId: string, companyId: string):
   const codigos = [...new Set(bs.map((b) => b.cuenta).filter((c): c is string => !!c))]
   const cuentas = codigos.length === 0 ? [] : await leer(tabla('company_account').select('code, name, plain_name')
     .eq('account_id', accountId).eq('company_id', companyId).in('code', codigos), 'el plan')
-  const nombres = new Map(cuentas.map((c) => [String(c.code), String(c.plain_name ?? c.name).trim().replace(/[.\s]+$/, '')]))
+  const nombres = new Map(cuentas.map((c) => [String(c.code), String(c.name).trim().replace(/[.\s]+$/, '')]))
   return bs
     .map((b) => ({ id: b.id, nombre: b.nombre, iban: b.iban, cuenta: b.cuenta, cuentaNombre: b.cuenta ? nombres.get(b.cuenta) ?? null : null }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))

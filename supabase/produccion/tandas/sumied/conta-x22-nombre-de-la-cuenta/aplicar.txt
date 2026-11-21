@@ -1,0 +1,14 @@
+# X22 · Cada cuenta, con su nombre guardado, también lo que devuelve la base (encargo del 21/11).
+# Rama conta/x22-nombre-de-la-cuenta. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1600  CAMBIA EN CALIENTE (declarado en su cabecera, con su prueba de staging): ocho funciones devuelven el
+#         nombre del plan (company_account.name) en lugar de su explicación. Misma firma; cada una, la que vive hoy
+#         (su guarda md5 para si no es) con solo esa expresión cambiada. Respaldo y vuelta atrás con
+#         _respaldar_funcion / _restaurar_funcion.
+#   1610  Update sobre lo que existe (autorizo): las reglas del banco escritas con la explicación de su cuenta
+#         («→ <explicación> · <código>») pasan al nombre. Lo de antes queda en bank_rule_log y de ahí vuelve.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x22-nombre-de-la-cuenta.sql
+supabase/migrations/20261121T1600_x22_nombre_de_la_cuenta.sql
+supabase/migrations/20261121T1610_x22_reglas_con_nombre.sql

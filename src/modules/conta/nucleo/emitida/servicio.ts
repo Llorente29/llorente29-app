@@ -79,7 +79,8 @@ export async function deLaEmpresa(accountId: string, companyId: string, hoy: str
     leer(tabla('treasury_account').select('id, name, kind').eq('account_id', accountId).eq('company_id', companyId), 'las cuentas de tesorería'),
   ])
   const porId = new Map(plan.map((c) => [String(c.id), c]))
-  const nombreDe = (c: Fila) => String(c.plain_name ?? c.name ?? '')
+  // K08 · El nombre guardado en el plan, nunca su explicación (Julio, 21/11).
+  const nombreDe = (c: Fila) => String(c.name ?? '')
   const nombres = new Map(plan.map((c) => [String(c.code), nombreDe(c)]))
   const enlace = (entity: string, id: string, role: string) => {
     const l = enlaces.find((x) => x.entity === entity && String(x.entity_id) === id && x.role === role)
@@ -149,7 +150,7 @@ export async function repartoDeVentas(accountId: string, companyId: string, part
     if (sin && String(f.entry_id) === sin) continue
     const c = f.company_account as Fila; const e = f.journal_entry as Fila
     const k = String(c.code)
-    const x = por.get(k) ?? { cuenta: k, nombre: String(c.plain_name ?? c.name ?? ''), asientos: new Set<string>(), ultima: '' }
+    const x = por.get(k) ?? { cuenta: k, nombre: String(c.name ?? ''), asientos: new Set<string>(), ultima: '' }
     x.asientos.add(String(f.entry_id))
     if (String(e.entry_date) > x.ultima) x.ultima = String(e.entry_date)
     por.set(k, x)
@@ -289,5 +290,5 @@ export async function cobroDeLaFactura(accountId: string, companyId: string, sub
   const debe = await leer(tabla('journal_line').select('company_account(code, name, plain_name)').eq('account_id', accountId).eq('entry_id', String(ultimo.entry_id)).gt('debit', 0), 'la cuenta de su cobro')
   const c = debe.map((x) => x.company_account as Fila | null).find((x) => x && /^57/.test(String(x.code)))
   if (!c) return null
-  return { cuenta: String(c.code), nombre: String(c.plain_name ?? c.name ?? ''), fecha: String((ultimo.journal_entry as Fila).entry_date), importe: n(ultimo.credit) }
+  return { cuenta: String(c.code), nombre: String(c.name ?? ''), fecha: String((ultimo.journal_entry as Fila).entry_date), importe: n(ultimo.credit) }
 }

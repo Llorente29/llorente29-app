@@ -1,0 +1,3 @@
+# X20 · la vuelta atrás: quita la función (las subcuentas creadas con ella se quedan).
+cuenta: scripts/conta/produccion/cuentas/x20-subcuenta-con-codigo.sql
+supabase/vuelta-atras/20261121T0930_x20_subcuenta_con_codigo.down.sql

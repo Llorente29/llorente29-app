@@ -218,4 +218,6 @@ html.k-sin-rueda, html.k-sin-rueda body { overflow: hidden; }
 .k-estado-frase:hover { text-decoration: underline; }
 .k-estado-punto { width: 8px; height: 8px; border-radius: 50%; background: var(--k-bien); }
 .k-estado-frase[data-tono='mira'] .k-estado-punto { background: var(--k-mira); }
+/* K08 · Gris: algo que espera a alguien (la primera salida a ERP10), no un fallo. */
+.k-estado-frase[data-tono='gris'] .k-estado-punto { background: var(--k-gris, #98a2b3); }
 .k-estado-frase:focus-visible { outline: 2px solid var(--k-azul); outline-offset: 2px; }
