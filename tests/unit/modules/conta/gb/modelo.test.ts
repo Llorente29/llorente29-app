@@ -8,7 +8,7 @@ import { datosDeClientes, datosDeFicha, FRASE_DE, leerAlmohadilla, modeloPestana
 import { modeloFicha } from '@/modules/conta/gestoria/g04/modelo'
 
 import { reciboPrevisto } from '@/publicas/bitrixPestanaModelo'
-import { clientes, ficha, Q, respuesta } from '../../../../e2e/conta/gb/respuesta'
+import { clientes, conMandato, ficha, Q, respuesta } from '../../../../e2e/conta/gb/respuesta'
 
 const HOY = '2026-11-09'
 
@@ -216,5 +216,25 @@ describe('GB (nº 17, D) · el DNI o NIE antes de guardar', () => {
     expect(documentoDe('1234567Z')).toEqual({ documento: '1234567Z', valido: false })
     expect(documentoDe('  ')).toEqual({ documento: null, valido: true })
     expect(diaCorto('2026-12-15')).toBe('15/12/2026')
+  })
+})
+
+// nº 31 · En SEPA, un mandato en «pending_submission» ya lo ha firmado el cliente: va al banco con el primer cobro.
+// La pestaña lo dice como la ficha de Sumied (el modelo del G04, nº 90 de Code 1): sin aviso, y «firmado».
+describe('GB (nº 31) · el mandato en la pestaña: firmado, se envía al banco con el primer cobro', () => {
+  it('pending_submission: sin aviso, y firmado', () => {
+    const p = modeloPestana(conMandato('pending_submission'), HOY)!
+    expect(p.aviso).toBeNull()
+    expect(p.mandato).toEqual({ texto: 'firmado, se envía al banco con el primer cobro', tono: 'bien' })
+  })
+  it('submitted: sin aviso, y firmado, camino del banco', () => {
+    const p = modeloPestana(conMandato('submitted'), HOY)!
+    expect(p.aviso).toBeNull()
+    expect(p.mandato).toEqual({ texto: 'firmado, camino del banco', tono: 'bien' })
+  })
+  it('«por firmar», solo el que aún no ha aprobado el cliente, con su aviso', () => {
+    const p = modeloPestana(conMandato('pending_customer_approval'), HOY)!
+    expect(p.mandato).toEqual({ texto: 'por firmar', tono: 'aviso' })
+    expect(p.aviso).toEqual({ texto: 'El mandato SEPA está sin firmar. Sin mandato firmado no entra en el cobro de GoCardless. Se firma desde el enlace que le envía GoCardless.', tono: 'aviso' })
   })
 })
