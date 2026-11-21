@@ -1,0 +1,20 @@
+[
+ {
+  "id": "775-1",
+  "pr": 775,
+  "fecha": "2026-11-21T20:51:43Z",
+  "producto": "sumied",
+  "apartado": "Proveedores",
+  "frase": "si una factura trae el NIF de un proveedor que ya tienes sin NIF, Sumied la pone a ese y le completa el NIF; si hay dos con ese nombre, te pide que elijas.",
+  "ruta": null
+ },
+ {
+  "id": "775-2",
+  "pr": 775,
+  "fecha": "2026-11-21T20:51:43Z",
+  "producto": "sumied",
+  "apartado": "Alta de proveedor",
+  "frase": "con el NIF de otro, aunque esté escrito con guion o espacios, dice «Ya tienes a … con este NIF» con «Abrirlo», y no crea otro.",
+  "ruta": null
+ }
+]

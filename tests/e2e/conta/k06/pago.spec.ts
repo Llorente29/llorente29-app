@@ -13,7 +13,7 @@
 //      su «Ya la he pagado»), queda igual que la de la ficha, y Bancos las
 //      propone igual para casar;
 //   3. por la 430: la de comisión de la plataforma (semilla K06b), ligada a su liquidación,
-//      propone su 43000091 «de su liquidación» y al validarla queda pagada por
+//      propone su 43000091 «De su ficha» (K10: la 430 de la plataforma pasó a su ficha, como cuenta de pago) y al validarla queda pagada por
 //      compensación;
 //   4. la raya: se arrastra, se recuerda al volver y no pasa del mínimo del
 //      formulario;
@@ -154,7 +154,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     const nVacia = `K06V-${t}-${sello}`
     await escribirAMano(page, t, nVacia)
     await expect(ficha(page).locator('#kf-pago')).toHaveValue('57200001', { timeout: 30_000 })
-    await expect(ficha(page).locator('[data-prueba="origen-pago"]')).toHaveText('de la última')
+    await expect(ficha(page).locator('[data-prueba="origen-pago"]')).toHaveText('La del último pago')
     await ficha(page).locator('#kf-pago').fill('')
     await expect(nombrePago(page)).toHaveValue('')
     await expect(nombrePago(page)).toHaveAttribute('placeholder', 'Pendiente de pagar')
@@ -183,7 +183,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
     await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
     await expect(ficha(page).locator('#kf-pago')).toHaveValue('43000091', { timeout: 30_000 })
-    await expect(ficha(page).locator('[data-prueba="origen-pago"]')).toHaveText('de su liquidación')
+    await expect(ficha(page).locator('[data-prueba="origen-pago"]')).toHaveText('De su ficha')
     await expect(nombrePago(page)).toHaveValue('Plataforma de Prueba K06')
     await expect(ficha(page)).not.toContainText('Compensación con la liquidación')
     await cargada(page, 'la de plataforma')

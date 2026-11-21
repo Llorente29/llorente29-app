@@ -46,7 +46,7 @@ import { dondeVaElFoco, dudaDelGasto, etiquetaDelAsiento, puedeGuardar, trimestr
 import { calendarioDe } from '../recibida/servicio'
 import {
   asientoDeLaEmitida, borradorDesdeAsiento, borradorVacio, comprobacionesEmitida, estadoDeLaEmitida, ETIQUETAS_EMITIDA, fechaDelCobro, nombreDePestanaEmitida,
-  queHaceElCobro, textoOperacionCliente, vaciasEmitida, type BorradorEmitida, type CuentasEmitida, type ModoEmitida,
+  queHaceElCobro, textoAsientoDelCobro, textoOperacionCliente, vaciasEmitida, type BorradorEmitida, type CuentasEmitida, type ModoEmitida,
 } from './asiento'
 import {
   apuntarCobro, asientoDeFacturacion, cobroDeLaFactura, colaEmitidas, deLaEmpresa, documentoDeLaEmitida, emitidaRepetida, guardarEmitida, mayorDelCliente, repartoDeVentas, ultimaCuentaDeCobro,
@@ -184,7 +184,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   async function elCobro(cuenta430: string, numero: string, fechaFactura: string): Promise<string> {
     if (!empresa || !cliente) return ''
     const bancos = new Map((emp?.cobros ?? []).filter((c) => c.bancoId).map((c) => [c.codigo, c.bancoId!]))
-    const q = queHaceElCobro({ cuenta: be.cobroCuenta ?? '', fecha: be.cobroFecha ?? '', hoy, importe: cobroImporte, bancos })
+    const q = queHaceElCobro({ cuenta: be.cobroCuenta ?? '', fecha: be.cobroFecha ?? '', hoy, importe: cobroImporte, bancos, cuentaCliente: cuenta430 || null })
     if (q.que === 'pendiente') return `Queda pendiente de cobrar (${q.porque}).`
     try { return await apuntarCobro({ companyId: empresa, cobro: q, cuenta430, partyId: cliente.id, numero, fechaFactura, quien: userName }) }
     catch (e) { return `El cobro no se ha apuntado (${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}): queda pendiente de cobrar.` }
@@ -329,6 +329,11 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   const concepto = cliente ? `Factura ${b.numero || ''} · ${cliente.nombre}`.replace('Factura  ·', 'Factura ·') : ''
   const nombreCobro = be.cobroCuenta ? emp?.nombres.get(be.cobroCuenta) ?? creadas.find((x) => x.codigo === be.cobroCuenta)?.nombre ?? 'Cuenta' : ''
   const nombreDelCobro = modo === 'hecha_sola' ? cobroApuntado?.nombre ?? '' : nombreCobro
+  // X23 · Cualquier cuenta vale para cobrar; si no es un banco ni la caja, qué asiento hará al guardar (sin bloquear).
+  const asientoDelCobro = modo === 'hecha_sola' ? null
+    : textoAsientoDelCobro(queHaceElCobro({ cuenta: be.cobroCuenta ?? '', fecha: be.cobroFecha ?? '', hoy, importe: cobroImporte,
+        bancos: new Map((emp?.cobros ?? []).filter((c) => c.bancoId).map((c) => [c.codigo, c.bancoId!])), cuentaCliente: sub?.codigo ?? null }),
+      { nombre: (c) => emp?.nombres.get(c) ?? creadas.find((x) => x.codigo === c)?.nombre ?? '', cuentaCliente: sub?.codigo ?? null, importe: `${cifra(cobroImporte)} €` })
   const ejercicio = b.fecha.slice(0, 4)
 
   return (
@@ -458,7 +463,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
                     : <Buscador id="kf-cobro" etiqueta="La cuenta del cobro" cargando={!emp} valor={textoCobro ?? be.cobroCuenta ?? ''} cuenta={be.cobroCuenta || null}
                         ponerTexto={(t) => { setTextoCobro(t); if (!t.trim()) ed.poner('cobroCuenta', '') }} lista={(t) => cuentasQueEncajan(t, cuentasCobro, 8)}
                         texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) }}
-                        crear={crearCuenta((c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) }, 'solo van bancos y caja (las del 57)')} />}
+                        crear={crearCuenta((c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) })} />}
                   {/* Sin cuenta, «Pendiente de cobrar» en la casilla ancha (en la de la cuenta no cabía entero). */}
                   <NombreDeCuenta etiqueta="Nombre de la cuenta del cobro" valor={nombreDelCobro} placeholder="Pendiente de cobrar" />
                 </div>
@@ -470,6 +475,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
                     <input className="kf-cifra" readOnly tabIndex={-1} aria-label="Importe del cobro" value={cifra(modo === 'hecha_sola' ? cobroApuntado?.importe ?? 0 : cobroImporte)} />
                   </div>
                 )}
+                {asientoDelCobro && <p className="kf-pago-asiento" data-prueba="cobro-asiento">{asientoDelCobro}</p>}
               </div>
             </div>
 

@@ -22,11 +22,13 @@
 // que al validar (lib/fichaDesdeDocumento) y queda escrito de qué factura salen.
 
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { rutaFichaProveedor } from '@/config/navegacion'
 import { useApp } from '@/context/AppContext'
 import { Campo, Dialogo } from '@/modules/conta/proveedor/piezas'
-import { crearProveedor } from '@/modules/conta/services/proveedorService'
+import { crearProveedor, NifRepetidoError } from '@/modules/conta/services/proveedorService'
 import { tipoEntidadPorNif } from '@/modules/conta/lib/nif'
-import { avisoNifAlta, revisarAlta, valoresInicialesAlta, type ProveedorExistente } from '@/modules/conta/lib/altaProveedor'
+import { avisoNifAlta, revisarAlta, textoNifRepetido, valoresInicialesAlta, type ProveedorExistente } from '@/modules/conta/lib/altaProveedor'
 import type { FichaProveedor } from '@/modules/conta/types'
 import { completarFicha } from '@/modules/conta/lib/fichaDesdeDocumento'
 import { guardarDesdeFactura, type FacturaOrigen } from '@/modules/conta/services/fichaDesdeFacturaService'
@@ -70,6 +72,8 @@ export function FormularioAltaProveedor({ accountId, otros, nombreInicial, nifIn
   const [name, setName] = useState(iniciales.nombre)
   const [nif, setNif] = useState(iniciales.nif)
   const [errores, setErrores] = useState<{ nombre?: string; nif?: string }>({})
+  // X24 · El que ya tiene ese NIF: la frase en ámbar con «Abrirlo», no un error.
+  const [repetido, setRepetido] = useState<ProveedorExistente | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const [fallo, setFallo] = useState<string | null>(null)
   const [direccion, setDireccion] = useState(delPapel?.direccion ?? '')
@@ -83,7 +87,7 @@ export function FormularioAltaProveedor({ accountId, otros, nombreInicial, nifIn
   async function enviar(e?: React.FormEvent) {
     e?.preventDefault()
     const r = revisarAlta({ nombre: name, nif }, otros)
-    setErrores(r.errores)
+    setErrores(r.errores); setRepetido(r.repetido)
     if (Object.keys(r.errores).length) return
     const norm = r.nif
     setOcupado(true); setFallo(null)
@@ -111,7 +115,9 @@ export function FormularioAltaProveedor({ accountId, otros, nombreInicial, nifIn
       }
       alCrear(creado)
     } catch (e2) {
-      setFallo(e2 instanceof Error ? e2.message : 'No se pudo crear.')
+      // X24 · La base lo ha parado por el NIF: la misma frase, con «Abrirlo», no un error.
+      if (e2 instanceof NifRepetidoError) setRepetido(e2.repetido)
+      else setFallo(e2 instanceof Error ? e2.message : 'No se pudo crear.')
       setOcupado(false)
     }
   }
@@ -128,10 +134,15 @@ export function FormularioAltaProveedor({ accountId, otros, nombreInicial, nifIn
       <Campo campo="nuevo-name" etiqueta="Nombre con el que lo conocéis" error={errores.nombre} ayuda={delPapel && !iniciales.nombre ? NO_VIENE : undefined}>
         {(p) => <input {...p} className="cx-input" value={name} onChange={(e) => setName(e.target.value)} />}
       </Campo>
-      <Campo campo="nuevo-nif" etiqueta="NIF (opcional)" error={errores.nif ?? nifAlMomento} aviso={nota}
+      <Campo campo="nuevo-nif" etiqueta="NIF (opcional)" error={repetido ? null : errores.nif ?? nifAlMomento} aviso={repetido ? null : nota}
         ayuda={delPapel ? (iniciales.nif ? 'Lo comprobamos al momento.' : `${NO_VIENE} Si lo tienes, lo comprobamos al momento.`) : 'Lo comprobamos al momento. El resto se completa en su ficha.'}>
-        {(p) => <input {...p} className="cx-input" value={nif} onChange={(e) => setNif(e.target.value)} autoCapitalize="characters" />}
+        {(p) => <input {...p} className="cx-input" value={nif} onChange={(e) => { setNif(e.target.value); setRepetido(null) }} autoCapitalize="characters" />}
       </Campo>
+      {repetido && (
+        <div className="cx-aviso" role="alert" data-prueba="nif-repetido">
+          {textoNifRepetido('archivado' in repetido && repetido.archivado ? `${repetido.name} (archivado)` : repetido.name)}{repetido.id && <> <Link to={rutaFichaProveedor(repetido.id)}>Abrirlo</Link></>}
+        </div>
+      )}
       {delPapel && (
         <>
           <Campo campo="nuevo-direccion" etiqueta="Dirección fiscal" ayuda={delPapel.direccion ? 'La de la factura. Se guarda en su ficha.' : NO_VIENE}>

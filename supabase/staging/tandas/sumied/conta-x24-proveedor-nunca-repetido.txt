@@ -1,0 +1,4 @@
+# X24 · Un proveedor nunca se da de alta dos veces (cambia el alta sola del R14 y el índice del NIF de supplier).
+supabase/migrations/20261121T1700_x24_proveedor_sin_nif.sql
+supabase/migrations/20261121T1710_x24_nif_unico.sql
+supabase/staging/sql/20261121_x24_proveedor_nunca_repetido_prueba.sql

@@ -172,18 +172,34 @@ export type QueHaceElCobro =
 
 /**
  * Qué se hace con «Cómo se cobra» al guardar. A un banco de Cuentas y extractos
- * (su 572), el asiento de tesorería de conta_banco_a_mano; a otra cuenta, el del
- * cobro en efectivo de conta_venta_cobrar. Vacía, sin fecha o con fecha
+ * (su 572), el asiento de tesorería de conta_banco_a_mano; a otra cuenta (desde el
+ * X23, cualquier subcuenta del plan), el del cobro en la serie 4 (apuntarCobro:
+ * la elegida al debe y la 430 del cliente al haber). Vacía, sin fecha o con fecha
  * posterior a hoy: nada, pendiente de cobrar (un cobro de mañana no ha pasado).
  */
-export function queHaceElCobro(o: { cuenta: string; fecha: string; hoy: string; importe: number; bancos: ReadonlyMap<string, string> }): QueHaceElCobro {
+export function queHaceElCobro(o: { cuenta: string; fecha: string; hoy: string; importe: number; bancos: ReadonlyMap<string, string>; cuentaCliente?: string | null }): QueHaceElCobro {
   const cuenta = o.cuenta.trim()
   if (!cuenta) return { que: 'pendiente', porque: 'sin cuenta de cobro' }
+  // X23 · Cualquier subcuenta vale para cobrar, menos la del propio cliente (el asiento iría de la 430 a la misma 430).
+  if (o.cuentaCliente && cuenta === o.cuentaCliente) return { que: 'pendiente', porque: `la ${cuenta} es la del cliente, no una cuenta de cobro` }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(o.fecha)) return { que: 'pendiente', porque: 'sin la fecha del cobro' }
   if (o.fecha > o.hoy) return { que: 'pendiente', porque: `se cobra el ${o.fecha.slice(8, 10)}/${o.fecha.slice(5, 7)}/${o.fecha.slice(0, 4)}, después de hoy` }
   if (!(o.importe > 0)) return { que: 'pendiente', porque: 'sin importe que cobrar' }
   const banco = o.bancos.get(cuenta)
   return banco ? { que: 'banco', bancoId: banco, cuenta, fecha: o.fecha, importe: o.importe } : { que: 'otra', cuenta, fecha: o.fecha, importe: o.importe }
+}
+
+/**
+ * X23 (Julio, 19/11) · «Cómo se cobra» admite cualquier subcuenta del plan, como el pago (X21b). Si la elegida no es un
+ * banco ni la caja (ni ninguna 57), una línea dice qué asiento hará al guardar, sin bloquear: el del cobro, con la
+ * elegida al debe y la 430 del cliente al haber (serie 4, apuntarCobro). Null si no toca decirlo.
+ */
+export function textoAsientoDelCobro(q: QueHaceElCobro, o: { nombre: (c: string) => string; cuentaCliente: string | null; importe: string }): string | null {
+  if (q.que !== 'otra' || /^57/.test(q.cuenta)) return null
+  const nombre = o.nombre(q.cuenta)
+  const elegida = `la ${q.cuenta}${nombre ? ` · ${nombre}` : ''}`
+  const cliente = o.cuentaCliente ? `la ${o.cuentaCliente} del cliente` : 'la del cliente'
+  return `No es un banco ni la caja: al guardar, un asiento del cobro con ${elegida} al debe y ${cliente} al haber, por ${o.importe}, y la factura queda cobrada.`
 }
 
 /** La fecha del cobro que se propone: la de la factura más los días de su ficha (sin días, la de la factura). */
