@@ -324,7 +324,9 @@ export function sqlMedida(sql) {
     `select 'tabla ${t}'::text as obj, (select count(*) from ${t})::text as n, (select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from ${t} x) as huella`)
   const fns = funcionesQueCrea(sql)
   const funciones = fns.length
-    ? [`select 'función ' || p.oid::regprocedure::text, '', md5(pg_get_functiondef(p.oid)) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in (${fns.map((f) => `'${f}'`).join(', ')})`]
+    // R14 · Con nombre en cada columna: una semilla que solo crea funciones (sin tablas delante que
+    // los pongan) daba «column "?column?" specified more than once» y nunca iba de verdad.
+    ? [`select ('función ' || p.oid::regprocedure::text)::text as obj, ''::text as n, md5(pg_get_functiondef(p.oid)) as huella from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in (${fns.map((f) => `'${f}'`).join(', ')})`]
     : []
   return [...tablas, ...funciones].join('\nunion all\n')
 }

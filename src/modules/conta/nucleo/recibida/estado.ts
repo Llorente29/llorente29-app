@@ -221,3 +221,33 @@ export function dondeVaElFoco(o: { pintada: boolean; yaPuesto: boolean; tocada: 
   if (o.aMano) return 'proveedor'
   return o.hayDuda ? 'duda' : null
 }
+
+/**
+ * R14 · La franja del proveedor que Sumied le puso al leerla: «Proveedor nuevo: lo ha dado
+ * de alta Sumied con lo que trae la factura» (o la plataforma, que es acreedor), con
+ * «Deshacer» mientras no esté validada. null si no lo puso Sumied, si ya se deshizo o si en
+ * la ficha hay ahora otro proveedor.
+ */
+export function franjaProveedorSolo(o: {
+  aMano: boolean
+  solo: { que: 'alta' | 'existente' | 'plataforma' | 'no'; supplierId: string | null; deshecho: boolean } | null
+  proveedorId: string
+  nombre: string | null
+  validada: boolean
+}): { fuerte: string; texto: string; deshacer: boolean } | null {
+  const s = o.solo
+  if (o.aMano || !s || s.deshecho || !s.supplierId || s.supplierId !== o.proveedorId) return null
+  if (s.que === 'alta') return { fuerte: 'Proveedor nuevo:', texto: 'lo ha dado de alta Sumied con lo que trae la factura.', deshacer: !o.validada }
+  if (s.que === 'plataforma') return { fuerte: 'Es una plataforma:', texto: `${o.nombre ?? 'la plataforma'} es acreedor; la factura va a su ficha y a su 410.`, deshacer: !o.validada }
+  return null
+}
+
+/**
+ * R14 · La cuenta de gasto propuesta sin historial (conta_gasto_propuesto), en ámbar y con
+ * su porqué («Propuesta: vende pollo y alitas → 600 Compras de mercaderías»), para que
+ * baste Intro. Solo mientras la casilla tenga esa misma cuenta y no haya nada aprendido.
+ */
+export function gastoEnAmbar(o: { aMano: boolean; propuesto: { cuenta: string | null; porque: string } | null; aprendida: string | null; cuentaAhora: string }): UnaComprobacion | null {
+  if (o.aMano || o.aprendida || !o.propuesto?.cuenta || o.cuentaAhora !== o.propuesto.cuenta) return null
+  return { id: 'gasto-propuesto', tono: 'ambar', texto: o.propuesto.porque }
+}

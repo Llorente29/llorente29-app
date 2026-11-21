@@ -96,6 +96,35 @@ export async function gastoAprendido(companyId: string, supplierId: string): Pro
   return { cuenta: s(r?.cuenta), confianza: conf, facturas: Number(r?.facturas ?? 0), reparto }
 }
 
+/**
+ * R14 · Lo que Sumied hizo con el proveedor de esta recibida al leerla (conta_proveedor_solo):
+ * lo dio de alta (alta), era uno que ya estaba (existente) o una plataforma; o por qué no.
+ * null si no hizo nada (una a mano, o leída antes del R14).
+ */
+export interface ProveedorSolo { que: 'alta' | 'existente' | 'plataforma' | 'no'; supplierId: string | null; motivo: string | null; deshecho: boolean }
+
+export async function proveedorSolo(invoiceId: string): Promise<ProveedorSolo | null> {
+  const { data, error } = await tabla('conta_proveedor_solo').select('que, supplier_id, motivo, deshecho_at').eq('invoice_id', invoiceId).maybeSingle()
+  if (error) throw new Error(`No se ha podido leer quién le puso el proveedor: ${error.message}`)
+  if (!data) return null
+  const r = data as Fila
+  return { que: String(r.que) as ProveedorSolo['que'], supplierId: s(r.supplier_id), motivo: s(r.motivo), deshecho: r.deshecho_at != null }
+}
+
+/** R14 · «Deshacer»: la factura vuelve a no tener proveedor; lo que Sumied dio de alta sin nada más, se va. Devuelve lo que dice la base. */
+export async function deshacerProveedorSolo(invoiceId: string, quien: string | null): Promise<string> {
+  const r = await rpc<Fila>('conta_proveedor_solo_deshacer', { p_invoice: invoiceId, p_quien_nombre: quien })
+  return String(r?.texto ?? 'Deshecho.')
+}
+
+/** R14 · La cuenta de gasto propuesta para un proveedor sin historial en esta empresa, con su porqué (en ámbar). */
+export interface GastoPropuesto { cuenta: string | null; nombre: string | null; porque: string; de: 'plataforma' | 'otra_sociedad' | 'lo_que_vende' | null }
+
+export async function gastoPropuesto(companyId: string, supplierId: string, invoiceId: string | null): Promise<GastoPropuesto> {
+  const r = await rpc<Fila | null>('conta_gasto_propuesto', { p_company: companyId, p_supplier: supplierId, p_invoice: invoiceId })
+  return { cuenta: s(r?.cuenta), nombre: s(r?.nombre), porque: String(r?.porque ?? ''), de: (s(r?.de) as GastoPropuesto['de']) ?? null }
+}
+
 /** Las cuentas del asiento de una recibida escrita a mano (aún sin propuesta), con los enlaces de la propuesta: la 472 de cada tipo y la 4751. Una vez por empresa. */
 export async function cuentasAMano(accountId: string, companyId: string): Promise<{ cuentas: CuentasFicha; nombres: Map<string, string>; mesesCerrados: string[]; ejercicios: { inicio: string; fin: string; abierto: boolean }[] }> {
   const ctx = await cargarContexto(accountId, companyId)

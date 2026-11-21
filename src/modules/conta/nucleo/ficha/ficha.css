@@ -146,6 +146,10 @@
 .kf-bloque { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .kf-gasto { display: grid; grid-template-columns: 92px minmax(0, 1fr) 84px 18px; gap: 6px; }
 .kf-gasto-ayuda { margin: 0; font-size: 11.5px; color: var(--k-apoyo); }
+/* R14 · «+ Nuevo proveedor» en la de a mano: un enlace pequeño bajo la casilla del proveedor. */
+.kf-nuevo-proveedor { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: -4px 0 8px; font-size: 12.5px; }
+button.kf-nuevo-proveedor { display: inline-block; }
+.kf-nuevo-proveedor .kf-error { flex-basis: 100%; margin: 0; color: var(--k-rojo, #b42318); font-size: 12px; }
 .kf-pareja { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
 .kf-quitar { width: 18px; padding: 0; background: none; border: 0; color: var(--k-apoyo); cursor: pointer; opacity: 0; }
 tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opacity: 1; }

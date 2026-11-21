@@ -1,0 +1,6 @@
+# R14 · la vuelta atrás, en orden inverso: la 1130 deshace lo completado al aplicar (para
+# si alguna ya está validada); la 1120 quita el disparador; la 1110, lo que añadió.
+cuenta: scripts/conta/produccion/cuentas/r14-proveedor-solo.sql
+supabase/vuelta-atras/20261121T1130_r14_proveedor_solo_completar.down.sql
+supabase/vuelta-atras/20261121T1120_r14_proveedor_solo_al_leer.down.sql
+supabase/vuelta-atras/20261121T1110_r14_proveedor_solo_anade.down.sql
