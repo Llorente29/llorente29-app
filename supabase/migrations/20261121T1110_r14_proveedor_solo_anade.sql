@@ -34,8 +34,11 @@ create table if not exists public.conta_gasto_por_venta (
   orden    int primary key,
   hoja     text not null check (hoja ~ '^6[0-9]{2}$'),
   que      text not null check (length(btrim(que)) > 0),
-  palabras text[] not null check (cardinality(palabras) > 0)
+  palabras text[] not null check (cardinality(palabras) > 0),
+  porque   text check (porque is null or length(btrim(porque)) > 0)
 );
+-- Julio, 21/11: el porqué propio de una fila, en una línea («Combustible para la cocina: 602»).
+alter table public.conta_gasto_por_venta add column if not exists porque text check (porque is null or length(btrim(porque)) > 0);
 comment on table public.conta_gasto_por_venta is
   'R14. Por lo que vende un proveedor (las líneas de su factura), la hoja del 6 de su gasto. Cada línea va a la primera fila (por orden) que tenga una de sus palabras; gana la hoja con más líneas. Las palabras, con tilde; se comparan sin tildes ni mayúsculas, enteras o en plural. Probada contra los nombres reales (regla 31) en el parte del R14.';
 alter table public.conta_gasto_por_venta enable row level security;
@@ -44,19 +47,23 @@ create policy conta_gasto_por_venta_leer on public.conta_gasto_por_venta for sel
 revoke all on table public.conta_gasto_por_venta from anon, authenticated;
 grant select on table public.conta_gasto_por_venta to authenticated;
 
-insert into public.conta_gasto_por_venta (orden, hoja, que, palabras) values
-  (10, '628', 'luz, agua y gas', array['electricidad', 'eléctrica', 'eléctrico', 'energía', 'kwh', 'potencia contratada', 'término de potencia', 'término de energía', 'término fijo', 'término variable', 'peaje de acceso', 'gas natural', 'butano', 'propano', 'consumo de agua', 'agua potable', 'canon de agua', 'saneamiento', 'alcantarillado', 'suministro eléctrico', 'suministro de agua', 'suministro de gas']),
-  (20, '621', 'el alquiler', array['alquiler', 'arrendamiento', 'renta del local', 'renta mensual', 'renting']),
-  (30, '623', 'asesoría', array['asesoría', 'asesoramiento', 'gestoría', 'honorarios', 'abogado', 'abogados', 'notaría', 'notario', 'consultoría', 'auditoría', 'nóminas', 'contabilidad']),
-  (40, '622', 'reparaciones y mantenimiento', array['reparación', 'mantenimiento', 'avería', 'mano de obra', 'desplazamiento', 'fontanería', 'electricista', 'cerrajería', 'revisión técnica']),
-  (50, '625', 'seguros', array['seguro', 'póliza', 'prima de seguro']),
-  (60, '624', 'transporte', array['transporte', 'portes', 'mensajería', 'paquetería']),
-  (70, '627', 'publicidad', array['publicidad', 'marketing', 'anuncio', 'anuncios', 'flyers', 'folletos', 'cartelería']),
-  (80, '629', 'teléfono, internet y programas', array['telefonía', 'teléfono', 'móvil', 'fibra', 'internet', 'software', 'licencia', 'suscripción', 'hosting', 'dominio']),
-  (90, '602', 'productos de limpieza', array['lejía', 'detergente', 'desengrasante', 'friegasuelos', 'fregasuelos', 'jabón', 'lavavajillas', 'limpiador', 'abrillantador', 'bayeta', 'bayetas', 'estropajo', 'desinfectante', 'amoniaco']),
-  (100, '600', 'comida y bebida para la cocina', array['pollo', 'alitas', 'alita', 'pechuga', 'muslo', 'contramuslo', 'carne', 'ternera', 'cerdo', 'cordero', 'vacuno', 'hamburguesa', 'burger', 'bacon', 'beicon', 'jamón', 'chorizo', 'salchicha', 'pescado', 'salmón', 'atún', 'gamba', 'langostino', 'calamar', 'verdura', 'fruta', 'tomate', 'lechuga', 'cebolla', 'patata', 'patatas', 'pimiento', 'ajo', 'limón', 'naranja', 'aguacate', 'pan', 'harina', 'arroz', 'pasta', 'queso', 'leche', 'nata', 'mantequilla', 'huevo', 'huevos', 'yogur', 'aceite', 'azúcar', 'especias', 'salsa', 'ketchup', 'mayonesa', 'mostaza', 'vinagre', 'pizza', 'refresco', 'cerveza', 'vino', 'agua mineral', 'zumo', 'café', 'bebida', 'congelado', 'kg', 'kilo', 'kilos']),
-  (110, '602', 'envases y desechables', array['envase', 'desechable', 'servilleta', 'vaso', 'pajita', 'film', 'aluminio', 'guante', 'guantes', 'bandeja', 'cubierto', 'cubiertos', 'tarrina', 'barqueta', 'recipiente', 'tapa', 'bolsa', 'packaging', 'kraft', 'cartón', 'papel', 'rollo'])
-on conflict (orden) do update set hoja = excluded.hoja, que = excluded.que, palabras = excluded.palabras;
+-- Julio, 21/11: el combustible que se almacena (carbón, leña, briquetas, pastillas de
+-- encendido, gas en bombona) es 602, no 600 ni 628; la 628, solo lo que no se almacena
+-- (luz, agua, gas canalizado). Va antes que la 628: «gas en bombona» no es suministro.
+insert into public.conta_gasto_por_venta (orden, hoja, que, palabras, porque) values
+  (5, '602', 'combustible para la cocina', array['carbón', 'carbón vegetal', 'leña', 'briqueta', 'briquetas', 'pastillas de encendido', 'pastilla de encendido', 'encendedores', 'gas en bombona', 'bombona', 'bombonas', 'butano', 'propano'], 'Combustible para la cocina: 602'),
+  (10, '628', 'luz, agua y gas', array['electricidad', 'eléctrica', 'eléctrico', 'energía', 'kwh', 'potencia contratada', 'término de potencia', 'término de energía', 'término fijo', 'término variable', 'peaje de acceso', 'gas natural', 'gas canalizado', 'consumo de agua', 'agua potable', 'canon de agua', 'saneamiento', 'alcantarillado', 'suministro eléctrico', 'suministro de agua', 'suministro de gas'], null),
+  (20, '621', 'el alquiler', array['alquiler', 'arrendamiento', 'renta del local', 'renta mensual', 'renting'], null),
+  (30, '623', 'asesoría', array['asesoría', 'asesoramiento', 'gestoría', 'honorarios', 'abogado', 'abogados', 'notaría', 'notario', 'consultoría', 'auditoría', 'nóminas', 'contabilidad'], null),
+  (40, '622', 'reparaciones y mantenimiento', array['reparación', 'mantenimiento', 'avería', 'mano de obra', 'desplazamiento', 'fontanería', 'electricista', 'cerrajería', 'revisión técnica'], null),
+  (50, '625', 'seguros', array['seguro', 'póliza', 'prima de seguro'], null),
+  (60, '624', 'transporte', array['transporte', 'portes', 'mensajería', 'paquetería'], null),
+  (70, '627', 'publicidad', array['publicidad', 'marketing', 'anuncio', 'anuncios', 'flyers', 'folletos', 'cartelería'], null),
+  (80, '629', 'teléfono, internet y programas', array['telefonía', 'teléfono', 'móvil', 'fibra', 'internet', 'software', 'licencia', 'suscripción', 'hosting', 'dominio'], null),
+  (90, '602', 'productos de limpieza', array['lejía', 'detergente', 'desengrasante', 'friegasuelos', 'fregasuelos', 'jabón', 'lavavajillas', 'limpiador', 'abrillantador', 'bayeta', 'bayetas', 'estropajo', 'desinfectante', 'amoniaco'], null),
+  (100, '600', 'comida y bebida para la cocina', array['pollo', 'alitas', 'alita', 'pechuga', 'muslo', 'contramuslo', 'carne', 'ternera', 'cerdo', 'cordero', 'vacuno', 'hamburguesa', 'burger', 'bacon', 'beicon', 'jamón', 'chorizo', 'salchicha', 'pescado', 'salmón', 'atún', 'gamba', 'langostino', 'calamar', 'verdura', 'fruta', 'tomate', 'lechuga', 'cebolla', 'patata', 'patatas', 'pimiento', 'ajo', 'limón', 'naranja', 'aguacate', 'pan', 'harina', 'arroz', 'pasta', 'queso', 'leche', 'nata', 'mantequilla', 'huevo', 'huevos', 'yogur', 'aceite', 'azúcar', 'especias', 'salsa', 'ketchup', 'mayonesa', 'mostaza', 'vinagre', 'pizza', 'refresco', 'cerveza', 'vino', 'agua mineral', 'zumo', 'café', 'bebida', 'congelado', 'kg', 'kilo', 'kilos'], null),
+  (110, '602', 'envases y desechables', array['envase', 'desechable', 'servilleta', 'vaso', 'pajita', 'film', 'aluminio', 'guante', 'guantes', 'bandeja', 'cubierto', 'cubiertos', 'tarrina', 'barqueta', 'recipiente', 'tapa', 'bolsa', 'packaging', 'kraft', 'cartón', 'papel', 'rollo'], null)
+on conflict (orden) do update set hoja = excluded.hoja, que = excluded.que, palabras = excluded.palabras, porque = excluded.porque;
 
 -- 2 · Por lo que vende ----------------------------------------------------------------------------
 create or replace function public._r14_sin_tildes(p text)
@@ -72,7 +79,7 @@ returns jsonb language sql stable set search_path = public as $function$
      where btrim(coalesce(t, '')) <> ''
   ), casa as (
     -- Cada línea, a la primera fila que la reconoce, con las palabras que tiene.
-    select distinct on (l.o) l.o, g.orden, g.hoja, g.que,
+    select distinct on (l.o) l.o, g.orden, g.hoja, g.que, g.porque,
            array(select w from unnest(g.palabras) with ordinality as p(w, k)
                   where l.t like '% ' || public._r14_sin_tildes(w) || ' %' or l.t like '% ' || public._r14_sin_tildes(w) || 's %'
                      or l.t like '% ' || public._r14_sin_tildes(w) || 'es %' order by k) as ws
@@ -82,7 +89,7 @@ returns jsonb language sql stable set search_path = public as $function$
                        or l.t like '% ' || public._r14_sin_tildes(w) || 'es %')
      order by l.o, g.orden
   ), por_hoja as (
-    select hoja, min(orden) as orden, (array_agg(que order by orden))[1] as que, count(*) as lineas
+    select hoja, min(orden) as orden, (array_agg(que order by orden))[1] as que, (array_agg(porque order by orden))[1] as porque, count(*) as lineas
       from casa group by hoja
   ), ws as (
     -- Las palabras de cada hoja, por dónde salen primero; sin la misma en singular y en plural.
@@ -90,7 +97,7 @@ returns jsonb language sql stable set search_path = public as $function$
       from casa c cross join lateral unnest(c.ws) with ordinality as u(w, k) group by c.hoja, u.w
   )
   select case when h.hoja is null then null else jsonb_build_object(
-           'hoja', h.hoja, 'que', h.que, 'lineas', h.lineas, 'de', (select count(*) from l),
+           'hoja', h.hoja, 'que', h.que, 'porque', h.porque, 'lineas', h.lineas, 'de', (select count(*) from l),
            'palabras', coalesce((select jsonb_agg(z.w order by z.pos) from (
               select x.w, x.pos from ws x
                where x.hoja = h.hoja and not exists (select 1 from ws y where y.hoja = x.hoja and y.pos < x.pos
@@ -158,7 +165,7 @@ begin
         left join public.pgc_account p on p.plan = a.plan and p.code = a.template_code and p.valid_to is null
        where a.company_id = p_company and a.code = v_cuenta;
       return jsonb_build_object('cuenta', v_cuenta, 'nombre', v_nombre, 'de', 'lo_que_vende', 'hoja', v_g->>'hoja', 'que', v_g->>'que',
-        'porque', format('Propuesta: vende %s → %s %s', public._conta_tpv_lista(array(select jsonb_array_elements_text(v_g->'palabras'))), v_g->>'hoja', coalesce(v_nombre, '')));
+        'porque', coalesce(v_g->>'porque', format('Propuesta: vende %s → %s %s', public._conta_tpv_lista(array(select jsonb_array_elements_text(v_g->'palabras'))), v_g->>'hoja', coalesce(v_nombre, ''))));
     end if;
   end if;
   return jsonb_build_object('cuenta', null, 'porque', 'No sé qué te vende: elige tú la cuenta de gasto.');

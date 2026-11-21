@@ -14,33 +14,33 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { estadoDeLaFicha, franjaProveedorSolo, gastoEnAmbar } from '@/modules/conta/nucleo/recibida/estado'
 
-interface Fila { orden: number; hoja: string; que: string; palabras: string[] }
+interface Fila { orden: number; hoja: string; que: string; palabras: string[]; porque: string | null }
 const TABLA: Fila[] = (() => {
   const sql = readFileSync('supabase/migrations/20261121T1110_r14_proveedor_solo_anade.sql', 'utf8')
   const bloque = /insert into public\.conta_gasto_por_venta[\s\S]*?values([\s\S]*?)on conflict/.exec(sql)
   if (!bloque) throw new Error('No encuentro la tabla en la 1110')
-  const filas = [...bloque[1].matchAll(/\((\d+), '(\d+)', '([^']+)', array\[([^\]]*)\]\)/g)]
-  return filas.map((m) => ({ orden: Number(m[1]), hoja: m[2], que: m[3], palabras: [...m[4].matchAll(/'([^']+)'/g)].map((x) => x[1]) }))
+  const filas = [...bloque[1].matchAll(/\((\d+), '(\d+)', '([^']+)', array\[([^\]]*)\], (null|'[^']+')\)/g)]
+  return filas.map((m) => ({ orden: Number(m[1]), hoja: m[2], que: m[3], palabras: [...m[4].matchAll(/'([^']+)'/g)].map((x) => x[1]), porque: m[5] === 'null' ? null : m[5].slice(1, -1) }))
 })()
 
 // Lo mismo que _r14_sin_tildes y _conta_gasto_por_venta de la 1110.
 const sinTildes = (t: string) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
 const tiene = (linea: string, w: string) => { const l = ` ${sinTildes(linea)} `, p = sinTildes(w); return [` ${p} `, ` ${p}s `, ` ${p}es `].some((x) => l.includes(x)) }
-function porLoQueVende(lineas: string[]): { hoja: string; que: string } | null {
-  const cuenta = new Map<string, { n: number; orden: number; que: string }>()
+function porLoQueVende(lineas: string[]): { hoja: string; que: string; porque?: string | null } | null {
+  const cuenta = new Map<string, { n: number; orden: number; que: string; porque: string | null }>()
   for (const l of lineas) {
     const f = TABLA.find((x) => x.palabras.some((w) => tiene(l, w)))
     if (!f) continue
-    const c = cuenta.get(f.hoja) ?? { n: 0, orden: f.orden, que: f.que }
+    const c = cuenta.get(f.hoja) ?? { n: 0, orden: f.orden, que: f.que, porque: f.porque }
     c.n++; c.orden = Math.min(c.orden, f.orden); cuenta.set(f.hoja, c)
   }
   const [mejor] = [...cuenta].sort(([, a], [, b]) => b.n - a.n || a.orden - b.orden)
-  return mejor ? { hoja: mejor[0], que: mejor[1].que } : null
+  return mejor ? { hoja: mejor[0], que: mejor[1].que, porque: mejor[1].porque } : null
 }
 
 describe('la tabla de lo que vende, la de la base', () => {
   it('está entera y en un solo sitio: cada hoja es del 6 y cada palabra sale una vez', () => {
-    expect(TABLA.length).toBe(11)
+    expect(TABLA.length).toBe(12)
     for (const f of TABLA) expect(f.hoja, f.que).toMatch(/^6\d\d$/)
     const todas = TABLA.flatMap((f) => f.palabras.map(sinTildes))
     expect(new Set(todas).size).toBe(todas.length)
@@ -69,7 +69,13 @@ describe('la tabla de lo que vende, la de la base', () => {
     expect(porLoQueVende(['Consumo de agua del periodo'])?.hoja).toBe('628')
   })
   it('gana la hoja con más líneas: dos de comida y unos portes, comida', () => {
-    expect(porLoQueVende(['Portes', 'Queso rallado', 'Tomate triturado'])).toEqual({ hoja: '600', que: 'comida y bebida para la cocina' })
+    expect(porLoQueVende(['Portes', 'Queso rallado', 'Tomate triturado'])).toEqual({ hoja: '600', que: 'comida y bebida para la cocina', porque: null })
+  })
+  it('Julio, 21/11: el combustible que se almacena es 602, con su porqué en una línea; la 628, solo lo que no se almacena', () => {
+    for (const l of ['Carbón vegetal 15 kg', 'Leña de encina', 'Briquetas de carbón', 'Pastillas de encendido', 'Bombona de butano 12,5 kg', 'Gas en bombona'])
+      expect(porLoQueVende([l]), l).toEqual({ hoja: '602', que: 'combustible para la cocina', porque: 'Combustible para la cocina: 602' })
+    for (const l of ['Término de potencia P1', 'Gas canalizado · noviembre', 'Gas natural', 'Consumo de agua del periodo'])
+      expect(porLoQueVende([l])?.hoja, l).toBe('628')
   })
 })
 

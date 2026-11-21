@@ -107,6 +107,12 @@ do $$ begin
     raise exception 'PRUEBA R14 · 1: los permisos no son los esperados.';
   end if;
   if (select count(*) from public.conta_gasto_por_venta) < 10 then raise exception 'PRUEBA R14 · 1: la tabla de lo que vende está vacía.'; end if;
+  -- Julio, 21/11: el combustible que se almacena, 602 con su porqué; el gas canalizado, 628.
+  if public._conta_gasto_por_venta(array['Bombona de butano 12,5 kg']) ->> 'porque' is distinct from 'Combustible para la cocina: 602'
+     or public._conta_gasto_por_venta(array['Carbón vegetal 15 kg']) ->> 'hoja' is distinct from '602'
+     or public._conta_gasto_por_venta(array['Gas canalizado · noviembre']) ->> 'hoja' is distinct from '628' then
+    raise exception 'PRUEBA R14 · 1: el combustible no va a la 602 o el gas canalizado no va a la 628.';
+  end if;
   raise notice '1 OK: el disparador diferido, los permisos y la tabla de lo que vende (% filas).', (select count(*) from public.conta_gasto_por_venta);
 end $$;
 
