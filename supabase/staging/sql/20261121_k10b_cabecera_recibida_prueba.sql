@@ -188,8 +188,10 @@ declare
   a constant uuid := 'c0e20000-0000-4000-8000-0000000000e0'; emp constant uuid := 'c0e20000-0000-4000-8000-0000000000e3';
   v_f jsonb;
 begin
+  -- El de la semilla K10b, si ya está (staging); si no, uno inventado aquí.
   insert into public.tax_return (account_id, company_id, form_code, fiscal_year, cadence, period, due_date, status, result_kind, amount, filed_at, filed_via, aeat_csv, filed_by_name)
-  values (a, emp, '303', 2026, 'quarterly', '3T', '2026-10-20', 'filed', 'zero', 0, '2026-10-15 10:00+02', 'outside', 'K10BPRUEBA0000000', 'Prueba K10b');
+  select a, emp, '303', 2026, 'quarterly', '3T', '2026-10-20', 'filed', 'zero', 0, '2026-10-15 10:00+02', 'outside', 'K10BPRUEBA0000000', 'Prueba K10b'
+   where public.conta_iva_presentado(emp, '2026-09-15') is null;
   v_f := public.conta_recibida_fecha(emp, '2026-09-15');
   if (v_f->>'fecha')::date is distinct from '2026-10-01' then raise exception 'PRUEBA K10b · 3: la del 15/09 no va al 01/10 (%)', v_f; end if;
   raise notice '3 · con el 3T presentado, la del 15/09 se apunta el %: «%»', v_f->>'fecha', v_f->>'aviso';
