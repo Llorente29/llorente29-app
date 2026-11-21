@@ -740,7 +740,7 @@ export default function RevisarFacturaPage() {
             <span className="cxf-alta-enlaces"><button type="button" className="s-boton s-boton-enlace" onClick={() => void elegirYGuardar(alta.proveedorId, alta.nombre, `Elegido ${alta.nombre}: el NIF de la factura es el suyo.`)}><NombreEntero texto={`Es ${alta.nombre}: elegirlo`} nombre={alta.nombre} /></button></span>
           )}
           {altaAbierta && alta.que === 'alta' && accountId && (
-            <AltaDesdeFactura accountId={accountId} otros={(proveedores.datos ?? []).map((p) => ({ name: p.nombre, taxId: p.nif }))}
+            <AltaDesdeFactura accountId={accountId} otros={(proveedores.datos ?? []).map((p) => ({ id: p.id, name: p.nombre, taxId: p.nif }))}
               leido={{ nombre: nombreLeido, nif: leidoProv?.nif ?? fac.propuesto?.nif ?? null, direccion: leidoProv?.direccion ?? null, correo: leidoProv?.email ?? null, telefono: leidoProv?.telefono ?? null, web: leidoProv?.web ?? null }}
               factura={facturaOrigen} alCancelar={() => setAltaAbierta(false)} leyendo={leyendo}
               relectura={releido?.id === invoiceId ? { texto: releido.texto, tono: releido.tono } : null}

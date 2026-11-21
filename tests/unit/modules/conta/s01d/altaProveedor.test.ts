@@ -42,7 +42,7 @@ describe('revisarAlta: lo que hay que corregir antes de crear', () => {
     expect(revisarAlta({ nombre: '  ', nif: '' }, []).errores).toEqual({ nombre: 'Pon el nombre con el que lo conocéis.' })
   })
   it('sin NIF vale: se completa en su ficha', () => {
-    expect(revisarAlta({ nombre: 'Hermanos Ruiz', nif: '' }, REALES)).toEqual({ errores: {}, nif: null })
+    expect(revisarAlta({ nombre: 'Hermanos Ruiz', nif: '' }, REALES)).toEqual({ errores: {}, nif: null, repetido: null })
   })
   it('un NIF que no pasa el algoritmo, con su motivo y la salida para los de otro país', () => {
     const r = revisarAlta({ nombre: 'Hermanos Ruiz', nif: 'B87123791' }, [])
@@ -51,10 +51,11 @@ describe('revisarAlta: lo que hay que corregir antes de crear', () => {
   })
   it.each(REALES)('el NIF de $name, escrito de otra forma, ya lo tiene él', ({ name, taxId }) => {
     const otraForma = ` es${taxId.replace('-', '').toLowerCase()} `
-    expect(revisarAlta({ nombre: 'Otro', nif: otraForma }, REALES)).toEqual({ errores: { nif: `Ese NIF ya lo tiene ${name}.` }, nif: taxId.replace('-', '') })
+    // X24 · La frase de ahora: «Ya tienes a … con este NIF», con el que lo tiene (para «Abrirlo»).
+    expect(revisarAlta({ nombre: 'Otro', nif: otraForma }, REALES)).toEqual({ errores: { nif: `Ya tienes a ${name} con este NIF.` }, nif: taxId.replace('-', ''), repetido: { name, taxId } })
   })
   it('un NIF nuevo y válido se guarda normalizado', () => {
-    expect(revisarAlta({ nombre: 'Hermanos Ruiz', nif: 'b-87123790' }, [])).toEqual({ errores: {}, nif: 'B87123790' })
+    expect(revisarAlta({ nombre: 'Hermanos Ruiz', nif: 'b-87123790' }, [])).toEqual({ errores: {}, nif: 'B87123790', repetido: null })
   })
 })
 
