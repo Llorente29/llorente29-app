@@ -16,7 +16,8 @@
 // Escribe (empresas, días, asientos): solo en un carril; sin carril se salta y lo dice.
 
 import { test, expect, type Page, type TestInfo } from '@playwright/test'
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { resolve, join } from 'node:path'
 import { CARRIL, entrarComo, type Sesion } from '../sesion'
 import { cifInventado, rest } from '../api'
@@ -37,8 +38,9 @@ const DIAS = ['2026-10-13', '2026-10-14', '2026-10-15'] as const
  * pasa a «Bizum». Los bytes del ejemplo se conservan (latin1 ida y vuelta).
  */
 function ficheros(info: TestInfo): string[] {
-  const dir = info.outputPath('revo')
-  mkdirSync(dir, { recursive: true })
+  // En una carpeta con nombre llano: la de salida de la prueba lleva «×» y «»» del título, y con esa ruta Chromium
+  // no recibe el fichero (setInputFiles no falla, pero el input llega vacío: los runs 44928228542 y 44930044830).
+  const dir = mkdtempSync(join(tmpdir(), `r15-revo-${info.workerIndex}-`))
   const columnas: Record<string, number[]> = { Ordenes: [0], Documentos: [0, 1], Impuestos: [0], Pagos: [0, 1, 4] }
   return Object.entries(columnas).map(([nombre, cols]) => {
     const texto = readFileSync(resolve(EJEMPLO, `${nombre}_2026-11-09.csv`)).toString('latin1')
