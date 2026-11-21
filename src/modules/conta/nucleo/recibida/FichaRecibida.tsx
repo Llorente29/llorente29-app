@@ -62,11 +62,13 @@ import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioS
 import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, Comprobaciones, Duda, EstadoFicha, NombreDeCuenta } from '../ficha/piezas'
-import { accionDocumento, etiquetaValidado, franjaContabilizada, franjaDescartada, laAnterior, lineasDelHistorial, opcionesDeMas, textoCasillaProveedor, queFichaSeAbre, textoCambioAlGuardar, type ModoRecibida, type OpcionMas } from './contabilizada'
+import { accionDocumento, etiquetaValidado, franjaContabilizada, franjaDescartada, franjaModificando, lineasQueCambian, porqueNoModificar, laAnterior, lineasDelHistorial, opcionesDeMas, textoCasillaProveedor, queFichaSeAbre, textoCambioAlGuardar, type ModoRecibida, type OpcionMas } from './contabilizada'
 import { cambiarDocumentoContabilizada, leerHistorial, salioAErp10 } from './documentoServicio'
 import { PanelDocumento } from '../ficha/PanelDocumento'
 import { cifra } from '../ficha/textos'
 import { useUltimo } from '../ficha/useUltimo'
+import { modificarRecibida, sePuedeModificar } from './modificarServicio'
+import { ModificarAsiento } from './ModificarAsiento'
 import { Buscador } from '../ficha/Buscador'
 import { cuentasQueEncajan, queHaceIntro, type CuentaDelPlan } from '../ficha/teclas'
 import { origenes } from './origen'
@@ -239,6 +241,10 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   // ── K07 · La contabilizada y la descartada: su asiento validado, si salió a ERP10, su descarte y el historial ──
   const asientoId = validada ? fac?.asiento?.id ?? null : null
   const asientoReal = useLeer(accountId && asientoId ? () => leerAsiento(accountId, asientoId) : null, `${accountId}:${asientoId}:asiento-real:${vuelta}`).datos ?? null
+  // X26 · «Modificar» la contabilizada: si se puede (la base dice por qué no) y, mientras se modifica, las cuentas elegidas por línea.
+  const [modificando, setModificando] = useState<{ de: string; elegidas: Record<number, string> } | null>(null)
+  const enModificar = modificando?.de === invoiceId
+  const sePuede = useLeer(!aMano && invoiceId && fac?.asiento?.estado === 'validado' ? () => sePuedeModificar(invoiceId) : null, `${invoiceId}:se-puede-modificar:${vuelta}`)
   const enErp10 = useLeer(accountId && asientoId ? () => salioAErp10(accountId, asientoId) : null, `${accountId}:${asientoId}:erp10:${vuelta}`).datos ?? false
   const descarte = useLeer(descartada && id ? () => leerDescarte(id) : null, `${id}:descarte:${descartada ? 'si' : 'no'}:${vuelta}`).datos ?? null
   const [verHistorial, setVerHistorial] = useState<string | null>(null)
@@ -458,6 +464,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
 
   async function guardarYSiguiente() {
     if (guardando) return
+    if (enModificar) { await guardarModificacion(); return }
     // K07 · La contabilizada y la descartada no se guardan (Intro fuera de una casilla llega aquí aunque el botón esté apagado): se dice.
     if (soloLectura) {
       setAviso({ tono: 'falta', texto: modo === 'contabilizada' ? 'Ya está contabilizada: no hay nada que guardar. Pasa a la siguiente con ›.' : 'Está descartada: no se guarda. Si es una factura, «Más › Recuperarla».' }); return
@@ -559,6 +566,20 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const salida = useAvisoSalir({ hay: ed.hay, cambios: ed.cambios, donde: prov ? `${prov.nombre}${b.numero ? ` ${b.numero}` : ''}` : 'la factura nueva',
     onGuardar: async () => { const g = await guardarCambios(); return g === true ? true : g }, onDescartar: ed.descartar })
 
+  // X26 · Guardar lo modificado: solo las líneas de gasto cuya cuenta ha cambiado; la base lo hace en el mismo asiento.
+  async function guardarModificacion() {
+    if (!modificando || !asientoReal) return
+    const lineas = lineasQueCambian(asientoReal.apuntes.map((a) => ({ posicion: a.posicion, cuenta: a.cuenta })), modificando.elegidas)
+    if (!lineas.length) { setAviso({ tono: 'falta', texto: 'No has cambiado ninguna cuenta. Esc lo deja como estaba.' }); return }
+    setGuardando(true)
+    try {
+      const texto = await modificarRecibida(invoiceId, lineas, userName ?? null)
+      setModificando(null); setAviso({ tono: 'ok', texto }); setVuelta((v) => v + 1)
+    } catch (e) { setAviso({ tono: 'mal', texto: `No se ha modificado: ${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}.` }) }
+    finally { setGuardando(false) }
+  }
+  const cancelarModificacion = () => { setModificando(null); setAviso({ tono: 'ok', texto: 'Sin modificar: la factura y su asiento se quedan como estaban.' }) }
+
   // ── El teclado: Intro (decisiones 11 y 12), las flechas de la cola y Esc ──
   const raiz = useRef<HTMLDivElement>(null)
   const alPulsar = (e: KE<HTMLDivElement>) => {
@@ -577,6 +598,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       // dentro de este mismo Esc) y su Esc la cierra al momento: con cambios, Esc no hacía nada (e2e 44479781525 del K05;
       // reproducido en Chromium con React 19.2.5: sin parar, 0 ventanas; parando, 1).
       e.preventDefault(); e.stopPropagation()
+      if (enModificar) { cancelarModificacion(); return }   // X26 · Esc, mientras se modifica: lo deja como estaba.
       if (pestana?.cerrar) pestana.cerrar(); else salida.pedirSalir(() => navegar(rutaDocumentos('por-revisar')))
     }
   }
@@ -588,6 +610,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       if (t && (raiz.current?.contains(t) || t.closest('input, textarea, select, button, a, [role="dialog"], [contenteditable="true"]'))) return
       e.preventDefault()
       if (e.key === 'Enter') void guardarYSiguiente()
+      else if (enModificar) cancelarModificacion()
       else if (pestana?.cerrar) pestana.cerrar()
     }
     window.addEventListener('keydown', fuera)
@@ -641,6 +664,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   // K07 · La franja, el asiento y «Más» de la contabilizada y la descartada.
   const pagada = fac?.estado === 'pagada' || !!extra?.pagada
   const franja = repetida ? { tono: 'ambar' as const, fuerte: 'Mira esto ·', resto: `Repetida: ${textoRepetida(repetida)}` }
+    : modo === 'contabilizada' && enModificar ? franjaModificando(fac?.asiento?.numero ?? null)
     : modo === 'contabilizada' ? franjaContabilizada({ numero: fac?.asiento?.numero ?? null, pagada, enErp10 })
     : modo === 'descartada' ? franjaDescartada({ motivo: descarte?.motivo ?? null, quien: descarte?.quien ?? null }) : estado
   const lineasValidado = (asientoReal?.apuntes ?? []).map((x) => ({ codigo: x.cuenta, nombre: x.nombreCuenta, debe: x.debe || null, haber: x.haber || null }))
@@ -663,6 +687,17 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
         <h1>Factura recibida</h1>
         <span className="kf-cola">{cola}</span>
         {!cargando && <EstadoFicha {...franja} />}
+        {/* X26 · En la franja de la contabilizada: «Modificar» (apagado, con su porqué, si no se puede); mientras, «Guardar» y «Cancelar». */}
+        {!cargando && modo === 'contabilizada' && (enModificar
+          ? <span className="kf-modificar" data-prueba="modificando">
+              <button type="button" className="kf-enlace" disabled={guardando} onClick={() => void guardarModificacion()}>{guardando ? 'Guardando…' : 'Guardar'} <kbd>Intro</kbd></button>
+              <button type="button" className="kf-enlace" disabled={guardando} onClick={cancelarModificacion}>Cancelar <kbd>Esc</kbd></button>
+            </span>
+          : <span className="kf-modificar">
+              <button type="button" className="kf-enlace" data-prueba="modificar" disabled={!sePuede.datos?.puede}
+                title={porqueNoModificar(sePuede.datos ?? (sePuede.error ? { puede: false, porque: sePuede.error } : null)) ?? undefined}
+                onClick={() => { setModificando({ de: invoiceId, elegidas: {} }); setAviso(null) }}>Modificar</button>
+            </span>)}
         <div className="kf-cabecera-botones">
           {!aMano && <>
             <button type="button" className="kf-flecha" aria-label="La anterior" disabled={!anterior} onClick={() => anterior && salida.pedirSalir(() => ir(anterior, undefined, anterior === deDonde?.vieneDe ? { despues: invoiceId } : undefined))}>‹</button>
@@ -896,7 +931,11 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
             )}
 
             {modo === 'contabilizada'
-              ? <AsientoQueSale lineas={lineasValidado} etiqueta={{ texto: etiquetaValidado(fac?.asiento?.numero ?? null), tono: 'bien' }} />
+              ? (enModificar && asientoReal
+                  ? <ModificarAsiento apuntes={asientoReal.apuntes.map((a) => ({ posicion: a.posicion, cuenta: a.cuenta, nombre: a.nombreCuenta, debe: a.debe, haber: a.haber }))}
+                      plan={cuentasPago?.lista ?? []} nombre={(c) => cuentasPago?.nombres.get(c) ?? asientoReal.apuntes.find((a) => a.cuenta === c)?.nombreCuenta ?? ''}
+                      elegidas={modificando?.elegidas ?? {}} elegir={(pos, c) => setModificando((m) => (m ? { ...m, elegidas: { ...m.elegidas, [pos]: c } } : m))} />
+                  : <AsientoQueSale lineas={lineasValidado} etiqueta={{ texto: etiquetaValidado(fac?.asiento?.numero ?? null), tono: 'bien' }} />)
               : <AsientoQueSale lineas={previa && totales.total !== 0 ? previa.lineas : []} etiqueta={etiqueta}
                   editar={!aMano && id && !soloLectura ? { texto: 'Editar el asiento', hacer: () => setCompleta(true) } : null} />}
           </fieldset>}

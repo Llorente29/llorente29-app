@@ -1,0 +1,34 @@
+// tests/unit/modules/conta/x26/modificar.test.ts — X26 · «Modificar» una recibida contabilizada: qué líneas se pueden
+// cambiar (las de gasto, con la misma regla que la base), la franja y qué se le manda a la base. Cuentas inventadas.
+
+import { describe, expect, it } from 'vitest'
+import { esLineaDeGasto, franjaModificando, lineasQueCambian, porqueNoModificar } from '@/modules/conta/nucleo/recibida/contabilizada'
+
+const APUNTES = [{ posicion: 1, cuenta: '62800000' }, { posicion: 2, cuenta: '47200021' }, { posicion: 3, cuenta: '40000071' }, { posicion: 4, cuenta: '62900000' }]
+
+describe('X26 · las líneas que se cambian aquí: las de gasto', () => {
+  it('ni la del proveedor (40, 41) ni la del IVA (472, 477, 4751); el resto, sí (la 480, el 21x)', () => {
+    expect(['62800000', '48000000', '21300000', '60000000'].every(esLineaDeGasto)).toBe(true)
+    expect(['40000071', '41000003', '47200021', '47700021', '47510000'].some(esLineaDeGasto)).toBe(false)
+  })
+})
+
+describe('X26 · lo que se le manda a la base', () => {
+  it('solo las de gasto que cambian, por su posición', () => {
+    expect(lineasQueCambian(APUNTES, { 1: '62800001', 4: '62900000' })).toEqual([{ posicion: 1, cuenta: '62800001' }])
+  })
+  it('la del proveedor o la del IVA no se mandan aunque se hayan escrito', () => {
+    expect(lineasQueCambian(APUNTES, { 2: '62800001', 3: '62800001' })).toEqual([])
+  })
+  it('sin cambios, nada', () => { expect(lineasQueCambian(APUNTES, {})).toEqual([]) })
+})
+
+describe('X26 · la franja y el porqué', () => {
+  it('«Modificando el asiento 11», en ámbar', () => {
+    expect(franjaModificando(11)).toEqual({ tono: 'ambar', fuerte: 'Modificando el asiento 11.', resto: 'Cambia la cuenta de cada gasto. Intro guarda; Esc lo deja como estaba.' })
+  })
+  it('el porqué del botón apagado, el de la base', () => {
+    expect(porqueNoModificar({ puede: false, porque: 'El IVA del 3T ya está presentado: esta factura no se puede modificar.' })).toBe('El IVA del 3T ya está presentado: esta factura no se puede modificar.')
+    expect(porqueNoModificar({ puede: true, porque: null })).toBeNull()
+  })
+})

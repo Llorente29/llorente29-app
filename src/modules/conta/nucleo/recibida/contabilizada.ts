@@ -139,3 +139,27 @@ export function laAnterior(o: { vieneDe: string | null; actual: string; enLaCola
 export function textoCasillaProveedor(o: { subcuenta: string; futura: string; nombre: string | null }): string {
   return o.subcuenta || o.futura || o.nombre || ''
 }
+
+// ── X26 · «Modificar» una recibida contabilizada (Julio, 21/11), como en ERP10 ─────────────────────────────────────
+// Este paso: las cuentas de sus líneas de gasto, en el mismo asiento (el mismo número, los mismos importes y el mismo
+// IVA). El importe y el IVA, en el X26b. La base lo comprueba y lo hace (conta_recibida_modificar); aquí, lo que se
+// enseña y qué se le manda.
+
+/** Una línea del asiento que se puede cambiar aquí: la de gasto (no la del proveedor ni la del IVA). La misma regla que la base. */
+export const esLineaDeGasto = (codigo: string) => !/^(40|41|472|477|4751)/.test(codigo)
+
+/** «Modificando el asiento 11» (ámbar), con lo que se hace. */
+export function franjaModificando(numero: number | null): Franja {
+  return { tono: 'ambar', fuerte: `Modificando el asiento ${numero ?? '—'}.`, resto: 'Cambia la cuenta de cada gasto. Intro guarda; Esc lo deja como estaba.' }
+}
+
+/** El porqué de «Modificar» apagado, para el ratón. Null si se puede. */
+export const porqueNoModificar = (s: { puede: boolean; porque: string | null } | null) =>
+  !s ? 'Mirando si se puede modificar…' : s.puede ? null : s.porque ?? 'No se puede modificar.'
+
+/** Lo que se le manda a la base: solo las líneas de gasto cuya cuenta ha cambiado, por su posición. */
+export function lineasQueCambian(apuntes: readonly { posicion: number; cuenta: string }[], elegidas: Readonly<Record<number, string>>): { posicion: number; cuenta: string }[] {
+  return apuntes
+    .filter((a) => esLineaDeGasto(a.cuenta) && elegidas[a.posicion] && elegidas[a.posicion].trim() !== a.cuenta)
+    .map((a) => ({ posicion: a.posicion, cuenta: elegidas[a.posicion].trim() }))
+}

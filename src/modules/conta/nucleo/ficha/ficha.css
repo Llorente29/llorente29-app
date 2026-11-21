@@ -319,3 +319,7 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 .kf-cuenta-de-pago [data-tono='mal'] { color: var(--k-rojo, #b42318); }
 /* K10 · Un aviso de una línea, en ámbar y pequeño (la contrapartida al inmovilizado). */
 .kf-aviso-linea { margin: 2px 0 0; font-size: 12px; color: var(--kf-ambar-tinta, #b54708); }
+/* X26 · «Modificar» una recibida contabilizada: la cuenta de cada gasto con su buscador, y su nombre al lado. */
+.kf-modificar-linea { display: grid; grid-template-columns: minmax(110px, 140px) minmax(0, 1fr); gap: 8px; align-items: center; }
+.kf-modificar-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kf-modificar { display: inline-flex; gap: 8px; align-items: center; margin-left: 8px; }
