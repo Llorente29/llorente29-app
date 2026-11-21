@@ -281,7 +281,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const vacias = aMano ? [] : casillasVacias({ proveedor: !!provId, numero: b.numero, fecha: b.fecha, total: totales.total, cuentaGasto: b.gastos.some((g) => g.cuenta.trim() !== '') })
   const estado = estadoDeLaFicha({ aMano, leida: !!fac?.lectura, comprobaciones, hayDudaGasto: !!duda || !!dudaPago, desconocido: emisor?.que === 'alta', vacias })
   const [altaAbierta, setAltaAbierta] = useState<string | null>(null)
-  const franja = franjaProveedorSolo({ aMano, solo, proveedorId: provId, nombre: prov?.nombre ?? fac?.proveedor?.nombre ?? null, validada: !!fac?.asiento })
+  const franjaSolo = franjaProveedorSolo({ aMano, solo, proveedorId: provId, nombre: prov?.nombre ?? fac?.proveedor?.nombre ?? null, validada: !!fac?.asiento })
   const [abrirProveedor, setAbrirProveedor] = useState(0)
   useNombreDePestana(nombreDePestana(aMano ? prov?.nombre : prov?.nombre ?? fac?.proveedor?.nombre ?? emisor?.nombre, !aMano))
 
@@ -656,9 +656,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 {nuevo.fallo && <p className="kf-error" role="alert">{nuevo.fallo}</p>}
               </div>
             )}
-            {franja && (
-              <Duda fuerte={franja.fuerte} texto={franja.texto}
-                secundario={franja.deshacer ? { texto: deshaciendo ? 'Deshaciendo…' : 'Deshacer', hacer: () => void deshacerSolo() } : undefined} />
+            {franjaSolo && (
+              <Duda fuerte={franjaSolo.fuerte} texto={franjaSolo.texto}
+                secundario={franjaSolo.deshacer ? { texto: deshaciendo ? 'Deshaciendo…' : 'Deshacer', hacer: () => void deshacerSolo() } : undefined} />
             )}
             {emisor?.que === 'alta' && altaAbierta !== invoiceId && (
               <Duda texto={`No conozco al que la emite${emisor.nombre ? `: ${emisor.nombre}` : ''}${emisor.nif ? ` · NIF ${emisor.nif}` : ''}. ${solo?.que === 'no' && solo.motivo ? `${solo.motivo} ` : ''}Hasta que tenga proveedor no se valida.`}
