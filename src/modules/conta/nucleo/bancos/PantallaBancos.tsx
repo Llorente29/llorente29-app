@@ -19,10 +19,11 @@
 //   · Al abrir, lo que el banco no cobró se aparta solo (bank_apartar_no_cobrados) y se dice.
 // Los mensajes de la base, en palabras (seleccion.enPalabras).
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as KE } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as KE, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaBancos } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import { CrearDesdeBuscador } from '@/modules/conta/plan/CrearDesdeBuscador'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
@@ -62,6 +63,9 @@ const TONO_PALABRA = { 'Por conciliar': 'mira', Conciliado: 'bien', Apartado: 'n
 
 const num = (x: string): number | null => { const n = Number(x.replace(/\./g, '').replace(',', '.')); return x.trim() && Number.isFinite(n) ? n : null }
 const euros = (cent: number | null) => (cent === null ? '' : cifra(cent / 100))
+/** X21 · Lo que pinta «No está: crear la …» en un buscador de cuenta de Bancos (y qué hacer con la creada). */
+type CrearCuenta = (alCrear: (c: CuentaDelPlan) => void) => (q: string, cerrar: () => void) => ReactNode
+
 const primeraHoja = (nombres: Readonly<Record<string, string>>, prefijo: string) => Object.keys(nombres).filter((c) => c.startsWith(prefijo) && c.length >= 8).sort()[0] ?? null
 
 export default function PantallaBancos() {
@@ -109,6 +113,11 @@ export default function PantallaBancos() {
   const nombreDe = (c: string | null) => (c ? nombres[c] ?? '' : '')
   const cuentasPlan: CuentaDelPlan[] = useMemo(() => Object.entries(nombres).filter(([c]) => c.length >= 8).map(([codigo, nombre]) => ({ codigo, nombre })).sort((a, b) => a.codigo.localeCompare(b.codigo)), [nombres])
   const cuenta572 = banco?.cuenta ?? null
+  // X21 · «No está: crear la …» en los buscadores de cuenta de Bancos (la empresa, la de arriba): creada, elegida y releída.
+  const crearCuenta: CrearCuenta = (alCrear) => (q, cerrar) => (companyId
+    ? <CrearDesdeBuscador accountId={accountId} companyId={companyId} q={q} quien={cuentaConta.userName ?? null}
+        alCrear={(c) => { setVuelta((v) => v + 1); alCrear({ codigo: c.code, nombre: c.name }); cerrar() }} />
+    : null)
   const cuenta = cuantos(movs)
   const marcadosVivos = losMarcados(movs, marcados)
   const conCuenta = (x: MovimientoBanco) => aQueVa(x, cuenta572, x.casado?.asientoId ? lectura.datos?.delAsiento[x.casado.asientoId] ?? null : null)
@@ -299,7 +308,8 @@ export default function PantallaBancos() {
                       valor={textoBarra ?? (cuentaBarra ? `${cuentaBarra.codigo} · ${cuentaBarra.nombre}` : '')} cuenta={cuentaBarra?.codigo ?? null}
                       ponerTexto={(t) => { setTextoBarra(t); setCuentaBarra(null) }}
                       lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8).filter((c) => c.codigo !== cuenta572)} texto={(c) => `${c.codigo} · ${c.nombre}`}
-                      elegir={(c) => { setCuentaBarra(c); setTextoBarra(null); setTimeout(() => document.getElementById('kb-conciliar-n')?.focus(), 0) }} />
+                      elegir={(c) => { setCuentaBarra(c); setTextoBarra(null); setTimeout(() => document.getElementById('kb-conciliar-n')?.focus(), 0) }}
+                      crear={crearCuenta((c) => { setCuentaBarra(c); setTextoBarra(null) })} />
                   </div>
                   <kbd>F4</kbd>
                 </div>
@@ -311,7 +321,7 @@ export default function PantallaBancos() {
               </div>
             ) : (
               <>
-                {banco && <AMano banco={banco} hoy={hoy} cuentas={cuentasPlan} ocupado={ocupado} hacer={hacer} />}
+                {banco && <AMano banco={banco} hoy={hoy} cuentas={cuentasPlan} ocupado={ocupado} hacer={hacer} crearCuenta={crearCuenta} />}
                 <p className="kb-saldo" data-prueba="saldo-a-la-fecha">Saldo de la cuenta a la fecha{fechaSaldo ? ` ${fechaVista(fechaSaldo)}` : ''} <strong>{saldo !== null && saldo !== undefined ? euros(saldo) : '—'}</strong></p>
               </>
             )}
@@ -327,7 +337,7 @@ export default function PantallaBancos() {
             documento={!m ? null : m.ticket ? (justificante.datos === null && !justificante.error ? undefined : justificante.datos ? { url: justificante.datos, foto: !/\.pdf$/i.test(m.ticket), titulo: `El justificante de ${quienEs(m)}` } : null) : null}
             alElegir={m ? (f) => void hacer(async () => { await subirTicket(accountId, m.id, f); return `Justificante guardado en el movimiento de ${quienEs(m)}.` }) : undefined}
             acepta="image/*,application/pdf" tituloSoltar="Falta el justificante" textoSoltar="Arrastra aquí la foto o el PDF del ticket, o pulsa para elegirlo."
-            otra={{ nombre: 'Qué es', contenido: m ? <QueEs m={m} banco={banco} nombres={nombres} cuentas={cuentasPlan} ocupado={ocupado} companyId={companyId} accountId={accountId} hoy={hoy}
+            otra={{ nombre: 'Qué es', contenido: m ? <QueEs m={m} banco={banco} nombres={nombres} cuentas={cuentasPlan} ocupado={ocupado} companyId={companyId} accountId={accountId} hoy={hoy} crearCuenta={crearCuenta}
               extractos={datos?.extractos ?? []} confirmar={() => void confirmar(m)} deshacer={() => void deshacer(m)} validar={() => void validarAsiento(m)} reabrir={() => void reabrir(m)} hacer={hacer}
               buscando={buscarFactura === m.id} ponerBuscando={(si) => setBuscarFactura(si ? m.id : null)} /> : <p className="kf-panel-nota">Elige un movimiento.</p> }} />
         )}
@@ -370,7 +380,8 @@ function Marcados({ ms, cuenta, cuenta572, nombres, cuentaDe }: {
 }
 
 /** «Qué es»: el movimiento, lo que propone Sumied y su porqué, y lo que se puede hacer con él. */
-function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, accountId, hoy, extractos, confirmar, deshacer, validar: validarIt, reabrir, hacer, buscando, ponerBuscando }: {
+function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, accountId, hoy, extractos, confirmar, deshacer, validar: validarIt, reabrir, hacer, buscando, ponerBuscando, crearCuenta }: {
+  crearCuenta?: CrearCuenta
   m: MovimientoBanco; banco: BancoVista | null; nombres: Readonly<Record<string, string>>; cuentas: CuentaDelPlan[]; ocupado: boolean; companyId: string; accountId: string; hoy: string
   extractos: Parameters<typeof porQueApartado>[1]
   confirmar: () => void; deshacer: () => void; validar: () => void; reabrir: () => void; hacer: (q: () => Promise<string>) => Promise<void>
@@ -460,7 +471,8 @@ function QueEs({ m, banco, nombres, cuentas, ocupado, companyId, accountId, hoy,
             {(p?.alternativas ?? []).map((a) => <button key={a.etiqueta} type="button" className="kf-boton-hueco" disabled={ocupado} onClick={() => void hacer(() => casarConAlternativa(m, a))}>{a.etiqueta}</button>)}
             {comision && !entra && <button type="button" className="kf-boton-hueco" disabled={ocupado} onClick={() => void aCuenta({ codigo: comision, nombre: nombres[comision] ?? comision })}>Comisión del banco</button>}
             <Buscador id={`kb-otra-${m.id}`} etiqueta="Otra cuenta" placeholder="Otra cuenta: 6001, 600.1 o parte del nombre" valor={texto ?? ''} ponerTexto={setTexto}
-              lista={(t) => cuentasQueEncajan(t, cuentas, 8)} texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { setTexto(null); void aCuenta(c) }} />
+              lista={(t) => cuentasQueEncajan(t, cuentas, 8)} texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { setTexto(null); void aCuenta(c) }}
+              crear={crearCuenta?.((c) => { setTexto(null); void aCuenta(c) })} />
             {m.conceptoLimpio.trim() && (
               <label className="kb-regla"><input type="checkbox" checked={regla} onChange={(e) => setRegla(e.target.checked)} /> Hacerlo solo la próxima vez que pase igual</label>
             )}
@@ -488,7 +500,7 @@ function Apartado({ m, extractos, ocupado, reabrir }: { m: MovimientoBanco; extr
 }
 
 /** «Escribir uno a mano · si no viene en el extracto»: la línea de edición de ERP10, validada al momento. */
-function AMano({ banco, hoy, cuentas, ocupado, hacer }: { banco: BancoVista; hoy: string; cuentas: CuentaDelPlan[]; ocupado: boolean; hacer: (q: () => Promise<string>) => Promise<void> }) {
+function AMano({ banco, hoy, cuentas, ocupado, hacer, crearCuenta }: { banco: BancoVista; hoy: string; cuentas: CuentaDelPlan[]; ocupado: boolean; hacer: (q: () => Promise<string>) => Promise<void>; crearCuenta?: CrearCuenta }) {
   const [fecha, setFecha] = useState(hoy)
   const [cuenta, setCuenta] = useState<CuentaDelPlan | null>(null)
   const [texto, setTexto] = useState<string | null>(null)
@@ -522,7 +534,8 @@ function AMano({ banco, hoy, cuentas, ocupado, hacer }: { banco: BancoVista; hoy
         <Casilla rotulo="Fecha" htmlFor="kb-fecha"><CasillaFecha id="kb-fecha" etiqueta="Fecha" iso={fecha} hoy={hoy} poner={setFecha} /></Casilla>
         <Casilla rotulo="Cuenta" origen="F4" htmlFor="kb-cuenta">
           <Buscador id="kb-cuenta" etiqueta="Cuenta" valor={texto ?? (cuenta ? `${cuenta.codigo} · ${cuenta.nombre}` : '')} cuenta={cuenta?.codigo ?? null} ponerTexto={(t) => { setTexto(t); setCuenta(null) }}
-            lista={(t) => cuentasQueEncajan(t, cuentas, 8).filter((c) => c.codigo !== banco.cuenta)} texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { setCuenta(c); setTexto(null) }} />
+            lista={(t) => cuentasQueEncajan(t, cuentas, 8).filter((c) => c.codigo !== banco.cuenta)} texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { setCuenta(c); setTexto(null) }}
+            crear={crearCuenta?.((c) => { setCuenta(c); setTexto(null) })} />
         </Casilla>
         <Casilla rotulo="Concepto" htmlFor="kb-concepto"><input id="kb-concepto" data-casilla value={concepto} onChange={(e) => setConcepto(e.target.value)} /></Casilla>
         <Casilla rotulo="Ingreso" htmlFor="kb-ingreso"><input id="kb-ingreso" data-casilla className="kf-cifra" inputMode="decimal" value={ingreso} onChange={(e) => setIngreso(e.target.value)} /></Casilla>

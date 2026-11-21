@@ -25,6 +25,7 @@ import { rutaAsiento, rutaEmitidaAsiento, rutaFacturasVenta, rutaNuevaFacturaVen
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
+import { CrearDesdeBuscador } from '@/modules/conta/plan/CrearDesdeBuscador'
 import { LineaErp10 } from '@/modules/conta/nucleo/ficha/LineaErp10'
 import { useLineaErp10 } from '@/modules/conta/nucleo/ficha/useLineaErp10'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
@@ -111,6 +112,8 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   const [textoCliente, setTextoCliente] = useState<string | null>(null)
   const [textoCuenta, setTextoCuenta] = useState<Record<number, string>>({})
   const [textoCobro, setTextoCobro] = useState<string | null>(null)
+  // X21 · Las subcuentas creadas desde los buscadores de esta ficha («No está: crear la …»): ya elegibles y con su nombre.
+  const [creadas, setCreadas] = useState<CuentaDelPlan[]>([])
   const [fichero, setFichero] = useState<{ file: File; url: string } | null>(null)
   useEffect(() => () => { if (fichero) URL.revokeObjectURL(fichero.url) }, [fichero])
 
@@ -143,9 +146,16 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
   const previa = cuentas ? asientoDeLaEmitida(be, cuentas, cliente?.nombre ?? null) : null
   const total = previa?.total ?? 0
   const cobroImporte = Math.round(((previa?.total ?? 0)) * 100) / 100
-  const nombreVenta = useCallback((c: string) => emp?.nombres.get(c) ?? 'Cuenta', [emp])
-  const cuentasVenta: CuentaDelPlan[] = useMemo(() => (emp?.ventas ?? []).map((c) => ({ codigo: c.codigo, nombre: c.nombre })), [emp])
-  const cuentasCobro: CuentaDelPlan[] = useMemo(() => (emp?.cobros ?? []).map((c) => ({ codigo: c.codigo, nombre: c.nombre })), [emp])
+  const nombreVenta = useCallback((c: string) => emp?.nombres.get(c) ?? creadas.find((x) => x.codigo === c)?.nombre ?? 'Cuenta', [emp, creadas])
+  const cuentasVenta: CuentaDelPlan[] = useMemo(() => [...(emp?.ventas ?? []).map((c) => ({ codigo: c.codigo, nombre: c.nombre })),
+    ...creadas.filter((c) => !(emp?.ventas ?? []).some((v) => v.codigo === c.codigo))], [emp, creadas])
+  /** X21 · «No está: crear la …» en los buscadores de cuenta de esta ficha (la empresa, la de la ficha). */
+  const crearCuenta = (alCrear: (c: CuentaDelPlan) => void) => (q: string, cerrar: () => void) => (empresa
+    ? <CrearDesdeBuscador accountId={accountId} companyId={empresa} q={q} quien={userName ?? null}
+        alCrear={(c) => { const n = { codigo: c.code, nombre: c.name }; setCreadas((x) => [...x, n]); alCrear(n); cerrar() }} />
+    : null)
+  const cuentasCobro: CuentaDelPlan[] = useMemo(() => [...(emp?.cobros ?? []).map((c) => ({ codigo: c.codigo, nombre: c.nombre })),
+    ...creadas.filter((c) => !(emp?.cobros ?? []).some((v) => v.codigo === c.codigo))], [emp, creadas])
 
   // ── Lo que se dice: la duda, las comprobaciones, la franja ──
   const [decidida, setDecidida] = useState<string | null>(null)
@@ -317,7 +327,7 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
     : de === 'nueva' ? null : doc.datos ? { url: doc.datos.url, foto: false, titulo: doc.datos.titulo } : doc.error ? null : entryId ? undefined : null
   const puede = puedeGuardar({ guardando, validada: modo === 'hecha_sola' && !siguiente, descartada: false })
   const concepto = cliente ? `Factura ${b.numero || ''} · ${cliente.nombre}`.replace('Factura  ·', 'Factura ·') : ''
-  const nombreCobro = be.cobroCuenta ? emp?.nombres.get(be.cobroCuenta) ?? 'Cuenta' : ''
+  const nombreCobro = be.cobroCuenta ? emp?.nombres.get(be.cobroCuenta) ?? creadas.find((x) => x.codigo === be.cobroCuenta)?.nombre ?? 'Cuenta' : ''
   const nombreDelCobro = modo === 'hecha_sola' ? cobroApuntado?.nombre ?? '' : nombreCobro
   const ejercicio = b.fecha.slice(0, 4)
 
@@ -418,7 +428,8 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
                     {modo === 'hecha_sola' ? <input readOnly tabIndex={-1} aria-label={`Cuenta de venta ${i + 1}`} value={v.cuenta} data-cuenta={v.cuenta || undefined} />
                       : <Buscador id={`kf-venta-${i}`} etiqueta={`Cuenta de venta ${i + 1}`} cargando={!emp} valor={textoCuenta[i] ?? v.cuenta} cuenta={v.cuenta || null} duda={!!duda && i === 0}
                           ponerTexto={(t) => setTextoCuenta((x) => ({ ...x, [i]: t }))} lista={(t) => cuentasQueEncajan(t, cuentasVenta, 8)}
-                          texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerVenta(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }} />}
+                          texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerVenta(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }}
+                          crear={crearCuenta((c) => { ponerVenta(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) })} />}
                     <NombreDeCuenta etiqueta={`Nombre de la cuenta de venta ${i + 1}`} valor={v.cuenta ? nombreVenta(v.cuenta) : ''} duda={!!duda && i === 0} />
                     <input className="kf-cifra" data-casilla={be.ventas.length > 1 && !soloLeer ? '' : undefined} aria-label={`Importe de la venta ${i + 1}`}
                       value={be.ventas.length === 1 ? importeEs(previa?.base ?? 0) : v.importe} readOnly={be.ventas.length === 1 || soloLeer}
@@ -446,7 +457,8 @@ export default function FichaEmitida({ de, hoy: deHoy }: { de: 'nueva' | 'factur
                   {modo === 'hecha_sola' ? <input readOnly tabIndex={-1} id="kf-cobro" aria-label="La cuenta del cobro" value={cobroApuntado?.cuenta ?? ''} data-cuenta={cobroApuntado?.cuenta} />
                     : <Buscador id="kf-cobro" etiqueta="La cuenta del cobro" cargando={!emp} valor={textoCobro ?? be.cobroCuenta ?? ''} cuenta={be.cobroCuenta || null}
                         ponerTexto={(t) => { setTextoCobro(t); if (!t.trim()) ed.poner('cobroCuenta', '') }} lista={(t) => cuentasQueEncajan(t, cuentasCobro, 8)}
-                        texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) }} />}
+                        texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) }}
+                        crear={crearCuenta((c) => { ed.poner('cobroCuenta', c.codigo); setTextoCobro(null) })} />}
                   {/* Sin cuenta, «Pendiente de cobrar» en la casilla ancha (en la de la cuenta no cabía entero). */}
                   <NombreDeCuenta etiqueta="Nombre de la cuenta del cobro" valor={nombreDelCobro} placeholder="Pendiente de cobrar" />
                 </div>

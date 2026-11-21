@@ -3,13 +3,16 @@
 // X20 (21/11) · Crear una subcuenta como en ERP10: el código y el nombre, y nada más. La regla, desde el
 // 20/11: si ERP10 lo hace en un paso, Sumied no puede pedir más. Lo que se escribe en «Código»:
 //   · entero, con los dígitos del plan: «43000030»;
-//   · con punto, como en el resto de Sumied (expandirSubcuenta): «430.30» → 43000030, «572.1» → 57200001;
-//   · solo la raíz: «430» → la siguiente libre (43000006), que se deja escrita para aceptarla o cambiarla.
+//   · corto o con punto, EXACTAMENTE como en la ficha de la factura (X21: la misma pieza, codigoEscrito de
+//     nucleo/ficha/teclas.ts, para que en toda la aplicación se escriba igual): las tres primeras cifras son la
+//     cuenta y el resto, el número, con ceros en medio: «4301» → 43000001, «6001» → 60000001; «430.30» → 43000030;
+//   · solo la raíz (tres cifras o menos): «430» → la siguiente libre (43000006), que se deja escrita para
+//     aceptarla o cambiarla.
 // La cuenta de la que cuelga la busca Sumied: la cuenta del plan, de las que admiten apuntes, más larga cuyo
 // número empieza el código (43000030 cuelga de la 4300). Si no hay ninguna, lo dice con el número que falta
 // y no inventa nada. Si el código ya existe, lo dice («Ya existe: ábrela»). Puro.
 
-import { expandirSubcuenta } from '@/modules/conta/diseno/valores'
+import { codigoEscrito } from '@/modules/conta/nucleo/ficha/teclas'
 import { siguienteLibre } from '@/modules/conta/lib/planEmpresa'
 
 export type SeriePlan = { code: string; name: string; isLeaf: boolean }
@@ -27,17 +30,23 @@ export type LecturaCodigo =
 export function leerCodigo(texto: string, o: { digitos: number; serie: readonly SeriePlan[]; cuentas: readonly CuentaDelPlan[] }): LecturaCodigo {
   const escrito = texto.replace(/\s/g, '')
   if (!escrito) return { tipo: 'vacio' }
-  const t = escrito.includes('.') ? expandirSubcuenta(escrito, o.digitos) : escrito
-  if (t.includes('.')) return { tipo: 'mal', porque: `Con punto, lo de delante y lo de detrás tienen que caber en ${o.digitos} cifras.` }
-  if (!/^\d+$/.test(t)) return { tipo: 'mal', porque: 'El código son cifras: 43000030, o 430.30.' }
-  if (t.length > o.digitos) return { tipo: 'mal', porque: `Tu plan tiene ${o.digitos} cifras: sobran ${t.length - o.digitos}.` }
+  if (!/^\d+(\.\d+)?$/.test(escrito)) return { tipo: 'mal', porque: 'El código son cifras: 43000030, 4301 o 430.30.' }
   const ocupados = new Set(o.cuentas.map((c) => c.code))
-  let codigo = t
-  const propuesta = t.length < o.digitos
+  // La raíz sola (tres cifras o menos, sin punto): la siguiente libre.
+  const propuesta = !escrito.includes('.') && escrito.length < 4
+  let codigo: string
   if (propuesta) {
-    const siguiente = siguienteLibre(t, o.digitos, ocupados)
-    if (!siguiente) return { tipo: 'mal', porque: `Ya no quedan códigos libres que empiecen por ${t}.` }
+    const siguiente = siguienteLibre(escrito, o.digitos, ocupados)
+    if (!siguiente) return { tipo: 'mal', porque: `Ya no quedan códigos libres que empiecen por ${escrito}.` }
     codigo = siguiente
+  } else {
+    const c = codigoEscrito(escrito, o.digitos)
+    if (!c) {
+      return escrito.includes('.')
+        ? { tipo: 'mal', porque: `Con punto, lo de delante y lo de detrás tienen que caber en ${o.digitos} cifras.` }
+        : { tipo: 'mal', porque: `Tu plan tiene ${o.digitos} cifras: sobran ${escrito.length - o.digitos}.` }
+    }
+    codigo = c
   }
   const ya = o.cuentas.find((c) => c.code === codigo)
   if (ya) return { tipo: 'existe', codigo, id: ya.id, nombre: ya.name }

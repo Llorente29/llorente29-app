@@ -43,6 +43,7 @@ import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { cuadreMano, importeMano, problemasMano, type LineaMano } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE, SERIES, type Serie } from '@/modules/conta/lib/libro'
 import { asientoEnPalabras, lineasDePredefinido, predefinidoDeMano, tipoDeAsiento, type Predefinido } from '@/modules/conta/lib/tipoAsiento'
+import { CrearDesdeBuscador } from '@/modules/conta/plan/CrearDesdeBuscador'
 import {
   cuentasDeApunte, guardarAMano, guardarPredefinido, leerEjercicios, leerPredefinidos, localesDeLaCuenta, validar,
   type CuentaPlan, type EjercicioLibro, type LocalEmpresa,
@@ -326,7 +327,10 @@ export default function NuevoAsientoPage({ tipo }: { tipo?: string } = {}) {
           {buscando === i && (
             <BuscarCuentaHoja cuentas={paraBuscar} inicial={l.cuenta}
               alElegir={(x) => { cambia(i, { cuenta: x.codigo }); setBuscando(null); siguienteCampo(cuentaDe(i)) }}
-              alCerrar={(volver) => { setBuscando(null); if (volver) cuentaDe(i)?.focus() }} />
+              alCerrar={(volver) => { setBuscando(null); if (volver) cuentaDe(i)?.focus() }}
+              // X21 · Lo que no está, se crea aquí (código y nombre) y queda elegido; las cuentas se vuelven a leer.
+              crear={activa ? (q, elegir) => <CrearDesdeBuscador accountId={accountId} companyId={activa.id} q={q} quien={userName ?? null}
+                alCrear={(c) => { setVuelta((v) => v + 1); elegir({ codigo: c.code, nombre: c.name }) }} /> : undefined} />
           )}
         </td>
         <td data-titulo="Concepto">
