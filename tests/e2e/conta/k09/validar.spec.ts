@@ -83,9 +83,18 @@ async function fichaLista(page: Page) {
 }
 
 async function introFuera(page: Page) {
-  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-  await expect.poll(() => page.evaluate(() => document.activeElement === document.body || document.activeElement === null)).toBe(true)
-  await page.keyboard.press('Enter')
+  // Como una persona: si la ficha aún está leyendo cómo se paga, lo dice y no guarda; se espera y se vuelve a pulsar
+  // (e2e 44901511998: con lo que lee el X21b, Intro llegaba antes que la propuesta del pago).
+  for (let i = 0; i < 10; i++) {
+    await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+    await expect.poll(() => page.evaluate(() => document.activeElement === document.body || document.activeElement === null)).toBe(true)
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(800)
+    const dice = (await aviso(page).textContent().catch(() => null)) ?? ''
+    if (!/Aún estoy leyendo cómo se paga/.test(dice)) return
+    await page.waitForTimeout(1500)
+  }
 }
 
 async function sinDudaDeGasto(page: Page) {
