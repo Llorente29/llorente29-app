@@ -85,9 +85,9 @@ export function textoFilaLibro(f: Pick<FilaLibroDia, 'tipo_factura' | 'serie' | 
 /** El tipo de factura del libro, en palabras: F4 «Resumen de tickets», F2 «Ticket», F1 «Factura», R5 «Rectificativa». */
 export const NOMBRE_TIPO_FACTURA: Record<string, string> = { F4: 'Resumen de tickets', F2: 'Ticket', F1: 'Factura', R5: 'Rectificativa' }
 
-/** Las filas del libro, en el orden en que se leen: las series, las facturas con NIF y las devoluciones. */
+/** Las filas del libro, en el orden en que se leen: las series, las facturas con NIF y las devoluciones; cada grupo por su número. */
 export function ordenarLibro<T extends Pick<FilaLibroDia, 'tipo_factura' | 'serie' | 'numero' | 'tipo'>>(fs: readonly T[]): T[] {
   const peso = { serie: 1, nif: 2, r5: 3 } as const
-  return [...fs].sort((a, b) => peso[claseFilaLibro(a)] - peso[claseFilaLibro(b)] || (a.serie ?? '').localeCompare(b.serie ?? '')
-    || Number(a.numero ?? 0) - Number(b.numero ?? 0) || a.tipo - b.tipo)
+  return [...fs].sort((a, b) => peso[claseFilaLibro(a)] - peso[claseFilaLibro(b)] || Number(a.numero ?? 0) - Number(b.numero ?? 0)
+    || (a.serie ?? '').localeCompare(b.serie ?? '') || a.tipo - b.tipo)
 }

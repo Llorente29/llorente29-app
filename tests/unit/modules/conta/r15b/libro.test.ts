@@ -30,9 +30,9 @@ describe('lo que dice cada fila del libro de un día', () => {
     expect(textoFilaLibro(DIA[0])).toBe('Devolución 5047')
     expect(claseFilaLibro(DIA[0])).toBe('r5')
   })
-  it('un día con dos series: primero las series, luego las facturas con NIF y al final las devoluciones', () => {
+  it('un día con dos series: primero las series (por su primer número), luego las facturas con NIF y al final las devoluciones', () => {
     expect(ordenarLibro(DIA).map(textoFilaLibro)).toEqual([
-      'Tickets 5031 a 5048 · Barra', 'Tickets 5001 a 5030 · Facturas',
+      'Tickets 5001 a 5030 · Facturas', 'Tickets 5031 a 5048 · Barra',
       'Factura 5007 · Cliente de ejemplo 7', 'Factura 5020 · Cliente de ejemplo 20', 'Devolución 5047',
     ])
   })
