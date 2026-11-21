@@ -87,6 +87,9 @@ begin
 
   select count(*) into v_n from public.supplier_invoice where company_id = k_emp2 and created_by_name = 'Semilla K10b';
   if v_n <> 4 then raise exception 'Semilla K10b: hay % facturas y tenían que ser 4.', v_n; end if;
-  if public.conta_iva_presentado(k_emp2, date '2026-09-15') is null then raise exception 'Semilla K10b: el 3T de la gestoría no sale presentado.'; end if;
+  if not exists (select 1 from public.tax_return r where r.company_id = k_emp2 and r.form_code = '303' and r.fiscal_year = 2026 and r.period = '3T'
+                   and r.status in ('filed', 'booked', 'paid', 'offset', 'refunded')) then
+    raise exception 'Semilla K10b: el 303 del 3T de la gestoría no está presentado.';
+  end if;
   raise notice 'Semilla K10b OK: dos marcas, el 303 del 3T presentado, y dos proveedores de prueba (40000084, 40000085) con su factura del 16/10 y la del 15/09.';
 end $$;
