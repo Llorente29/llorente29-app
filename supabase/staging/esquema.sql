@@ -6039,7 +6039,7 @@ CREATE FUNCTION public._conta_gasto_por_venta(p_textos text[]) RETURNS jsonb
      where btrim(coalesce(t, '')) <> ''
   ), casa as (
     -- Cada línea, a la primera fila que la reconoce, con las palabras que tiene.
-    select distinct on (l.o) l.o, g.orden, g.hoja, g.que,
+    select distinct on (l.o) l.o, g.orden, g.hoja, g.que, g.porque,
            array(select w from unnest(g.palabras) with ordinality as p(w, k)
                   where l.t like '% ' || public._r14_sin_tildes(w) || ' %' or l.t like '% ' || public._r14_sin_tildes(w) || 's %'
                      or l.t like '% ' || public._r14_sin_tildes(w) || 'es %' order by k) as ws
@@ -6049,7 +6049,7 @@ CREATE FUNCTION public._conta_gasto_por_venta(p_textos text[]) RETURNS jsonb
                        or l.t like '% ' || public._r14_sin_tildes(w) || 'es %')
      order by l.o, g.orden
   ), por_hoja as (
-    select hoja, min(orden) as orden, (array_agg(que order by orden))[1] as que, count(*) as lineas
+    select hoja, min(orden) as orden, (array_agg(que order by orden))[1] as que, (array_agg(porque order by orden))[1] as porque, count(*) as lineas
       from casa group by hoja
   ), ws as (
     -- Las palabras de cada hoja, por dónde salen primero; sin la misma en singular y en plural.
@@ -6057,7 +6057,7 @@ CREATE FUNCTION public._conta_gasto_por_venta(p_textos text[]) RETURNS jsonb
       from casa c cross join lateral unnest(c.ws) with ordinality as u(w, k) group by c.hoja, u.w
   )
   select case when h.hoja is null then null else jsonb_build_object(
-           'hoja', h.hoja, 'que', h.que, 'lineas', h.lineas, 'de', (select count(*) from l),
+           'hoja', h.hoja, 'que', h.que, 'porque', h.porque, 'lineas', h.lineas, 'de', (select count(*) from l),
            'palabras', coalesce((select jsonb_agg(z.w order by z.pos) from (
               select x.w, x.pos from ws x
                where x.hoja = h.hoja and not exists (select 1 from ws y where y.hoja = x.hoja and y.pos < x.pos
@@ -6096,7 +6096,9 @@ begin
    where ps.supplier_id = p_supplier and ps.role = 'supplier' limit 1;
   if v_rol.id is not null then
     select name into v_party from public.party where id = v_rol.party_id;
-    v_cuenta := coalesce(nullif(btrim(v_rol.commission_account_code), ''), public._conta_hoja(p_company, '623'));
+    -- La comisión de su papel, si la base la tiene (party_role.commission_account_code, de la 1113 del D01):
+    -- leída por jsonb, para que no falle donde la columna no esté.
+    v_cuenta := coalesce(nullif(btrim(to_jsonb(v_rol)->>'commission_account_code'), ''), public._conta_hoja(p_company, '623'));
     if v_cuenta is not null then
       select name into v_nombre from public.company_account where company_id = p_company and code = v_cuenta;
       return jsonb_build_object('cuenta', v_cuenta, 'nombre', v_nombre, 'de', 'plataforma',
@@ -6137,7 +6139,7 @@ begin
         left join public.pgc_account p on p.plan = a.plan and p.code = a.template_code and p.valid_to is null
        where a.company_id = p_company and a.code = v_cuenta;
       return jsonb_build_object('cuenta', v_cuenta, 'nombre', v_nombre, 'de', 'lo_que_vende', 'hoja', v_g->>'hoja', 'que', v_g->>'que',
-        'porque', format('Propuesta: vende %s → %s %s', public._conta_tpv_lista(array(select jsonb_array_elements_text(v_g->'palabras'))), v_g->>'hoja', coalesce(v_nombre, '')));
+        'porque', coalesce(v_g->>'porque', format('Propuesta: vende %s → %s %s', public._conta_tpv_lista(array(select jsonb_array_elements_text(v_g->'palabras'))), v_g->>'hoja', coalesce(v_nombre, ''))));
     end if;
   end if;
   return jsonb_build_object('cuenta', null, 'porque', 'No sé qué te vende: elige tú la cuenta de gasto.');
@@ -9219,7 +9221,7 @@ CREATE FUNCTION public._conta_proveedor_solo(p_invoice uuid, p_cuando text DEFAU
     AS $_$
 declare
   v public.supplier_invoice; c public.company; p jsonb; v_nif text; v_nombre text; v_tipo text; v_pais text;
-  v_party uuid; v_s uuid; v_que text; v_creado boolean := false; v_k uuid; v_kcreada boolean := false;
+  v_party uuid; v_como text; v_s uuid; v_que text; v_creado boolean := false; v_k uuid; v_kcreada boolean := false;
   v_plan text; v_d int; v_hoja text; v_code text; v_gasto jsonb; v_dir jsonb; v_origen jsonb; v_motivo text; v_txt text;
 begin
   select * into v from public.supplier_invoice where id = p_invoice for update;
@@ -9238,20 +9240,24 @@ begin
   v_nif := public._conta_nif_clave(p->>'nif');
   v_nombre := nullif(btrim(regexp_replace(coalesce(p->>'nombre', ''), '\s+', ' ', 'g')), '');
 
-  if v_nif is null then
-    v_motivo := 'La factura no trae el NIF del proveedor: dalo de alta tú.';
-  elsif v_nif = public._conta_nif_clave(c.tax_id) then
+  if v_nif is not null and v_nif = public._conta_nif_clave(c.tax_id) then
     v_motivo := format('El NIF del proveedor (%s) es el de %s: parece una factura emitida, no recibida.', v_nif, coalesce(c.legal_name, 'la propia empresa'));
+  else
+    -- Una plataforma de la cuenta (Julio, 21/11): por su NIF o, si el NIF es de fuera o no viene, por su nombre.
+    select x.party_id, x.como into v_party, v_como from public._r14_plataforma_de(v.account_id, v_nif, v_nombre) x;
+    if v_party is null and v_nif is null then v_motivo := 'La factura no trae el NIF del proveedor: dalo de alta tú.'; end if;
   end if;
 
   if v_motivo is null then
-    -- Una plataforma de la cuenta: su tercero (con o sin ficha de proveedor).
-    select pt.id into v_party from public.party pt
-     where pt.account_id = v.account_id and public._conta_nif_clave(pt.tax_id) = v_nif
-       and exists (select 1 from public.party_role r where r.party_id = pt.id and r.role = 'platform') limit 1;
     if v_party is not null then
       v_que := 'plataforma';
       select supplier_id into v_s from public.party_role where party_id = v_party and role = 'supplier';
+      -- Si la plataforma no tiene ficha de proveedor y hay una suelta con su NIF, se une a ella (no otra suelta).
+      if v_s is null and v_nif is not null then
+        select s.id into v_s from public.supplier s
+         where s.account_id = v.account_id and s.archived_at is null and public._conta_nif_clave(s.tax_id) = v_nif order by s.created_at limit 1;
+        if v_s is not null and not public._r14_unir(v_s, v_party, v_como, p_cuando) then v_s := null; end if;
+      end if;
     else
       -- Un proveedor de la cuenta, de esta u otra sociedad: el mismo tercero.
       select s.id into v_s from public.supplier s
@@ -9284,14 +9290,13 @@ begin
     v_origen := jsonb_build_object('factura', v.invoice_number, 'facturaId', v.id, 'fecha', to_char(now() at time zone 'Europe/Madrid', 'YYYY-MM-DD'), 'quien', 'Sumied');
     insert into public.supplier (account_id, name, legal_name, tax_id, tax_id_type, country_code, entity_kind,
                                  tax_id_check_status, tax_id_checked_at, tax_id_verified_at,
-                                 fiscal_street, fiscal_postal_code, fiscal_city, email, phone, website,
+                                 fiscal_street, fiscal_postal_code, fiscal_city, website,
                                  is_active, created_from, created_by_name, data_from_invoice)
     values (v.account_id, coalesce(v_nombre, v_nif), v_nombre, v_nif, coalesce(v_tipo, 'foreign'), v_pais,
             case when v_tipo = 'nif_es' and (v_nif ~ '^\d{8}[A-Z]$' or v_nif ~ '^[XYZKLM]') then 'self_employed'
                  when v_tipo = 'nif_es' and v_nif ~ '^[ABCDEFGHJNPQRSUVW]' then 'company' end,
             case when v_tipo = 'nif_es' then 'valid' end, case when v_tipo = 'nif_es' then now() end, case when v_tipo = 'nif_es' then now() end,
-            v_dir->>'calle', v_dir->>'cp', v_dir->>'ciudad',
-            nullif(btrim(p->>'email'), ''), nullif(btrim(p->>'telefono'), ''), nullif(btrim(p->>'web'), ''),
+            v_dir->>'calle', v_dir->>'cp', v_dir->>'ciudad', nullif(btrim(p->>'web'), ''),
             true, 'factura', 'Sumied',
             (select jsonb_object_agg(k, v_origen) from unnest(array['nif', 'nombreFiscal']
                || case when v_dir->>'calle' is not null or v_dir->>'cp' is not null then array['direccion'] else '{}' end
@@ -9300,6 +9305,22 @@ begin
                || case when nullif(btrim(p->>'web'), '') is not null then array['web'] else '{}' end) k))
     returning id into v_s;
     v_creado := true;
+    -- El correo y el teléfono, en su contacto principal (en producción supplier no los tiene: van en
+    -- supplier_contact, como al «Darlo de alta» de la pantalla).
+    if nullif(btrim(p->>'email'), '') is not null or nullif(btrim(p->>'telefono'), '') is not null then
+      insert into public.supplier_contact (account_id, supplier_id, name, role, phone, email, is_primary, notes, created_by_name)
+      values (v.account_id, v_s, coalesce(v_nombre, v_nif), 'other', nullif(btrim(p->>'telefono'), ''), nullif(btrim(p->>'email'), ''), true,
+              format('De la factura %s (lo dio de alta Sumied).', coalesce(v.invoice_number, 'sin número')), 'Sumied');
+    end if;
+    -- La ficha nueva de una plataforma va en el tercero de la plataforma (el disparador del C03 la une por
+    -- el NIF; por el nombre, no): si ha quedado en un tercero suyo, pasa al de la plataforma y ese se borra.
+    if v_que = 'plataforma' then
+      select party_id into v_txt from public.party_role where supplier_id = v_s and role = 'supplier';
+      if v_txt is distinct from v_party::text then
+        update public.party_role set party_id = v_party where supplier_id = v_s and role = 'supplier';
+        delete from public.party pa where pa.id = v_txt::uuid and pa.source = 'supplier' and not exists (select 1 from public.party_role ro where ro.party_id = pa.id);
+      end if;
+    end if;
   end if;
 
   -- Su subcuenta en esta empresa: la siguiente libre de la 4000 o de la 4100 (la plataforma, su 410).
@@ -17262,6 +17283,25 @@ $$;
 
 
 --
+-- Name: _r14_nombre_clave(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._r14_nombre_clave(p text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  select nullif(btrim(regexp_replace(' ' || public._r14_sin_tildes(p) || ' ',
+    ' (ltd|limited|plc|llc|inc|corp|sl|slu|s l|s l u|sa|sau|s a|bv|b v|nv|gmbh|ag|sas|sarl|srl|spa|sociedad limitada|sociedad anonima|co|company|technologies|technology) ', ' ', 'g')), '')
+$$;
+
+
+--
+-- Name: FUNCTION _r14_nombre_clave(p text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._r14_nombre_clave(p text) IS 'R14: el nombre de una empresa para compararlo: sin tildes ni signos y sin su forma jurídica («Cheerfy Ltd» → «cheerfy»).';
+
+
+--
 -- Name: _r14_partir_direccion(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -17275,6 +17315,44 @@ CREATE FUNCTION public._r14_partir_direccion(p text) RETURNS jsonb
   end
   from (select regexp_match(coalesce(p, ''), '^(.*?)[\s,.-]*\m([0-5][0-9]{4})\M(.*)$') as m) x
 $_$;
+
+
+--
+-- Name: _r14_plataforma_de(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._r14_plataforma_de(p_account uuid, p_nif text, p_nombre text) RETURNS TABLE(party_id uuid, como text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_nif text := public._conta_nif_clave(p_nif); v_nom text := public._r14_nombre_clave(p_nombre); v_ids uuid[];
+begin
+  -- Por su NIF: el del tercero de la plataforma, o el de su ficha de proveedor.
+  if v_nif is not null then
+    select array_agg(distinct pt.id) into v_ids from public.party pt
+     where pt.account_id = p_account and exists (select 1 from public.party_role r where r.party_id = pt.id and r.role = 'platform')
+       and (public._conta_nif_clave(pt.tax_id) = v_nif
+            or exists (select 1 from public.party_role rs join public.supplier s on s.id = rs.supplier_id
+                        where rs.party_id = pt.id and rs.role = 'supplier' and public._conta_nif_clave(s.tax_id) = v_nif));
+    if cardinality(v_ids) = 1 then party_id := v_ids[1]; como := 'nif'; return next; return; end if;
+  end if;
+  -- Por su nombre, solo si el NIF es de fuera o no viene (un NIF español manda: es otra empresa).
+  if v_nom is null or (v_nif is not null and public._verifactu_nif_es_valido(v_nif)) then return; end if;
+  select array_agg(distinct pt.id) into v_ids from public.party pt
+    join public.party_role r on r.party_id = pt.id and r.role = 'platform'
+    left join public.sales_channel ch on ch.id = r.channel_id
+   where pt.account_id = p_account and pt.archived_at is null
+     and exists (select 1 from unnest(array[public._r14_nombre_clave(pt.name), public._r14_nombre_clave(ch.name)]) k
+                  where k is not null and length(k) >= 4 and (v_nom = k or v_nom like k || ' %' or k like v_nom || ' %'));
+  if cardinality(v_ids) = 1 then party_id := v_ids[1]; como := 'nombre'; return next; end if;
+end $$;
+
+
+--
+-- Name: FUNCTION _r14_plataforma_de(p_account uuid, p_nif text, p_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._r14_plataforma_de(p_account uuid, p_nif text, p_nombre text) IS 'R14: la plataforma (su tercero) de un emisor: por su NIF (el del tercero o el de su ficha de proveedor) o, con un NIF de fuera o sin NIF, por su nombre sin forma jurídica. Nada si encajan dos.';
 
 
 --
@@ -17293,6 +17371,38 @@ $$;
 --
 
 COMMENT ON FUNCTION public._r14_sin_tildes(p text) IS 'R14: un texto como se compara con conta_gasto_por_venta: minúsculas, sin tildes y solo letras y cifras separadas por un espacio.';
+
+
+--
+-- Name: _r14_unir(uuid, uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._r14_unir(p_supplier uuid, p_plataforma uuid, p_como text, p_cuando text) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_antes uuid; v_cuenta uuid; v_nombre text;
+begin
+  select r.party_id, r.account_id into v_antes, v_cuenta from public.party_role r where r.supplier_id = p_supplier and r.role = 'supplier';
+  if v_antes is null or v_antes = p_plataforma then return false; end if;
+  if exists (select 1 from public.party_role r where r.party_id = p_plataforma and r.role = 'supplier') then return false; end if;
+  if exists (select 1 from public.party_role r where r.party_id = v_antes and r.role = 'platform') then return false; end if;
+  update public.party_role set party_id = p_plataforma where supplier_id = p_supplier and role = 'supplier';
+  select name into v_nombre from public.party where id = p_plataforma;
+  update public.party set archived_at = coalesce(archived_at, now()), archived_note = 'Unido a la plataforma ' || v_nombre || ' (R14)'
+   where id = v_antes and not exists (select 1 from public.party_role r where r.party_id = v_antes);
+  insert into public.conta_proveedor_unido (supplier_id, account_id, party_antes, party_plataforma, como, cuando)
+  values (p_supplier, v_cuenta, v_antes, p_plataforma, p_como, p_cuando)
+  on conflict (supplier_id) do update set party_antes = excluded.party_antes, party_plataforma = excluded.party_plataforma, como = excluded.como, cuando = excluded.cuando;
+  return true;
+end $$;
+
+
+--
+-- Name: FUNCTION _r14_unir(p_supplier uuid, p_plataforma uuid, p_como text, p_cuando text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._r14_unir(p_supplier uuid, p_plataforma uuid, p_como text, p_cuando text) IS 'R14: une una ficha de proveedor suelta al tercero de su plataforma (su papel de proveedor) y archiva el suelto con su nota. Lo apunta en conta_proveedor_unido.';
 
 
 --
@@ -105067,6 +105177,33 @@ begin new.updated_at := now(); return new; end; $$;
 
 
 --
+-- Name: tg_r14_proveedor_solo(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_r14_proveedor_solo() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if new.supplier_id is null and coalesce(new.reading, '{}'::jsonb) ? 'factura' then
+    begin
+      perform public._conta_proveedor_solo(new.id, 'al_leer');
+    exception when others then
+      raise warning 'R14 · el proveedor de la factura % no se ha podido dar de alta: %', new.id, sqlerrm;
+    end;
+  end if;
+  return null;
+end $$;
+
+
+--
+-- Name: FUNCTION tg_r14_proveedor_solo(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_r14_proveedor_solo() IS 'R14: al leer una recibida sin proveedor (o cambiar su lectura), Sumied lo busca o lo da de alta (_conta_proveedor_solo). Diferido: al confirmar. Nunca para la lectura.';
+
+
+--
 -- Name: tg_reparto_touch_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -118438,8 +118575,10 @@ CREATE TABLE public.conta_gasto_por_venta (
     hoja text NOT NULL,
     que text NOT NULL,
     palabras text[] NOT NULL,
+    porque text,
     CONSTRAINT conta_gasto_por_venta_hoja_check CHECK ((hoja ~ '^6[0-9]{2}$'::text)),
     CONSTRAINT conta_gasto_por_venta_palabras_check CHECK ((cardinality(palabras) > 0)),
+    CONSTRAINT conta_gasto_por_venta_porque_check CHECK (((porque IS NULL) OR (length(btrim(porque)) > 0))),
     CONSTRAINT conta_gasto_por_venta_que_check CHECK ((length(btrim(que)) > 0))
 );
 
@@ -119949,6 +120088,30 @@ CREATE TABLE public.conta_proveedor_solo (
 --
 
 COMMENT ON TABLE public.conta_proveedor_solo IS 'R14. El proveedor de cada recibida leída: si Sumied lo dio de alta solo (alta), lo encontró (existente) o era una plataforma, con lo que creó; o por qué no (no, con su motivo). La franja de la ficha y «Deshacer» salen de aquí.';
+
+
+--
+-- Name: conta_proveedor_unido; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_proveedor_unido (
+    supplier_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    party_antes uuid,
+    party_plataforma uuid NOT NULL,
+    como text NOT NULL,
+    cuando text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_proveedor_unido_como_check CHECK ((como = ANY (ARRAY['nif'::text, 'nombre'::text]))),
+    CONSTRAINT conta_proveedor_unido_cuando_check CHECK ((cuando = ANY (ARRAY['al_leer'::text, 'al_aplicar'::text])))
+);
+
+
+--
+-- Name: TABLE conta_proveedor_unido; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_proveedor_unido IS 'R14. Los proveedores sueltos que eran una plataforma y Sumied unió a su tercero (por su NIF o por su nombre). party_antes, el tercero suelto (archivado con su nota): con esto la vuelta atrás los deja como estaban.';
 
 
 --
@@ -136098,6 +136261,14 @@ ALTER TABLE ONLY public.conta_proveedor_solo
 
 
 --
+-- Name: conta_proveedor_unido conta_proveedor_unido_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_proveedor_unido
+    ADD CONSTRAINT conta_proveedor_unido_pkey PRIMARY KEY (supplier_id);
+
+
+--
 -- Name: conta_puerta_ajustes conta_puerta_ajustes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -147052,6 +147223,13 @@ CREATE TRIGGER print_job_caducado_no_vuelve BEFORE UPDATE OF status ON public.pr
 
 
 --
+-- Name: supplier_invoice r14_proveedor_solo; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER r14_proveedor_solo AFTER INSERT OR UPDATE OF reading ON public.supplier_invoice DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.tg_r14_proveedor_solo();
+
+
+--
 -- Name: supplier_invoice s01h_abono_ligar; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -153414,6 +153592,38 @@ ALTER TABLE ONLY public.conta_proveedor_solo
 
 ALTER TABLE ONLY public.conta_proveedor_solo
     ADD CONSTRAINT conta_proveedor_solo_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_proveedor_unido conta_proveedor_unido_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_proveedor_unido
+    ADD CONSTRAINT conta_proveedor_unido_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_proveedor_unido conta_proveedor_unido_party_antes_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_proveedor_unido
+    ADD CONSTRAINT conta_proveedor_unido_party_antes_fkey FOREIGN KEY (party_antes) REFERENCES public.party(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_proveedor_unido conta_proveedor_unido_party_plataforma_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_proveedor_unido
+    ADD CONSTRAINT conta_proveedor_unido_party_plataforma_fkey FOREIGN KEY (party_plataforma) REFERENCES public.party(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_proveedor_unido conta_proveedor_unido_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_proveedor_unido
+    ADD CONSTRAINT conta_proveedor_unido_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(id) ON DELETE CASCADE;
 
 
 --
@@ -165046,6 +165256,19 @@ CREATE POLICY conta_proveedor_solo_leer ON public.conta_proveedor_solo FOR SELEC
 
 
 --
+-- Name: conta_proveedor_unido; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_proveedor_unido ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_proveedor_unido conta_proveedor_unido_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_proveedor_unido_leer ON public.conta_proveedor_unido FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_puerta_ajustes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -175932,6 +176155,15 @@ GRANT ALL ON FUNCTION public._queue_system_alert(p_kind text, p_subject text, p_
 
 
 --
+-- Name: FUNCTION _r14_nombre_clave(p text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._r14_nombre_clave(p text) TO anon;
+GRANT ALL ON FUNCTION public._r14_nombre_clave(p text) TO authenticated;
+GRANT ALL ON FUNCTION public._r14_nombre_clave(p text) TO service_role;
+
+
+--
 -- Name: FUNCTION _r14_partir_direccion(p text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -175941,12 +176173,28 @@ GRANT ALL ON FUNCTION public._r14_partir_direccion(p text) TO service_role;
 
 
 --
+-- Name: FUNCTION _r14_plataforma_de(p_account uuid, p_nif text, p_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._r14_plataforma_de(p_account uuid, p_nif text, p_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._r14_plataforma_de(p_account uuid, p_nif text, p_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION _r14_sin_tildes(p text); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public._r14_sin_tildes(p text) TO anon;
 GRANT ALL ON FUNCTION public._r14_sin_tildes(p text) TO authenticated;
 GRANT ALL ON FUNCTION public._r14_sin_tildes(p text) TO service_role;
+
+
+--
+-- Name: FUNCTION _r14_unir(p_supplier uuid, p_plataforma uuid, p_como text, p_cuando text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._r14_unir(p_supplier uuid, p_plataforma uuid, p_como text, p_cuando text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._r14_unir(p_supplier uuid, p_plataforma uuid, p_como text, p_cuando text) TO service_role;
 
 
 --
@@ -190867,6 +191115,14 @@ GRANT ALL ON FUNCTION public.tg_printer_updated_at() TO service_role;
 
 
 --
+-- Name: FUNCTION tg_r14_proveedor_solo(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_r14_proveedor_solo() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_r14_proveedor_solo() TO service_role;
+
+
+--
 -- Name: FUNCTION tg_reparto_touch_updated_at(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -194641,6 +194897,14 @@ GRANT ALL ON TABLE public.conta_propuesta_pendiente TO service_role;
 
 GRANT ALL ON TABLE public.conta_proveedor_solo TO service_role;
 GRANT SELECT ON TABLE public.conta_proveedor_solo TO authenticated;
+
+
+--
+-- Name: TABLE conta_proveedor_unido; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_proveedor_unido TO service_role;
+GRANT SELECT ON TABLE public.conta_proveedor_unido TO authenticated;
 
 
 --
