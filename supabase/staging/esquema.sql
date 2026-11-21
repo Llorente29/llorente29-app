@@ -9223,6 +9223,7 @@ declare
   v public.supplier_invoice; c public.company; p jsonb; v_nif text; v_nombre text; v_tipo text; v_pais text;
   v_party uuid; v_como text; v_s uuid; v_que text; v_creado boolean := false; v_k uuid; v_kcreada boolean := false;
   v_plan text; v_d int; v_hoja text; v_code text; v_gasto jsonb; v_dir jsonb; v_origen jsonb; v_motivo text; v_txt text;
+  v_sin uuid[]; v_completado jsonb;
 begin
   select * into v from public.supplier_invoice where id = p_invoice for update;
   if v.id is null then return jsonb_build_object('que', 'no', 'motivo', 'No está.'); end if;
@@ -9264,8 +9265,28 @@ begin
        where s.account_id = v.account_id and s.archived_at is null and public._conta_nif_clave(s.tax_id) = v_nif
        order by s.created_at limit 1;
       v_que := case when v_s is null then 'alta' else 'existente' end;
+      -- X24 (Julio, 21/11) · Antes de darlo de alta: uno de la cuenta SIN NIF en su ficha y con el mismo nombre
+      -- (limpio, sin la forma jurídica). Uno solo: es ese, y se le completa el NIF. Dos o más: ninguno, y se dice.
+      if v_s is null and public._r14_nombre_clave(v_nombre) is not null then
+        select array_agg(s.id order by s.created_at) into v_sin from public.supplier s
+         where s.account_id = v.account_id and s.archived_at is null and public._conta_nif_clave(s.tax_id) is null
+           and public._r14_nombre_clave(v_nombre) in (public._r14_nombre_clave(s.name), public._r14_nombre_clave(s.legal_name));
+        if cardinality(v_sin) > 1 then
+          v_motivo := format('Hay %s proveedores sin NIF con este nombre: elige.', cardinality(v_sin));
+        elsif cardinality(v_sin) = 1 then
+          v_tipo := case when public._verifactu_nif_es_valido(v_nif) then 'nif_es'
+                         when v_nif ~ '^[A-Z]{2}' and public._verifactu_nif_iva_ue_valido(left(v_nif, 2), substr(v_nif, 3)) then 'vat_eu' end;
+          if v_tipo is null then
+            v_motivo := format('El NIF leído (%s) no es válido: compruébalo en el papel antes de ponérselo a quien ya estaba.', v_nif);
+          else
+            v_s := v_sin[1]; v_que := 'existente';
+            select jsonb_build_object('nif', v_nif, 'tax_id_antes', s.tax_id, 'tipo_antes', s.tax_id_type, 'estado_antes', s.tax_id_check_status)
+              into v_completado from public.supplier s where s.id = v_s;
+          end if;
+        end if;
+      end if;
     end if;
-    if v_s is null then
+    if v_s is null and v_motivo is null then
       v_tipo := case when public._verifactu_nif_es_valido(v_nif) then 'nif_es'
                      when v_nif ~ '^[A-Z]{2}' and public._verifactu_nif_iva_ue_valido(left(v_nif, 2), substr(v_nif, 3)) then 'vat_eu' end;
       if v_tipo is null and v_que <> 'plataforma' then
@@ -9281,6 +9302,14 @@ begin
     values (p_invoice, v.account_id, v.company_id, 'no', v_motivo, v_nif, p_cuando)
     on conflict (invoice_id) do update set que = 'no', motivo = excluded.motivo, nif = excluded.nif, company_id = excluded.company_id;
     return jsonb_build_object('que', 'no', 'motivo', v_motivo);
+  end if;
+
+  -- X24 · Al que ya estaba sin NIF, el que trae la factura (lo de antes queda en conta_proveedor_solo, para «Deshacer»).
+  if v_completado is not null then
+    update public.supplier set tax_id = v_nif, tax_id_type = v_tipo,
+           tax_id_check_status = case when v_tipo = 'nif_es' then 'valid' else tax_id_check_status end,
+           tax_id_checked_at = case when v_tipo = 'nif_es' then now() else tax_id_checked_at end
+     where id = v_s;
   end if;
 
   -- El proveedor nuevo, con lo que trae la factura.
@@ -9349,17 +9378,20 @@ begin
   end if;
 
   update public.supplier_invoice set supplier_id = v_s where id = p_invoice;
-  insert into public.conta_proveedor_solo (invoice_id, account_id, company_id, que, supplier_id, supplier_creado, cuenta_id, cuenta_creada, nif, cuando)
-  values (p_invoice, v.account_id, v.company_id, v_que, v_s, v_creado, v_k, v_kcreada, v_nif, p_cuando)
+  insert into public.conta_proveedor_solo (invoice_id, account_id, company_id, que, supplier_id, supplier_creado, cuenta_id, cuenta_creada, nif, cuando, nif_completado)
+  values (p_invoice, v.account_id, v.company_id, v_que, v_s, v_creado, v_k, v_kcreada, v_nif, p_cuando, v_completado)
   on conflict (invoice_id) do update set que = excluded.que, supplier_id = excluded.supplier_id, supplier_creado = excluded.supplier_creado,
-    cuenta_id = excluded.cuenta_id, cuenta_creada = excluded.cuenta_creada, motivo = null, nif = excluded.nif, company_id = excluded.company_id;
+    cuenta_id = excluded.cuenta_id, cuenta_creada = excluded.cuenta_creada, motivo = null, nif = excluded.nif, company_id = excluded.company_id, nif_completado = excluded.nif_completado;
   select name into v_txt from public.supplier where id = v_s;
   insert into public.document_activity (account_id, company_id, inbox_id, supplier_invoice_id, actor, actor_name, action, text)
   values (v.account_id, v.company_id, v.inbox_id, p_invoice, 'folvy', 'Sumied', 'corregida',
           case v_que when 'alta' then format('Proveedor nuevo: Sumied ha dado de alta a %s con lo que trae la factura%s.', v_txt, coalesce(', con su subcuenta ' || v_code, ''))
                      when 'plataforma' then format('Es la plataforma %s: la factura va a su ficha%s.', v_txt, coalesce(' y a su ' || v_code, ''))
+                     when 'existente' then case when v_completado is not null
+                       then format('Es %s, uno que ya estaba sin NIF: Sumied le ha completado el NIF (%s)%s.', v_txt, v_nif, coalesce('; su subcuenta en esta empresa, ' || v_code, ''))
+                       else format('Es %s, que ya estaba dado de alta en la cuenta%s.', v_txt, coalesce(': su subcuenta en esta empresa, ' || v_code, '')) end
                      else format('Es %s, que ya estaba dado de alta en la cuenta%s.', v_txt, coalesce(': su subcuenta en esta empresa, ' || v_code, '')) end);
-  return jsonb_build_object('que', v_que, 'supplier_id', v_s, 'creado', v_creado, 'subcuenta', v_code);
+  return jsonb_build_object('que', v_que, 'supplier_id', v_s, 'creado', v_creado, 'subcuenta', v_code, 'nif_completado', v_completado is not null);
 end $_$;
 
 
@@ -9378,7 +9410,7 @@ CREATE FUNCTION public._conta_proveedor_solo_deshacer(p_invoice uuid, p_quien_no
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare r public.conta_proveedor_solo; v public.supplier_invoice; v_nombre text; v_quien text; v_sigue boolean := false; v_texto text;
+declare r public.conta_proveedor_solo; v public.supplier_invoice; v_nombre text; v_quien text; v_sigue boolean := false; v_texto text; v_quitado boolean := false;
 begin
   select * into r from public.conta_proveedor_solo where invoice_id = p_invoice for update;
   select * into v from public.supplier_invoice where id = p_invoice for update;
@@ -9409,6 +9441,14 @@ begin
     v_texto := format('Deshecho: %s ya no está dado de alta y la factura vuelve a no tener proveedor.', coalesce(v_nombre, 'el proveedor'));
   else
     v_texto := format('Deshecho: la factura ya no es de %s y vuelve a no tener proveedor.', coalesce(v_nombre, 'ese proveedor'));
+  end if;
+  -- X24 · Si Sumied le completó el NIF a uno que ya estaba, se le quita (solo si sigue siendo ese).
+  if r.nif_completado is not null and not r.supplier_creado then
+    update public.supplier set tax_id = r.nif_completado->>'tax_id_antes', tax_id_type = r.nif_completado->>'tipo_antes',
+           tax_id_check_status = r.nif_completado->>'estado_antes'
+     where id = r.supplier_id and public._conta_nif_clave(tax_id) = r.nif_completado->>'nif';
+    v_quitado := found;
+    if v_quitado then v_texto := v_texto || format(' Y %s vuelve a no tener NIF.', coalesce(v_nombre, 'el proveedor')); end if;
   end if;
   update public.conta_proveedor_solo set deshecho_at = now(), deshecho_por = v_quien where invoice_id = p_invoice;
   insert into public.document_activity (account_id, company_id, inbox_id, supplier_invoice_id, actor, actor_name, action, text)
@@ -120293,6 +120333,7 @@ CREATE TABLE public.conta_proveedor_solo (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     deshecho_at timestamp with time zone,
     deshecho_por text,
+    nif_completado jsonb,
     CONSTRAINT conta_proveedor_solo_check CHECK ((((que = 'no'::text) = ((supplier_id IS NULL) AND (motivo IS NOT NULL))) OR (deshecho_at IS NOT NULL))),
     CONSTRAINT conta_proveedor_solo_cuando_check CHECK ((cuando = ANY (ARRAY['al_leer'::text, 'al_aplicar'::text]))),
     CONSTRAINT conta_proveedor_solo_que_check CHECK ((que = ANY (ARRAY['alta'::text, 'existente'::text, 'plataforma'::text, 'no'::text])))
@@ -120304,6 +120345,13 @@ CREATE TABLE public.conta_proveedor_solo (
 --
 
 COMMENT ON TABLE public.conta_proveedor_solo IS 'R14. El proveedor de cada recibida leída: si Sumied lo dio de alta solo (alta), lo encontró (existente) o era una plataforma, con lo que creó; o por qué no (no, con su motivo). La franja de la ficha y «Deshacer» salen de aquí.';
+
+
+--
+-- Name: COLUMN conta_proveedor_solo.nif_completado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_proveedor_solo.nif_completado IS 'X24: si Sumied le completó el NIF a un proveedor que ya estaba sin NIF, el NIF puesto y lo que tenía antes (tax_id, tipo y estado), para «Deshacer».';
 
 
 --
@@ -146843,10 +146891,17 @@ CREATE UNIQUE INDEX ux_staff_role_name ON public.staff_role USING btree (account
 
 
 --
--- Name: ux_supplier_account_tax_id; Type: INDEX; Schema: public; Owner: -
+-- Name: ux_supplier_account_nif_clave; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX ux_supplier_account_tax_id ON public.supplier USING btree (account_id, tax_id) WHERE (tax_id IS NOT NULL);
+CREATE UNIQUE INDEX ux_supplier_account_nif_clave ON public.supplier USING btree (account_id, public._conta_nif_clave(tax_id)) WHERE (public._conta_nif_clave(tax_id) IS NOT NULL);
+
+
+--
+-- Name: INDEX ux_supplier_account_nif_clave; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON INDEX public.ux_supplier_account_nif_clave IS 'X24: un NIF por cuenta, comparado limpio (_conta_nif_clave): «B-12345678» y «B12345678» son el mismo. Sustituye a ux_supplier_account_tax_id.';
 
 
 --
