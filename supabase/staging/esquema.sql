@@ -7532,6 +7532,25 @@ $$;
 
 
 --
+-- Name: _conta_numero_clave(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_numero_clave(p text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  select nullif(string_agg(regexp_replace(t, '(^|[^0-9])0+([0-9])', '\1\2', 'g'), '' order by o), '')
+    from regexp_split_to_table(upper(coalesce(p, '')), '[\s\-_./\\]+') with ordinality as x(t, o)
+$$;
+
+
+--
+-- Name: FUNCTION _conta_numero_clave(p text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_numero_clave(p text) IS 'K09 · El número de una factura para compararlo: sin mayúsculas, espacios, guiones, barras ni puntos, y sin ceros a la izquierda de cada tramo («F-0012/26» = «F1226»). La misma regla que normaNumero de la pantalla.';
+
+
+--
 -- Name: _conta_numero_con_formato(text, integer, text, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -52518,6 +52537,11 @@ begin
     motivo := (public._conta_de_quien(v_e.source_id)->>'frase') || ' Contesta en su ficha antes de validar.'; return next;
   end if;
 
+  -- K09: una recibida, completa y no repetida (conta_recibida_motivos).
+  if v_e.source_type = 'supplier_invoice' and v_e.source_id is not null then
+    return query select m.orden, m.codigo, m.motivo from public.conta_recibida_motivos(v_e.source_id, v_e.id) m;
+  end if;
+
   -- C06b (#210): un asiento de ventas del día con un envío por aclarar. Copiado
   -- de tg_journal_entry_envio_por_aclarar, que desde aquí lo lee de esta función.
   if v_e.source_type = 'sales_day' then
@@ -58552,6 +58576,119 @@ end $$;
 
 
 --
+-- Name: conta_recibida_motivos(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_motivos(p_invoice uuid, p_entry uuid DEFAULT NULL::uuid) RETURNS TABLE(orden integer, codigo text, motivo text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_f public.supplier_invoice;
+  v_bases int;
+  v_gasto int;
+  v_ret numeric;
+  v_rep jsonb;
+begin
+  select * into v_f from public.supplier_invoice where id = p_invoice;
+  if v_f.id is null then return; end if;
+  if v_f.supplier_id is null then
+    orden := 20; codigo := 'falta_proveedor'; motivo := 'Falta el proveedor.'; return next;
+  elsif not exists (select 1 from public.company_account_link k
+                     where k.account_id = v_f.account_id and k.company_id = v_f.company_id and k.entity = 'supplier'
+                       and k.entity_id = v_f.supplier_id::text and k.role = 'principal') then
+    orden := 20; codigo := 'falta_subcuenta'; motivo := 'Falta la cuenta del proveedor (su subcuenta).'; return next;
+  end if;
+  if nullif(trim(coalesce(v_f.invoice_number, '')), '') is null then
+    orden := 21; codigo := 'falta_numero'; motivo := 'Falta el número de la factura.'; return next;
+  end if;
+  if v_f.invoice_date is null then
+    orden := 22; codigo := 'falta_fecha'; motivo := 'Falta la fecha de la factura.'; return next;
+  end if;
+  -- Una base con su tipo: en el desglose de la factura, o en el asiento (sus apuntes de IVA llevan base y tipo).
+  select count(*) into v_bases from public.supplier_invoice_tax t
+   where t.supplier_invoice_id = v_f.id and t.base is not null and t.vat_pct is not null;
+  if v_bases = 0 and p_entry is not null then
+    select count(*) into v_bases from public.journal_line l where l.entry_id = p_entry and l.tax_rate_id is not null and l.tax_base is not null;
+  end if;
+  if v_bases = 0 then
+    orden := 23; codigo := 'falta_base'; motivo := 'Falta la base con su tipo de IVA.'; return next;
+  end if;
+  -- La cuenta de gasto: en el asiento, un apunte que no sea del proveedor ni de impuestos (grupo 4).
+  if p_entry is not null then
+    select count(*) into v_gasto from public.journal_line l join public.company_account a on a.id = l.company_account_id
+     where l.entry_id = p_entry and a.code !~ '^4';
+    if v_gasto = 0 then
+      orden := 24; codigo := 'falta_gasto'; motivo := 'Falta la cuenta de gasto.'; return next;
+    end if;
+  end if;
+  -- Base + cuotas − retención = total (con o sin el recargo de equivalencia, según cómo vino).
+  v_ret := coalesce(v_f.withholding_amount, 0);
+  if v_f.grand_total is not null and v_f.tax_base_total is not null
+     and abs(v_f.grand_total - (v_f.tax_base_total + coalesce(v_f.tax_total, 0) - v_ret)) > 0.01
+     and abs(v_f.grand_total - (v_f.tax_base_total + coalesce(v_f.tax_total, 0) + coalesce(v_f.surcharge_total, 0) - v_ret)) > 0.01 then
+    orden := 25; codigo := 'no_suma';
+    motivo := format('No cuadra: base + cuotas − retención es %s y el total de la factura, %s.',
+      public.conta_impuesto_euros(v_f.tax_base_total + coalesce(v_f.tax_total, 0) - v_ret), public.conta_impuesto_euros(v_f.grand_total)); return next;
+  end if;
+  v_rep := public.conta_recibida_repetida(v_f.id);
+  if v_rep is not null then
+    orden := 26; codigo := 'repetida';
+    motivo := (v_rep->>'texto') || ' Si no es la misma, dilo en «No es la misma» y se valida.'; return next;
+  end if;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_motivos(p_invoice uuid, p_entry uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_motivos(p_invoice uuid, p_entry uuid) IS 'K09 · Lo que impide validar una recibida, cada cosa con su frase: el proveedor y su subcuenta, el número, la fecha, una base con su tipo, la cuenta de gasto (en su asiento), que base + cuotas − retención sea el total y la repetida. Solo lee. La llama conta_motivos_para_validar.';
+
+
+--
+-- Name: conta_recibida_no_es_la_misma(uuid, uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_no_es_la_misma(p_invoice uuid, p_otra uuid, p_motivo text, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_f public.supplier_invoice;
+  v_o public.supplier_invoice;
+  v_quien text := coalesce(nullif(trim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  v_motivo text := nullif(trim(p_motivo), '');
+begin
+  select * into v_f from public.supplier_invoice where id = p_invoice for update;
+  if v_f.id is null or not public.belongs_to_account(v_f.account_id) then
+    raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501';
+  end if;
+  select * into v_o from public.supplier_invoice where id = p_otra and account_id = v_f.account_id;
+  if v_o.id is null then raise exception 'La otra factura no está.' using errcode = 'P0002'; end if;
+  if v_motivo is null then raise exception 'Para decir que no es la misma, di por qué.' using errcode = '22023'; end if;
+  insert into public.supplier_invoice_no_es_la_misma (supplier_invoice_id, otra_id, account_id, motivo, by_user, by_name)
+  values (v_f.id, v_o.id, v_f.account_id, v_motivo, auth.uid(), v_quien)
+  on conflict (supplier_invoice_id, otra_id) do update set motivo = excluded.motivo, by_user = excluded.by_user, by_name = excluded.by_name, at = now();
+  -- Y la confirmación de siempre (C01b), para que la regla S01q (tg_journal_entry_factura_una_vez) la deje pasar.
+  update public.supplier_invoice
+     set not_duplicate_confirmed_at = now(), not_duplicate_confirmed_by = auth.uid(), not_duplicate_confirmed_by_name = v_quien
+   where id = v_f.id;
+  insert into public.supplier_invoice_change (account_id, supplier_invoice_id, by_name, what, cambios)
+  values (v_f.account_id, v_f.id, v_quien, 'no_es_la_misma',
+          jsonb_build_array(jsonb_build_object('campo', 'no_es_la_misma', 'otra', v_o.id, 'numero', v_o.invoice_number, 'motivo', v_motivo)));
+  return jsonb_build_object('texto', format('Anotado: no es la misma que la %s («%s»). Ya se puede validar.', v_o.invoice_number, v_motivo));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_no_es_la_misma(p_invoice uuid, p_otra uuid, p_motivo text, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_no_es_la_misma(p_invoice uuid, p_otra uuid, p_motivo text, p_quien_nombre text) IS 'K09 · «No es la misma: …»: guarda por escrito que esta recibida no es la otra con su número, y lo deja en su historial. Con ella, conta_recibida_motivos no la para por repetida.';
+
+
+--
 -- Name: conta_recibida_pagar_con_cuenta(uuid, uuid, text, date, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -58985,6 +59122,54 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_recibida_pdf_reclamar(p_limite integer) IS 'D02 · Coge las fotos que faltan por convertir (conta_recibida_pdf_por_hacer) y las aparta 10 minutos para que no las coja otra pasada. Solo el servidor (conta-recibida-pdf).';
+
+
+--
+-- Name: conta_recibida_repetida(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_repetida(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_f public.supplier_invoice;
+  v_nif text;
+  v_r record;
+begin
+  select * into v_f from public.supplier_invoice where id = p_invoice;
+  if v_f.id is null or (auth.uid() is not null and not public.belongs_to_account(v_f.account_id)) then
+    raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501';
+  end if;
+  if public._conta_numero_clave(v_f.invoice_number) is null then return null; end if;
+  select public._conta_nif_clave(s.tax_id) into v_nif from public.supplier s where s.id = v_f.supplier_id and s.account_id = v_f.account_id;
+  select o.id, o.invoice_number, coalesce(s.name, o.issuer_name, 'su proveedor') as proveedor, e.series, e.number
+    into v_r
+    from public.supplier_invoice o
+    join public.journal_entry e on e.account_id = o.account_id and e.source_type = 'supplier_invoice' and e.source_id = o.id and e.status = 'validado'
+    left join public.supplier s on s.id = o.supplier_id and s.account_id = o.account_id
+   where o.account_id = v_f.account_id and o.company_id is not distinct from v_f.company_id and o.id <> v_f.id
+     and o.status not in ('anulada', 'descartada')
+     and public._conta_numero_clave(o.invoice_number) = public._conta_numero_clave(v_f.invoice_number)
+     and ((v_f.supplier_id is not null and o.supplier_id = v_f.supplier_id)
+          or (v_nif is not null and public._conta_nif_clave(s.tax_id) = v_nif))
+     and not exists (select 1 from public.supplier_invoice_no_es_la_misma m where m.supplier_invoice_id = v_f.id and m.otra_id = o.id)
+     -- La confirmación de siempre («No es repetida», C01b), la de antes de esta: también vale.
+     and v_f.not_duplicate_confirmed_at is null
+   order by e.validated_at nulls last, o.id
+   limit 1;
+  if v_r.id is null then return null; end if;
+  return jsonb_build_object('id', v_r.id, 'numero', v_r.invoice_number, 'proveedor', v_r.proveedor,
+    'asiento', v_r.series || '/' || coalesce(v_r.number::text, '—'),
+    'texto', format('Ya está la %s de %s, asiento %s.', v_r.invoice_number, v_r.proveedor, v_r.series || '/' || coalesce(v_r.number::text, '—')));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_repetida(p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_repetida(p_invoice uuid) IS 'K09 · La otra recibida, ya contabilizada, del mismo proveedor (o del mismo NIF) en la misma empresa y con el mismo número (_conta_numero_clave), salvo «No es la misma». Null si no la hay. Solo lee.';
 
 
 --
@@ -130663,7 +130848,7 @@ CREATE TABLE public.supplier_invoice_change (
     by_name text,
     what text NOT NULL,
     cambios jsonb DEFAULT '[]'::jsonb NOT NULL,
-    CONSTRAINT supplier_invoice_change_what_check CHECK ((what = ANY (ARRAY['guardar'::text, 'papel'::text, 'sin_papel'::text])))
+    CONSTRAINT supplier_invoice_change_what_check CHECK ((what = ANY (ARRAY['guardar'::text, 'papel'::text, 'sin_papel'::text, 'no_es_la_misma'::text])))
 );
 
 
@@ -130729,6 +130914,29 @@ CREATE TABLE public.supplier_invoice_line (
 --
 
 COMMENT ON COLUMN public.supplier_invoice_line.expense_account_code IS 'D01 · La cuenta de gasto de ESTA línea, si no es la del proveedor (la factura de comisión de Uber: comisión a la 623, anuncios a la 627).';
+
+
+--
+-- Name: supplier_invoice_no_es_la_misma; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.supplier_invoice_no_es_la_misma (
+    supplier_invoice_id uuid NOT NULL,
+    otra_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    motivo text NOT NULL,
+    by_user uuid,
+    by_name text,
+    at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT supplier_invoice_no_es_la_misma_motivo_check CHECK ((length(TRIM(BOTH FROM motivo)) > 0))
+);
+
+
+--
+-- Name: TABLE supplier_invoice_no_es_la_misma; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.supplier_invoice_no_es_la_misma IS 'K09 · «No es la misma: …»: una persona dijo, por escrito, que esta recibida no es la otra con su número (un proveedor que repite número en otro ejercicio…). Con ella, se valida igual. Lo escribe conta_recibida_no_es_la_misma.';
 
 
 --
@@ -139519,6 +139727,14 @@ ALTER TABLE ONLY public.supplier_invoice_expense
 
 ALTER TABLE ONLY public.supplier_invoice_line
     ADD CONSTRAINT supplier_invoice_line_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: supplier_invoice_no_es_la_misma supplier_invoice_no_es_la_misma_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_invoice_no_es_la_misma
+    ADD CONSTRAINT supplier_invoice_no_es_la_misma_pkey PRIMARY KEY (supplier_invoice_id, otra_id);
 
 
 --
@@ -159632,6 +159848,30 @@ ALTER TABLE ONLY public.supplier_invoice
 
 
 --
+-- Name: supplier_invoice_no_es_la_misma supplier_invoice_no_es_la_misma_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_invoice_no_es_la_misma
+    ADD CONSTRAINT supplier_invoice_no_es_la_misma_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: supplier_invoice_no_es_la_misma supplier_invoice_no_es_la_misma_otra_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_invoice_no_es_la_misma
+    ADD CONSTRAINT supplier_invoice_no_es_la_misma_otra_id_fkey FOREIGN KEY (otra_id) REFERENCES public.supplier_invoice(id) ON DELETE CASCADE;
+
+
+--
+-- Name: supplier_invoice_no_es_la_misma supplier_invoice_no_es_la_misma_supplier_invoice_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_invoice_no_es_la_misma
+    ADD CONSTRAINT supplier_invoice_no_es_la_misma_supplier_invoice_id_fkey FOREIGN KEY (supplier_invoice_id) REFERENCES public.supplier_invoice(id) ON DELETE CASCADE;
+
+
+--
 -- Name: supplier_invoice_payment supplier_invoice_payment_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -170958,6 +171198,19 @@ CREATE POLICY supplier_invoice_line_all ON public.supplier_invoice_line USING ((
 
 
 --
+-- Name: supplier_invoice_no_es_la_misma; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.supplier_invoice_no_es_la_misma ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: supplier_invoice_no_es_la_misma supplier_invoice_no_es_la_misma_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY supplier_invoice_no_es_la_misma_leer ON public.supplier_invoice_no_es_la_misma FOR SELECT USING ((account_id = ANY (public.current_user_account_ids())));
+
+
+--
 -- Name: supplier_invoice_payment; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -173642,6 +173895,15 @@ GRANT ALL ON FUNCTION public._conta_nif_clave(p text) TO service_role;
 
 REVOKE ALL ON FUNCTION public._conta_no_propuesta(p_company uuid, p_origen text, p_origen_id text, p_que text, p_porque text, p_donde text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_no_propuesta(p_company uuid, p_origen text, p_origen_id text, p_que text, p_porque text, p_donde text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_numero_clave(p text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._conta_numero_clave(p text) TO anon;
+GRANT ALL ON FUNCTION public._conta_numero_clave(p text) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_numero_clave(p text) TO service_role;
 
 
 --
@@ -183489,6 +183751,24 @@ GRANT ALL ON FUNCTION public.conta_recibida_iva_no_deducible(p_invoice uuid, p_n
 
 
 --
+-- Name: FUNCTION conta_recibida_motivos(p_invoice uuid, p_entry uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_motivos(p_invoice uuid, p_entry uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_motivos(p_invoice uuid, p_entry uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_motivos(p_invoice uuid, p_entry uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibida_no_es_la_misma(p_invoice uuid, p_otra uuid, p_motivo text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_no_es_la_misma(p_invoice uuid, p_otra uuid, p_motivo text, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_no_es_la_misma(p_invoice uuid, p_otra uuid, p_motivo text, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_no_es_la_misma(p_invoice uuid, p_otra uuid, p_motivo text, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_recibida_pagar_con_cuenta(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -183569,6 +183849,15 @@ GRANT ALL ON FUNCTION public.conta_recibida_pdf_por_hacer(p_limite integer) TO s
 
 REVOKE ALL ON FUNCTION public.conta_recibida_pdf_reclamar(p_limite integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_recibida_pdf_reclamar(p_limite integer) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibida_repetida(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_repetida(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_repetida(p_invoice uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_repetida(p_invoice uuid) TO service_role;
 
 
 --
@@ -197652,6 +197941,14 @@ GRANT SELECT ON TABLE public.supplier_invoice_expense TO authenticated;
 GRANT ALL ON TABLE public.supplier_invoice_line TO anon;
 GRANT ALL ON TABLE public.supplier_invoice_line TO authenticated;
 GRANT ALL ON TABLE public.supplier_invoice_line TO service_role;
+
+
+--
+-- Name: TABLE supplier_invoice_no_es_la_misma; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.supplier_invoice_no_es_la_misma TO service_role;
+GRANT SELECT ON TABLE public.supplier_invoice_no_es_la_misma TO authenticated;
 
 
 --
