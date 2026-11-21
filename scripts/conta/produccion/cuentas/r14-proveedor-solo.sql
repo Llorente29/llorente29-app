@@ -55,6 +55,19 @@ select o, clave, valor from (
   select 3, 'cuenta ' || left(s.account_id::text, 8) || ' · proveedores dados de alta desde una factura', count(*)::text
     from public.supplier s where s.created_from = 'factura' and s.created_at < timestamptz '2026-11-21 00:00:00+01' group by s.account_id
   union all
+  -- Julio, 21/11 (Cheerfy): las plataformas de cada cuenta (su tercero, con NIF o sin él) y las fichas de
+  -- proveedor sueltas con un NIF de fuera o sin NIF, las que se pueden unir a una plataforma por su nombre.
+  select 3, 'cuenta ' || left(pt.account_id::text, 8) || ' · plataformas · ' || case when pt.tax_id is null then 'sin NIF' else 'con NIF' end, count(*)::text
+    from public.party pt where exists (select 1 from public.party_role r where r.party_id = pt.id and r.role = 'platform')
+     and pt.created_at < timestamptz '2026-11-21 00:00:00+01' group by pt.account_id, pt.tax_id is null
+  union all
+  select 3, 'cuenta ' || left(s.account_id::text, 8) || ' · fichas sueltas con NIF de fuera o sin NIF', count(*)::text
+    from public.supplier s join public.party_role ps on ps.supplier_id = s.id and ps.role = 'supplier'
+   where s.archived_at is null and s.created_at < timestamptz '2026-11-21 00:00:00+01'
+     and not exists (select 1 from public.party_role pp where pp.party_id = ps.party_id and pp.role = 'platform')
+     and (s.tax_id is null or not public._verifactu_nif_es_valido(public._conta_nif_clave(s.tax_id)))
+   group by s.account_id
+  union all
   select 4, 'cuenta ' || left(a.account_id::text, 8) || ' · empresa ' || left(a.company_id::text, 8) || ' · subcuentas de la ' || a.template_code, count(*)::text
     from public.company_account a where a.template_code in ('4000', '4100') and a.kind = 'own'
      and a.created_at < timestamptz '2026-11-21 00:00:00+01' group by a.account_id, a.company_id, a.template_code

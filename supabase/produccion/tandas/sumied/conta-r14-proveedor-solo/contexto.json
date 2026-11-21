@@ -2,7 +2,7 @@
  "_que": "R14 · el proveedor que se da de alta solo · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging), en SOLO LECTURA: esta sesión no lee producción. 1110 solo añade (dos tablas y sus funciones); 1120 pone un disparador diferido en supplier_invoice (cambia en caliente, declarado, con prueba de staging); 1130 completa las leídas sin proveedor llamando a _conta_proveedor_solo (escribe sobre lo que existe: declarado en aplicar.txt). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
  "medido": "2026-11-21T12:00Z",
  "tanda": {
-  "supabase/migrations/20261121T1110_r14_proveedor_solo_anade.sql": "1ec76e8847ae617e7e0fdeaba0c178ee",
+  "supabase/migrations/20261121T1110_r14_proveedor_solo_anade.sql": "7077d21860aad815069774ebd272b609",
   "supabase/migrations/20261121T1120_r14_proveedor_solo_al_leer.sql": "5a8434e965cb6f8d47c98f8da46ec1e7",
   "supabase/migrations/20261121T1130_r14_proveedor_solo_completar.sql": "edff565bc2823288bd8a16dec2dc63db"
  },

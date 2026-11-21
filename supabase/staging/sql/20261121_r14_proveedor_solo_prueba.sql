@@ -128,9 +128,10 @@ declare s public.supplier; f constant uuid := 'a1140000-0000-4000-8000-000000000
 begin
   select p.* into s from public.supplier p join public.supplier_invoice i on i.supplier_id = p.id where i.id = f;
   if s.id is null then raise exception 'PRUEBA R14 · 2: no le ha puesto proveedor: %', pg_temp.r14_que(f); end if;
-  if (s.name, s.legal_name, s.tax_id, s.tax_id_type, s.entity_kind, s.fiscal_street, s.fiscal_postal_code, s.fiscal_city, s.email, s.phone, s.website, s.created_from)
+  if (s.name, s.legal_name, s.tax_id, s.tax_id_type, s.entity_kind, s.fiscal_street, s.fiscal_postal_code, s.fiscal_city, s.website, s.created_from)
      is distinct from ('Suministros Inventados, S.L.', 'Suministros Inventados, S.L.', 'J00000000', 'nif_es', 'company', 'C/ Inventada 1', '28000', 'Madrid',
-                       'pedidos@ejemplo.test', '900000000', 'ejemplo.test', 'factura') then
+                       'ejemplo.test', 'factura')
+     or not exists (select 1 from public.supplier_contact k where k.supplier_id = s.id and k.is_primary and k.email = 'pedidos@ejemplo.test' and k.phone = '900000000') then
     raise exception 'PRUEBA R14 · 2: la ficha no es la de lo leído: %', row_to_json(s);
   end if;
   if not (s.data_from_invoice ? 'nif' and s.data_from_invoice ? 'direccion' and s.data_from_invoice->'nif'->>'quien' = 'Sumied') then

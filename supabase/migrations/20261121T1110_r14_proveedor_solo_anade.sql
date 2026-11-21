@@ -384,14 +384,13 @@ begin
     v_origen := jsonb_build_object('factura', v.invoice_number, 'facturaId', v.id, 'fecha', to_char(now() at time zone 'Europe/Madrid', 'YYYY-MM-DD'), 'quien', 'Sumied');
     insert into public.supplier (account_id, name, legal_name, tax_id, tax_id_type, country_code, entity_kind,
                                  tax_id_check_status, tax_id_checked_at, tax_id_verified_at,
-                                 fiscal_street, fiscal_postal_code, fiscal_city, email, phone, website,
+                                 fiscal_street, fiscal_postal_code, fiscal_city, website,
                                  is_active, created_from, created_by_name, data_from_invoice)
     values (v.account_id, coalesce(v_nombre, v_nif), v_nombre, v_nif, coalesce(v_tipo, 'foreign'), v_pais,
             case when v_tipo = 'nif_es' and (v_nif ~ '^\d{8}[A-Z]$' or v_nif ~ '^[XYZKLM]') then 'self_employed'
                  when v_tipo = 'nif_es' and v_nif ~ '^[ABCDEFGHJNPQRSUVW]' then 'company' end,
             case when v_tipo = 'nif_es' then 'valid' end, case when v_tipo = 'nif_es' then now() end, case when v_tipo = 'nif_es' then now() end,
-            v_dir->>'calle', v_dir->>'cp', v_dir->>'ciudad',
-            nullif(btrim(p->>'email'), ''), nullif(btrim(p->>'telefono'), ''), nullif(btrim(p->>'web'), ''),
+            v_dir->>'calle', v_dir->>'cp', v_dir->>'ciudad', nullif(btrim(p->>'web'), ''),
             true, 'factura', 'Sumied',
             (select jsonb_object_agg(k, v_origen) from unnest(array['nif', 'nombreFiscal']
                || case when v_dir->>'calle' is not null or v_dir->>'cp' is not null then array['direccion'] else '{}' end
@@ -400,6 +399,13 @@ begin
                || case when nullif(btrim(p->>'web'), '') is not null then array['web'] else '{}' end) k))
     returning id into v_s;
     v_creado := true;
+    -- El correo y el teléfono, en su contacto principal (en producción supplier no los tiene: van en
+    -- supplier_contact, como al «Darlo de alta» de la pantalla).
+    if nullif(btrim(p->>'email'), '') is not null or nullif(btrim(p->>'telefono'), '') is not null then
+      insert into public.supplier_contact (account_id, supplier_id, name, role, phone, email, is_primary, notes, created_by_name)
+      values (v.account_id, v_s, coalesce(v_nombre, v_nif), 'other', nullif(btrim(p->>'telefono'), ''), nullif(btrim(p->>'email'), ''), true,
+              format('De la factura %s (lo dio de alta Sumied).', coalesce(v.invoice_number, 'sin número')), 'Sumied');
+    end if;
     -- La ficha nueva de una plataforma va en el tercero de la plataforma (el disparador del C03 la une por
     -- el NIF; por el nombre, no): si ha quedado en un tercero suyo, pasa al de la plataforma y ese se borra.
     if v_que = 'plataforma' then
