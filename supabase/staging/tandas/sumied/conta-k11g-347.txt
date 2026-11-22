@@ -1,0 +1,3 @@
+# K11g · El 347 desde los libros. La 1855 solo añade una función (va de verdad desde la rama, W05).
+supabase/migrations/20261122T1855_k11g_347_desde_los_libros.sql
+supabase/staging/sql/20261122_k11g_347_prueba.sql
