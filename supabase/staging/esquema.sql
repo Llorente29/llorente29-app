@@ -10368,6 +10368,141 @@ COMMENT ON FUNCTION public._conta_tpv_formas_de(p_company uuid, p_dias uuid[]) I
 
 
 --
+-- Name: _conta_tpv_libro_grupos(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_tpv_libro_grupos(p_dia uuid) RETURNS TABLE(orden integer, clase text, tipo numeric, contador text, desde text, hasta text, docs integer, base numeric, cuota numeric, nif text, nombre text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with doc as (
+    select d.*, case when d.total < 0 then 'r5' when nullif(btrim(coalesce(d.cliente_nif, '')), '') is not null then 'nif' else 'serie' end as clase
+      from public.conta_tpv_documento d where d.dia_id = p_dia
+  ), rango as (
+    select d.contador, min(d.numero) as desde, max(d.numero) as hasta from doc d group by d.contador
+  ), imp as (
+    select d.id, d.numero, d.contador, d.clase, d.cliente_nif, d.cliente_nombre, i.tipo, i.base as ib, i.cuota as iq
+      from doc d join public.conta_tpv_impuesto i on i.documento_id = d.id
+  )
+  select 1, 'serie', i.tipo, i.contador, r.desde::text, case when r.hasta <> r.desde then r.hasta::text end,
+         count(distinct i.id)::int, round(sum(i.ib), 2), round(sum(i.iq), 2), null::text, 'VENTAS A CONSUMIDOR FINAL'
+    from imp i join rango r on r.contador is not distinct from i.contador
+   where i.clase = 'serie'
+   group by i.tipo, i.contador, r.desde, r.hasta
+  union all
+  select case when i.clase = 'nif' then 2 else 3 end, i.clase, i.tipo, i.contador, i.numero::text, null::text, 1, round(sum(i.ib), 2), round(sum(i.iq), 2),
+         nullif(btrim(coalesce(i.cliente_nif, '')), ''),
+         coalesce(nullif(btrim(coalesce(i.cliente_nombre, '')), ''), case when i.clase = 'r5' then 'VENTAS A CONSUMIDOR FINAL' end)
+    from imp i
+   where i.clase in ('nif', 'r5')
+   group by i.clase, i.tipo, i.contador, i.numero, i.cliente_nif, i.cliente_nombre
+  order by 1, 4, 3, 5
+$$;
+
+
+--
+-- Name: FUNCTION _conta_tpv_libro_grupos(p_dia uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_tpv_libro_grupos(p_dia uuid) IS 'R15b: las filas del libro de IVA de un día del TPV: una por serie y tipo (con su rango), una por factura con NIF y tipo, una por devolución (R5) y tipo. Solo lee.';
+
+
+--
+-- Name: _conta_tpv_libro_juntar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_tpv_libro_juntar(p_entry uuid) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare a record; v_n int := 0;
+begin
+  if not exists (select 1 from public.conta_tpv_libro_antes where entry_id = p_entry) then return 0; end if;
+  delete from public.vat_book_entry where entry_id = p_entry and book = 'issued' and line_id is null;
+  for a in select x.vat_book_entry_id, (jsonb_populate_record(null::public.vat_book_entry, x.fila)).* from public.conta_tpv_libro_antes x where x.entry_id = p_entry loop
+    update public.vat_book_entry v set
+      invoice_type = a.invoice_type, series = a.series, number = a.number, number_to = a.number_to, documents_count = a.documents_count,
+      counterpart_tax_id = a.counterpart_tax_id, counterpart_name = a.counterpart_name, counterpart_id_type = a.counterpart_id_type,
+      counterpart_country = a.counterpart_country, party_id = a.party_id, tax_base = a.tax_base, tax_amount = a.tax_amount, total = a.total,
+      updated_at = a.updated_at, updated_by_name = a.updated_by_name
+     where v.id = a.vat_book_entry_id;
+    v_n := v_n + 1;
+  end loop;
+  delete from public.conta_tpv_libro_antes where entry_id = p_entry;
+  return v_n;
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_tpv_libro_juntar(p_entry uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_tpv_libro_juntar(p_entry uuid) IS 'R15b: vuelve el libro de IVA de un día del TPV a como era antes de repartirlo (una fila por tipo), con lo guardado en conta_tpv_libro_antes.';
+
+
+--
+-- Name: _conta_tpv_libro_repartir(uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_tpv_libro_repartir(p_dia uuid, p_entry uuid, p_origen text DEFAULT 'al validar'::text) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_row public.vat_book_entry; g record; v_n int := 0; v_primero boolean; v_b bigint; v_q bigint; v_cambio jsonb;
+begin
+  if p_dia is null or p_entry is null then return 0; end if;
+  -- Ya repartido (o vuelto a pasar): nada.
+  if exists (select 1 from public.conta_tpv_libro_antes a where a.entry_id = p_entry) then return 0; end if;
+  for v_row in
+    select * from public.vat_book_entry where entry_id = p_entry and book = 'issued' and line_id is not null order by tax_rate, id
+  loop
+    -- Regla 31: lo repartido da, al céntimo, la base y la cuota de su tipo.
+    select coalesce(sum(round(x.base * 100)), 0), coalesce(sum(round(x.cuota * 100)), 0) into v_b, v_q
+      from public._conta_tpv_libro_grupos(p_dia) x where x.tipo = v_row.tax_rate;
+    if v_b <> round(v_row.tax_base * 100) or v_q <> round(v_row.tax_amount * 100) then
+      raise exception 'El libro del % al % %% no se reparte: sus facturas dan % de base y % de IVA, y el libro tiene % y %.',
+        to_char(v_row.issue_date, 'DD/MM/YYYY'), public.conta_numero_texto(v_row.tax_rate),
+        public.conta_euros_exactos(v_b / 100.0), public.conta_euros_exactos(v_q / 100.0),
+        public.conta_euros_exactos(v_row.tax_base), public.conta_euros_exactos(v_row.tax_amount) using errcode = '23514';
+    end if;
+    insert into public.conta_tpv_libro_antes (vat_book_entry_id, account_id, company_id, entry_id, fila, origen)
+    values (v_row.id, v_row.account_id, v_row.company_id, p_entry, to_jsonb(v_row), coalesce(p_origen, 'al validar'));
+    v_primero := true;
+    for g in select * from public._conta_tpv_libro_grupos(p_dia) x where x.tipo = v_row.tax_rate order by x.orden, x.contador, x.desde loop
+      v_cambio := jsonb_build_object(
+        'invoice_type', case g.clase when 'nif' then 'F1' when 'r5' then 'R5' else case when g.docs > 1 then 'F4' else 'F2' end end,
+        'series', g.contador, 'number', g.desde, 'number_to', g.hasta, 'documents_count', greatest(g.docs, 1),
+        'counterpart_tax_id', g.nif, 'counterpart_name', g.nombre, 'counterpart_id_type', null, 'counterpart_country', null, 'party_id', null,
+        'tax_base', g.base, 'tax_amount', g.cuota, 'total', g.base + g.cuota, 'updated_at', now(), 'updated_by_name', 'R15b · el libro del día');
+      if v_primero then
+        update public.vat_book_entry v set
+          invoice_type = n.invoice_type, series = n.series, number = n.number, number_to = n.number_to, documents_count = n.documents_count,
+          counterpart_tax_id = n.counterpart_tax_id, counterpart_name = n.counterpart_name, counterpart_id_type = n.counterpart_id_type,
+          counterpart_country = n.counterpart_country, party_id = n.party_id, tax_base = n.tax_base, tax_amount = n.tax_amount, total = n.total,
+          updated_at = n.updated_at, updated_by_name = n.updated_by_name
+          from jsonb_populate_record(null::public.vat_book_entry, to_jsonb(v_row) || v_cambio) n
+         where v.id = v_row.id;
+        v_primero := false;
+      else
+        insert into public.vat_book_entry
+        select (jsonb_populate_record(null::public.vat_book_entry, to_jsonb(v_row) || v_cambio
+                  || jsonb_build_object('id', gen_random_uuid(), 'line_id', null, 'created_at', now()))).*;
+      end if;
+      v_n := v_n + 1;
+    end loop;
+  end loop;
+  return v_n;
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_tpv_libro_repartir(p_dia uuid, p_entry uuid, p_origen text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_tpv_libro_repartir(p_dia uuid, p_entry uuid, p_origen text) IS 'R15b: reparte el libro de IVA de un día del TPV por serie, factura con NIF y devolución (R5), sin tocar su asiento. Si no da la misma base y cuota por tipo, para. Guarda lo de antes en conta_tpv_libro_antes. Se puede pasar dos veces.';
+
+
+--
 -- Name: _conta_tpv_lista(text[]); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -34496,6 +34631,46 @@ $$;
 
 
 --
+-- Name: conta_347_ventas_por_cliente(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_347_ventas_por_cliente(p_company uuid, p_anio integer) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid; v_r jsonb;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(v_acc)) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  with v as (
+    select v.counterpart_tax_id as nif, v.counterpart_name as nombre, v.total, v.issue_date, v.number
+      from public.vat_book_entry v
+     where v.account_id = v_acc and v.company_id = p_company and v.book = 'issued' and v.voided_at is null
+       and nullif(btrim(coalesce(v.counterpart_tax_id, '')), '') is not null
+       and v.issue_date >= make_date(p_anio, 1, 1) and v.issue_date < make_date(p_anio + 1, 1, 1)
+  )
+  select coalesce(jsonb_agg(x order by (x->>'total')::numeric desc), '[]'::jsonb) into v_r from (
+    select jsonb_build_object('nif', nif, 'nombre', max(nombre), 'facturas', count(distinct number), 'total', sum(total),
+             't1', coalesce(sum(total) filter (where extract(quarter from issue_date) = 1), 0),
+             't2', coalesce(sum(total) filter (where extract(quarter from issue_date) = 2), 0),
+             't3', coalesce(sum(total) filter (where extract(quarter from issue_date) = 3), 0),
+             't4', coalesce(sum(total) filter (where extract(quarter from issue_date) = 4), 0)) as x
+      from v group by nif
+  ) z;
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_347_ventas_por_cliente(p_company uuid, p_anio integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_347_ventas_por_cliente(p_company uuid, p_anio integer) IS 'R15b: lo emitido a cada NIF en el año, del libro de IVA (total con IVA, y por trimestre). Preparada para el 347 (que todavía no existe en Sumied): el umbral de 3.005,06 € y las exclusiones las pondrá él. Solo lee.';
+
+
+--
 -- Name: conta_abono_compensar(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -45877,6 +46052,8 @@ CREATE FUNCTION public.conta_impuesto_303_cajas(v public.vat_book_entry) RETURNS
     cross join lateral (select
       case
         when coalesce(v.surcharge_amount, 0) <> 0 then 'recargo'
+        -- R15b · el libro del día: la devolución de un día del TPV (R5) sí la declara Sumied, en la [14] y la [15].
+        when v.book = 'issued' and v.invoice_type = 'R5' and v.source_type = 'sales_day' then null
         when v.book = 'issued' and v.invoice_type like 'R%' then 'rectificativa_expedida'
         when v.book in ('received', 'investment') and v.invoice_type like 'R%' and (v.reverse_charge or v.operation_key = '09') then 'rectificativa_isp'
         when v.book in ('received', 'investment') and not v.reverse_charge and v.operation_key <> '09'
@@ -45894,6 +46071,7 @@ CREATE FUNCTION public.conta_impuesto_303_cajas(v public.vat_book_entry) RETURNS
         -- ni nada en la [29]. Medido el 23/10: 0 líneas así en producción.
         when v.book in ('received', 'investment') and not v.reverse_charge and v.operation_key <> '09'
              and coalesce(v.deductible_amount, 0) = 0 and coalesce(v.tax_amount, 0) <> 0 then '{}'::text[]
+        when v.book = 'issued' and v.invoice_type = 'R5' and v.source_type = 'sales_day' then array['14', '15']
         when v.book = 'issued' and v.qualification = 'S1' and not v.reverse_charge then
           case v.tax_rate when 4 then array['01', '03'] when 10 then array['04', '06'] when 21 then array['07', '09'] end
         when v.book = 'issued' and v.qualification = 'S2' then array['122']
@@ -58966,6 +59144,118 @@ end $$;
 
 
 --
+-- Name: conta_recibida_modificar(uuid, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_modificar(p_invoice uuid, p_lineas jsonb, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v public.supplier_invoice; e public.journal_entry; v_se jsonb; v_quien text; x jsonb; l public.journal_line;
+  v_cta public.company_account; v_antes_code text; v_local uuid; v_comun boolean; v_n int := 0;
+  v_antes jsonb := '[]'; v_despues jsonb := '[]'; v_cadena jsonb := '[]'; v_prev text; r record; v_textos text[] := '{}';
+  v_reg uuid;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice for update;
+  v_se := public.conta_recibida_se_puede_modificar(p_invoice);
+  if not coalesce((v_se->>'puede')::boolean, false) then raise exception '%', v_se->>'porque' using errcode = '23514'; end if;
+  if jsonb_typeof(coalesce(p_lineas, 'null')) <> 'array' or jsonb_array_length(p_lineas) = 0 then
+    raise exception 'No hay nada que cambiar.' using errcode = '22023';
+  end if;
+  v_quien := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  select * into e from public.journal_entry where id = v.journal_entry_id for update;
+  perform pg_advisory_xact_lock(hashtextextended('journal_entry_numero:' || e.company_id, 0));
+
+  -- Lo que cambia, comprobado antes de tocar nada: cada línea, de gasto; cada cuenta, una subcuenta de la empresa.
+  for x in select * from jsonb_array_elements(p_lineas) loop
+    select * into l from public.journal_line where entry_id = e.id and position = (x->>'posicion')::int;
+    if l.id is null then raise exception 'El asiento %/% no tiene la línea %.', e.series, e.number, x->>'posicion' using errcode = '22023'; end if;
+    select code into v_antes_code from public.company_account where id = l.company_account_id;
+    if v_antes_code ~ '^(40|41|472|477|4751)' then
+      raise exception 'La línea % es la del proveedor o la del IVA (%): aquí solo se cambian las de gasto.', l.position, v_antes_code using errcode = '22023';
+    end if;
+    select * into v_cta from public.company_account
+     where company_id = e.company_id and account_id = e.account_id and code = btrim(coalesce(x->>'cuenta', ''));
+    if v_cta.id is null then raise exception 'La cuenta % no está en el plan de la empresa.', coalesce(nullif(btrim(x->>'cuenta'), ''), '(vacía)') using errcode = '22023'; end if;
+    if v_cta.code ~ '^(40|41|472|477|4751)' then
+      raise exception 'La % es de proveedor o de IVA: no es una cuenta de gasto.', v_cta.code using errcode = '22023';
+    end if;
+    if v_cta.status is distinct from 'activa' then raise exception 'La % está oculta o cerrada: no se le puede apuntar nada.', v_cta.code using errcode = '22023'; end if;
+  end loop;
+
+  -- La cadena de antes de este asiento y de todos los de detrás (los que se vuelven a encadenar).
+  select coalesce(jsonb_agg(jsonb_build_object('entry_id', o.id, 'chain_seq', o.chain_seq, 'prev_hash', o.prev_hash, 'hash', o.hash) order by o.chain_seq), '[]')
+    into v_cadena from public.journal_entry o where o.company_id = e.company_id and o.chain_seq >= e.chain_seq;
+  select coalesce(jsonb_agg(to_jsonb(j) order by j.position), '[]') into v_antes from public.journal_line j where j.entry_id = e.id;
+
+  -- Solo en esta transacción: sin los dos candados de «inalterable» (como _conta_asientos_borrar, S01q).
+  set constraints public.trg_journal_entry_valida_con_pdf immediate;
+  alter table public.journal_entry disable trigger trg_journal_entry_inalterable;
+  alter table public.journal_line disable trigger trg_journal_line_inalterable;
+
+  for x in select * from jsonb_array_elements(p_lineas) loop
+    select * into l from public.journal_line where entry_id = e.id and position = (x->>'posicion')::int;
+    select code into v_antes_code from public.company_account where id = l.company_account_id;
+    select * into v_cta from public.company_account where company_id = e.company_id and account_id = e.account_id and code = btrim(x->>'cuenta');
+    v_comun := coalesce(x->>'local', '') = 'comun';
+    v_local := case when coalesce(x->>'local', '') ~ '^[0-9a-f-]{36}$' then (x->>'local')::uuid end;
+    if not (x ? 'local') then v_comun := l.is_common; v_local := l.location_id; end if;
+    if v_cta.id = l.company_account_id and v_local is not distinct from l.location_id and v_comun is not distinct from l.is_common then continue; end if;
+    update public.journal_line set company_account_id = v_cta.id, location_id = v_local, is_common = v_comun where id = l.id;
+    -- El reparto guardado de la factura, igual (la línea de gasto con esa cuenta y ese importe).
+    update public.supplier_invoice_expense s set account_code = v_cta.code, location_id = v_local, is_common = v_comun
+     where s.id = (select s2.id from public.supplier_invoice_expense s2 where s2.supplier_invoice_id = v.id and s2.account_code = v_antes_code
+                     and s2.amount = round(l.debit - l.credit, 2) order by s2.position limit 1);
+    v_textos := array_append(v_textos, case when v_antes_code = v_cta.code then format('la línea %s, de local', l.position)
+                                            else format('%s → %s', v_antes_code, v_cta.code) end);
+    v_n := v_n + 1;
+  end loop;
+
+  if v_n > 0 then
+    -- La cadena: desde este asiento, cada huella con la función de siempre (los eslabones y su orden no cambian).
+    select hash into v_prev from public.journal_entry where company_id = e.company_id and chain_seq is not null and chain_seq < e.chain_seq order by chain_seq desc limit 1;
+    for r in select o.id from public.journal_entry o where o.company_id = e.company_id and o.chain_seq >= e.chain_seq order by o.chain_seq loop
+      update public.journal_entry set prev_hash = v_prev where id = r.id;
+      update public.journal_entry set hash = public.journal_huella(v_prev, public.journal_entry_canonico(r.id)) where id = r.id returning hash into v_prev;
+    end loop;
+  end if;
+
+  alter table public.journal_line enable trigger trg_journal_line_inalterable;
+  alter table public.journal_entry enable trigger trg_journal_entry_inalterable;
+  set constraints public.trg_journal_entry_valida_con_pdf deferred;
+
+  if v_n = 0 then
+    return jsonb_build_object('texto', 'No había nada distinto: el asiento se queda como estaba.', 'numero', e.number, 'cambiadas', 0);
+  end if;
+  if public._conta_cadena_rota(e.company_id) <> 0 then
+    raise exception 'No se modifica nada: después de cambiarlo, la cadena de huellas no cuadra.' using errcode = '23514';
+  end if;
+
+  select coalesce(jsonb_agg(to_jsonb(j) order by j.position), '[]') into v_despues from public.journal_line j where j.entry_id = e.id;
+  insert into public.conta_recibida_modificada (account_id, company_id, invoice_id, entry_id, numero, lineas_antes, lineas_despues, cadena_antes, quien)
+  values (v.account_id, v.company_id, v.id, e.id, e.number, v_antes, v_despues, v_cadena, v_quien) returning id into v_reg;
+  insert into public.supplier_invoice_change (account_id, supplier_invoice_id, by_name, what, cambios)
+  -- En el historial de la factura, como un «guardar» que dice qué fue («modificada», con el asiento y lo que cambió).
+  values (v.account_id, v.id, v_quien, 'guardar', jsonb_build_object('modificada', true, 'asiento', e.number, 'cambios', to_jsonb(v_textos), 'registro', v_reg));
+  insert into public.document_activity (account_id, company_id, inbox_id, supplier_invoice_id, journal_entry_id, actor, actor_name, action, text)
+  values (v.account_id, v.company_id, v.inbox_id, v.id, e.id, 'persona', v_quien, 'corregida',
+          format('%s ha modificado el asiento %s (contabilizado): %s. El mismo número, los mismos importes y el mismo IVA.',
+                 v_quien, e.number, array_to_string(v_textos, ', ')));
+  return jsonb_build_object('texto', format('Modificado: el asiento %s sigue siendo el %s, con %s. Los mismos importes y el mismo IVA.',
+                                            e.number, e.number, array_to_string(v_textos, ', ')),
+                            'numero', e.number, 'cambiadas', v_n);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_recibida_modificar(p_invoice uuid, p_lineas jsonb, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_modificar(p_invoice uuid, p_lineas jsonb, p_quien_nombre text) IS 'X26 · «Modificar» una recibida contabilizada: las cuentas (y el local) de sus líneas de gasto, en el mismo asiento (mismo número, fecha, importes e IVA). Respaldo, candados quitados solo en la transacción, cadena vuelta a encadenar y comprobada. p_lineas: [{posicion, cuenta, local?: uuid | ''comun'' | null}].';
+
+
+--
 -- Name: conta_recibida_motivos(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -59621,6 +59911,64 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_recibida_responder_antes_del_inicio(p_invoice uuid, p_respuesta text, p_quien_nombre text) IS 'N03: guarda la respuesta a «¿Ya estaba contabilizada en el programa de antes?» (ya_estaba / es_nueva) de una recibida anterior al día de inicio, o la deshace (nulo). Encargado o administrador. Devuelve el texto para la pantalla.';
+
+
+--
+-- Name: conta_recibida_se_puede_modificar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_se_puede_modificar(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v public.supplier_invoice; e public.journal_entry; y public.fiscal_year; v_p jsonb; v_lock public.fiscal_period_lock;
+  v_no text;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null or not public.belongs_to_account(v.account_id) then
+    return jsonb_build_object('puede', false, 'porque', 'Esa factura no está.');
+  end if;
+  select * into e from public.journal_entry where id = v.journal_entry_id;
+  if e.id is null or e.status <> 'validado' then
+    return jsonb_build_object('puede', false, 'porque', 'No está contabilizada: se cambia en la ficha, sin «Modificar».');
+  end if;
+  if not public.current_user_is_admin_or_manager_of(v.account_id) then
+    v_no := 'Solo un administrador o un encargado de la cuenta modifica una factura contabilizada.';
+  end if;
+  if v_no is null then
+    v_p := public.conta_iva_presentado(e.company_id, e.entry_date);
+    if v_p is not null then
+      v_no := format('El IVA del %s ya está presentado: esta factura no se puede modificar.',
+                     case when v_p->>'periodo' ~ 'T$' then v_p->>'periodo' else 'mes ' || (v_p->>'periodo') end);
+    end if;
+  end if;
+  if v_no is null then
+    select * into y from public.fiscal_year where id = e.fiscal_year_id;
+    if y.status is distinct from 'open' then v_no := format('El ejercicio %s está cerrado: esta factura no se puede modificar.', coalesce(y.code, '')); end if;
+  end if;
+  if v_no is null then
+    select * into v_lock from public.fiscal_period_lock
+     where company_id = e.company_id and month = date_trunc('month', e.entry_date)::date and reopened_at is null limit 1;
+    if v_lock.id is not null then
+      v_no := format('El mes de %s está cerrado: reábrelo antes de modificar esta factura.', to_char(e.entry_date, 'MM/YYYY'));
+    end if;
+  end if;
+  if v_no is null and exists (select 1 from public.external_send x where x.entry_id = e.id) then
+    v_no := 'Su asiento ya salió a Diez o a ERP10: se modifica allí, no aquí.';
+  end if;
+  if v_no is null and public._conta_cadena_rota(e.company_id) <> 0 then
+    v_no := 'La cadena de huellas de la empresa ya estaba rota: no se modifica nada hasta arreglarla.';
+  end if;
+  return jsonb_build_object('puede', v_no is null, 'porque', v_no, 'numero', e.number, 'serie', e.series, 'asiento', e.id);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_recibida_se_puede_modificar(p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_se_puede_modificar(p_invoice uuid) IS 'X26 · Si una recibida contabilizada se puede «Modificar» y, si no, por qué (IVA presentado, ejercicio o mes cerrado, ya en Diez o ERP10, cadena rota, sin permiso).';
 
 
 --
@@ -62710,6 +63058,49 @@ COMMENT ON FUNCTION public.conta_tpv_dia_leer(p_company uuid, p_dia date, p_prog
 
 
 --
+-- Name: conta_tpv_dia_libro(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tpv_dia_libro(p_dia uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_d public.conta_tpv_dia; v_r jsonb;
+begin
+  select * into v_d from public.conta_tpv_dia where id = p_dia;
+  if v_d.id is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(v_d.account_id)) then
+    raise exception 'Ese día no está.' using errcode = 'P0002';
+  end if;
+  if v_d.entry_id is not null and exists (select 1 from public.vat_book_entry where entry_id = v_d.entry_id and book = 'issued') then
+    select jsonb_build_object('en_libro', true, 'repartido', exists (select 1 from public.conta_tpv_libro_antes a where a.entry_id = v_d.entry_id),
+             'filas', coalesce(jsonb_agg(jsonb_build_object(
+               'tipo_factura', v.invoice_type, 'serie', v.series, 'numero', v.number, 'hasta', v.number_to, 'documentos', v.documents_count,
+               'nif', v.counterpart_tax_id, 'nombre', v.counterpart_name, 'tipo', v.tax_rate, 'base', v.tax_base, 'cuota', v.tax_amount, 'total', v.total)
+               order by case when v.invoice_type in ('F4', 'F2') then 1 when v.invoice_type = 'F1' then 2 else 3 end, v.series, v.number, v.tax_rate), '[]'::jsonb))
+      into v_r
+      from public.vat_book_entry v where v.entry_id = v_d.entry_id and v.book = 'issued' and v.voided_at is null;
+  else
+    select jsonb_build_object('en_libro', false, 'repartido', false,
+             'filas', coalesce(jsonb_agg(jsonb_build_object(
+               'tipo_factura', case g.clase when 'nif' then 'F1' when 'r5' then 'R5' else case when g.docs > 1 then 'F4' else 'F2' end end,
+               'serie', g.contador, 'numero', g.desde, 'hasta', g.hasta, 'documentos', g.docs, 'nif', g.nif, 'nombre', g.nombre,
+               'tipo', g.tipo, 'base', g.base, 'cuota', g.cuota, 'total', g.base + g.cuota)
+               order by g.orden, g.contador, g.desde, g.tipo), '[]'::jsonb))
+      into v_r
+      from public._conta_tpv_libro_grupos(p_dia) g;
+  end if;
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_tpv_dia_libro(p_dia uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_tpv_dia_libro(p_dia uuid) IS 'R15b: las filas del libro de IVA de un día del TPV (las de verdad si está contabilizado; si no, las que tendrá): por serie, factura con NIF y devolución (R5). Solo lee.';
+
+
+--
 -- Name: conta_tpv_dia_para_validar(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -62828,6 +63219,8 @@ begin
   -- 4 · En el libro de IVA, el rango del TPV: el primer número y el último (RIVA 63.4).
   update public.vat_book_entry set number = v_d.primer_numero::text, number_to = v_d.ultimo_numero::text, updated_at = now()
    where entry_id = p_entry and book = 'issued';
+  -- R15b · el libro del día: por serie, cada factura con NIF y cada devolución (R5) en su fila; la base y la cuota de cada tipo, las mismas.
+  perform public._conta_tpv_libro_repartir(p_dia, p_entry);
 
   -- R07 · la factura del día y su cobro: el cobro, el mismo día, unido a su factura (se validan, se deshacen y se ven juntos).
   insert into public.journal_entry (id, account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, source_id, status,
@@ -62967,6 +63360,52 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_tpv_emitidas(p_company uuid, p_desde date, p_hasta date) IS 'R15: los días del TPV contabilizados como facturas expedidas (una fila por día, con su rango y su PDF) y sus facturas con NIF (una fila cada una), para «Facturas emitidas». Solo lee; no son customer_invoice y no van a Verifactu.';
+
+
+--
+-- Name: conta_tpv_emitidas_libro(uuid, date, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tpv_emitidas_libro(p_company uuid, p_desde date DEFAULT NULL::date, p_hasta date DEFAULT NULL::date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid; v_r jsonb;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(v_acc)) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  with d as (
+    select t.* from public.conta_tpv_dia t
+     where t.company_id = p_company and t.account_id = v_acc and t.estado = 'contabilizado' and t.entry_id is not null
+       and (p_desde is null or t.dia >= p_desde) and (p_hasta is null or t.dia <= p_hasta)
+  ), f as (
+    -- Una factura (o una serie) con varios tipos va en una fila: se suman sus tipos.
+    select d.id as dia_id, d.dia, d.programa, d.entry_id, v.invoice_type, v.series, v.number, v.number_to,
+           max(v.documents_count) as documentos, v.counterpart_tax_id as nif, v.counterpart_name as nombre,
+           sum(v.tax_base) as base, sum(v.tax_amount) as cuota, sum(v.total) as total
+      from d join public.vat_book_entry v on v.entry_id = d.entry_id and v.book = 'issued' and v.voided_at is null and v.account_id = v_acc
+     group by d.id, d.dia, d.programa, d.entry_id, v.invoice_type, v.series, v.number, v.number_to, v.counterpart_tax_id, v.counterpart_name
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'clase', case when f.invoice_type = 'F1' then 'nif' when f.invoice_type like 'R%' then 'r5' else 'serie' end,
+           'dia_id', f.dia_id, 'dia', f.dia, 'programa_nombre', case f.programa when 'revo' then 'Revo' else f.programa end,
+           'tipo_factura', f.invoice_type, 'serie', f.series, 'numero', f.number, 'hasta', f.number_to, 'documentos', f.documentos,
+           'nif', f.nif, 'nombre', f.nombre, 'base', f.base, 'cuota', f.cuota, 'total', f.total, 'asiento_id', f.entry_id,
+           'pdf', case when f.invoice_type in ('F4', 'F2') then (select j.storage_path from public.journal_entry_document j
+                       where j.entry_id = f.entry_id and j.kind = 'resumen_ventas' order by j.created_at desc limit 1) end)
+           order by f.dia desc, case when f.invoice_type in ('F4', 'F2') then 1 when f.invoice_type = 'F1' then 2 else 3 end, f.series, f.number), '[]'::jsonb)
+    into v_r from f;
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_tpv_emitidas_libro(p_company uuid, p_desde date, p_hasta date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_tpv_emitidas_libro(p_company uuid, p_desde date, p_hasta date) IS 'R15b: los días del TPV contabilizados, con las filas de su libro de IVA (por serie, facturas con NIF y devoluciones R5; los tipos de una misma factura, juntos). Para «Facturas emitidas». Solo lee.';
 
 
 --
@@ -120616,6 +121055,32 @@ COMMENT ON TABLE public.conta_puerta_recibido IS 'V02d · «Ya lo tengo»: la pe
 
 
 --
+-- Name: conta_recibida_modificada; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_recibida_modificada (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    invoice_id uuid NOT NULL,
+    entry_id uuid NOT NULL,
+    numero integer,
+    lineas_antes jsonb NOT NULL,
+    lineas_despues jsonb NOT NULL,
+    cadena_antes jsonb NOT NULL,
+    quien text NOT NULL,
+    at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_recibida_modificada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_recibida_modificada IS 'X26 · Cada «Modificar» de una recibida contabilizada: las líneas del asiento antes y después, y la cadena de huellas de antes de cada asiento que se volvió a encadenar (para saber qué era y poder volver).';
+
+
+--
 -- Name: supplier_invoice; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -121714,6 +122179,29 @@ CREATE TABLE public.conta_tpv_impuesto (
 --
 
 COMMENT ON TABLE public.conta_tpv_impuesto IS 'R03: un renglón por factura del TPV y tipo de IVA, con su base y su cuota.';
+
+
+--
+-- Name: conta_tpv_libro_antes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_tpv_libro_antes (
+    vat_book_entry_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    entry_id uuid NOT NULL,
+    fila jsonb NOT NULL,
+    origen text DEFAULT 'al validar'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_tpv_libro_antes_origen_check CHECK ((origen = ANY (ARRAY['al validar'::text, 'rehecho'::text])))
+);
+
+
+--
+-- Name: TABLE conta_tpv_libro_antes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_tpv_libro_antes IS 'R15b. La fila del libro de IVA de cada tipo de un día del TPV, como era antes de repartirla por serie, factura con NIF y devolución. Para volver atrás exacto (_conta_tpv_libro_juntar).';
 
 
 --
@@ -136814,6 +137302,14 @@ ALTER TABLE ONLY public.conta_puerta_recibido
 
 
 --
+-- Name: conta_recibida_modificada conta_recibida_modificada_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_recibida_modificada
+    ADD CONSTRAINT conta_recibida_modificada_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_recibida_pdf conta_recibida_pdf_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -137099,6 +137595,14 @@ ALTER TABLE ONLY public.conta_tpv_impuesto
 
 ALTER TABLE ONLY public.conta_tpv_impuesto
     ADD CONSTRAINT conta_tpv_impuesto_uno UNIQUE (documento_id, tipo);
+
+
+--
+-- Name: conta_tpv_libro_antes conta_tpv_libro_antes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_libro_antes
+    ADD CONSTRAINT conta_tpv_libro_antes_pkey PRIMARY KEY (vat_book_entry_id);
 
 
 --
@@ -143972,10 +144476,24 @@ CREATE INDEX idx_conta_proveedor_solo_cuenta ON public.conta_proveedor_solo USIN
 
 
 --
+-- Name: idx_conta_recibida_modificada_factura; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_conta_recibida_modificada_factura ON public.conta_recibida_modificada USING btree (invoice_id, at DESC);
+
+
+--
 -- Name: idx_conta_tpv_dia_subida; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_conta_tpv_dia_subida ON public.conta_tpv_dia USING btree (subida_id) WHERE (subida_id IS NOT NULL);
+
+
+--
+-- Name: idx_conta_tpv_libro_antes_asiento; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_conta_tpv_libro_antes_asiento ON public.conta_tpv_libro_antes USING btree (entry_id);
 
 
 --
@@ -154225,6 +154743,30 @@ ALTER TABLE ONLY public.conta_puerta_recibido
 
 
 --
+-- Name: conta_recibida_modificada conta_recibida_modificada_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_recibida_modificada
+    ADD CONSTRAINT conta_recibida_modificada_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_recibida_modificada conta_recibida_modificada_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_recibida_modificada
+    ADD CONSTRAINT conta_recibida_modificada_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_recibida_modificada conta_recibida_modificada_invoice_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_recibida_modificada
+    ADD CONSTRAINT conta_recibida_modificada_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.supplier_invoice(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_recibida_pdf conta_recibida_pdf_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -154622,6 +155164,30 @@ ALTER TABLE ONLY public.conta_tpv_impuesto
 
 ALTER TABLE ONLY public.conta_tpv_impuesto
     ADD CONSTRAINT conta_tpv_impuesto_documento_id_fkey FOREIGN KEY (documento_id) REFERENCES public.conta_tpv_documento(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tpv_libro_antes conta_tpv_libro_antes_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_libro_antes
+    ADD CONSTRAINT conta_tpv_libro_antes_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tpv_libro_antes conta_tpv_libro_antes_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_libro_antes
+    ADD CONSTRAINT conta_tpv_libro_antes_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tpv_libro_antes conta_tpv_libro_antes_vat_book_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tpv_libro_antes
+    ADD CONSTRAINT conta_tpv_libro_antes_vat_book_entry_id_fkey FOREIGN KEY (vat_book_entry_id) REFERENCES public.vat_book_entry(id) ON DELETE CASCADE;
 
 
 --
@@ -165883,6 +166449,19 @@ CREATE POLICY conta_puerta_recibido_leer ON public.conta_puerta_recibido FOR SEL
 
 
 --
+-- Name: conta_recibida_modificada; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_recibida_modificada ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_recibida_modificada conta_recibida_modificada_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_recibida_modificada_leer ON public.conta_recibida_modificada FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_recibida_pdf; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -166171,6 +166750,19 @@ ALTER TABLE public.conta_tpv_impuesto ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_tpv_impuesto_select ON public.conta_tpv_impuesto FOR SELECT USING ((account_id = ANY (( SELECT public.current_user_account_ids() AS current_user_account_ids)::uuid[])));
+
+
+--
+-- Name: conta_tpv_libro_antes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_tpv_libro_antes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_tpv_libro_antes conta_tpv_libro_antes_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_tpv_libro_antes_leer ON public.conta_tpv_libro_antes FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -175344,6 +175936,30 @@ GRANT ALL ON FUNCTION public._conta_tpv_formas_de(p_company uuid, p_dias uuid[])
 
 
 --
+-- Name: FUNCTION _conta_tpv_libro_grupos(p_dia uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_tpv_libro_grupos(p_dia uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_tpv_libro_grupos(p_dia uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_tpv_libro_juntar(p_entry uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_tpv_libro_juntar(p_entry uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_tpv_libro_juntar(p_entry uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_tpv_libro_repartir(p_dia uuid, p_entry uuid, p_origen text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_tpv_libro_repartir(p_dia uuid, p_entry uuid, p_origen text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_tpv_libro_repartir(p_dia uuid, p_entry uuid, p_origen text) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_tpv_lista(p text[]); Type: ACL; Schema: public; Owner: -
 --
 
@@ -179996,6 +180612,15 @@ GRANT ALL ON FUNCTION public.consumo_sin_descontar_watchdog() TO service_role;
 
 
 --
+-- Name: FUNCTION conta_347_ventas_por_cliente(p_company uuid, p_anio integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_347_ventas_por_cliente(p_company uuid, p_anio integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_347_ventas_por_cliente(p_company uuid, p_anio integer) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_347_ventas_por_cliente(p_company uuid, p_anio integer) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_abono_compensar(p_abono uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -184635,6 +185260,15 @@ GRANT ALL ON FUNCTION public.conta_recibida_iva_no_deducible(p_invoice uuid, p_n
 
 
 --
+-- Name: FUNCTION conta_recibida_modificar(p_invoice uuid, p_lineas jsonb, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_modificar(p_invoice uuid, p_lineas jsonb, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_modificar(p_invoice uuid, p_lineas jsonb, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_modificar(p_invoice uuid, p_lineas jsonb, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_recibida_motivos(p_invoice uuid, p_entry uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -184751,6 +185385,15 @@ GRANT ALL ON FUNCTION public.conta_recibida_repetida(p_invoice uuid) TO service_
 REVOKE ALL ON FUNCTION public.conta_recibida_responder_antes_del_inicio(p_invoice uuid, p_respuesta text, p_quien_nombre text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_recibida_responder_antes_del_inicio(p_invoice uuid, p_respuesta text, p_quien_nombre text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_recibida_responder_antes_del_inicio(p_invoice uuid, p_respuesta text, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibida_se_puede_modificar(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_se_puede_modificar(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_se_puede_modificar(p_invoice uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_se_puede_modificar(p_invoice uuid) TO service_role;
 
 
 --
@@ -185366,6 +186009,15 @@ GRANT ALL ON FUNCTION public.conta_tpv_dia_leer(p_company uuid, p_dia date, p_pr
 
 
 --
+-- Name: FUNCTION conta_tpv_dia_libro(p_dia uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tpv_dia_libro(p_dia uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tpv_dia_libro(p_dia uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tpv_dia_libro(p_dia uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_tpv_dia_para_validar(p_dia uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -185399,6 +186051,15 @@ GRANT ALL ON FUNCTION public.conta_tpv_dias(p_company uuid, p_desde date, p_hast
 REVOKE ALL ON FUNCTION public.conta_tpv_emitidas(p_company uuid, p_desde date, p_hasta date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_tpv_emitidas(p_company uuid, p_desde date, p_hasta date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_tpv_emitidas(p_company uuid, p_desde date, p_hasta date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tpv_emitidas_libro(p_company uuid, p_desde date, p_hasta date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tpv_emitidas_libro(p_company uuid, p_desde date, p_hasta date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tpv_emitidas_libro(p_company uuid, p_desde date, p_hasta date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tpv_emitidas_libro(p_company uuid, p_desde date, p_hasta date) TO service_role;
 
 
 --
@@ -195595,6 +196256,14 @@ GRANT SELECT ON TABLE public.conta_puerta_recibido TO authenticated;
 
 
 --
+-- Name: TABLE conta_recibida_modificada; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_recibida_modificada TO service_role;
+GRANT SELECT ON TABLE public.conta_recibida_modificada TO authenticated;
+
+
+--
 -- Name: TABLE supplier_invoice; Type: ACL; Schema: public; Owner: -
 --
 
@@ -195788,6 +196457,14 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.conta_tpv_forma_cuenta TO auth
 
 GRANT ALL ON TABLE public.conta_tpv_impuesto TO service_role;
 GRANT SELECT ON TABLE public.conta_tpv_impuesto TO authenticated;
+
+
+--
+-- Name: TABLE conta_tpv_libro_antes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_tpv_libro_antes TO service_role;
+GRANT SELECT ON TABLE public.conta_tpv_libro_antes TO authenticated;
 
 
 --
