@@ -1,0 +1,4 @@
+# K11f1 · la vuelta atrás: las ocho funciones desde su respaldo, fuera las nuevas, y la fecha contable solo si nadie la ha usado.
+cuenta: scripts/conta/produccion/cuentas/k11f1-fecha-fiscal.sql
+supabase/vuelta-atras/20261122T0922_k11f1_iva_lee_la_fecha_fiscal.down.sql
+supabase/vuelta-atras/20261122T0921_k11f1_fecha_contable.down.sql
