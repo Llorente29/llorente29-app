@@ -22,6 +22,8 @@ import { apuntesDeCuentas } from '@/modules/conta/services/libroService'
 import { cargarContexto } from '@/modules/conta/services/propuestasLibroService'
 import type { Apunte } from '@/modules/conta/lib/cuentasProveedor'
 import type { CuentasFicha } from '@/modules/conta/documentos/fichaRecibida'
+import { claseIva, type FichaIva } from '@/modules/conta/lib/ivaProveedor'
+import { esOperacion, operacionDeLaClase, presentadosDe, type Operacion } from './cabecera'
 
 type Fila = Record<string, unknown>
 const s = (x: unknown): string | null => (typeof x === 'string' && x.trim() !== '' ? x : null)
@@ -42,6 +44,8 @@ export const textoOperacion = (regimen: string | null): string | null => (regime
 
 export interface DelProveedor {
   regimen: string | null
+  /** K10b · El tipo de operación que le da su ficha (país, NIF-IVA, VIES y régimen): con el que nace cada factura suya. */
+  operacion: Operacion | null
   /** Su subcuenta (la 400/410 de su ficha), o null. */
   subcuenta: { id: string; codigo: string; nombre: string } | null
 }
@@ -58,15 +62,18 @@ export async function subcuentasDeProveedores(accountId: string, companyId: stri
 /** El régimen de IVA y la subcuenta del proveedor. */
 export async function delProveedor(accountId: string, companyId: string, supplierId: string): Promise<DelProveedor> {
   const [{ data: p, error: ep }, { data: l, error: el }] = await Promise.all([
-    tabla('supplier').select('vat_regime').eq('account_id', accountId).eq('id', supplierId).maybeSingle(),
+    tabla('supplier').select('vat_regime, country_code, tax_id_type, tax_id, tax_id_check_status').eq('account_id', accountId).eq('id', supplierId).maybeSingle(),
     tabla('company_account_link').select('company_account:company_account_id(id, code, name)')
       .eq('account_id', accountId).eq('company_id', companyId).eq('entity', 'supplier').eq('entity_id', supplierId).eq('role', 'principal').maybeSingle(),
   ])
   if (ep) throw new Error(`No se ha podido leer la ficha del proveedor: ${ep.message}`)
   if (el) throw new Error(`No se ha podido leer la subcuenta del proveedor: ${el.message}`)
   const c = (l as Fila | null)?.company_account as Fila | null | undefined
+  const pf = (p as Fila | null) ?? {}
   return {
-    regimen: s((p as Fila | null)?.vat_regime),
+    regimen: s(pf.vat_regime),
+    operacion: p ? operacionDeLaClase(claseIva({ pais: s(pf.country_code), tipoNif: s(pf.tax_id_type) as FichaIva['tipoNif'], nif: s(pf.tax_id),
+      vies: s(pf.tax_id_check_status) as FichaIva['vies'], regimen: s(pf.vat_regime) as FichaIva['regimen'] })) : null,
     subcuenta: c ? { id: String(c.id), codigo: String(c.code), nombre: String(c.name) } : null,
   }
 }
@@ -228,4 +235,119 @@ export async function codigosDeProveedores(accountId: string, companyId: string)
     .eq('account_id', accountId).eq('company_id', companyId).eq('entity', 'supplier').eq('role', 'principal')
   if (error) throw new Error(`No se han podido leer los códigos de los proveedores: ${error.message}`)
   return new Map(((data ?? []) as Fila[]).map((x) => [String(x.entity_id), String((x.company_account as Fila | null)?.code ?? '')]))
+}
+
+// ── K10b · La cabecera de la recibida ─────────────────────────────────────────
+
+export interface CabeceraFactura {
+  /** El tipo de operación cambiado en esta factura (null: el de su ficha). */
+  operacion: Operacion | null
+  /** El primer día del trimestre elegido (null: el suyo). */
+  deduceEn: string | null
+  /** El concepto del asiento escrito (null: el propuesto). */
+  concepto: string | null
+  observaciones: string | null
+  marcaId: string | null
+  /** ¿La base ya tiene las columnas del K10b (la 2150)? Si no, las casillas no se escriben. */
+  disponible: boolean
+}
+
+/** Lo que la ficha guarda en la cabecera de la factura (2150). Sin la 2150, lo de antes: la marca y las notas. */
+export async function cabeceraDeLaFactura(accountId: string, invoiceId: string): Promise<CabeceraFactura> {
+  const r = await tabla('supplier_invoice').select('vat_operation, deduct_from, entry_concept, notes, brand_id').eq('account_id', accountId).eq('id', invoiceId).maybeSingle()
+  if (r.error && /does not exist|could not find/i.test(r.error.message)) {
+    const v = await tabla('supplier_invoice').select('notes, brand_id').eq('account_id', accountId).eq('id', invoiceId).maybeSingle()
+    if (v.error) throw new Error(`No se ha podido leer la cabecera de la factura: ${v.error.message}`)
+    const f = (v.data as Fila | null) ?? {}
+    return { operacion: null, deduceEn: null, concepto: null, observaciones: s(f.notes), marcaId: s(f.brand_id), disponible: false }
+  }
+  if (r.error) throw new Error(`No se ha podido leer la cabecera de la factura: ${r.error.message}`)
+  const f = (r.data as Fila | null) ?? {}
+  return {
+    operacion: esOperacion(f.vat_operation) ? f.vat_operation : null, deduceEn: s(f.deduct_from), concepto: s(f.entry_concept),
+    observaciones: s(f.notes), marcaId: s(f.brand_id), disponible: true,
+  }
+}
+
+/** Las marcas de la cuenta que se pueden poner: activas y sin archivar. Sin ninguna, la casilla no sale. */
+export async function marcasParaPoner(accountId: string): Promise<{ id: string; nombre: string }[]> {
+  const { data, error } = await tabla('brand').select('id, name, is_active, archived_at').eq('account_id', accountId).order('name')
+  if (error) throw new Error(`No se han podido leer las marcas: ${error.message}`)
+  return ((data ?? []) as Fila[]).filter((b) => b.is_active !== false && !b.archived_at).map((b) => ({ id: String(b.id), nombre: String(b.name) }))
+}
+
+/** Los trimestres con el 303 presentado de la empresa, como «2026-3T» (los mismos estados que conta_iva_presentado). */
+export async function trimestresPresentados(accountId: string, companyId: string): Promise<Set<string>> {
+  const { data, error } = await tabla('tax_return').select('fiscal_year, period').eq('account_id', accountId).eq('company_id', companyId)
+    .eq('form_code', '303').in('status', ['filed', 'booked', 'paid', 'offset', 'refunded'])
+  if (error) throw new Error(`No se han podido leer los 303 presentados: ${error.message}`)
+  return presentadosDe(((data ?? []) as Fila[]).map((x) => ({ ejercicio: Number(x.fiscal_year), periodo: String(x.period) })))
+}
+
+/** Guarda la cabecera (conta_recibida_cabecera, 2150): el tipo de operación, el trimestre, el concepto, las observaciones y la marca. */
+export async function guardarCabecera(invoiceId: string, cambios: { operacion?: Operacion | null; deduce_en?: string | null; concepto?: string | null; observaciones?: string | null; marca?: string | null },
+  quien: string | null): Promise<{ texto: string; asientoQuitado: boolean }> {
+  const r = await rpc<Fila>('conta_recibida_cabecera', { p_invoice: invoiceId, p_cambios: cambios, p_quien_nombre: quien })
+  return { texto: String(r.texto ?? 'Guardado.'), asientoQuitado: r.asiento_quitado === true }
+}
+
+// ── K11a · «Otros datos» y los datos de cada línea (0839) ─────────────────────
+
+export interface Codigo { codigo: string; nombre: string }
+
+/** Los tipos de factura y las claves de régimen (catálogos globales de la AEAT, 0839), para su lupa. */
+export async function catalogosDeLaRecibida(): Promise<{ tiposFactura: Codigo[]; clavesRegimen: Codigo[] }> {
+  const [t, r] = await Promise.all([
+    tabla('conta_tipo_factura').select('code, nombre').order('orden'),
+    tabla('conta_clave_regimen').select('code, nombre').order('orden'),
+  ])
+  if (t.error) throw new Error(`No se han podido leer los tipos de factura: ${t.error.message}`)
+  if (r.error) throw new Error(`No se han podido leer las claves de régimen: ${r.error.message}`)
+  const de = (x: unknown) => ((x ?? []) as Fila[]).map((f) => ({ codigo: String(f.code), nombre: String(f.nombre) }))
+  return { tiposFactura: de(t.data), clavesRegimen: de(r.data) }
+}
+
+export interface OtrosDatos {
+  /** El elegido en la factura, o el que da ella (conta_recibida_por_defecto). */
+  tipoFactura: string
+  claveRegimen: string
+  /** ¿Elegidos en la factura? (para la casilla en ámbar o no) */
+  tipoElegido: boolean
+  claveElegida: boolean
+  noIva: boolean
+  rectificacion: boolean
+  no347: boolean
+  /** 0 a 100; 100 si no se dijo. */
+  ivaDeducible: number
+  lineas: { posicion: number; concepto: string | null; marcaId: string | null; canalId: string | null }[]
+}
+
+/** «Otros datos» de una recibida y los datos de sus líneas de gasto. */
+export async function otrosDatosDeLaFactura(accountId: string, invoiceId: string): Promise<OtrosDatos> {
+  const [f, d, def] = await Promise.all([
+    tabla('supplier_invoice').select('invoice_type, regime_key, exclude_from_vat_return, deduction_rectification, exclude_from_347, vat_deductible_pct')
+      .eq('account_id', accountId).eq('id', invoiceId).maybeSingle(),
+    tabla('supplier_invoice_expense_dato').select('position, concept, brand_id, channel_id').eq('account_id', accountId).eq('supplier_invoice_id', invoiceId).order('position'),
+    rpc<Fila | null>('conta_recibida_por_defecto', { p_invoice: invoiceId }),
+  ])
+  if (f.error) throw new Error(`No se han podido leer los otros datos de la factura: ${f.error.message}`)
+  if (d.error) throw new Error(`No se han podido leer los datos de sus líneas: ${d.error.message}`)
+  const x = (f.data as Fila | null) ?? {}
+  const pct = x.vat_deductible_pct === null || x.vat_deductible_pct === undefined ? 100 : Number(x.vat_deductible_pct)
+  return {
+    tipoFactura: s(x.invoice_type) ?? s(def?.tipo_factura) ?? 'F1', claveRegimen: s(x.regime_key) ?? s(def?.clave_regimen) ?? '01',
+    tipoElegido: !!s(x.invoice_type), claveElegida: !!s(x.regime_key),
+    noIva: x.exclude_from_vat_return === true, rectificacion: x.deduction_rectification === true, no347: x.exclude_from_347 === true,
+    ivaDeducible: pct,
+    lineas: ((d.data ?? []) as Fila[]).map((l) => ({ posicion: Number(l.position), concepto: s(l.concept), marcaId: s(l.brand_id), canalId: s(l.channel_id) })),
+  }
+}
+
+/** Guarda «Otros datos» y los datos de las líneas (conta_recibida_otros_datos, 0839). */
+export async function guardarOtrosDatos(invoiceId: string, cambios: {
+  tipo_factura?: string | null; clave_regimen?: string | null; no_iva?: boolean; rectificacion?: boolean; no_347?: boolean; iva_deducible?: number | null
+  lineas?: { posicion: number; concepto: string | null; marca: string | null; plataforma: string | null }[]
+}, quien: string | null): Promise<{ texto: string; asientoQuitado: boolean }> {
+  const r = await rpc<Fila>('conta_recibida_otros_datos', { p_invoice: invoiceId, p_cambios: cambios, p_quien_nombre: quien })
+  return { texto: String(r.texto ?? 'Guardado.'), asientoQuitado: r.asiento_quitado === true }
 }

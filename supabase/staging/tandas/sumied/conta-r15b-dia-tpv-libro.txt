@@ -1,0 +1,7 @@
+# R15b · el día del TPV en el libro de IVA: por serie, facturas con NIF y devoluciones (R5).
+# 2346 (solo añade: desde la rama, de verdad, W05: la e2e usa sus funciones), 2347 (cambia en
+# caliente: desde la rama, en ROLLBACK) y 2350 (rehace: en ROLLBACK), con su prueba.
+supabase/migrations/20261121T2346_r15b_libro_del_dia_anade.sql
+supabase/migrations/20261121T2347_r15b_libro_del_dia.sql
+supabase/migrations/20261121T2350_r15b_rehacer_dias.sql
+supabase/staging/sql/20261121_r15b_libro_del_dia_prueba.sql

@@ -18,7 +18,7 @@ export async function prepararDescarga(x: Salida): Promise<{
   const huellaBytes = async (b: ArrayBuffer) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', b))].map((v) => v.toString(16).padStart(2, '0')).join('')
   const libros: { nombre: string; bytes: ArrayBuffer; filas: number; huella: string }[] = []
   for (const [nombre, filas] of [
-    [FICHERO_SUBCUENTAS, x.ficheros.subcuentas], [FICHERO_EXPEDIDAS, x.ficheros.expedidas.map((r) => r.fila)], [FICHERO_DIAS, x.ficheros.dias.map((r) => r.fila)],
+    [FICHERO_SUBCUENTAS, x.ficheros.subcuentas], [FICHERO_EXPEDIDAS, x.ficheros.expedidas.map((r) => r.fila)], [FICHERO_DIAS, x.ficheros.dias.flatMap((r) => r.filas)],
     [FICHERO_RECIBIDAS, x.ficheros.recibidas.map((r) => r.fila)],
     [FICHERO_ASIENTOS, x.ficheros.asientos.flatMap((a) => a.filas)],
   ] as const) {
@@ -34,7 +34,7 @@ export async function prepararDescarga(x: Salida): Promise<{
     // X08 · Un día sale una vez, como emitida: la huella de su fila y la de su cobro.
     ...x.ficheros.dias.map(async (d) => ({
       entry_id: d.entryId, clase: 'emitida' as const,
-      huella: await huellaFila([...d.fila, ...x.ficheros.asientos.filter((a) => a.entryId === d.entryId).flatMap((a) => a.filas.flat())]),
+      huella: await huellaFila([...d.filas.flat(), ...x.ficheros.asientos.filter((a) => a.entryId === d.entryId).flatMap((a) => a.filas.flat())]),
     })),
   ])
   return { libros, partidas }

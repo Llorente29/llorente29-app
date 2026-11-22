@@ -78,8 +78,8 @@ export function FormasDePago({ companyId, quien, diaId = null, alCerrar, alGuard
   /** El día de ejemplo (el que ha pedido la cuenta); si no, el último sin validar. */
   diaId?: string | null
   alCerrar: () => void
-  /** Después de guardar: la lista de detrás se vuelve a leer. */
-  alGuardar: () => void
+  /** Después de guardar: la lista de detrás se vuelve a leer. R15: con la frase de lo guardado (la de la base). */
+  alGuardar: (texto: string) => void
 }) {
   const [datos, setDatos] = useState<Formas | null>(null)
   const [cuentas, setCuentas] = useState<CuentaElegible[]>([])
@@ -155,7 +155,7 @@ export function FormasDePago({ companyId, quien, diaId = null, alCerrar, alGuard
         setFactura(await leerFacturaDelDia(companyId, datos?.mes ?? null))
       }
       setHecho(textos.join(' '))
-      alGuardar()
+      alGuardar(textos.join(' '))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {

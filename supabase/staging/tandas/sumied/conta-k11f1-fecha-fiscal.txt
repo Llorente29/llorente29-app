@@ -1,0 +1,5 @@
+# K11f1 · Las dos fechas de la recibida. La 0921 solo añade (va de verdad desde la rama, W05); la 0922 cambia ocho
+# funciones del IVA y desde la rama solo pasa en ROLLBACK.
+supabase/migrations/20261122T0921_k11f1_fecha_contable.sql
+supabase/migrations/20261122T0922_k11f1_iva_lee_la_fecha_fiscal.sql
+supabase/staging/sql/20261122_k11f1_fecha_fiscal_prueba.sql

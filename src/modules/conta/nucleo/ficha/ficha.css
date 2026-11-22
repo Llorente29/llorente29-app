@@ -325,3 +325,10 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 .kf-modificar-linea .kf-con-sugerencias, .kf-modificar-linea input { min-width: 0; width: 100%; box-sizing: border-box; }
 .kf-modificar { display: inline-flex; gap: 8px; align-items: center; margin-left: 8px; }
 .kf-modificar-porque { font-size: 12px; color: var(--k-apoyo); }
+
+/* K10b · «Observaciones +»: plegadas en una línea, al lado del concepto, para que la ficha siga cabiendo entera. */
+.kf-obs-boton { align-self: end; white-space: nowrap; padding-bottom: 6px; }
+.kf-recibida textarea#kf-observaciones { width: 100%; resize: vertical; font: inherit; }
+
+/* K10b · Sin propuesta: su porqué, debajo de la cabecera del asiento (regla 8). */
+.kf-asiento-nota { margin: 6px 0 0; font-size: 13px; color: var(--kf-ambar-tinta, #8a5a00); }

@@ -1,21 +1,36 @@
 // src/modules/conta/ventas/tpv/SubirVentasTpv.tsx
 //
 // R06 · «Subir las ventas del TPV» (maqueta 2): Suelta los ficheros → Mira lo que
-// he leído → Guardado. Los cuatro ficheros de Revo se leen en el navegador
+// he leído → Contabilizado. Los cuatro ficheros de Revo se leen en el navegador
 // (leerRevo, R04) y no se guardan en ningún sitio: solo lo leído de los días que
 // cuadran, con conta_tpv_dia_guardar (R03). Lo que se decide, en lib/subirTpv.ts.
+//
+// R15 · «Contabilizar N días»: se guardan, se apunta la subida en ellos
+// (conta_tpv_subida_apuntar) y los que la base da por listos se contabilizan con
+// la MISMA pieza que «Validar los N listos» (validarDiaTpv: los dos asientos y su
+// PDF). Los demás quedan en espera con su motivo. Si alguno espera por una cuenta
+// sin elegir, primero se abre «A qué cuenta va cada forma de pago» y, al guardarla,
+// sigue solo. Los días que ya estaban guardados y sin validar no se tocan: siguen
+// en «Validar los N listos».
 
 import { useEffect, useId, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Boton, Chip, Icono } from '@/modules/conta/diseno'
 import { leerRevo, reconocer, type FicheroRevo } from '@/modules/conta/lib/lectorRevo'
 import {
-  ETIQUETA_COMO_ESTA, cifra, diaCorto, huecos, juntarFicheros, numeracion, prepararDias, textoGuardado,
-  type DiaParaSubir, type DiaYaGuardado, type FormaCuenta, type ResultadoDia,
+  ETIQUETA_COMO_ESTA, cifra, diaCorto, huecos, juntarFicheros, numeracion, esperaPorCuenta, prepararDias, queHacerAlSubir, textoContabilizado, textoGuardado,
+  type DiaContabilizado, type DiaEnEspera, type DiaParaSubir, type DiaYaGuardado, type FormaCuenta, type ResultadoDia,
 } from '@/modules/conta/lib/subirTpv'
-import { guardarDia, leerFormas, leerGuardados } from '@/modules/conta/services/tpvSubirService'
+import { apuntarSubida, guardarDia, leerFormas, leerGuardados } from '@/modules/conta/services/tpvSubirService'
+import { validarDiaTpv } from '@/modules/conta/services/tpvDiaService'
 import { VentanaAncha } from './VentanaAncha'
+import { FormasDePago } from './FormasDePago'
 
-const PASOS = ['Suelta los ficheros', 'Mira lo que he leído', 'Guardado'] as const
+const FRASE = 'Los días que cuadran y tienen la cuenta de cada forma de pago se contabilizan: la factura del día, su cobro y su PDF. Los demás quedan en espera, con su motivo.'
+
+/** Lo que dice el paso 3: lo guardado, lo contabilizado (con sus asientos), lo que espera y lo que no se ha podido. */
+interface Hecho { guardado: string; cuentas?: string | null; contabilizados: string | null; enEspera: string | null; fallos: string[]; espera: DiaEnEspera[] }
+
+const PASOS = ['Suelta los ficheros', 'Mira lo que he leído', 'Contabilizado'] as const
 const TONO = { bien: 'seguro', mal: 'falta', neutro: 'neutro', duda: 'duda' } as const
 const tipoTexto = (t: number) => `${t.toLocaleString('es-ES')} %`
 
@@ -34,7 +49,10 @@ export function SubirVentasTpv({ companyId, quien, alCerrar, alGuardar, alElegir
   const [error, setError] = useState<string | null>(null)
   const [elegido, setElegido] = useState<string | null>(null)
   const [guardando, setGuardando] = useState(false)
-  const [hecho, setHecho] = useState<{ texto: string; sinCuenta: string[] } | null>(null)
+  const [hecho, setHecho] = useState<Hecho | null>(null)
+  const [progreso, setProgreso] = useState<string | null>(null)
+  /** Mientras está abierta «A qué cuenta va cada forma de pago»: el día de ejemplo y lo que sigue al cerrarla. */
+  const [cuentasPara, setCuentasPara] = useState<{ diaId: string | null; seguir: (texto?: string) => void } | null>(null)
   const [encima, setEncima] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const idInput = useId()
@@ -64,20 +82,65 @@ export function SubirVentasTpv({ companyId, quien, alCerrar, alGuardar, alElegir
     setElegido(null)
   }
 
-  async function guardar() {
+  /** Contabilizar los días recién guardados que la base da por listos; los demás, en espera con su motivo. */
+  async function contabilizarGuardados(ids: string[], base: Omit<Hecho, 'contabilizados' | 'enEspera' | 'espera'>) {
+    const ahora = await leerGuardados(companyId)
+    const plan = queHacerAlSubir(ahora, ids)
+    const hechos: DiaContabilizado[] = []
+    const fallos = [...base.fallos]
+    const espera = [...plan.espera]
+    for (const [i, d] of plan.contabilizar.entries()) {
+      setProgreso(`Contabilizando ${i + 1} de ${plan.contabilizar.length}…`)
+      try {
+        const v = await validarDiaTpv(d.id, quien)
+        hechos.push({ dia: d.dia, numeros: v.cobroNumero != null ? [v.numero, v.cobroNumero] : [v.numero] })
+      } catch (e) {
+        espera.push({ dia: d.dia, motivo: `no se ha podido contabilizar: ${e instanceof Error ? e.message : String(e)}` })
+      }
+    }
+    const t = textoContabilizado(hechos, espera)
+    setHecho({ ...base, fallos, ...t, espera })
+    setProgreso(null)
+    setGuardando(false)
+    alGuardar()
+  }
+
+  async function contabilizar() {
     setGuardando(true)
+    setProgreso('Guardando…')
     const r: ResultadoDia[] = []
+    const ids: string[] = []
     for (const d of aGuardar) {
       const g = await guardarDia(companyId, d.dia, d.lectura, quien)
+      if (g.ok) ids.push(g.id)
       r.push(g.ok ? { dia: d.dia, ok: true, facturas: g.facturas, total: g.total } : { dia: d.dia, ok: false, facturas: d.facturas, total: d.total, error: g.error })
     }
     for (const d of dias.filter((x) => x.como === 'no_cuadra' || x.como === 'validado_distinto')) r.push({ dia: d.dia, ok: false, facturas: d.facturas, total: d.total })
     const sinTocar = dias.filter((d) => d.como === 'igual').map((d) => d.dia)
-    const bien = new Set(r.filter((x) => x.ok).map((x) => x.dia))
-    const sinCuenta = dias.filter((d) => bien.has(d.dia) && d.dentro.cobros.some((c) => c.sinCuenta)).map((d) => d.dia)
-    setHecho({ texto: textoGuardado(r, sinTocar), sinCuenta })
-    setGuardando(false)
-    alGuardar()
+    const base = { guardado: textoGuardado(r, sinTocar), fallos: [] as string[] }
+    if (!ids.length) { setHecho({ ...base, contabilizados: null, enEspera: null, espera: [] }); setProgreso(null); setGuardando(false); alGuardar(); return }
+    try {
+      await apuntarSubida(companyId, ids, quien)
+    } catch (e) {
+      base.fallos.push(`No se ha podido apuntar la subida en sus días: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    try {
+      const plan = queHacerAlSubir(await leerGuardados(companyId), ids)
+      if (plan.faltaCuenta) {
+        // La primera vez con formas sin cuenta: primero las cuentas, y al guardarlas sigue solo.
+        setProgreso(null)
+        const ejemplo = plan.espera.find((x) => esperaPorCuenta(x.motivo))?.id ?? null
+        setCuentasPara({ diaId: ejemplo, seguir: (texto) => { setCuentasPara(null); void contabilizarGuardados(ids, { ...base, cuentas: texto ?? null }) } })
+        return
+      }
+      await contabilizarGuardados(ids, base)
+    } catch (e) {
+      base.fallos.push(e instanceof Error ? e.message : String(e))
+      setHecho({ ...base, contabilizados: null, enEspera: null, espera: [] })
+      setProgreso(null)
+      setGuardando(false)
+      alGuardar()
+    }
   }
 
   const soltarProps = {
@@ -180,22 +243,32 @@ export function SubirVentasTpv({ companyId, quien, alCerrar, alGuardar, alElegir
     </>
   )
 
+  if (cuentasPara) {
+    // Sigue solo: al guardar las cuentas (o al cerrar sin elegirlas, y esos días quedan en espera).
+    return <FormasDePago companyId={companyId} quien={quien} diaId={cuentasPara.diaId} alCerrar={() => cuentasPara.seguir()} alGuardar={(t) => cuentasPara.seguir(t)} />
+  }
+
   if (hecho) {
+    const porCuenta = hecho.espera.some((x) => esperaPorCuenta(x.motivo))
     return (
       <VentanaAncha titulo="Subir las ventas del TPV" pasos={PASOS} paso={3} alCerrar={alCerrar}
         izquierda={(
-          <div className="tpv-hecho">
-            <p className="tpv-hecho-frase" role="status" data-prueba="resultado-subir">{hecho.texto}</p>
-            {hecho.sinCuenta.length > 0 && (
-              <div className="tpv-aviso" data-tono="duda">
-                <p>{hecho.sinCuenta.length === 1 ? `El ${diaCorto(hecho.sinCuenta[0])} lleva` : `Los días ${hecho.sinCuenta.map(diaCorto).join(', ')} llevan`} una forma de pago sin cuenta: {hecho.sinCuenta.length === 1 ? 'queda' : 'quedan'} en espera hasta que digas a qué cuenta va.</p>
-                <p><Boton variante="secundario" onClick={alElegirCuentas}>Decir a qué cuenta va</Boton></p>
+          <div className="tpv-hecho" data-prueba="resultado-subir">
+            {hecho.cuentas && <p className="tpv-nota" data-prueba="resultado-cuentas">{hecho.cuentas}</p>}
+            {hecho.contabilizados && <p className="tpv-hecho-frase" role="status" data-prueba="resultado-contabilizados">{hecho.contabilizados}</p>}
+            {hecho.enEspera && (
+              <div className="tpv-aviso" data-tono="duda" data-prueba="resultado-en-espera">
+                <p>{hecho.enEspera}</p>
+                {porCuenta && <p><Boton variante="secundario" onClick={alElegirCuentas}>Elegir la cuenta</Boton></p>}
               </div>
             )}
-            <p className="tpv-nota">Ya están en la lista de «Cierres del día», por validar como los demás.</p>
+            {!hecho.contabilizados && !hecho.enEspera && <p className="tpv-hecho-frase" role="status">No se ha contabilizado ningún día.</p>}
+            {hecho.fallos.map((f) => <div key={f} className="tpv-aviso" role="alert"><p>{f}</p></div>)}
+            <p className="tpv-nota" data-prueba="resultado-guardado">{hecho.guardado}</p>
+            <p className="tpv-nota">Los contabilizados ya están en «Cierres del día», validados, y en «Facturas emitidas»; los que esperan, en «En espera».</p>
           </div>
         )}
-        frase="Guardar no contabiliza: los días quedan en «Por validar», como los demás."
+        frase={FRASE}
         acciones={<>
           <Boton variante="secundario" onClick={() => { setHecho(null); setFicheros([]) }}>Subir más</Boton>
           <Boton variante="principal" data-autofocus onClick={alCerrar}>Ver la lista</Boton>
@@ -211,11 +284,11 @@ export function SubirVentasTpv({ companyId, quien, alCerrar, alGuardar, alElegir
         {tabla}
       </>}
       derecha={porDentro || undefined}
-      frase="Guardar no contabiliza: los días quedan en «Por validar», como los demás."
+      frase={FRASE}
       acciones={<>
-        <Boton variante="secundario" onClick={alCerrar}>Cancelar</Boton>
-        <Boton variante="principal" disabled={!aGuardar.length || guardando} onClick={() => void guardar()}>
-          {guardando ? 'Guardando…' : aGuardar.length === 1 ? 'Guardar 1 día' : `Guardar ${aGuardar.length} días`}
+        <Boton variante="secundario" onClick={alCerrar} disabled={guardando}>Cancelar</Boton>
+        <Boton variante="principal" disabled={!aGuardar.length || guardando} onClick={() => void contabilizar()}>
+          {guardando ? (progreso ?? 'Contabilizando…') : aGuardar.length === 1 ? 'Contabilizar 1 día' : `Contabilizar ${aGuardar.length} días`}
         </Boton>
       </>} />
   )

@@ -1,0 +1,3 @@
+# R15 · la vuelta atrás: la 1712 quita lo que añadió (los días y sus asientos se quedan).
+cuenta: scripts/conta/produccion/cuentas/r15-dia-tpv.sql
+supabase/vuelta-atras/20261121T1712_r15_dia_tpv_anade.down.sql

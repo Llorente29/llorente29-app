@@ -1,0 +1,31 @@
+{
+ "_que": "K11f1 · las dos fechas de la recibida · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. 0921 añade una columna que admite nulos y dos funciones; 0922 cambia ocho funciones del IVA. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-22T08:28Z",
+ "tanda": {
+  "supabase/migrations/20261122T0921_k11f1_fecha_contable.sql": "35d0c3545065071e27b540fa0d951c5c",
+  "supabase/migrations/20261122T0922_k11f1_iva_lee_la_fecha_fiscal.sql": "b03c78a67278cd80c27074654998d7e1"
+ },
+ "contexto": {
+  "tablas": [
+   "public.supplier_invoice"
+  ],
+  "funciones": [
+   "public.conta_vat_book_desde_asiento(uuid)",
+   "public._conta_iva_candado_apunte()",
+   "public._conta_iva_candado_asiento()",
+   "public._tg_s01p_trimestre_presentado()",
+   "public._conta_periodo_admite(uuid)",
+   "public._conta_iva_ajustar_propuesta(uuid,jsonb,jsonb)",
+   "public._conta_recibida_no_antes_de_entrar(uuid,jsonb)",
+   "public.conta_recibida_otros_datos(uuid,jsonb,text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

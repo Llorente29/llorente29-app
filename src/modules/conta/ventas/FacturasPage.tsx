@@ -30,8 +30,9 @@
 // services/ventasService.ts (con account_id y company_id, regla 9).
 
 import { useState } from 'react'
+import { urlDocumento } from '@/modules/conta/services/conDiezService'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { rutaAsiento, rutaFacturaVenta, rutaLiquidacionesVentas, rutaNuevaFacturaVenta, rutaConta, CONTA } from '@/config/navegacion'
+import { rutaAsiento, rutaDiaTpv, rutaFacturaVenta, rutaLiquidacionesVentas, rutaNuevaFacturaVenta, rutaConta, CONTA } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -70,6 +71,7 @@ export default function FacturasPage() {
   const { accountId, cargando, userName } = useCuentaConta()
   // V03 E3 · «Comprobar con Hacienda», en «Más» cuando Verifactu está encendido.
   const [comprobar, setComprobar] = useState(false)
+  const [errorPdf, setErrorPdf] = useState<string | null>(null)
   const { activa } = useEmpresas()
   const { local: ejeLocal } = useAnalitica()
   const movil = useIsMobile()
@@ -168,6 +170,15 @@ export default function FacturasPage() {
     return <Chip tono={et.tono} titulo={titulo}>{et.texto}</Chip>
   }
 
+  // R15 · Un día del TPV: sus tickets y su PDF; una factura con NIF de un día, en qué día va (y no suma otra vez).
+  // R15b · Un día del TPV como va en el libro de IVA: cada serie (sus tickets y su PDF), cada factura con NIF y cada
+  // devolución (R5, en rojo, con su número). Lo del R15 (antes del libro por serie): la factura con NIF, dentro del día.
+  const apoyoTpv = (t: NonNullable<FacturaVenta['tpv']>) => t.clase === 'dia'
+    ? <span className="s-tarjeta-apoyo" data-prueba="emitida-dia-tpv">Tickets del TPV{t.serie ? ` · ${t.serie}` : ''}{t.pdf && <> · <button type="button" className="s-boton s-boton-enlace"
+        onClick={(e) => { e.stopPropagation(); void urlDocumento(t.pdf!).then((u) => window.open(u, '_blank', 'noopener')).catch((er: unknown) => setErrorPdf(er instanceof Error ? er.message : String(er))) }}>PDF</button></>}</span>
+    : t.clase === 'r5'
+      ? <span className="s-tarjeta-apoyo" data-tono="falta" data-prueba="emitida-r5-tpv">Devolución del día del TPV del {diaMes(t.dia)}</span>
+      : <span className="s-tarjeta-apoyo" data-prueba="emitida-nif-tpv">{t.dentro ? 'Dentro del día' : 'Del día'} del TPV del {diaMes(t.dia)}</span>
   const cliente = (x: FacturaVenta) => x.cliente ?? (x.fuente === 'libro' ? 'Ventas a consumidor final' : 'Sin cliente')
   const estado = (x: FacturaVenta) => {
     const e = NOMBRE_ESTADO[estadoDe(x, hoy)]
@@ -182,7 +193,7 @@ export default function FacturasPage() {
   const columnas: ColumnaLista<FacturaVenta>[] = [
     {
       id: 'numero', titulo: 'Número', ordenable: true, prioridad: 1, minimo: 120,
-      celda: (x) => <span className="s-lista-texto-doble"><span className="s-cifra">{x.numero ?? 'Borrador'}</span>{x.rectificativa && <span className="s-tarjeta-apoyo">Rectificativa</span>}</span>,
+      celda: (x) => <span className="s-lista-texto-doble"><span className="s-cifra">{x.numero ?? 'Borrador'}</span>{x.rectificativa && !x.tpv && <span className="s-tarjeta-apoyo">Rectificativa</span>}{x.tpv && apoyoTpv(x.tpv)}</span>,
     },
     { id: 'fecha', titulo: 'Fecha', ordenable: true, ancho: '80px', prioridad: 2, minimo: 80, celda: (x) => <span className="s-cifra">{diaMes(x.fecha)}</span> },
     {
@@ -221,6 +232,7 @@ export default function FacturasPage() {
       <BandaPruebas />
       {encabezado}
       {dialogoComprobar}
+      {errorPdf && <p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido abrir el PDF del día: {errorPdf}</p>}
       {datos.error && (
         <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer las facturas: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p>
       )}
@@ -276,7 +288,7 @@ export default function FacturasPage() {
         <TablaLista<FacturaVenta>
           etiqueta={`Facturas · ${nombrePestana}`}
           columnas={columnas} filas={filas} clave={(x) => x.id} nombre={(x) => `${cliente(x)}${x.numero ? ` ${x.numero}` : ' borrador'}`}
-          alAbrir={(x) => navegar(x.fuente === 'sumied' ? rutaFacturaVenta(x.id) : rutaAsiento(x.entryId ?? ''))} movil={movil} tarjeta={tarjeta}
+          alAbrir={(x) => navegar(x.tpv ? rutaDiaTpv(x.tpv.diaId) : x.fuente === 'sumied' ? rutaFacturaVenta(x.id) : rutaAsiento(x.entryId ?? ''))} movil={movil} tarjeta={tarjeta}
           orden={f.orden} alOrdenar={(col) => cambiar({ orden: escribirOrden({ columna: col, sentido: f.orden.columna === col && f.orden.sentido === 'desc' ? 'asc' : 'desc' }) })}
           vacio={todas.length === 0
             ? <><strong>Aún no hay facturas {periodo}.</strong> Las que escribas aquí, y las que lleguen de tus ventas, salen en esta lista. <BotonEnlace a={rutaNuevaFacturaVenta()} variante="enlace">Nueva factura</BotonEnlace></>

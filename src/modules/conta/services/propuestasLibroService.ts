@@ -13,7 +13,7 @@
 import { hojaDelProveedor, siguienteLibre } from '@/modules/conta/lib/planEmpresa'
 import { leerNoDeducibles, type IvaNoDeducible } from '@/modules/conta/services/ivaNoDeducibleService'
 import { porQueNoDeducible } from '@/modules/conta/lib/ivaNoDeducible'
-import { aplicarAsientoAMano, aplicarReparto, cuentaDelReparto, lineasYCuotas } from '@/modules/conta/lib/recibidaGuardada'
+import { aplicarAsientoAMano, aplicarDatosDeLineas, aplicarReparto, cuentaDelReparto, lineasYCuotas, type LineaConCanal } from '@/modules/conta/lib/recibidaGuardada'
 import { supabase } from '@/lib/supabase'
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
@@ -22,6 +22,7 @@ import {
 } from '@/modules/conta/lib/asientosPropuestos'
 import { avisoPeriodoCerrado, diaAbierto, fechaPropuesta, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta, type Razon } from '@/modules/conta/lib/libro'
 import { claseIva, nombrePais, tipoDeLaClase, type ClaseIva, type FichaIva } from '@/modules/conta/lib/ivaProveedor'
+import { claseParaElAsiento, esOperacion, textoDeOperacion } from '@/modules/conta/nucleo/recibida/cabecera'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -225,6 +226,8 @@ function aJson(p: Propuesta) {
     lineas: p.lineas.map((l: LineaAsiento) => ({
       cuenta: l.cuenta, debe: l.debe, haber: l.haber, concepto: l.concepto ?? null, local_id: l.localId, comun: !!l.comun,
       marca_id: l.marcaId ?? null, tercero_id: l.terceroId ?? null, documento: l.documento ?? null,
+      // K11a · La plataforma de la línea (0840: _journal_entry_proponer la escribe en journal_line.channel_id).
+      ...((l as LineaConCanal).canalId ? { canal_id: (l as LineaConCanal).canalId } : {}),
       iva: l.iva ? { tipo_id: l.iva.tipoId, base: l.iva.base, libro: l.iva.libro, deducible: l.iva.deducible ?? null, facturas: l.iva.facturas ?? 1 } : null,
       // S01d: la que nace lleva tipo, base y modelo; el pago de un modelo, su modelo y su periodo.
       retencion: !l.retencion ? null : l.retencion.periodo !== undefined ? { modelo: l.retencion.modelo, periodo: l.retencion.periodo }
@@ -328,8 +331,19 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada', 'pagada'] : ['aprobada', 'pagada']).or(`company_id.is.null,company_id.eq.${companyId}`)
     .gte('invoice_date', desde).lte('invoice_date', hasta).match(soloFactura ? { id: soloFactura } : {}).order('invoice_date', { ascending: false })
   const conLaFicha = async (): Promise<Fila[]> => {
-    const x = await consulta(`${SELECT}, entry_overrides, supplier_invoice_expense(position, account_code, location_id, is_common, amount)`)
-    if (x.error && /does not exist|could not find|relationship/i.test(x.error.message)) return leer(consulta(SELECT), 'las facturas')
+    const falta = (e: { message: string } | null) => !!e && /does not exist|could not find|relationship/i.test(e.message)
+    const ficha = `${SELECT}, entry_overrides, supplier_invoice_expense(position, account_code, location_id, is_common, amount)`
+    // K10b · 2150: el tipo de operación, el trimestre y el concepto de la factura. Sin ellos (antes de aplicarla), lo de antes.
+    // K11a · 0839: el % de IVA deducible y los datos de cada línea (concepto, marca y plataforma).
+    // K11f1 · 0921: la fecha contable (la del asiento).
+    const k11f = await consulta(`${ficha}, vat_operation, deduct_from, accounting_date, entry_concept, vat_deductible_pct, supplier_invoice_expense_dato(position, concept, brand_id, channel_id)`)
+    if (!falta(k11f.error)) return leer(Promise.resolve(k11f), 'las facturas')
+    const k11a = await consulta(`${ficha}, vat_operation, deduct_from, entry_concept, vat_deductible_pct, supplier_invoice_expense_dato(position, concept, brand_id, channel_id)`)
+    if (!falta(k11a.error)) return leer(Promise.resolve(k11a), 'las facturas')
+    const k10b = await consulta(`${ficha}, vat_operation, deduct_from, entry_concept`)
+    if (!falta(k10b.error)) return leer(Promise.resolve(k10b), 'las facturas')
+    const x = await consulta(ficha)
+    if (falta(x.error)) return leer(consulta(SELECT), 'las facturas')
     return leer(Promise.resolve(x), 'las facturas')
   }
   const [leidas, socios] = await Promise.all([
@@ -363,20 +377,34 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     // un ejercicio cerrado). Lo decide la base (conta_recibida_fecha, la misma regla
     // que aplica al proponer): ni el día en que entró (la V04 del 27/10) ni un mes
     // cerrado por una persona (se marca «entró después del cierre», no se mueve).
-    let fecha = fechaFactura
+    // K11f1 (Julio, 22/11: «las dos fechas, como ERP10»): el asiento va en la fecha CONTABLE (la elegida en la factura,
+    // o la de la factura); la FISCAL (deduct_from) decide el periodo del IVA: el libro, el 303 y el candado la leen (0922).
+    const contable = s(f.accounting_date) ?? fechaFactura
+    const fiscal = s(f.deduct_from)
+    let fecha = contable
     let avisoFecha: string | null = null
-    const enLaBase = await fechaEnLaBase(companyId, fechaFactura, fechasBase)
-    if (enLaBase) {
+    // Con fecha fiscal, la contable solo se mueve si su día no está abierto en el libro (el IVA lo decide la fiscal).
+    const enLaBase = fiscal ? null : await fechaEnLaBase(companyId, contable, fechasBase)
+    if (fiscal) {
+      if (!abierto(fecha)) {
+        const fp = soloFactura || ver ? fechaPropuesta(fecha, ctx.calendario) : { fecha: null, aviso: null }
+        if (!fp.fecha) {
+          if (soloFactura || ver) r.sinPropuesta.push({ id: String(f.id), que: `Factura${f.invoice_number ? ` ${String(f.invoice_number)}` : ''}`, porque: fp.aviso ?? 'Su fecha contable cae en un día que no está abierto en el libro.' })
+          continue
+        }
+        avisoFecha = fp.aviso; fecha = fp.fecha
+      }
+    } else if (enLaBase) {
       if (!enLaBase.fecha) {
         if (soloFactura || ver) r.sinPropuesta.push({ id: String(f.id), que: `Factura${f.invoice_number ? ` ${String(f.invoice_number)}` : ''}`, porque: enLaBase.aviso ?? 'No hay ningún día abierto para apuntarla.' })
         continue
       }
-      if (enLaBase.fecha !== fechaFactura) {
+      if (enLaBase.fecha !== contable) {
         // Como siempre, la tanda de pendientes no arrastra la de un periodo presentado:
         // se apunta al mirarla o validarla una a una (o en bloque), con su aviso.
         if (!(soloFactura || ver)) continue
         fecha = enLaBase.fecha
-        avisoFecha = enLaBase.aviso ?? avisoPeriodoCerrado(fechaFactura, enLaBase.fecha)
+        avisoFecha = enLaBase.aviso ?? avisoPeriodoCerrado(contable, enLaBase.fecha)
       }
     } else if (!abierto(fecha)) {
       // Sin conta_recibida_fecha (la 0913 sin aplicar): lo de antes, el primer día abierto (D07b).
@@ -385,7 +413,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
         if (soloFactura || ver) r.sinPropuesta.push({ id: String(f.id), que: `Factura${f.invoice_number ? ` ${String(f.invoice_number)}` : ''}`, porque: fp.aviso ?? 'Su fecha cae en un periodo cerrado o antes del primer día abierto: no se apunta ahí.' })
         continue
       }
-      avisoFecha = avisoPeriodoCerrado(fechaFactura, fp.fecha)
+      avisoFecha = avisoPeriodoCerrado(contable, fp.fecha)
       fecha = fp.fecha
     }
     let cuentaProv = ctx.enlace('supplier', sup, 'principal')
@@ -438,7 +466,9 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       pais: s(prov.country_code), tipoNif: s(prov.tax_id_type) as FichaIva['tipoNif'], nif: s(prov.tax_id),
       vies: s(prov.tax_id_check_status) as FichaIva['vies'], regimen: s(prov.vat_regime) as FichaIva['regimen'],
     }
-    const clase = claseIva(ficha)
+    // K10b · El tipo de operación de la factura, si se cambió en ella; si no, el de su ficha (lo de siempre).
+    const operacion = esOperacion(f.vat_operation) ? f.vat_operation : null
+    const clase = claseParaElAsiento(operacion, claseIva(ficha))
     const nombreProv = s(prov.name) ?? 'El proveedor'
     if (clase === 'ue_sin_nif_iva' && f.vat_non_deductible !== true) {
       r.sinPropuesta.push({ id: String(f.id), que, porque: `${nombreProv} es de ${nombrePais(ficha.pais)} y no tiene un NIF-IVA europeo válido: sin él su compra no es intracomunitaria. Ponlo en su ficha (se comprueba en VIES) y la factura se propone.` })
@@ -470,13 +500,16 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       // D01 · Una línea puede llevar su propia cuenta (la factura de comisión de una liquidación: comisión y anuncios).
       lineas: lote?.lineas ?? (f.source === 'liquidacion' ? deLineas : lc.lineas),
       ...(lote ? { cuotas: lote.cuotas, reparto: lote.reparto } : lc.cuotas ? { cuotas: lc.cuotas } : {}),
+      // K10b · La marca de la factura va a sus apuntes, como el local (antes, solo la de una liquidación).
+      marcaId: s(f.brand_id),
       ...(f.source === 'liquidacion' ? {
         cuotas: impuestos,
-        marcaId: s(f.brand_id), faltaNumero: !s(f.invoice_number),
+        faltaNumero: !s(f.invoice_number),
         porAclarar: (((f.reading as Fila | null)?.requisitos ?? []) as Fila[]).filter((x) => (x.id === 'solape' || x.id === 'cuadre') && x.ok === false).map((x) => String(x.texto)),
       } : {}),
       retencion: rr && f.withholding_amount !== null ? { tipoId: String(rr.id), porcentaje: n(rr.rate), base: 0, importe: imp(n(f.withholding_amount)), modelo: (String(rr.filed_in) as '111' | '115' | '123') } : null,
       ivaNoDeducible: f.vat_non_deductible === true,
+      ivaDeduciblePct: f.vat_deductible_pct === null || f.vat_deductible_pct === undefined ? null : n(f.vat_deductible_pct),
       motivoNoDeducible: porQueNoDeducible(noDeducibles.get(String(f.id))?.motivo, noDeducibles.get(String(f.id))?.texto),
       autoliquidacion: tipoAuto && f.vat_non_deductible !== true ? { tipo: tipoAuto, porque: `${nombreProv} ${porqueAutoliquida(clase, ficha.pais)}.` } : null,
     }, {
@@ -505,8 +538,12 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     res.propuesta.razones.push(fecha === fechaFactura
       ? { decision: `Fecha: ${fechaFactura.split('-').reverse().join('/')}, la de la factura`,
           porque: 'Una factura recibida se apunta con su fecha de factura mientras su trimestre no tenga el IVA presentado' }
-      : { decision: `Fecha: ${fecha.split('-').reverse().join('/')}, no la de la factura (${fechaFactura.split('-').reverse().join('/')})`,
+      : fecha === contable
+        ? { decision: `Fecha: ${fecha.split('-').reverse().join('/')}, la fecha contable`, porque: 'Se eligió en la factura (Otros datos): el asiento va en ella. Su fecha de factura no cambia' }
+        : { decision: `Fecha: ${fecha.split('-').reverse().join('/')}, no la de la factura (${fechaFactura.split('-').reverse().join('/')})`,
           porque: avisoFecha ?? 'Su día no está abierto en el libro' })
+    if (fiscal) res.propuesta.razones.push({ decision: `Fecha fiscal: ${fiscal.split('-').reverse().join('/')}`, porque: 'Se eligió en la factura: decide el periodo del IVA (el libro de IVA y el 303); el asiento va en la fecha contable' })
+    if (operacion) res.propuesta.razones.push({ decision: `Tipo de operación: ${textoDeOperacion(operacion)}`, porque: 'Se cambió en esta factura; su ficha no cambia' })
     if (clase === 'intracomunitaria' && ficha.vies !== 'valid') {
       res.propuesta.avisos.push(`El NIF-IVA de ${nombreProv} está sin comprobar en VIES: ábrelo en su ficha y se vuelve a preguntar.`)
       res.propuesta.confianza = peor(res.propuesta.confianza, 'probable')
@@ -527,7 +564,13 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     const reparto = ((f.supplier_invoice_expense ?? []) as Fila[]).sort((a, b) => n(a.position) - n(b.position))
       .map((x) => ({ cuenta: String(x.account_code), local: s(x.location_id), comun: x.is_common === true, importe: n(x.amount) }))
     const aprendida = await aprender(companyId, res.propuesta, `supplier_invoice:${sup}`, ctx)
-    const final = aplicarAsientoAMano(f.vat_non_deductible === true ? aprendida : aplicarReparto(aprendida, reparto), f.entry_overrides ?? null)
+    const conAMano = aplicarAsientoAMano(f.vat_non_deductible === true ? aprendida : aplicarReparto(aprendida, reparto), f.entry_overrides ?? null)
+    // K10b · El concepto del asiento escrito en la ficha manda sobre el propuesto.
+    // K11a · El concepto, la marca y la plataforma de cada línea de gasto.
+    const datosLineas = ((f.supplier_invoice_expense_dato ?? []) as Fila[])
+      .map((d) => ({ posicion: n(d.position), concepto: s(d.concept), marcaId: s(d.brand_id), canalId: s(d.channel_id) }))
+    const conDatos = aplicarDatosDeLineas(conAMano, datosLineas)
+    const final = s(f.entry_concept) ? { ...conDatos, concepto: String(f.entry_concept).trim() } : conDatos
     // N23 «Cómo se apunta»: la misma propuesta, sin escribirla.
     if (ver) ver(final)
     else await proponer(companyId, final, null, r, ctx, quien)

@@ -1,0 +1,14 @@
+# K11a · La base de la ficha de la recibida copiada de ERP10: «Otros datos», los datos de cada línea y la plataforma (22/11).
+# Rama conta/k11a-base-ficha-recibida. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0839  Añade los catálogos globales de tipo de factura y clave de régimen (AEAT), las columnas de «Otros datos» en
+#         supplier_invoice (vacías = lo de siempre: 100 % deducible, F1/01 o lo que dé la factura), los datos de cada
+#         línea de gasto (supplier_invoice_expense_dato), journal_line.channel_id y conta_recibida_otros_datos. No
+#         escribe en ninguna fila que exista.
+#   0840  Cambia dos trozos de _journal_entry_proponer: la línea lleva su plataforma (canal_id → channel_id). Lo que se
+#         propone hoy no lleva plataforma: queda igual. Lo cuenta k11a-base-ficha-recibida.sql (regla 31).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k11a-base-ficha-recibida.sql
+supabase/migrations/20261122T0839_k11a_otros_datos_y_lineas.sql
+supabase/migrations/20261122T0840_k11a_plataforma_en_el_asiento.sql

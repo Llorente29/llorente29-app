@@ -1,0 +1,4 @@
+# R15 · los días del TPV: contabilizar al subir y abrir el día.
+# 1712 (solo añade: desde la rama, de verdad, W05: la e2e usa sus funciones).
+supabase/migrations/20261121T1712_r15_dia_tpv_anade.sql
+supabase/staging/sql/20261121_r15_dia_tpv_prueba.sql

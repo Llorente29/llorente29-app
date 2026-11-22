@@ -223,7 +223,7 @@ describe('regla 31 · el mismo día por el Excel y por la conexión deja lo mism
     // Lo que lleva el Excel: la fila de dias-tpv.xlsx y las del cobro en asientos.xlsx (en un día de un asiento, con el id del día).
     const excel: string[] = []
     for (const d of s.ficheros.dias) {
-      const c = celdas(d.fila)
+      const c = celdas(d.filas[0])
       excel.push(`total ${cts(c[letraE('024')] ?? c.AB)}`, `base ${cts(c.J)}`, `pct ${c.K}`, `cuota ${cts(c.L)}`, `venta ${c.AA} ${cts(c.AC)}`, `rango ${c.AJ} ${c.AK} ${c.AL}`)
       const cobroId = d.cobroId ?? d.entryId
       for (const f of s.ficheros.asientos.filter((a) => a.entryId === cobroId).flatMap((a) => a.filas).map(celdas)) {

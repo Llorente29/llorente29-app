@@ -1,0 +1,14 @@
+# K11f1 · Las dos fechas de la recibida, como ERP10: la contable es la del asiento y la fiscal decide el IVA (22/11).
+# Rama conta/k11f1-fecha-fiscal. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0921  Añade supplier_invoice.accounting_date (la fecha contable), _conta_fecha_fiscal y _conta_primer_dia_contable.
+#         La fecha fiscal es deduct_from (del K10b): una sola verdad, sin mover filas.
+#   0922  Cambia ocho funciones: el libro de IVA (su fecha de recepción es la fiscal, así que el 303 la sigue), los
+#         candados del apunte, del asiento y del trimestre, el periodo al validar, el ajuste y el día de la propuesta, y
+#         «Otros datos» (guarda las dos fechas). Vacías, lo de siempre. Lo cuenta k11f1-fecha-fiscal.sql (regla 31: cada
+#         303 presentado, recalculado, igual).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k11f1-fecha-fiscal.sql
+supabase/migrations/20261122T0921_k11f1_fecha_contable.sql
+supabase/migrations/20261122T0922_k11f1_iva_lee_la_fecha_fiscal.sql

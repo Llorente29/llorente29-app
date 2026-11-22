@@ -76,11 +76,12 @@ import { crearProveedor, NifRepetidoError } from '@/modules/conta/services/prove
 import { revisarAlta, textoNifRepetido, type ProveedorExistente } from '@/modules/conta/lib/altaProveedor'
 import { tipoEntidadPorNif } from '@/modules/conta/lib/nif'
 import { casillasVacias, comprobacionesDe, dondeVaElFoco, dudaDelGasto, emisorDesconocido, estadoDeLaFicha, etiquetaDelAsiento, franjaProveedorSolo, gastoEnAmbar, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
-import { calendarioDe, cuentasAMano, delProveedor, deshacerProveedorSolo, gastoAprendido, gastoPropuesto as leerGastoPropuesto, marcaDeLaFactura, mayorDelProveedor, noEsLaMisma, otrasDelProveedor, proveedorSolo, subcuentasDeProveedores, textoOperacion, cuentasDeContrapartida, codigosDeProveedores } from './servicio'
+import { calendarioDe, cuentasAMano, delProveedor, deshacerProveedorSolo, gastoAprendido, gastoPropuesto as leerGastoPropuesto, cabeceraDeLaFactura, guardarCabecera, marcasParaPoner, trimestresPresentados, mayorDelProveedor, noEsLaMisma, otrasDelProveedor, proveedorSolo, subcuentasDeProveedores, textoOperacion, cuentasDeContrapartida, codigosDeProveedores } from './servicio'
 import { cuentaDelProveedorEnElAsiento } from './proveedorEnAsiento'
 import { faltasParaValidar, laRepetida, textoNoSeValida, textoRepetida } from './validarSoloLoCompleto'
 import { avisoInmovilizado } from './contrapartida'
 import { proveedoresQueEncajan } from './buscarProveedor'
+import { OPERACIONES, cortoDeOperacion, esOperacion, marcaCorta, origenOperacion, textoDeOperacion, trimestrePropuesto, trimestresParaElegir } from './cabecera'
 import { fechaDelPago, propuestaDelPago, queHaceElPago, textoAsientoDelPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
 import { apuntarPago, cuentasDePago, hayLiquidacion, pagoDelProveedor } from './pagoServicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
@@ -171,7 +172,10 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const tiposIva = useLeer(accountId ? () => tiposDeIvaRecibida(accountId) : null, `${accountId}:tipos-iva`).datos ?? [21, 10, 4, 0]
   const dup = useLeer(accountId && fac ? () => duplicadaDe(accountId, fac.id, fac.proveedor?.id ?? null) : null, `${accountId}:${id}:${fac?.numero}:${fac?.total}:dup:${vuelta}`).datos ?? null
   const calendario = useLeer(accountId && empresa ? () => calendarioDe(accountId, empresa) : null, `${accountId}:${empresa}:calendario`).datos ?? null
-  const marca = useLeer(accountId && id ? () => marcaDeLaFactura(accountId, id) : null, `${accountId}:${id}:marca`).datos ?? null
+  // K10b · La cabecera como ERP10: el tipo de operación, el trimestre, el concepto, las observaciones y la marca.
+  const cab = useUltimo(useLeer(accountId && id && !aMano ? () => cabeceraDeLaFactura(accountId, id) : null, `${accountId}:${id}:cabecera:${vuelta}`).datos, id ?? '')
+  const marcas = useLeer(accountId ? () => marcasParaPoner(accountId) : null, `${accountId}:marcas`).datos ?? []
+  const presentados = useLeer(accountId && empresa ? () => trimestresPresentados(accountId, empresa) : null, `${accountId}:${empresa}:303-presentados`).datos ?? null
 
   // ── El borrador: lo guardado, como en la ficha de hoy ──
   const vistaDatos = useUltimo(vista.datos, `${id}:${fac?.proveedor?.id ?? ''}`)
@@ -324,6 +328,34 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   if (faltaDoc) comprobaciones.push({ id: 'documento', tono: 'rojo', texto: faltaDoc.replace(/\.$/, '') })
   const ambarGasto = gastoEnAmbar({ aMano, propuesto: propuestoGasto, aprendida: aprendido?.cuenta ?? null, cuentaAhora: b.gastos[0]?.cuenta ?? '' })
   if (ambarGasto) comprobaciones.push(ambarGasto)
+  // K10b · La cabecera: el tipo de operación (de su ficha o cambiado en esta), el trimestre en que se deduce.
+  const opFicha = delProv?.operacion ?? null
+  const opFactura = cab?.operacion ?? null
+  const origenOp = aMano ? (opFicha ? 'De su ficha' : null) : origenOperacion(opFactura, opFicha)
+  const trim = presentados && b.fecha ? trimestrePropuesto({ fecha: b.fecha, deduceEn: cab?.deduceEn ?? null, presentados }) : null
+  const trimestres = presentados && b.fecha ? trimestresParaElegir(b.fecha, presentados) : []
+  const cabEscribible = !aMano && !soloLectura && !!fac && !!cab?.disponible
+  if (trim?.aviso) {
+    // En la franja ámbar, con una frase: sustituye a la del periodo («El 3T está cerrado»), no se suma.
+    const x = { id: 'periodo', tono: 'ambar' as const, texto: trim.aviso.replace(/\.$/, '') }
+    const i = comprobaciones.findIndex((c) => c.id === 'periodo')
+    if (i >= 0) comprobaciones[i] = x; else comprobaciones.push(x)
+  }
+  const [guardandoCab, setGuardandoCab] = useState(false)
+  const [textoConcepto, setTextoConcepto] = useState<{ k: string; v: string } | null>(null)
+  const [obsAbiertas, setObsAbiertas] = useState<string | null>(null)
+  const [textoObs, setTextoObs] = useState<{ k: string; v: string } | null>(null)
+  /** Guarda en el momento lo cambiado en la cabecera (conta_recibida_cabecera) y lo dice (regla 8). */
+  async function ponerCabecera(c: Parameters<typeof guardarCabecera>[1]) {
+    if (!fac || guardandoCab) return
+    setGuardandoCab(true)
+    try {
+      const r = await guardarCabecera(fac.id, c, userName ?? null)
+      setAviso({ tono: 'ok', texto: r.texto }); setVuelta((v) => v + 1)
+    } catch (e) {
+      setAviso({ tono: 'mal', texto: `No se ha guardado: ${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}.` })
+    } finally { setGuardandoCab(false) }
+  }
   // K04b · El emisor que no se reconoce, y lo que falta: la franja no dice «Rellenada» con casillas vacías.
   const leidoEmisor = leido ? { nombre: leido.proveedor.nombre ?? fac?.propuesto?.nombre ?? null, nif: leido.proveedor.nif ?? fac?.propuesto?.nif ?? null }
     : fac?.propuesto ? { nombre: fac.propuesto.nombre, nif: fac.propuesto.nif } : null
@@ -470,6 +502,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     if (soloLectura) {
       setAviso({ tono: 'falta', texto: modo === 'contabilizada' ? 'Ya está contabilizada: no hay nada que guardar. Pasa a la siguiente con ›.' : 'Está descartada: no se guarda. Si es una factura, «Más › Recuperarla».' }); return
     }
+    if (guardandoCab) { setAviso({ tono: 'falta', texto: 'Aún estoy guardando la cabecera (el tipo, el trimestre, el concepto…): vuelve a pulsar en un momento. No he validado nada.' }); return }
     if (leyendoPago) { setAviso({ tono: 'falta', texto: 'Aún estoy leyendo cómo se paga (la cuenta del pago que propongo): vuelve a pulsar en un momento. No he guardado nada.' }); return }
     setGuardando(true); setAviso(null)
     try {
@@ -659,7 +692,11 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const subcuenta = delProv?.subcuenta?.codigo ?? ''
   const conEstaFactura = mayor ? mayor.saldo + (validada ? 0 : totales.total) : null
   const cola = !aMano && pos >= 0 ? `${pos + 1} de ${ids.length} por revisar` : aMano ? 'Nueva' : ''
-  const etiqueta = previa ? etiquetaDelAsiento({ debe: previa.debe, haber: previa.haber, cuadra: previa.cuadra, faltan: previa.faltan, lineas: previa.lineas.length }) : { texto: 'Se forma al escribir', tono: 'vacio' as const }
+  // K10b · Sin propuesta, su porqué (regla 8: nunca «Se forma al escribir» en silencio; e2e 44960214725, «le falta el NIF»).
+  const porqueSinPropuesta = !aMano && !fac?.asiento && vistaDatos && vistaDatos.propuesta === null ? vistaDatos.porque : null
+  // Lo escrito a mano sin propuesta sigue saliendo (regla 30): «Sin propuesta» solo cuando el asiento está vacío; el porqué, siempre.
+  const etiqueta = previa ? etiquetaDelAsiento({ debe: previa.debe, haber: previa.haber, cuadra: previa.cuadra, faltan: previa.faltan, lineas: previa.lineas.length, sinPropuesta: porqueSinPropuesta })
+    : porqueSinPropuesta ? etiquetaDelAsiento({ debe: 0, haber: 0, cuadra: false, faltan: [], lineas: 0, sinPropuesta: porqueSinPropuesta }) : { texto: 'Se forma al escribir', tono: 'vacio' as const }
   const documento = aMano
     ? (fichero ? { url: fichero.url, foto: !/pdf/i.test(fichero.file.type), titulo: fichero.file.name } : null)
     : fichero ? { url: fichero.url, foto: !/pdf/i.test(fichero.file.type), titulo: fichero.file.name }
@@ -764,7 +801,20 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 <Casilla rotulo="N.I.F." origen={origen.nif} htmlFor="kf-nif"><input id="kf-nif" readOnly tabIndex={-1} value={prov?.nif ?? emisor?.nif ?? ''} /></Casilla>
                 <Casilla rotulo="Nombre" origen={origen.nombre} htmlFor="kf-nombre"><input id="kf-nombre" readOnly tabIndex={-1} value={prov?.nombre ?? emisor?.nombre ?? ''} title={prov?.nombre ?? emisor?.nombre ?? undefined} /></Casilla>
               </>)}
-              <Casilla rotulo="Tipo de operación" origen={origen.tipoOperacion} htmlFor="kf-operacion"><input id="kf-operacion" readOnly tabIndex={-1} value={textoOperacion(delProv?.regimen ?? null) ?? ''} /></Casilla>
+              {/* K10b · El tipo de operación, por factura (como ERP10): nace con el de su ficha; cambiarlo aquí no toca la ficha. */}
+              <Casilla rotulo="Tipo de operación" htmlFor="kf-operacion"
+                accion={origenOp ? <span className="kf-origen" data-prueba="origen-operacion" title={origenOp}>
+                  {/* A 1366 «Cambiado en esta factura» corta el rótulo (Julio, 21/11): «Cambiado», y entero al pasar el ratón. */}
+                  {origenOp === 'De su ficha' ? (provId ? <Link to={`/conta/proveedores/${provId}`}>De su ficha</Link> : 'De su ficha') : 'Cambiado'}
+                </span> : undefined}>
+                {cabEscribible ? (
+                  <select id="kf-operacion" aria-label="Tipo de operación" value={opFactura ?? opFicha ?? ''} disabled={guardandoCab} title={textoDeOperacion(opFactura ?? opFicha)}
+                    onChange={(e) => { const v = esOperacion(e.target.value) ? e.target.value : null; void ponerCabecera({ operacion: v === opFicha ? null : v }) }}>
+                    {!opFactura && !opFicha && <option value="">—</option>}
+                    {OPERACIONES.map((o) => <option key={o.valor} value={o.valor} title={o.texto}>{o.corto}</option>)}
+                  </select>
+                ) : <input id="kf-operacion" readOnly tabIndex={-1} value={cortoDeOperacion(opFactura ?? opFicha) || (textoOperacion(delProv?.regimen ?? null) ?? '')} title={textoDeOperacion(opFactura ?? opFicha) || undefined} />}
+              </Casilla>
             </div>
             {aMano && !provId && !nuevo && (
               <button type="button" className="kf-enlace-plano kf-nuevo-proveedor" data-prueba="nuevo-proveedor" onClick={() => setNuevo({ nif: '', nombre: textoProv?.trim() ?? '', fallo: null, ocupado: false })}>+ Nuevo proveedor</button>
@@ -805,12 +855,53 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
             <div className="kf-fila" style={{ gridTemplateColumns: '1.7fr 1.1fr 1.1fr 1.1fr' }}>
               <Casilla rotulo="N.º de factura" origen={origen.numero} htmlFor="kf-numero"><input id="kf-numero" data-casilla value={b.numero} onChange={(e) => ed.poner('numero', e.target.value)} /></Casilla>
               <Casilla rotulo="Fecha factura" origen={origen.fecha} htmlFor="kf-fecha"><CasillaFecha id="kf-fecha" etiqueta="Fecha factura" iso={b.fecha} hoy={hoy} poner={(x) => ed.poner('fecha', x)} /></Casilla>
-              <Casilla rotulo="Se deduce en" htmlFor="kf-deduce"><input id="kf-deduce" readOnly tabIndex={-1} value={trimestreDe(b.fecha)} /></Casilla>
+              {/* K10b · El trimestre: el de su fecha, o el primero abierto si el suyo está presentado; otro abierto se elige, uno presentado nunca. */}
+              <Casilla rotulo="Se deduce en" htmlFor="kf-deduce" origen={trim?.elegido ? 'Elegido' : null}>
+                {cabEscribible && trimestres.length > 0 ? (
+                  <select id="kf-deduce" aria-label="Se deduce en" value={trim?.trimestre?.inicio ?? ''} disabled={guardandoCab}
+                    onChange={(e) => void ponerCabecera({ deduce_en: e.target.value || null })}>
+                    {trimestres.map((t) => <option key={t.inicio} value={t.inicio} disabled={t.presentado}>{t.texto}{t.presentado ? ' · presentado' : ''}</option>)}
+                  </select>
+                ) : <input id="kf-deduce" readOnly tabIndex={-1} value={trim?.trimestre?.texto ?? trimestreDe(b.fecha)} />}
+              </Casilla>
               <Casilla rotulo="Serie / documento" htmlFor="kf-serie"><input id="kf-serie" readOnly tabIndex={-1} value={fac?.asiento?.numero ? `2 / ${fac.asiento.numero}` : '2 / —'} /></Casilla>
             </div>
-            <div className="kf-fila" style={{ gridTemplateColumns: '1fr' }}>
-              <Casilla rotulo="Concepto del asiento" origen={origen.concepto} htmlFor="kf-concepto"><input id="kf-concepto" readOnly tabIndex={-1} value={conceptoTexto} title={conceptoTexto} /></Casilla>
+            {/* K10b · El concepto del asiento se escribe (Sumied lo propone, y lo escrito va al asiento); las observaciones, plegadas en una
+                línea para que la ficha siga cabiendo entera (Julio, 16/11): se guardan con la factura y no van al asiento. */}
+            <div className="kf-fila" style={{ gridTemplateColumns: '1fr auto' }}>
+              <Casilla rotulo="Concepto del asiento" origen={cab?.concepto ? 'Escrito' : origen.concepto} htmlFor="kf-concepto">
+                {cabEscribible ? (
+                  <input id="kf-concepto" data-casilla maxLength={200} value={textoConcepto?.k === invoiceId ? textoConcepto.v : conceptoTexto} title={conceptoTexto}
+                    onChange={(e) => setTextoConcepto({ k: invoiceId ?? '', v: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur() } }}
+                    onBlur={() => {
+                      if (textoConcepto?.k !== invoiceId) return
+                      const v = textoConcepto.v.trim(); setTextoConcepto(null)
+                      if (v !== conceptoTexto.trim()) void ponerCabecera({ concepto: v || null })
+                    }} />
+                ) : <input id="kf-concepto" readOnly tabIndex={-1} value={conceptoTexto} title={conceptoTexto} />}
+              </Casilla>
+              {!aMano && (
+                <button type="button" className="kf-enlace-plano kf-obs-boton" data-prueba="observaciones-boton" aria-expanded={obsAbiertas === invoiceId}
+                  onClick={() => setObsAbiertas((x) => (x === invoiceId ? null : invoiceId ?? null))}>
+                  {cab?.observaciones ? 'Observaciones ✓' : 'Observaciones +'}
+                </button>
+              )}
             </div>
+            {!aMano && obsAbiertas === invoiceId && (
+              <div className="kf-fila" style={{ gridTemplateColumns: '1fr' }}>
+                <Casilla rotulo="Observaciones" origen="No van al asiento" htmlFor="kf-observaciones">
+                  <textarea id="kf-observaciones" rows={2} maxLength={2000} readOnly={!cabEscribible} value={textoObs?.k === invoiceId ? textoObs.v : cab?.observaciones ?? ''}
+                    onChange={(e) => setTextoObs({ k: invoiceId ?? '', v: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.stopPropagation() }}
+                    onBlur={() => {
+                      if (textoObs?.k !== invoiceId) return
+                      const v = textoObs.v.trim(); setTextoObs(null)
+                      if (v !== (cab?.observaciones ?? '')) void ponerCabecera({ observaciones: v || null })
+                    }} />
+                </Casilla>
+              </div>
+            )}
             {!aMano && (
               <div className="kf-saldo" data-prueba="saldo-proveedor">
                 Saldo del proveedor a hoy <strong>{mayor ? cifra(mayor.saldo) : '—'}</strong>
@@ -896,9 +987,16 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                     <option value={aMano && ejeLocal ? LOCAL_COMUN : ''}>{ejeLocal ? 'Común a todos los locales' : 'Sin locales'}</option>
                     {locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}{l.id === localPropuesto ? ' (su ficha)' : ''}</option>)}
                   </select>
-                  <select aria-label="Marca" disabled title="La marca de la factura aún no se puede cambiar desde esta ficha." value="">
-                    <option value="">{marca ? `${marca} (de la factura)` : 'Sin repartir por marca'}</option>
-                  </select>
+                  {/* K10b · La marca, de las de la cuenta; sin ninguna, no sale. Va a los apuntes del asiento, como el local. */}
+                  {marcas.length > 0 && (
+                    <select id="kf-marca" aria-label="Marca" value={cab?.marcaId ?? ''} disabled={!cabEscribible || guardandoCab}
+                      title={marcas.find((m) => m.id === cab?.marcaId)?.nombre ?? 'Sin marca'}
+                      onChange={(e) => void ponerCabecera({ marca: e.target.value || null })}>
+                      <option value="">Sin marca</option>
+                      {/* El nombre corto en la casilla (no cabe entero a 1456 ni a 1366), y el entero al pasar el ratón. */}
+                      {marcas.map((m) => <option key={m.id} value={m.id} title={m.nombre}>{marcaCorta(m.nombre)}</option>)}
+                    </select>
+                  )}
                 </div>
               </div>
               <div className="kf-bloque">
@@ -941,7 +1039,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
 
             {modo === 'contabilizada'
               ? (enModificar && asientoReal ? null : <AsientoQueSale lineas={lineasValidado} etiqueta={{ texto: etiquetaValidado(fac?.asiento?.numero ?? null), tono: 'bien' }} />)
-              : <AsientoQueSale lineas={previa && totales.total !== 0 ? previa.lineas : []} etiqueta={etiqueta}
+              : <AsientoQueSale lineas={previa && totales.total !== 0 ? previa.lineas : []} etiqueta={etiqueta} nota={porqueSinPropuesta}
                   editar={!aMano && id && !soloLectura ? { texto: 'Editar el asiento', hacer: () => setCompleta(true) } : null} />}
           </fieldset>}
           {/* X26 · Fuera del fieldset de solo lectura: dentro, todo sale desactivado (e2e #1739). Con display: contents, en el mismo sitio. */}
