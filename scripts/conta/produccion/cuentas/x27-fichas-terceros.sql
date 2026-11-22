@@ -6,11 +6,13 @@
 -- cuenta (regla 9), que las fichas y las recibidas son las mismas: la huella de cada ficha de proveedor y de cliente
 -- (lo que ya guardaban) y, de las recibidas, cuántas tienen % deducible, «No incluir en 347», marca, y cuántas líneas
 -- tienen plataforma.
+-- Solo columnas que existen ANTES de la tanda (el ensayo de 5e548b1 paró en «column s.phone does not exist»: en
+-- producción supplier no tiene phone ni email; la 1315 las añade).
 -- Corte fijo: lo creado y cambiado antes del 22/11/2026 a las 00:00 de Madrid.
 select clave, valor from (
   select 1 o, 'cuenta ' || s.account_id || ' · fichas de proveedor (cuántas · huella)' clave,
          count(*) || ' · ' || md5(string_agg(concat_ws('|', s.id, s.name, s.legal_name, s.tax_id, s.tax_id_type, s.country_code,
-           s.fiscal_street, s.fiscal_postal_code, s.fiscal_city, s.fiscal_province, s.phone, s.email, s.notes, s.vat_regime,
+           s.fiscal_street, s.fiscal_postal_code, s.fiscal_city, s.fiscal_province, s.notes, s.vat_regime,
            s.usual_tax_rate_ids::text, s.irpf_withholding_pct, s.default_location_id, s.payment_method, s.payment_terms_days, s.iban),
            ',' order by s.id)) valor
     from public.supplier s

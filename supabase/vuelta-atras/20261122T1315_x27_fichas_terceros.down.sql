@@ -13,3 +13,5 @@ alter table public.supplier drop column if exists default_channel_id;
 alter table public.supplier drop column if exists default_brand_id;
 alter table public.supplier drop constraint if exists supplier_vat_deductible_pct_check;
 alter table public.supplier drop column if exists vat_deductible_pct;
+-- supplier.phone y supplier.email NO se quitan: en staging existían antes de la 1315 y no se sabe aquí si los puso
+-- ella; vacíos no estorban.

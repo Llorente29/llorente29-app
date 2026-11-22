@@ -7,6 +7,7 @@
 --      · vat_deductible_pct («% I.V.A. deducible»): de 0 a 100; vacío = lo de siempre (100).
 --      · default_brand_id («Marca») y default_channel_id («Plataforma»).
 --      · exclude_from_347 («No incluir en 347»): vacío = no.
+--      · phone y email («Teléfonos» y «Correo electrónico»): en staging ya estaban; en producción, no.
 --      · pay_on_post («Pago directo al contabilizar la factura»): la pantalla de la recibida propone el pago con la
 --        subcuenta de pago en la fecha de la factura (sin esperar al vencimiento). Solo lo lee la pantalla.
 --   2. customer_fiscal, datos de la ficha del cliente: phone, email, notes, trade_name (nombre comercial) y
@@ -25,6 +26,10 @@ alter table public.supplier add column if not exists default_brand_id uuid refer
 alter table public.supplier add column if not exists default_channel_id uuid references public.sales_channel(id) on delete set null;
 alter table public.supplier add column if not exists exclude_from_347 boolean;
 alter table public.supplier add column if not exists pay_on_post boolean;
+-- El teléfono y el correo de la ficha («Teléfonos», «Correo electrónico»): staging los tiene, producción no (el ensayo
+-- de 5e548b1: «column s.phone does not exist»). Con «if not exists», en staging no hacen nada.
+alter table public.supplier add column if not exists phone text;
+alter table public.supplier add column if not exists email text;
 comment on column public.supplier.vat_deductible_pct is 'X27 · «% I.V.A. deducible» de su ficha: la recibida nace con él (disparador x27_recibida_nace). Vacío = 100.';
 comment on column public.supplier.default_brand_id is 'X27 · «Marca» de su ficha: la recibida nace con ella (su brand_id, que va a los apuntes del asiento).';
 comment on column public.supplier.default_channel_id is 'X27 · «Plataforma» de su ficha: cada línea de gasto nace con ella (supplier_invoice_expense_dato.channel_id).';
