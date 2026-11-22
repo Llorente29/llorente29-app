@@ -589,6 +589,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     if (e.key === 'Enter' && !e.ctrlKey && !e.altKey && !e.metaKey) {
       const lista = casillasDe(raiz.current)
       const sobre = t.closest('button, a, summary') ? 'boton' : t.closest('textarea') ? 'texto' : null
+      // X26 · Modificando, Intro guarda (lo dice la franja), esté donde esté el foco: las casillas apagadas de la
+      // contabilizada también cuentan en el orden, y la del asiento no sería la última.
+      if (enModificar && sobre !== 'boton') { e.preventDefault(); void guardarYSiguiente(); return }
       const que = queHaceIntro({ orden: lista.length, actual: lista.indexOf(t), sobre })
       if (!que) return
       e.preventDefault()
@@ -937,14 +940,16 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
             )}
 
             {modo === 'contabilizada'
-              ? (enModificar && asientoReal
-                  ? <ModificarAsiento apuntes={asientoReal.apuntes.map((a) => ({ posicion: a.posicion, cuenta: a.cuenta, nombre: a.nombreCuenta, debe: a.debe, haber: a.haber }))}
-                      plan={cuentasPago?.lista ?? []} nombre={(c) => cuentasPago?.nombres.get(c) ?? asientoReal.apuntes.find((a) => a.cuenta === c)?.nombreCuenta ?? ''}
-                      elegidas={modificando?.elegidas ?? {}} elegir={(pos, c) => setModificando((m) => (m ? { ...m, elegidas: { ...m.elegidas, [pos]: c } } : m))} />
-                  : <AsientoQueSale lineas={lineasValidado} etiqueta={{ texto: etiquetaValidado(fac?.asiento?.numero ?? null), tono: 'bien' }} />)
+              ? (enModificar && asientoReal ? null : <AsientoQueSale lineas={lineasValidado} etiqueta={{ texto: etiquetaValidado(fac?.asiento?.numero ?? null), tono: 'bien' }} />)
               : <AsientoQueSale lineas={previa && totales.total !== 0 ? previa.lineas : []} etiqueta={etiqueta}
                   editar={!aMano && id && !soloLectura ? { texto: 'Editar el asiento', hacer: () => setCompleta(true) } : null} />}
           </fieldset>}
+          {/* X26 · Fuera del fieldset de solo lectura: dentro, todo sale desactivado (e2e #1739). Con display: contents, en el mismo sitio. */}
+          {!cargando && modo === 'contabilizada' && enModificar && asientoReal && (
+            <ModificarAsiento apuntes={asientoReal.apuntes.map((a) => ({ posicion: a.posicion, cuenta: a.cuenta, nombre: a.nombreCuenta, debe: a.debe, haber: a.haber }))}
+              plan={cuentasPago?.lista ?? []} nombre={(c) => cuentasPago?.nombres.get(c) ?? asientoReal.apuntes.find((a) => a.cuenta === c)?.nombreCuenta ?? ''}
+              elegidas={modificando?.elegidas ?? {}} elegir={(pos, c) => setModificando((m) => (m ? { ...m, elegidas: { ...m.elegidas, [pos]: c } } : m))} />
+          )}
         </div>
         <AyudaTeclas />
         </div>

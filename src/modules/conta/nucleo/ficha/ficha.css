@@ -322,5 +322,6 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 /* X26 · «Modificar» una recibida contabilizada: la cuenta de cada gasto con su buscador, y su nombre al lado. */
 .kf-modificar-linea { display: grid; grid-template-columns: minmax(110px, 140px) minmax(0, 1fr); gap: 8px; align-items: center; }
 .kf-modificar-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kf-modificar-linea .kf-con-sugerencias, .kf-modificar-linea input { min-width: 0; width: 100%; box-sizing: border-box; }
 .kf-modificar { display: inline-flex; gap: 8px; align-items: center; margin-left: 8px; }
 .kf-modificar-porque { font-size: 12px; color: var(--k-apoyo); }
