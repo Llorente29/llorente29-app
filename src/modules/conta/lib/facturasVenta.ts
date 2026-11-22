@@ -104,7 +104,14 @@ export interface FacturaVenta {
    * R15 · Un día del TPV de fuera (clase «dia»: todas sus facturas, con su PDF) o una de sus facturas con NIF (clase
    * «nif»: va DENTRO del día, así que no suma otra vez en el total). Se abre en la ficha del día.
    */
-  tpv?: { clase: 'dia' | 'nif'; diaId: string; dia: string; programa: string | null; pdf: string | null; primero: number | string | null; ultimo: number | string | null }
+  tpv?: {
+    /** R15b · «dia»: una serie del día (sus tickets, con su PDF); «nif»: una factura con NIF; «r5»: una devolución. */
+    clase: 'dia' | 'nif' | 'r5'; diaId: string; dia: string; programa: string | null; pdf: string | null; primero: number | string | null; ultimo: number | string | null
+    /** Va DENTRO de la fila de su día (la lista del R15, antes del libro por serie): no suma otra vez. */
+    dentro?: boolean
+    /** La serie (contador) del TPV, si el libro la dice. */
+    serie?: string | null
+  }
 }
 
 const c = (n: number) => Math.round(n * 100)
@@ -268,9 +275,9 @@ export function seriesQueHay(fs: readonly FacturaVenta[]): string[] {
   return [...new Set(fs.map((f) => f.serie).filter((s): s is string => !!s))].sort()
 }
 
-/** El total del filtro, sin las anuladas (se compensan con su rectificativa) ni las facturas con NIF de un día del TPV (ya suman en su día). */
+/** El total del filtro, sin las anuladas (se compensan con su rectificativa) ni lo que va dentro de la fila de su día del TPV (ya suma allí). */
 export function totalDelFiltro(fs: readonly FacturaVenta[]): number {
-  return fs.filter((f) => f.guardado !== 'anulada' && f.tpv?.clase !== 'nif').reduce((t, f) => t + c(f.total), 0) / 100
+  return fs.filter((f) => f.guardado !== 'anulada' && !f.tpv?.dentro).reduce((t, f) => t + c(f.total), 0) / 100
 }
 
 // ── Las cuentas de una factura ────────────────────────────────────────────────
@@ -501,7 +508,40 @@ export function conDiasTpv(libro: readonly Omit<FacturaVenta, 'diez'>[], tpv: re
     : {
         ...base, id: `tpv:${x.dia_id}:${x.numero}`, entryId: x.asiento_id, numero: x.numero, serie: x.contador, fecha: x.dia,
         cliente: x.cliente ?? 'Sin nombre', nif: x.nif, base: x.base, iva: x.cuota, total: x.total,
-        tpv: { clase: 'nif', diaId: x.dia_id, dia: x.dia, programa: null, pdf: null, primero: x.numero, ultimo: x.numero },
+        tpv: { clase: 'nif', diaId: x.dia_id, dia: x.dia, programa: null, pdf: null, primero: x.numero, ultimo: x.numero, dentro: true },
       })
   return [...fuera, ...dias]
+}
+
+// ── R15b · Las filas del libro de IVA de cada día del TPV ─────────────────────
+
+/** Una fila de conta_tpv_emitidas_libro: una serie del día, una factura con NIF o una devolución (R5). */
+export interface FilaLibroTpv {
+  clase: 'serie' | 'nif' | 'r5'; dia_id: string; dia: string; programa_nombre: string
+  tipo_factura: string; serie: string | null; numero: string | null; hasta: string | null; documentos: number
+  nif: string | null; nombre: string | null; base: number; cuota: number; total: number; asiento_id: string | null; pdf: string | null
+}
+
+/** «5097 a 5144» · «5097» · null. */
+export const rangoLibro = (numero: string | null, hasta: string | null): string | null =>
+  numero == null ? null : hasta && hasta !== numero ? `${numero} a ${hasta}` : numero
+
+/**
+ * Los días del TPV en «Facturas emitidas» como van en el libro de IVA: cada serie en su fila («Día del TPV ·
+ * Revo», tickets X a Y, con su PDF), cada factura con NIF en la suya (con su cliente) y cada devolución en la suya
+ * (R5, rectificativa). Las filas de un día suman lo que el día: ninguna va «dentro». Las anotaciones del libro que
+ * ya salían por su asiento (una por tipo) se quitan: estas las sustituyen.
+ */
+export function conLibroTpv(libro: readonly Omit<FacturaVenta, 'diez'>[], filas: readonly FilaLibroTpv[]): Omit<FacturaVenta, 'diez'>[] {
+  const asientos = new Set(filas.map((x) => x.asiento_id).filter((x): x is string => !!x))
+  const fuera = libro.filter((f) => !f.entryId || !asientos.has(f.entryId))
+  const tpv = filas.map((x, i): Omit<FacturaVenta, 'diez'> => ({
+    fuente: 'libro', vence: null, cobrado: 0, guardado: 'emitida', enviada: false, localId: null, estadoCobro: null, origen: 'dia_tpv',
+    id: `tpv:${x.dia_id}:${x.clase}:${x.serie ?? ''}:${x.numero ?? i}`, entryId: x.asiento_id,
+    numero: rangoLibro(x.numero, x.hasta), serie: x.serie, fecha: x.dia,
+    cliente: x.clase === 'serie' ? `Día del TPV · ${x.programa_nombre}` : x.clase === 'r5' ? (x.nif ? x.nombre ?? 'Sin nombre' : 'Devolución del TPV') : x.nombre ?? 'Sin nombre',
+    nif: x.nif, base: x.base, iva: x.cuota, total: x.total, rectificativa: x.clase === 'r5',
+    tpv: { clase: x.clase === 'serie' ? 'dia' : x.clase, diaId: x.dia_id, dia: x.dia, programa: x.programa_nombre, pdf: x.pdf, primero: x.numero, ultimo: x.hasta ?? x.numero, serie: x.serie },
+  }))
+  return [...fuera, ...tpv]
 }

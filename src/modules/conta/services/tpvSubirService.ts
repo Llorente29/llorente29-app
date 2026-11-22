@@ -13,6 +13,7 @@ import { rpc, hayBase } from '@/modules/conta/services/bd'
 import type { LecturaDia } from '@/modules/conta/lib/lectorRevo'
 import type { DiaYaGuardado, FormaCuenta } from '@/modules/conta/lib/subirTpv'
 import type { CuentaHoja } from '@/modules/conta/diseno/plantillas'
+import type { FilaLibroDia } from '@/modules/conta/lib/diaTpv'
 
 const limpio = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, '')
 
@@ -168,5 +169,22 @@ export async function leerFichaDia(diaId: string): Promise<FichaDiaTpv> {
     sobre_limite: (r.sobre_limite ?? []).map((d) => ({ ...d, total: num(d.total) })),
     iva: (r.iva ?? []).map((t) => ({ tipo: num(t.tipo), base: num(t.base), cuota: num(t.cuota), facturas: num(t.facturas) })),
     cobros: (r.cobros ?? []).map((c) => ({ ...c, importe: num(c.importe), pagos: num(c.pagos), por_canal: !!c.por_canal })),
+  }
+}
+
+// ── R15b · El día en el libro de IVA ────────────────────────────────────────────────
+// Nombre dentro de cadena (regla 40): conta_tpv_dia_libro es del R15b (20261121T2347).
+
+export interface LibroDia { enLibro: boolean; repartido: boolean; filas: FilaLibroDia[] }
+
+/** Las filas del libro de IVA de un día (o las que tendrá). Null si la base aún no tiene la 2347. */
+export async function leerLibroDia(diaId: string): Promise<LibroDia | null> {
+  try {
+    const r = await rpc<{ en_libro: boolean; repartido: boolean; filas: FilaLibroDia[] }>('conta_tpv_dia_libro', { p_dia: diaId })
+    return { enLibro: !!r.en_libro, repartido: !!r.repartido,
+      filas: (r.filas ?? []).map((f) => ({ ...f, tipo: num(f.tipo), base: num(f.base), cuota: num(f.cuota), total: num(f.total), documentos: num(f.documentos) })) }
+  } catch (e) {
+    if (/PGRST202|could not find the function|does not exist/i.test(e instanceof Error ? e.message : String(e))) return null
+    throw e
   }
 }

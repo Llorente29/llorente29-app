@@ -218,7 +218,10 @@ test('a 1456 × 816: se contabilizan al subir, se abren, el que espera se arregl
     for (const rango of ['5001 a 5048', '5049 a 5096', '5097 a 5144'])
       await expect(lista.getByRole('row').filter({ hasText: rango })).toContainText('Día del TPV · Revo')
     await expect(lista.locator('[data-prueba="emitida-dia-tpv"]').first().getByRole('button', { name: 'PDF' })).toBeVisible()
-    await expect(lista.locator('[data-prueba="emitida-nif-tpv"]').first()).toContainText(/^Dentro del día del TPV del 1[345] oct$/)
+    // R15b: con el libro por serie, las facturas con NIF salen en su fila («Del día…»); antes, dentro del día; y entre
+    // la 2346 y la 2347 (desde la rama), el libro aún no está repartido y no salen aparte.
+    const nif = lista.locator('[data-prueba="emitida-nif-tpv"]')
+    if (await nif.count()) await expect(nif.first()).toContainText(/^(Dentro del|Del) día del TPV del 1[345] oct$/)
   } catch (e) { await contarPantalla(page, 'Facturas emitidas'); throw e }
   await cargada(page, 'Facturas emitidas con los días del TPV')
   await page.screenshot({ path: `${DIR}/emitidas-dias-tpv-1456.png` })
