@@ -21940,6 +21940,75 @@ $_$;
 
 
 --
+-- Name: _x27c_partir_domicilio(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._x27c_partir_domicilio(p_texto text) RETURNS jsonb
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO 'public'
+    AS $_$
+declare
+  t text := nullif(btrim(regexp_replace(coalesce(p_texto, ''), '\s+', ' ', 'g')), '');
+  m text[]; v_calle text; v_cp text; v_ciudad text; v_prov text; v_ult text; v_resto text;
+begin
+  if t is null then return jsonb_build_object('calle', null, 'cp', null, 'ciudad', null, 'provincia', null); end if;
+  m := regexp_match(t, '^(.*?)[,\s-]*\m((?:0[1-9]|[1-4][0-9]|5[0-2])[0-9]{3})\M[,\s-]*(.*)$');
+  if m is not null then
+    v_calle := nullif(btrim(regexp_replace(m[1], '[,\s-]+$', '')), '');
+    v_cp := m[2];
+    v_ciudad := nullif(btrim(regexp_replace(split_part(regexp_replace(m[3], '\(.*?\)', '', 'g'), ',', 1), '[\s-]+$', '')), '');
+    v_prov := public._x27c_provincia_de_cp(v_cp);
+  else
+    v_ult := btrim(regexp_replace(t, '^.*,', ''));
+    v_resto := btrim(regexp_replace(t, ',[^,]*$', ''));
+    if position(',' in t) > 0 and v_ult <> '' and v_ult !~ '[0-9]' and array_length(regexp_split_to_array(v_ult, '\s+'), 1) <= 4 and v_resto <> '' then
+      v_calle := v_resto; v_ciudad := v_ult;
+      v_prov := (select p from unnest(array['MADRID','BARCELONA','VALENCIA','SEVILLA','MÁLAGA','ZARAGOZA','MURCIA','ALICANTE','CÓRDOBA',
+                  'VALLADOLID','GRANADA','TOLEDO','SALAMANCA','BURGOS','LEÓN','CÁDIZ','HUELVA','JAÉN','ALMERÍA','GIRONA','LLEIDA',
+                  'TARRAGONA','CASTELLÓN','ALBACETE','CUENCA','GUADALAJARA','SEGOVIA','ÁVILA','SORIA','PALENCIA','ZAMORA','TERUEL',
+                  'HUESCA','BADAJOZ','CÁCERES','LUGO','OURENSE','PONTEVEDRA','CANTABRIA','ASTURIAS','NAVARRA','LA RIOJA','CEUTA','MELILLA']) p
+                  where translate(upper(p), 'ÁÉÍÓÚÜÀÈÒ', 'AEIOUUAEO') = translate(upper(v_ult), 'ÁÉÍÓÚÜÀÈÒ', 'AEIOUUAEO') limit 1);
+    else
+      v_calle := t;
+    end if;
+  end if;
+  return jsonb_build_object('calle', v_calle, 'cp', v_cp, 'ciudad', v_ciudad, 'provincia', v_prov);
+end $_$;
+
+
+--
+-- Name: FUNCTION _x27c_partir_domicilio(p_texto text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._x27c_partir_domicilio(p_texto text) IS 'X27c · Un domicilio en una línea partido en calle, código postal, población y provincia (la del código postal; sin él, la que se llama como la población). Lo que no se sabe partir, entero en la calle.';
+
+
+--
+-- Name: _x27c_provincia_de_cp(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._x27c_provincia_de_cp(p_cp text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $_$
+  select (array['ARABA/ÁLAVA','ALBACETE','ALICANTE','ALMERÍA','ÁVILA','BADAJOZ','ILLES BALEARS','BARCELONA','BURGOS','CÁCERES',
+                'CÁDIZ','CASTELLÓN','CIUDAD REAL','CÓRDOBA','A CORUÑA','CUENCA','GIRONA','GRANADA','GUADALAJARA','GIPUZKOA',
+                'HUELVA','HUESCA','JAÉN','LEÓN','LLEIDA','LA RIOJA','LUGO','MADRID','MÁLAGA','MURCIA',
+                'NAVARRA','OURENSE','ASTURIAS','PALENCIA','LAS PALMAS','PONTEVEDRA','SALAMANCA','SANTA CRUZ DE TENERIFE','CANTABRIA','SEGOVIA',
+                'SEVILLA','SORIA','TARRAGONA','TERUEL','TOLEDO','VALENCIA','VALLADOLID','BIZKAIA','ZAMORA','ZARAGOZA',
+                'CEUTA','MELILLA'])[left(btrim(p_cp), 2)::int]
+   where btrim(coalesce(p_cp, '')) ~ '^(0[1-9]|[1-4][0-9]|5[0-2])[0-9]{3}$'
+$_$;
+
+
+--
+-- Name: FUNCTION _x27c_provincia_de_cp(p_cp text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._x27c_provincia_de_cp(p_cp text) IS 'X27c · La provincia de un código postal español (01–52), en mayúsculas como ERP10. Null si no lo es.';
+
+
+--
 -- Name: ack_goods_receipt_cost_warning(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -107577,6 +107646,39 @@ COMMENT ON FUNCTION public.tg_x27_recibida_nace() IS 'X27 · La recibida nace co
 
 
 --
+-- Name: tg_x27c_alta_parte_el_domicilio(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_x27c_alta_parte_el_domicilio() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+declare v jsonb;
+begin
+  if new.fiscal_street is not null and new.fiscal_city is null then
+    v := public._x27c_partir_domicilio(new.fiscal_street);
+    if v->>'ciudad' is not null then
+      new.fiscal_street := coalesce(v->>'calle', new.fiscal_street);
+      new.fiscal_city := v->>'ciudad';
+      if new.fiscal_postal_code is null then new.fiscal_postal_code := v->>'cp'; end if;
+      if new.fiscal_province is null then new.fiscal_province := v->>'provincia'; end if;
+    end if;
+  end if;
+  if new.fiscal_province is null and new.fiscal_postal_code is not null and coalesce(new.country_code, 'ES') = 'ES' then
+    new.fiscal_province := public._x27c_provincia_de_cp(new.fiscal_postal_code);
+  end if;
+  return new;
+end $$;
+
+
+--
+-- Name: FUNCTION tg_x27c_alta_parte_el_domicilio(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_x27c_alta_parte_el_domicilio() IS 'X27c · Al dar de alta un proveedor, su domicilio partido: la población, el código postal y la provincia que vienen dentro del domicilio, y la provincia de su código postal. Solo lo vacío.';
+
+
+--
 -- Name: theoretical_qty_at(uuid, uuid, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -123928,6 +124030,7 @@ CREATE TABLE public.customer_fiscal (
     notes text,
     trade_name text,
     usual_tax_rate_ids uuid[],
+    website text,
     CONSTRAINT customer_fiscal_country_code_check CHECK ((country_code ~ '^[A-Z]{2}$'::text)),
     CONSTRAINT customer_fiscal_entity_kind_check CHECK (((entity_kind IS NULL) OR (entity_kind = ANY (ARRAY['company'::text, 'self_employed'::text, 'person'::text])))),
     CONSTRAINT customer_fiscal_iban_check CHECK (((iban IS NULL) OR (iban ~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$'::text))),
@@ -123994,6 +124097,13 @@ COMMENT ON COLUMN public.customer_fiscal.trade_name IS 'X27 · Nombre comercial 
 --
 
 COMMENT ON COLUMN public.customer_fiscal.usual_tax_rate_ids IS 'X27 · Tipos de IVA habituales del cliente (ids de tax_rate), como supplier.usual_tax_rate_ids.';
+
+
+--
+-- Name: COLUMN customer_fiscal.website; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.customer_fiscal.website IS 'X27c · «Página web» de la ficha del cliente.';
 
 
 --
@@ -151169,6 +151279,13 @@ CREATE TRIGGER x27_linea_plataforma AFTER INSERT ON public.supplier_invoice_expe
 --
 
 CREATE TRIGGER x27_recibida_nace BEFORE INSERT OR UPDATE OF supplier_id ON public.supplier_invoice FOR EACH ROW EXECUTE FUNCTION public.tg_x27_recibida_nace();
+
+
+--
+-- Name: supplier x27c_alta_parte_el_domicilio; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER x27c_alta_parte_el_domicilio BEFORE INSERT ON public.supplier FOR EACH ROW EXECUTE FUNCTION public.tg_x27c_alta_parte_el_domicilio();
 
 
 --
@@ -179678,6 +179795,24 @@ GRANT ALL ON FUNCTION public._verifactu_url_codificar(p text) TO service_role;
 
 
 --
+-- Name: FUNCTION _x27c_partir_domicilio(p_texto text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._x27c_partir_domicilio(p_texto text) TO anon;
+GRANT ALL ON FUNCTION public._x27c_partir_domicilio(p_texto text) TO authenticated;
+GRANT ALL ON FUNCTION public._x27c_partir_domicilio(p_texto text) TO service_role;
+
+
+--
+-- Name: FUNCTION _x27c_provincia_de_cp(p_cp text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._x27c_provincia_de_cp(p_cp text) TO anon;
+GRANT ALL ON FUNCTION public._x27c_provincia_de_cp(p_cp text) TO authenticated;
+GRANT ALL ON FUNCTION public._x27c_provincia_de_cp(p_cp text) TO service_role;
+
+
+--
 -- Name: FUNCTION ack_goods_receipt_cost_warning(p_account_id uuid, p_receipt_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -194039,6 +194174,14 @@ GRANT ALL ON FUNCTION public.tg_x27_linea_plataforma() TO service_role;
 
 REVOKE ALL ON FUNCTION public.tg_x27_recibida_nace() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.tg_x27_recibida_nace() TO service_role;
+
+
+--
+-- Name: FUNCTION tg_x27c_alta_parte_el_domicilio(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_x27c_alta_parte_el_domicilio() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_x27c_alta_parte_el_domicilio() TO service_role;
 
 
 --
