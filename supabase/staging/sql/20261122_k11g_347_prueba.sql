@@ -12,7 +12,13 @@
 --   3. Proveedor dos: dos de 1.210,00 € (2.420,00) → por debajo de 3.005,06: no sale.
 --   4. Un abono del proveedor uno marcado «Rectificación de deducciones» (Julio, 22/11: «el signo lo da la factura»):
 --      en el 303 del 4T resta en la [40] (−100) y la [41] (−21); y en el 347, el del proveedor uno baja a 3.509,00.
---   5. La vuelta atrás quita la función.
+--   5. Arrendamiento (art. 34.1.d): con un contrato de alquiler del proveedor uno (su referencia catastral, inventada),
+--      sale en «arrendamientos» con el arrendador, la referencia y lo facturado en el año sin lo marcado (3.509,00).
+--   6. Metálico (art. 34.1.h): un cliente que paga 7.000,00 € en caja (570 al debe contra su 430) sale en «metalico»;
+--      otro con 2.000,00, no.
+--   7. Ventas (clave B): un cliente con dos facturas expedidas de 2.000,00 € (en el libro de expedidas, puestas aquí
+--      a mano: el libro es lo que lee el 347) sale con 4.000,00 en la clave B; otro con 1.000,00, no.
+--   8. La vuelta atrás quita la función.
 
 begin;
 do $$ begin
@@ -119,11 +125,63 @@ end $$;
 reset role;
 select set_config('request.jwt.claims', '', true);
 
--- 5 · La vuelta atrás.
+-- 5, 6 y 7 · Arrendamiento, metálico y ventas.
+do $$
+declare
+  a constant uuid := 'c0e20000-0000-4000-8000-0000000000e0'; emp constant uuid := 'c0e20000-0000-4000-8000-0000000000e3';
+  v_y uuid := (select id from public.fiscal_year where company_id = 'c0e20000-0000-4000-8000-0000000000e3' and date '2026-11-12' between starts_on and ends_on);
+  v_e uuid; k record;
+begin
+  insert into public.company_lease (account_id, company_id, supplier_id, situation, cadastral_ref, street_name, municipality, province, postal_code)
+  values (a, emp, 'c0f30000-0000-4000-8000-0000000000a1', '1', '0000000AA0000A0001AA', 'Calle de Prueba', 'Madrid', '28', '28000');
+  insert into public.party (id, account_id, name, tax_id, source) values
+    ('c0f30000-0000-4000-8000-0000000000c1', a, 'Cliente Uno de Prueba K11g, S.L.', 'B00011197', 'manual'),
+    ('c0f30000-0000-4000-8000-0000000000c2', a, 'Cliente Dos de Prueba K11g, S.L.', 'B00011205', 'manual');
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source) values
+    (a, emp, 'pymes', '57000097', '570', 'Caja de prueba K11g', 'own', 'manual')
+  on conflict (company_id, code) do nothing;
+  -- 6 · Cobros en caja: 7.000,00 del cliente uno y 2.000,00 del dos (contra dos 43 de la semilla, con su tercero en la línea).
+  for k in select * from (values ('43000081', 'c0f30000-0000-4000-8000-0000000000c1', 7000), ('43000082', 'c0f30000-0000-4000-8000-0000000000c2', 2000)) v(cta, party, imp) loop
+    insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status, created_by_name)
+    values (a, emp, v_y, 4, '2026-11-12', 'K11g cobro en caja', 'manual', 'borrador', 'Prueba K11g') returning id into v_e;
+    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, is_common, party_id)
+    select a, emp, v_e, x.p, c.id, x.d, x.h, false, case when x.p = 2 then k.party::uuid end
+      from (values (1, '57000097', k.imp, 0), (2, k.cta, 0, k.imp)) x(p, code, d, h) join public.company_account c on c.company_id = emp and c.code = x.code;
+    perform public._journal_entry_validar(v_e, 'Prueba K11g');
+  end loop;
+  -- 7 · El libro de expedidas: dos de 2.000,00 al cliente uno y una de 1.000,00 al dos.
+  for k in select * from (values ('B00011197', 'Cliente Uno de Prueba K11g, S.L.', 'K11G-V1', 2000), ('B00011197', 'Cliente Uno de Prueba K11g, S.L.', 'K11G-V2', 2000),
+                                 ('B00011205', 'Cliente Dos de Prueba K11g, S.L.', 'K11G-V3', 1000)) v(nif, nombre, num, total) loop
+    insert into public.vat_book_entry (account_id, company_id, entry_id, book, invoice_type, number, issue_date, counterpart_tax_id, counterpart_country, counterpart_name,
+                                       qualification, tax_base, tax_rate, tax_amount, total, source_type)
+    values (a, emp, v_e, 'issued', 'F1', k.num, date '2026-11-12', k.nif, 'ES', k.nombre, 'S1', round(k.total / 1.21, 2), 21, k.total - round(k.total / 1.21, 2), k.total, 'manual');
+  end loop;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"c0e20000-0000-4000-8000-0000000000e1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare r jsonb := public.conta_347_desde_los_libros('c0e20000-0000-4000-8000-0000000000e3', 2026); x jsonb;
+begin
+  select t into x from jsonb_array_elements(r -> 'arrendamientos') t where t ->> 'referencia_catastral' = '0000000AA0000A0001AA';
+  if x is null or x ->> 'nif' <> 'B00011171' or (x ->> 'total')::numeric <> 3509 then raise exception 'PRUEBA K11g · 5: el alquiler no sale con su arrendador, su referencia y 3.509,00 (%)', x; end if;
+  raise notice 'PRUEBA K11g · 5: arrendamiento: % (%), referencia %, % €.', x ->> 'arrendador', x ->> 'nif', x ->> 'referencia_catastral', x ->> 'total';
+  select t into x from jsonb_array_elements(r -> 'metalico') t where t ->> 'nif' = 'B00011197';
+  if x is null or (x ->> 'total')::numeric <> 7000 then raise exception 'PRUEBA K11g · 6: el cobro en caja del cliente uno no sale con 7.000,00 (%)', r -> 'metalico'; end if;
+  if exists (select 1 from jsonb_array_elements(r -> 'metalico') t where t ->> 'nif' = 'B00011205') then raise exception 'PRUEBA K11g · 6: el cliente dos (2.000,00) sale en metálico'; end if;
+  raise notice 'PRUEBA K11g · 6: metálico: % con % €; el de 2.000,00, no.', x ->> 'cliente', x ->> 'total';
+  select t into x from jsonb_array_elements(r -> 'terceros') t where t ->> 'nif' = 'B00011197' and t ->> 'clave' = 'B';
+  if x is null or (x ->> 'total')::numeric <> 4000 then raise exception 'PRUEBA K11g · 7: el cliente uno no sale en la clave B con 4.000,00 (%)', x; end if;
+  if exists (select 1 from jsonb_array_elements(r -> 'terceros') t where t ->> 'nif' = 'B00011205') then raise exception 'PRUEBA K11g · 7: el cliente dos (1.000,00) sale'; end if;
+  raise notice 'PRUEBA K11g · 7: ventas: cliente uno, clave B, % € (4T %); el de 1.000,00, no.', x ->> 'total', x ->> 't4';
+end $$;
+reset role;
+select set_config('request.jwt.claims', '', true);
+
+-- 8 · La vuelta atrás.
 \i supabase/vuelta-atras/20261122T1855_k11g_347_desde_los_libros.down.sql
 do $$ begin
-  if to_regprocedure('public.conta_347_desde_los_libros(uuid,integer)') is not null then raise exception 'PRUEBA K11g · 5: la vuelta atrás no quita la función'; end if;
-  raise notice 'PRUEBA K11g · 5: la vuelta atrás quita la función.';
+  if to_regprocedure('public.conta_347_desde_los_libros(uuid,integer)') is not null then raise exception 'PRUEBA K11g · 8: la vuelta atrás no quita la función'; end if;
+  raise notice 'PRUEBA K11g · 8: la vuelta atrás quita la función.';
 end $$;
 
 rollback;
