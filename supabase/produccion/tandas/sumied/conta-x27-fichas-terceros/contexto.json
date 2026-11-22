@@ -1,0 +1,29 @@
+{
+ "_que": "X27 · Las fichas de proveedor y de cliente · contexto medido en la BASE LOCAL con la estructura de staging (main 15d7ae1), en SOLO LECTURA: no en producción (esta sesión no lee producción). 1315 añade columnas vacías a supplier y customer_fiscal y dos disparadores sobre supplier_invoice y supplier_invoice_expense (cambia, con su prueba de staging). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-22T12:16Z",
+ "tanda": {
+  "supabase/migrations/20261122T1315_x27_fichas_terceros.sql": "f388c8700bdb2d69413769683e3442ba"
+ },
+ "contexto": {
+  "tablas": [
+   "public.customer_fiscal",
+   "public.supplier",
+   "public.supplier_invoice",
+   "public.supplier_invoice_expense"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.customer_fiscal": 0,
+   "public.supplier": 27,
+   "public.supplier_invoice": 70,
+   "public.supplier_invoice_expense": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,3 @@
+# X27 · la vuelta atrás: quita los dos disparadores, sus funciones y las columnas nuevas.
+cuenta: scripts/conta/produccion/cuentas/x27-fichas-terceros.sql
+supabase/vuelta-atras/20261122T1315_x27_fichas_terceros.down.sql
