@@ -154,7 +154,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await page.keyboard.press('F4')
     await page.getByRole('dialog').locator('tbody tr').first().click()
     await expect(fichaCli(page).getByRole('textbox', { name: 'Subcuenta de cobro: su nombre' })).not.toHaveValue('')
-    await page.locator('#ft-telefono').fill('900000000')
+    // Uno distinto en cada pasada: las dos pruebas guardan el mismo cliente del carril, y si la segunda escribe lo mismo
+    // que la primera la ficha dice, con razón, «No había nada distinto» (e2e 45029395595).
+    await page.locator('#ft-telefono').fill(`9${n.padStart(8, '0')}`)
     await fichaCli(page).locator('[data-boton="guardar"]').click()
     await expect(fichaCli(page).locator('.kp-barra-aviso')).toContainText('Guardado: Cliente de Prueba Emitida Uno', { timeout: 30_000 })
     await cabe(page, '[data-prueba="ficha-cliente-nucleo"]', ancho)
