@@ -30,6 +30,8 @@
 /* ── 1 · La ventana ─────────────────────────────────────────────────────────────────────────────── */
 .kp-ventana {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
+  /* X27c · En una pantalla grande no se estira (Julio, 22/11, a 1920): el ancho de la maqueta a 1366; lo que sobra, vacío. */
+  width: 100%; max-width: var(--kp-ventana-max, 1350px); box-sizing: border-box;
   background: var(--kp-blanco); border: 1px solid var(--kp-titulo-borde); color: var(--kp-tinta);
   font-size: 12.5px; line-height: 1.25;
 }
@@ -81,9 +83,22 @@
 .kp-bloque-titulo::before { content: ''; width: 52px; border-top: 1px solid #8f99a3; flex-shrink: 0; }
 .kp-bloque-titulo::after { content: ''; flex: 1; border-top: 1px solid #8f99a3; }
 .kp-bloque[data-crece='si'] { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* X27c · El bloque en su recuadro, con el título en su franja (las fichas de ERP10). */
+.kp-bloque[data-recuadro='si'] { border: 1px solid var(--kp-raya); padding: 0 6px 6px; margin-bottom: 8px; }
+.kp-bloque[data-recuadro='si'] > .kp-bloque-titulo { margin: 0 -6px 4px; padding: 2px 6px; background: var(--kp-cabeza-fondo); color: var(--kp-rotulo); font-weight: 400; font-size: 13px; }
+.kp-bloque[data-recuadro='si'] > .kp-bloque-titulo::before, .kp-bloque[data-recuadro='si'] > .kp-bloque-titulo::after { display: none; }
 
 /* ── 4 · La casilla ─────────────────────────────────────────────────────────────────────────────── */
 .kp-casilla { display: flex; flex-direction: column; min-width: 0; }
+/* X27c · Cada casilla mide lo que su dato (Casilla `mide`): no crece más que esto, también a 1920. */
+.kp-casilla[data-mide] { flex: 0 1 auto; }
+.kp-casilla[data-mide='cifra'] { width: 48px; }
+.kp-casilla[data-mide='corto'] { width: 110px; }
+.kp-casilla[data-mide='subcuenta'] { width: 120px; }
+.kp-casilla[data-mide='medio'] { width: 220px; }
+.kp-casilla[data-mide='nombre'] { width: 280px; }
+.kp-casilla[data-mide='largo'] { width: 560px; }
+.kp-casilla[data-mide] .kp-rotulo { overflow: visible; }
 .kp-rotulo { min-height: 15px; color: var(--kp-rotulo); font-size: 11.5px; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kp-casilla-dentro { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .kp-ventana input, .kp-ventana select, .kp-ventana textarea {

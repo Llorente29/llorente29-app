@@ -5,6 +5,8 @@
 //   · proveedor: supplier (su ficha, con lo del X27: vat_deductible_pct, default_brand_id, default_channel_id,
 //     exclude_from_347 y pay_on_post) y company_account_link de la empresa (rol «principal», su 400; «gasto»; «pago»,
 //     la del K10). Lo de siempre se guarda con guardarFicha (que quita el «de la factura» de un dato cambiado a mano).
+//   · el teléfono y el correo del proveedor: una sola verdad, su contacto principal (supplier_contact), el mismo que
+//     usa Cocina (Julio, 22/11). supplier.phone y supplier.email (de la 1315) ya no se usan: se quitan en otra tanda.
 //   · cliente: party y customer_fiscal con party_save_customer, y lo del X27 (phone, email, notes, trade_name,
 //     usual_tax_rate_ids) con un update de customer_fiscal; su 430, el rol «principal» de entity «customer».
 //   · el alta: el proveedor (crearProveedor) o el cliente (party_save_customer), y su subcuenta con
@@ -12,13 +14,13 @@
 //     subcuenta no se crea, el tercero ya existe: se abre su ficha y se dice por qué (nunca otro alta al reintentar).
 
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
-import { crearProveedor, guardarFicha, obtenerFicha } from '@/modules/conta/services/proveedorService'
+import { actualizarContacto, crearContacto, crearProveedor, guardarFicha, listarContactos, obtenerFicha } from '@/modules/conta/services/proveedorService'
 import { apuntesDeCuentas } from '@/modules/conta/services/libroService'
 import { leerEjercicios, localesDeLaCuenta, type EjercicioLibro } from '@/modules/conta/services/diarioService'
 import { marcasDeLaCuenta, plataformasDeLaCuenta, type Opcion } from '@/modules/conta/services/asientoGeneralService'
 import { delProveedor } from '@/modules/conta/nucleo/recibida/servicio'
 import { textoDeOperacion } from '@/modules/conta/nucleo/recibida/cabecera'
-import { borradorVacio, hojaDeAlta, porcentaje, dias as diasDe, retencionQueEncaja, type Borrador, type Movimiento, type TipoTercero } from './fichaTercero'
+import { borradorVacio, conPunto, hojaDeAlta, porcentaje, dias as diasDe, retencionQueEncaja, type Borrador, type Movimiento, type TipoTercero } from './fichaTercero'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
@@ -99,13 +101,15 @@ async function enlaces(accountId: string, companyId: string, entity: 'supplier' 
 }
 
 export async function leerProveedor(accountId: string, companyId: string, supplierId: string, retenciones: readonly Tasa[]): Promise<FichaLeida | null> {
-  const [f, extra, ls, del] = await Promise.all([
+  const [f, extra, ls, del, contactos] = await Promise.all([
     obtenerFicha(supplierId),
-    leer(tabla('supplier').select('vat_deductible_pct, default_brand_id, default_channel_id, exclude_from_347, pay_on_post, phone, email').eq('account_id', accountId).eq('id', supplierId), 'su ficha'),
+    leer(tabla('supplier').select('vat_deductible_pct, default_brand_id, default_channel_id, exclude_from_347, pay_on_post').eq('account_id', accountId).eq('id', supplierId), 'su ficha'),
     enlaces(accountId, companyId, 'supplier', supplierId),
     delProveedor(accountId, companyId, supplierId).catch(() => null),
+    listarContactos(supplierId),
   ])
   if (!f || f.accountId !== accountId) return null
+  const principal = contactos.find((c) => c.isPrimary) ?? null
   const x = extra[0] ?? {}
   const de = (rol: string) => ls.find((l) => l.rol === rol)?.subcuenta ?? null
   const ret = retencionQueEncaja(f.irpfWithholdingPct, retenciones)
@@ -113,12 +117,12 @@ export async function leerProveedor(accountId: string, companyId: string, suppli
     ...borradorVacio(),
     nombre: f.legalName ?? f.name, nif: f.taxId ?? '', tipoNif: f.taxIdType ?? 'nif_es', comercial: f.legalName && f.legalName !== f.name ? f.name : '',
     domicilio: f.fiscalStreet ?? '', postal: f.fiscalPostalCode ?? '', poblacion: f.fiscalCity ?? '', provincia: f.fiscalProvince ?? '', pais: f.countryCode ?? 'ES',
-    telefono: s(x.phone), correo: s(x.email), observaciones: f.notes ?? '',
+    telefono: principal?.phone ?? '', correo: principal?.email ?? '', web: f.website ?? '', observaciones: f.notes ?? '',
     recargo: f.vatRegime === 'recargo_equivalencia', no347: x.exclude_from_347 === true,
     iva1: f.usualTaxRateIds[0] ?? '', iva2: f.usualTaxRateIds[1] ?? '',
     retencion: ret ? ret.id : f.irpfWithholdingPct ? String(f.irpfWithholdingPct).replace('.', ',') : '',
     deducible: x.vat_deductible_pct === null || x.vat_deductible_pct === undefined ? '' : String(Number(x.vat_deductible_pct)).replace('.', ','),
-    gasto: de('gasto')?.id ?? '', local: f.defaultLocationId ?? '', marca: s(x.default_brand_id), plataforma: s(x.default_channel_id),
+    gasto: de('gasto')?.id ?? '', suplidos: de('suplidos')?.id ?? '', local: f.defaultLocationId ?? '', marca: s(x.default_brand_id), plataforma: s(x.default_channel_id),
     pagoDirecto: x.pay_on_post === true, pago: de('pago')?.id ?? '',
     forma: f.paymentMethod && f.paymentMethod !== 'prepaid' ? f.paymentMethod : '', dias: f.paymentTermsDays === null ? '' : String(f.paymentTermsDays), iban: f.iban ?? '',
   }
@@ -142,7 +146,7 @@ export async function leerCliente(accountId: string, companyId: string, partyId:
     ...borradorVacio(),
     nombre: s(c.legal_name) || s(pt.name), nif: s(pt.tax_id), tipoNif: (s(c.tax_id_type) || 'nif_es') as Borrador['tipoNif'], comercial: s(c.trade_name),
     domicilio: s(c.fiscal_street), postal: s(c.fiscal_postal_code), poblacion: s(c.fiscal_city), provincia: s(c.fiscal_province), pais: s(c.country_code) || 'ES',
-    telefono: s(c.phone), correo: s(c.email), observaciones: s(c.notes),
+    telefono: s(c.phone), correo: s(c.email), web: s(c.website), observaciones: s(c.notes),
     recargo: c.equivalence_surcharge === true, no347: c.exclude_347 === true,
     iva1: ids[0] ?? '', iva2: ids[1] ?? '', retencion: s(c.withholding_rate_id), operacion: s(c.operation_scope),
     pago: s(c.collection_treasury_id), forma: (['transfer', 'direct_debit', 'card', 'cash'].includes(s(c.payment_method)) ? s(c.payment_method) : '') as Borrador['forma'],
@@ -169,7 +173,7 @@ export async function movimientos(accountId: string, companyId: string, subcuent
 
 // ── Guardar ────────────────────────────────────────────────────────────────
 
-const enlazar = async (companyId: string, entity: 'supplier', id: string, rol: 'gasto' | 'pago', antes: string, ahora: string, quien: string | null) => {
+const enlazar = async (companyId: string, entity: 'supplier', id: string, rol: 'gasto' | 'pago' | 'suplidos', antes: string, ahora: string, quien: string | null) => {
   if (antes === ahora) return
   if (ahora) await rpc<void>('company_account_link_set', { p_company: companyId, p_entity: entity, p_entity_id: id, p_role: rol, p_account_id: ahora, p_quien_nombre: quien, p_source: 'manual' })
   else await rpc<void>('company_account_link_unset', { p_company: companyId, p_entity: entity, p_entity_id: id, p_role: rol, p_quien_nombre: quien })
@@ -203,21 +207,32 @@ export async function guardarProveedor(o: {
   await guardarFicha(id, {
     name: b.comercial.trim() || b.nombre.trim(), legalName: b.nombre.trim(), taxId: nulo(b.nif), taxIdType: b.tipoNif || null,
     fiscalStreet: nulo(b.domicilio), fiscalPostalCode: nulo(b.postal), fiscalCity: nulo(b.poblacion), fiscalProvince: nulo(b.provincia),
-    countryCode: (b.pais.trim() || 'ES').toUpperCase(), notes: nulo(b.observaciones),
+    countryCode: (b.pais.trim() || 'ES').toUpperCase(), notes: nulo(b.observaciones), website: nulo(b.web),
     ...(b.recargo !== o.antes.recargo ? { vatRegime: b.recargo ? 'recargo_equivalencia' : 'general' } : {}),
     usualTaxRateIds: ivas, irpfWithholdingPct: retencionPct(b, o.retenciones),
     defaultLocationId: b.local || null, paymentMethod: b.forma || null, paymentTermsDays: diasDe(b.dias), iban: nulo(b.iban)?.replace(/\s/g, '').toUpperCase() ?? null,
   })
   const pct = porcentaje(b.deducible)
   const { error } = await tabla('supplier').update({
-    phone: nulo(b.telefono), email: nulo(b.correo), vat_deductible_pct: pct, exclude_from_347: b.no347 || null, pay_on_post: b.pagoDirecto || null,
+    vat_deductible_pct: pct, exclude_from_347: b.no347 || null, pay_on_post: b.pagoDirecto || null,
     default_brand_id: b.marca || null, default_channel_id: b.plataforma || null,
   }).eq('account_id', o.accountId).eq('id', id)
   if (error) throw new Error(mensaje('No se ha guardado lo que propone la factura', error))
+  // El teléfono y el correo, en su contacto principal; sin él, se le crea uno (si hay algo que poner).
+  if (b.telefono !== (o.id ? o.antes.telefono : '') || b.correo !== (o.id ? o.antes.correo : '')) {
+    const principal = (await listarContactos(id)).find((c) => c.isPrimary) ?? null
+    if (principal) {
+      await actualizarContacto(principal.id, { name: principal.name, role: principal.role, phone: nulo(b.telefono), email: nulo(b.correo), notes: principal.notes })
+    } else if (nulo(b.telefono) || nulo(b.correo)) {
+      await crearContacto(o.accountId, id, { name: b.comercial.trim() || b.nombre.trim(), role: 'other', phone: nulo(b.telefono), email: nulo(b.correo), notes: null },
+        { id: o.userId, name: o.quien }, true)
+    }
+  }
   await enlazar(o.companyId, 'supplier', id, 'gasto', o.id ? o.antes.gasto : '', b.gasto, o.quien)
   await enlazar(o.companyId, 'supplier', id, 'pago', o.id ? o.antes.pago : '', b.pago, o.quien)
-  if (falloSub) return { id, texto: `Dado de alta: ${b.nombre.trim()}, pero sin subcuenta: ${falloSub}`, tono: 'ambar' }
-  return { id, texto: alta ? `Dado de alta: ${b.nombre.trim()}, con la subcuenta ${alta}.` : `Guardado: ${b.nombre.trim()}.`, tono: 'bien' }
+  await enlazar(o.companyId, 'supplier', id, 'suplidos', o.id ? o.antes.suplidos : '', b.suplidos, o.quien)
+  if (falloSub) return { id, texto: conPunto(`Dado de alta: ${b.nombre.trim()}, pero sin subcuenta: ${falloSub}`), tono: 'ambar' }
+  return { id, texto: alta ? `Dado de alta: ${b.nombre.trim()}, con la subcuenta ${alta}.` : conPunto(`Guardado: ${b.nombre.trim()}`), tono: 'bien' }
 }
 
 export interface Guardado { id: string; texto: string; tono: 'bien' | 'ambar' }
@@ -230,7 +245,7 @@ async function subcuentaDelAlta(companyId: string, hoja: string, nombre: string,
 }
 
 /** Guarda la ficha del cliente; con `nuevo`, primero el alta y su 430. */
-export async function guardarCliente(o: { accountId: string; companyId: string; id: string | null; ahora: Borrador; quien: string | null }): Promise<Guardado> {
+export async function guardarCliente(o: { accountId: string; companyId: string; id: string | null; antes: Borrador; ahora: Borrador; quien: string | null }): Promise<Guardado> {
   const b = o.ahora
   const r = await rpc<{ party_id: string; nuevo: boolean }>('party_save_customer', {
     p_account: o.accountId, p_party: o.id, p_nombre: b.nombre.trim(), p_nif: nulo(b.nif), p_quien_nombre: o.quien,
@@ -244,7 +259,8 @@ export async function guardarCliente(o: { accountId: string; companyId: string; 
   const id = r.party_id
   const { error } = await tabla('customer_fiscal').update({
     phone: nulo(b.telefono), email: nulo(b.correo), notes: nulo(b.observaciones), trade_name: nulo(b.comercial),
-    usual_tax_rate_ids: [b.iva1, b.iva2].filter(Boolean),
+    usual_tax_rate_ids: [b.iva1, b.iva2].filter(Boolean), // X27c · La web, de la 1530: solo si ha cambiado (así una base sin la tanda sigue guardando lo demás).
+    ...(b.web !== o.antes.web ? { website: nulo(b.web) } : {}),
   }).eq('account_id', o.accountId).eq('party_id', id)
   if (error) throw new Error(mensaje('No se han guardado sus datos', error))
   let alta: string | null = null
@@ -252,11 +268,11 @@ export async function guardarCliente(o: { accountId: string; companyId: string; 
     const ya = await leer(tabla('company_account_link').select('company_account_id').eq('company_id', o.companyId).eq('entity', 'customer').eq('entity_id', id).eq('role', 'principal'), 'su subcuenta')
     if (!ya.length) {
       const sub = await subcuentaDelAlta(o.companyId, hojaDeAlta('cliente', null), b.nombre.trim(), 'customer', id, o.quien)
-      if ('fallo' in sub) return { id, texto: `Dado de alta: ${b.nombre.trim()}, pero sin subcuenta: ${sub.fallo}`, tono: 'ambar' }
+      if ('fallo' in sub) return { id, texto: conPunto(`Dado de alta: ${b.nombre.trim()}, pero sin subcuenta: ${sub.fallo}`), tono: 'ambar' }
       alta = sub.code
     }
   }
-  return { id, texto: alta ? `Dado de alta: ${b.nombre.trim()}, con la subcuenta ${alta}.` : `Guardado: ${b.nombre.trim()}.`, tono: 'bien' }
+  return { id, texto: alta ? `Dado de alta: ${b.nombre.trim()}, con la subcuenta ${alta}.` : conPunto(`Guardado: ${b.nombre.trim()}`), tono: 'bien' }
 }
 
 /** ¿Este tercero es un cliente? (la ficha de cliente del núcleo solo abre los que lo son). */

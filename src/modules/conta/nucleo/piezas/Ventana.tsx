@@ -73,10 +73,13 @@ export function Barra({ guardar, cancelar, nuevo, anterior, siguiente, documento
   )
 }
 
-/** 3 · Un bloque con su nombre en la línea, como en ERP10 («Datos asiento», «Apuntes», «Observaciones»). */
-export function Bloque({ titulo, children, className, crece = false }: { titulo: string; children: ReactNode; className?: string; crece?: boolean }) {
+/**
+ * 3 · Un bloque con su nombre en la línea, como en ERP10 («Datos asiento», «Apuntes», «Observaciones»). Con `recuadro`,
+ * como las fichas de ERP10 (X27c): en su recuadro, con el título en su franja.
+ */
+export function Bloque({ titulo, children, className, crece = false, recuadro = false }: { titulo: string; children: ReactNode; className?: string; crece?: boolean; recuadro?: boolean }) {
   return (
-    <section className={`kp-bloque${className ? ` ${className}` : ''}`} data-crece={crece ? 'si' : undefined} aria-label={titulo} data-pieza="bloque">
+    <section className={`kp-bloque${className ? ` ${className}` : ''}`} data-crece={crece ? 'si' : undefined} data-recuadro={recuadro ? 'si' : undefined} aria-label={titulo} data-pieza="bloque">
       <h2 className="kp-bloque-titulo"><span>{titulo}</span></h2>
       {children}
     </section>
@@ -84,14 +87,27 @@ export function Bloque({ titulo, children, className, crece = false }: { titulo:
 }
 
 /**
+ * Lo que mide una casilla, por su dato, como en ERP10 (X27c, Julio, 22/11: «cada casilla mide lo que su dato»; en una
+ * pantalla grande no se estira). Las medidas, de la captura de ERP10 y la maqueta a 1366 (piezas.css, [data-mide]):
+ *   · cifra: días, %, un código de 1 a 3 cifras o letras (el país, el tipo de IVA): 48 px;
+ *   · corto: el NIF, el código postal, un importe: 110 px;
+ *   · subcuenta: 8 cifras con su lupa: 120 px;
+ *   · medio: una provincia, una población, un teléfono, un local: 220 px;
+ *   · nombre: el nombre gris al lado de una lupa: 280 px;
+ *   · largo: nombre, domicilio, correo, observaciones: con tope, 560 px.
+ * Sin `mide`, como hasta ahora (lo que le dé su fila).
+ */
+export type Mide = 'cifra' | 'corto' | 'subcuenta' | 'medio' | 'nombre' | 'largo'
+
+/**
  * 4 · La casilla: el rótulo encima, en azul, con el nombre contable de ERP10. Blanca se escribe; gris (`gris`) la pone
  * el programa. En ámbar (`ambar`), la que Sumied propone y conviene mirar: la única ayuda visible (sin frases).
  */
-export function Casilla({ rotulo, htmlFor, gris = false, ambar = false, className, children, mas }: {
-  rotulo: string; htmlFor: string; gris?: boolean; ambar?: boolean; className?: string; children: ReactNode; mas?: ReactNode
+export function Casilla({ rotulo, htmlFor, gris = false, ambar = false, className, children, mas, mide }: {
+  rotulo: string; htmlFor: string; gris?: boolean; ambar?: boolean; className?: string; children: ReactNode; mas?: ReactNode; mide?: Mide
 }) {
   return (
-    <div className={`kp-casilla${className ? ` ${className}` : ''}`} data-gris={gris ? 'si' : undefined} data-ambar={ambar ? 'si' : undefined} data-pieza="casilla">
+    <div className={`kp-casilla${className ? ` ${className}` : ''}`} data-gris={gris ? 'si' : undefined} data-ambar={ambar ? 'si' : undefined} data-mide={mide} data-pieza="casilla">
       <label className="kp-rotulo" htmlFor={htmlFor}>{rotulo}</label>
       <div className="kp-casilla-dentro">{children}{mas}</div>
     </div>

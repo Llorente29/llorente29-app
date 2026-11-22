@@ -1,0 +1,26 @@
+{
+ "_que": "X27c · La ficha fiel a ERP10 · contexto medido en la BASE LOCAL con la estructura de staging (main 32eff03), en SOLO LECTURA: no en producción (esta sesión no lee producción). 1920 solo añade (una columna y dos funciones); 1921, un disparador de alta en supplier (cambia, con su prueba de staging). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-22T18:19Z",
+ "tanda": {
+  "supabase/migrations/20261122T1920_x27c_web_y_domicilio.sql": "456a2d648ec2cd695926ca72d854b816",
+  "supabase/migrations/20261122T1921_x27c_alta_parte_el_domicilio.sql": "8564605c387d0c55a5eb2407f1b8627c"
+ },
+ "contexto": {
+  "tablas": [
+   "public.customer_fiscal",
+   "public.supplier"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.customer_fiscal": 0,
+   "public.supplier": 27
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
