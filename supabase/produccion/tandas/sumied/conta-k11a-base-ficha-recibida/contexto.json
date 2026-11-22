@@ -1,0 +1,25 @@
+{
+ "_que": "K11a · base de la ficha de la recibida · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. 0839 añade dos catálogos, columnas que admiten nulos en supplier_invoice y journal_line, una tabla y dos funciones; 0840 cambia dos trozos de _journal_entry_proponer. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-22T07:53Z",
+ "tanda": {
+  "supabase/migrations/20261122T0839_k11a_otros_datos_y_lineas.sql": "b19ca5280d8d788a97f14d85bf08a620",
+  "supabase/migrations/20261122T0840_k11a_plataforma_en_el_asiento.sql": "d871a882f568955d2c17962b65de9877"
+ },
+ "contexto": {
+  "tablas": [
+   "public.journal_line",
+   "public.supplier_invoice"
+  ],
+  "funciones": [
+   "public._journal_entry_proponer(uuid,jsonb,jsonb,jsonb,text,uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -13,7 +13,7 @@
 import { hojaDelProveedor, siguienteLibre } from '@/modules/conta/lib/planEmpresa'
 import { leerNoDeducibles, type IvaNoDeducible } from '@/modules/conta/services/ivaNoDeducibleService'
 import { porQueNoDeducible } from '@/modules/conta/lib/ivaNoDeducible'
-import { aplicarAsientoAMano, aplicarReparto, cuentaDelReparto, lineasYCuotas } from '@/modules/conta/lib/recibidaGuardada'
+import { aplicarAsientoAMano, aplicarDatosDeLineas, aplicarReparto, cuentaDelReparto, lineasYCuotas, type LineaConCanal } from '@/modules/conta/lib/recibidaGuardada'
 import { supabase } from '@/lib/supabase'
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
@@ -226,6 +226,8 @@ function aJson(p: Propuesta) {
     lineas: p.lineas.map((l: LineaAsiento) => ({
       cuenta: l.cuenta, debe: l.debe, haber: l.haber, concepto: l.concepto ?? null, local_id: l.localId, comun: !!l.comun,
       marca_id: l.marcaId ?? null, tercero_id: l.terceroId ?? null, documento: l.documento ?? null,
+      // K11a · La plataforma de la línea (0840: _journal_entry_proponer la escribe en journal_line.channel_id).
+      ...((l as LineaConCanal).canalId ? { canal_id: (l as LineaConCanal).canalId } : {}),
       iva: l.iva ? { tipo_id: l.iva.tipoId, base: l.iva.base, libro: l.iva.libro, deducible: l.iva.deducible ?? null, facturas: l.iva.facturas ?? 1 } : null,
       // S01d: la que nace lleva tipo, base y modelo; el pago de un modelo, su modelo y su periodo.
       retencion: !l.retencion ? null : l.retencion.periodo !== undefined ? { modelo: l.retencion.modelo, periodo: l.retencion.periodo }
@@ -332,6 +334,9 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     const falta = (e: { message: string } | null) => !!e && /does not exist|could not find|relationship/i.test(e.message)
     const ficha = `${SELECT}, entry_overrides, supplier_invoice_expense(position, account_code, location_id, is_common, amount)`
     // K10b · 2150: el tipo de operación, el trimestre y el concepto de la factura. Sin ellos (antes de aplicarla), lo de antes.
+    // K11a · 0839: el % de IVA deducible y los datos de cada línea (concepto, marca y plataforma).
+    const k11a = await consulta(`${ficha}, vat_operation, deduct_from, entry_concept, vat_deductible_pct, supplier_invoice_expense_dato(position, concept, brand_id, channel_id)`)
+    if (!falta(k11a.error)) return leer(Promise.resolve(k11a), 'las facturas')
     const k10b = await consulta(`${ficha}, vat_operation, deduct_from, entry_concept`)
     if (!falta(k10b.error)) return leer(Promise.resolve(k10b), 'las facturas')
     const x = await consulta(ficha)
@@ -490,6 +495,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       } : {}),
       retencion: rr && f.withholding_amount !== null ? { tipoId: String(rr.id), porcentaje: n(rr.rate), base: 0, importe: imp(n(f.withholding_amount)), modelo: (String(rr.filed_in) as '111' | '115' | '123') } : null,
       ivaNoDeducible: f.vat_non_deductible === true,
+      ivaDeduciblePct: f.vat_deductible_pct === null || f.vat_deductible_pct === undefined ? null : n(f.vat_deductible_pct),
       motivoNoDeducible: porQueNoDeducible(noDeducibles.get(String(f.id))?.motivo, noDeducibles.get(String(f.id))?.texto),
       autoliquidacion: tipoAuto && f.vat_non_deductible !== true ? { tipo: tipoAuto, porque: `${nombreProv} ${porqueAutoliquida(clase, ficha.pais)}.` } : null,
     }, {
@@ -545,7 +551,11 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     const aprendida = await aprender(companyId, res.propuesta, `supplier_invoice:${sup}`, ctx)
     const conAMano = aplicarAsientoAMano(f.vat_non_deductible === true ? aprendida : aplicarReparto(aprendida, reparto), f.entry_overrides ?? null)
     // K10b · El concepto del asiento escrito en la ficha manda sobre el propuesto.
-    const final = s(f.entry_concept) ? { ...conAMano, concepto: String(f.entry_concept).trim() } : conAMano
+    // K11a · El concepto, la marca y la plataforma de cada línea de gasto.
+    const datosLineas = ((f.supplier_invoice_expense_dato ?? []) as Fila[])
+      .map((d) => ({ posicion: n(d.position), concepto: s(d.concept), marcaId: s(d.brand_id), canalId: s(d.channel_id) }))
+    const conDatos = aplicarDatosDeLineas(conAMano, datosLineas)
+    const final = s(f.entry_concept) ? { ...conDatos, concepto: String(f.entry_concept).trim() } : conDatos
     // N23 «Cómo se apunta»: la misma propuesta, sin escribirla.
     if (ver) ver(final)
     else await proponer(companyId, final, null, r, ctx, quien)
