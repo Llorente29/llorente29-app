@@ -32,3 +32,13 @@ describe('X26 · la franja y el porqué', () => {
     expect(porqueNoModificar({ puede: true, porque: null })).toBeNull()
   })
 })
+
+describe('X26 · el porqué escrito al lado del botón apagado (regla 8)', () => {
+  it('del porqué de la base, la frase corta', async () => {
+    const { textoNoSeModifica } = await import('@/modules/conta/nucleo/recibida/contabilizada')
+    expect(textoNoSeModifica({ puede: false, porque: 'El IVA del 4T ya está presentado: esta factura no se puede modificar.' })).toBe('No se puede modificar: el IVA del 4T ya está presentado.')
+    expect(textoNoSeModifica({ puede: false, porque: 'Su asiento ya salió a Diez o a ERP10: se modifica allí, no aquí.' })).toBe('No se puede modificar: su asiento ya salió a Diez o a ERP10: se modifica allí, no aquí.')
+    expect(textoNoSeModifica({ puede: true, porque: null })).toBeNull()
+    expect(textoNoSeModifica(null)).toBeNull()
+  })
+})

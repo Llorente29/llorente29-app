@@ -97,7 +97,14 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     // «Modificar»: la franja, la cuenta nueva e Intro.
     await page.goto(`/conta/documentos/recibidas/${fac.id}`, { timeout: 30_000 })
     await expect(franja(page)).toContainText(`Contabilizada · asiento ${antes.number}.`, { timeout: 30_000 })
+    // Lo que dice la base de esta factura, en el registro (e2e 44962297448: el botón salió apagado sin saber por qué),
+    // y lo que hay de ella en Diez o ERP10.
+    const sePuede = await pedir<unknown>(s, 'rpc/conta_recibida_se_puede_modificar', { p_invoice: fac.id })
+    const envios = await pedir<unknown[]>(s, `external_send?select=status,kind&entry_id=eq.${fac.journal_entry_id}`).catch((e) => `sin leer (${String(e).slice(0, 80)})`)
+    console.log(`[X26] conta_recibida_se_puede_modificar: ${JSON.stringify(sePuede)} · envíos: ${JSON.stringify(envios)}`)
     const modificar = ficha(page).locator('[data-prueba="modificar"]')
+    // Si no se puede, la franja lo dice escrito al lado (regla 8): sale en el volcado.
+    await expect(ficha(page).locator('[data-prueba="no-se-modifica"]')).toHaveCount(0, { timeout: 30_000 })
     await expect(modificar).toBeEnabled({ timeout: 30_000 })
     await modificar.click()
     await expect(franja(page)).toContainText(`Modificando el asiento ${antes.number}.`)

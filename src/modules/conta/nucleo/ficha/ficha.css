@@ -323,3 +323,4 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 .kf-modificar-linea { display: grid; grid-template-columns: minmax(110px, 140px) minmax(0, 1fr); gap: 8px; align-items: center; }
 .kf-modificar-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kf-modificar { display: inline-flex; gap: 8px; align-items: center; margin-left: 8px; }
+.kf-modificar-porque { font-size: 12px; color: var(--k-apoyo); }

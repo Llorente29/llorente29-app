@@ -85,7 +85,8 @@ begin
       v_no := format('El mes de %s está cerrado: reábrelo antes de modificar esta factura.', to_char(e.entry_date, 'MM/YYYY'));
     end if;
   end if;
-  if v_no is null and exists (select 1 from public.external_send x where x.entry_id = e.id) then
+  -- Solo si ya está allí (enviado o enlazado): un envío pendiente o rechazado aún no ha salido.
+  if v_no is null and exists (select 1 from public.external_send x where x.entry_id = e.id and x.status in ('enviado', 'enlazado')) then
     v_no := 'Su asiento ya salió a Diez o a ERP10: se modifica allí, no aquí.';
   end if;
   if v_no is null and public._conta_cadena_rota(e.company_id) <> 0 then

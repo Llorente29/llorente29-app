@@ -62,7 +62,7 @@ import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioS
 import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, Comprobaciones, Duda, EstadoFicha, NombreDeCuenta } from '../ficha/piezas'
-import { accionDocumento, etiquetaValidado, franjaContabilizada, franjaDescartada, franjaModificando, lineasQueCambian, porqueNoModificar, laAnterior, lineasDelHistorial, opcionesDeMas, textoCasillaProveedor, queFichaSeAbre, textoCambioAlGuardar, type ModoRecibida, type OpcionMas } from './contabilizada'
+import { accionDocumento, etiquetaValidado, franjaContabilizada, franjaDescartada, franjaModificando, lineasQueCambian, porqueNoModificar, textoNoSeModifica, laAnterior, lineasDelHistorial, opcionesDeMas, textoCasillaProveedor, queFichaSeAbre, textoCambioAlGuardar, type ModoRecibida, type OpcionMas } from './contabilizada'
 import { cambiarDocumentoContabilizada, leerHistorial, salioAErp10 } from './documentoServicio'
 import { PanelDocumento } from '../ficha/PanelDocumento'
 import { cifra } from '../ficha/textos'
@@ -697,6 +697,11 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
               <button type="button" className="kf-enlace" data-prueba="modificar" disabled={!sePuede.datos?.puede}
                 title={porqueNoModificar(sePuede.datos ?? (sePuede.error ? { puede: false, porque: sePuede.error } : null)) ?? undefined}
                 onClick={() => { setModificando({ de: invoiceId, elegidas: {} }); setAviso(null) }}>Modificar</button>
+              {/* Regla 8: apagado, el porqué escrito al lado, no solo al pasar el ratón. */}
+              {(() => {
+                const t = textoNoSeModifica(sePuede.datos ?? (sePuede.error ? { puede: false, porque: `no he podido comprobarlo (${sePuede.error})` } : null))
+                return t ? <span className="kf-modificar-porque" data-prueba="no-se-modifica">{t}</span> : null
+              })()}
             </span>)}
         <div className="kf-cabecera-botones">
           {!aMano && <>

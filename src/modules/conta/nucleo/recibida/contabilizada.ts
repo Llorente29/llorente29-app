@@ -157,6 +157,18 @@ export function franjaModificando(numero: number | null): Franja {
 export const porqueNoModificar = (s: { puede: boolean; porque: string | null } | null) =>
   !s ? 'Mirando si se puede modificar…' : s.puede ? null : s.porque ?? 'No se puede modificar.'
 
+/**
+ * Lo que dice la franja, escrito, al lado de «Modificar» apagado (regla 8: no solo al pasar el ratón). Del porqué de
+ * la base: «El IVA del 4T ya está presentado: esta factura no se puede modificar.» → «No se puede modificar: el IVA del
+ * 4T ya está presentado.». Null si se puede o aún se está mirando.
+ */
+export function textoNoSeModifica(s: { puede: boolean; porque: string | null } | null): string | null {
+  if (!s || s.puede) return null
+  const p = (s.porque ?? '').replace(/:?\s*esta factura no se puede modificar\.?$/i, '').replace(/\.$/, '').trim()
+  if (!p) return 'No se puede modificar.'
+  return `No se puede modificar: ${p.charAt(0).toLowerCase()}${p.slice(1)}.`
+}
+
 /** Lo que se le manda a la base: solo las líneas de gasto cuya cuenta ha cambiado, por su posición. */
 export function lineasQueCambian(apuntes: readonly { posicion: number; cuenta: string }[], elegidas: Readonly<Record<number, string>>): { posicion: number; cuenta: string }[] {
   return apuntes
