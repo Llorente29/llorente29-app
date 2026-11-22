@@ -6027,6 +6027,27 @@ COMMENT ON FUNCTION public._conta_falta_historico_motivo(p_entry uuid) IS 'N05c:
 
 
 --
+-- Name: _conta_fecha_fiscal(text, uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_fecha_fiscal(p_source_type text, p_source_id uuid, p_entry_date date) RETURNS date
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(case when p_source_type = 'supplier_invoice'
+                       then (select si.deduct_from from public.supplier_invoice si where si.id = p_source_id) end,
+                  p_entry_date)
+$$;
+
+
+--
+-- Name: FUNCTION _conta_fecha_fiscal(p_source_type text, p_source_id uuid, p_entry_date date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_fecha_fiscal(p_source_type text, p_source_id uuid, p_entry_date date) IS 'K11f1 · La fecha fiscal de un asiento: la de su recibida (supplier_invoice.deduct_from), si la tiene; si no, la del asiento.';
+
+
+--
 -- Name: _conta_gasto_por_venta(text[]); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -8775,6 +8796,30 @@ begin
   end if;
   return v_id;
 end $$;
+
+
+--
+-- Name: _conta_primer_dia_contable(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_primer_dia_contable(p_company uuid, p_fecha date) RETURNS date
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select min(d)::date
+    from generate_series(p_fecha, p_fecha + 400, interval '1 day') d
+   where not public.conta_mes_cerrado(p_company, d::date)
+     and exists (select 1 from public.fiscal_year y
+                  where y.company_id = p_company and y.status = 'open' and d::date between y.starts_on and y.ends_on
+                    and (y.imported_until is null or d::date > y.imported_until))
+$$;
+
+
+--
+-- Name: FUNCTION _conta_primer_dia_contable(p_company uuid, p_fecha date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_primer_dia_contable(p_company uuid, p_fecha date) IS 'K11f1 · El primer día abierto en el libro desde una fecha, sin mirar el IVA (para la fecha contable de una recibida con fecha fiscal).';
 
 
 --
@@ -121535,6 +121580,7 @@ END, ''::text)) STORED,
     deduction_rectification boolean,
     exclude_from_347 boolean,
     vat_deductible_pct numeric(5,2),
+    accounting_date date,
     CONSTRAINT supplier_invoice_arrival_channel_check CHECK ((arrival_channel = ANY (ARRAY['subida'::text, 'correo'::text, 'cocina'::text, 'portal'::text]))),
     CONSTRAINT supplier_invoice_before_start_answer_check CHECK (((before_start_answer IS NULL) OR (before_start_answer = ANY (ARRAY['ya_estaba'::text, 'es_nueva'::text])))),
     CONSTRAINT supplier_invoice_descartada_con_motivo CHECK (((status = 'descartada'::text) = ((discarded_at IS NOT NULL) AND (length(TRIM(BOTH FROM COALESCE(discard_reason, ''::text))) > 0) AND (status_before_discard IS NOT NULL)))),
@@ -121799,7 +121845,7 @@ COMMENT ON COLUMN public.supplier_invoice.vat_operation IS 'K10b · El tipo de o
 -- Name: COLUMN supplier_invoice.deduct_from; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.supplier_invoice.deduct_from IS 'K10b · El primer día del trimestre en que se deduce, si se eligió uno distinto del suyo. Nulo = su fecha, o el primer día abierto (conta_recibida_fecha). Nunca uno presentado.';
+COMMENT ON COLUMN public.supplier_invoice.deduct_from IS 'K10b y K11f1 · La fecha FISCAL: decide el periodo del IVA (el libro de IVA, el 303 y el candado del IVA presentado). Nula = la de siempre: el día que entró o, si es después, el del asiento (D07). Nunca en un periodo presentado.';
 
 
 --
@@ -121849,6 +121895,13 @@ COMMENT ON COLUMN public.supplier_invoice.exclude_from_347 IS 'K11a · «No incl
 --
 
 COMMENT ON COLUMN public.supplier_invoice.vat_deductible_pct IS 'K11a · % de IVA deducible, de 0 a 100 (el coche al 50 %). Nulo = 100. La propuesta lleva lo no deducible a la cuenta de gasto de su línea.';
+
+
+--
+-- Name: COLUMN supplier_invoice.accounting_date; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier_invoice.accounting_date IS 'K11f1 · La fecha contable: el día del asiento, si se eligió en la factura. Nula = la de la factura (o el primer día abierto).';
 
 
 --
@@ -175526,6 +175579,15 @@ GRANT ALL ON FUNCTION public._conta_falta_historico_motivo(p_entry uuid) TO serv
 
 
 --
+-- Name: FUNCTION _conta_fecha_fiscal(p_source_type text, p_source_id uuid, p_entry_date date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_fecha_fiscal(p_source_type text, p_source_id uuid, p_entry_date date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_fecha_fiscal(p_source_type text, p_source_id uuid, p_entry_date date) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_fecha_fiscal(p_source_type text, p_source_id uuid, p_entry_date date) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_gasto_por_venta(p_textos text[]); Type: ACL; Schema: public; Owner: -
 --
 
@@ -176196,6 +176258,15 @@ GRANT ALL ON FUNCTION public._conta_portal_yo(p_party uuid, p_todo boolean) TO s
 
 REVOKE ALL ON FUNCTION public._conta_precio_insertar(p_cuenta uuid, p_company uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_party uuid, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_hasta date, p_cambio uuid, p_quien text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_precio_insertar(p_cuenta uuid, p_company uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_party uuid, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_hasta date, p_cambio uuid, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_primer_dia_contable(p_company uuid, p_fecha date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_primer_dia_contable(p_company uuid, p_fecha date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_primer_dia_contable(p_company uuid, p_fecha date) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_primer_dia_contable(p_company uuid, p_fecha date) TO service_role;
 
 
 --
