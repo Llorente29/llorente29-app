@@ -1,0 +1,3 @@
+# X26 · la vuelta atrás: quita las dos funciones y la tabla.
+cuenta: scripts/conta/produccion/cuentas/x26-modificar-recibida.sql
+supabase/vuelta-atras/20261121T1900_x26_modificar_recibida.down.sql

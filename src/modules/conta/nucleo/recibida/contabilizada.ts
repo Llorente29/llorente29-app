@@ -139,3 +139,47 @@ export function laAnterior(o: { vieneDe: string | null; actual: string; enLaCola
 export function textoCasillaProveedor(o: { subcuenta: string; futura: string; nombre: string | null }): string {
   return o.subcuenta || o.futura || o.nombre || ''
 }
+
+// ── X26 · «Modificar» una recibida contabilizada (Julio, 21/11), como en ERP10 ─────────────────────────────────────
+// Este paso: las cuentas de sus líneas de gasto, en el mismo asiento (el mismo número, los mismos importes y el mismo
+// IVA). El importe y el IVA, en el X26b. La base lo comprueba y lo hace (conta_recibida_modificar); aquí, lo que se
+// enseña y qué se le manda.
+
+/** Una línea del asiento que se puede cambiar aquí: la de gasto (no la del proveedor ni la del IVA). La misma regla que la base. */
+export const esLineaDeGasto = (codigo: string) => !/^(40|41|472|477|4751)/.test(codigo)
+
+/** «Modificando el asiento 11» (ámbar), con lo que se hace. */
+export function franjaModificando(numero: number | null): Franja {
+  return { tono: 'ambar', fuerte: `Modificando el asiento ${numero ?? '—'}.`, resto: 'Cambia la cuenta de cada gasto. Intro guarda; Esc lo deja como estaba.' }
+}
+
+/** El porqué de «Modificar» apagado, para el ratón. Null si se puede. */
+export const porqueNoModificar = (s: { puede: boolean; porque: string | null } | null) =>
+  !s ? 'Mirando si se puede modificar…' : s.puede ? null : s.porque ?? 'No se puede modificar.'
+
+/**
+ * Lo que dice la franja, escrito, al lado de «Modificar» apagado (regla 8: no solo al pasar el ratón). Del porqué de
+ * la base: «El IVA del 4T ya está presentado: esta factura no se puede modificar.» → «No se puede modificar: el IVA del
+ * 4T ya está presentado.». Null si se puede o aún se está mirando.
+ */
+export function textoNoSeModifica(s: { puede: boolean; porque: string | null } | null): string | null {
+  if (!s || s.puede) return null
+  const p = (s.porque ?? '').replace(/:?\s*esta factura no se puede modificar\.?$/i, '').replace(/\.$/, '').trim()
+  if (!p) return 'No se puede modificar.'
+  return `No se puede modificar: ${p.charAt(0).toLowerCase()}${p.slice(1)}.`
+}
+
+/** Lo que se le manda a la base: solo las líneas de gasto cuya cuenta ha cambiado, por su posición. */
+export function lineasQueCambian(apuntes: readonly { posicion: number; cuenta: string }[], elegidas: Readonly<Record<number, string>>): { posicion: number; cuenta: string }[] {
+  return apuntes
+    .filter((a) => esLineaDeGasto(a.cuenta) && elegidas[a.posicion] && elegidas[a.posicion].trim() !== a.cuenta)
+    .map((a) => ({ posicion: a.posicion, cuenta: elegidas[a.posicion].trim() }))
+}
+
+/**
+ * La clave de la lectura de «¿se puede modificar?». useLeer solo vuelve a leer si cambia la clave: tiene que llevar el
+ * asiento validado, que llega DESPUÉS de abrir la ficha (e2e 44962297448 y #1733: con la clave sin él, la lectura se
+ * quedaba en «no leer» de cuando aún no había factura, y «Modificar» no se encendía nunca, sin decir por qué).
+ */
+export const claveSePuedeModificar = (o: { invoiceId: string; asientoValidado: string | null; vuelta: number }) =>
+  `${o.invoiceId}:${o.asientoValidado ?? 'sin-asiento'}:se-puede-modificar:${o.vuelta}`
