@@ -1,0 +1,4 @@
+# R16 · la vuelta atrás: la 0810 quita sus tres funciones (los clientes que la salida haya dado de
+# alta se quedan: son fichas de Sumied).
+cuenta: scripts/conta/produccion/cuentas/r16-erp10-por-serie.sql
+supabase/vuelta-atras/20261122T0810_r16_erp10_dia_por_serie_anade.down.sql
