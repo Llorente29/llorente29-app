@@ -26,7 +26,7 @@ import { useNombreDePestana, useSeVe } from '@/modules/conta/diseno/plantillas/p
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { cifra } from '@/modules/conta/nucleo/ficha/textos'
 import { fechaVista } from '@/modules/conta/nucleo/ficha/teclas'
-import { Barra, Bloque, Casilla, Ventana } from '@/modules/conta/nucleo/piezas/Ventana'
+import { Barra, Bloque, Casilla, Ventana, type Mide } from '@/modules/conta/nucleo/piezas/Ventana'
 import { CasillaLupa } from '@/modules/conta/nucleo/piezas/Lupa'
 import { Lineas, type Columna } from '@/modules/conta/nucleo/piezas/Lineas'
 import {
@@ -122,7 +122,7 @@ export function FichaTercero({ tipo, id: idRuta }: { tipo: TipoTercero; id: stri
     try {
       const r = prov
         ? await guardarProveedor({ accountId, companyId: activa.id, id, antes, ahora: b, retenciones: base?.retenciones ?? [], subcuentas: base?.subcuentas ?? [], quien: userName ?? null, userId: userId ?? null })
-        : await guardarCliente({ accountId, companyId: activa.id, id, ahora: b, quien: userName ?? null })
+        : await guardarCliente({ accountId, companyId: activa.id, id, antes, ahora: b, quien: userName ?? null })
       const quedan = `${r.texto}${cambiadas.length && id ? ` ${cambiadas.length === 1 ? 'Una casilla cambiada' : `${cambiadas.length} casillas cambiadas`}.` : ''}`
       if (!id) { navegar(rutaDe(r.id), { state: { aviso: { texto: quedan, tono: r.tono } } }); return true }
       setAviso({ texto: quedan, tono: r.tono }); setVuelta((v) => v + 1)
@@ -171,8 +171,10 @@ export function FichaTercero({ tipo, id: idRuta }: { tipo: TipoTercero; id: stri
   if (leida === 'no') return <div className="kp-ventana"><p className="kp-aviso" data-tono="ambar" role="alert">Esa ficha no existe o no es de esta cuenta. <Link to={rutaTerceros()}>Volver a la lista</Link></p></div>
 
   const poner = (x: Partial<Borrador>) => { setB((v) => ({ ...v, ...x })); setFallo(null) }
-  const texto = (k: keyof Borrador, rotulo: string, o: { cifra?: boolean; className?: string } = {}) => (
-    <Casilla rotulo={rotulo} htmlFor={`ft-${k}`} ambar={ambar(k)} className={o.className}>
+  // X27c · Cada casilla mide lo que su dato (la pieza Casilla, `mide`); las de una lupa con su nombre gris al lado, el
+  // código y el nombre con su ancho (en px, de la captura de ERP10). En una pantalla grande no se estira nada.
+  const texto = (k: keyof Borrador, rotulo: string, o: { cifra?: boolean; className?: string; mide?: Mide } = {}) => (
+    <Casilla rotulo={rotulo} htmlFor={`ft-${k}`} ambar={ambar(k)} className={o.className} mide={o.mide}>
       <input id={`ft-${k}`} data-orden className={o.cifra ? 'kp-num' : undefined} value={String(b[k])} inputMode={o.cifra ? 'decimal' : undefined}
         onChange={(e) => poner({ [k]: e.target.value } as Partial<Borrador>)} onKeyDown={intro} />
     </Casilla>
@@ -183,17 +185,18 @@ export function FichaTercero({ tipo, id: idRuta }: { tipo: TipoTercero; id: stri
       {rotulo}
     </label>
   )
-  const lupa = <T extends { id: string; codigo: string; descripcion: string }>(k: keyof Borrador, rotulo: string, registros: readonly T[], o: { gris?: boolean; vista?: (r: T) => string; conNombre?: boolean; className?: string } = {}) => {
+  const lupa = <T extends { id: string; codigo: string; descripcion: string }>(k: keyof Borrador, rotulo: string, registros: readonly T[],
+    o: { vista?: (r: T) => string; codigo: number; nombre?: number; mide?: Mide; className?: string } = { codigo: 120 }) => {
     const elegido = registros.find((r) => r.id === b[k]) ?? null
     return (
-      <Casilla rotulo={rotulo} htmlFor={`ft-${k}`} className={`${o.conNombre ? 'ft-con-nombre ' : ''}${o.className ?? ''}`.trim() || undefined}>
-        <span className="ft-lupa">
+      <Casilla rotulo={rotulo} htmlFor={`ft-${k}`} mide={o.nombre ? undefined : o.mide} className={o.nombre ? 'ft-con-nombre' : o.className}>
+        <span className="ft-lupa" style={o.nombre ? { width: o.codigo } : undefined}>
           <CasillaLupa id={`ft-${k}`} etiqueta={rotulo} registros={registros} valor={String(b[k]) || null} vista={o.vista}
             poner={(r) => poner({ [k]: r?.id ?? '' } as Partial<Borrador>)}
             alIntro={() => siguienteDe(`#ft-${k}`)}
             teclas={(e) => { if (e.key === 'Enter' && !e.defaultPrevented) { e.preventDefault(); siguiente(e.currentTarget) } }} />
         </span>
-        {o.conNombre && <input className="ft-gris" readOnly tabIndex={-1} aria-label={`${rotulo}: su nombre`} value={elegido?.descripcion ?? ''} />}
+        {o.nombre && <input className="ft-gris" style={{ width: o.nombre }} readOnly tabIndex={-1} aria-label={`${rotulo}: su nombre`} value={elegido?.descripcion ?? ''} />}
       </Casilla>
     )
   }
@@ -201,80 +204,85 @@ export function FichaTercero({ tipo, id: idRuta }: { tipo: TipoTercero; id: stri
   // ── «Datos proveedor» / «Datos cliente» ─────────────────────────────────────
   const sub = ficha?.subcuenta ?? null
   const izquierdaDatos = (
-    <Bloque titulo={nombreDatos} className="ft-izquierda">
-      <div className="ft-fila ft-f-nif">
-        {texto('nif', 'N.I.F.')}
-        <Casilla rotulo="Tipo de identificador" htmlFor="ft-tipoNif">
+    <Bloque titulo={nombreDatos} className="ft-izquierda" recuadro>
+      <div className="ft-fila">
+        {texto('nif', 'N.I.F.', { mide: 'corto' })}
+        <Casilla rotulo="Tipo de identificador" htmlFor="ft-tipoNif" className="ft-tipo-nif">
           <select id="ft-tipoNif" data-orden value={b.tipoNif} onChange={(e) => poner({ tipoNif: e.target.value as Borrador['tipoNif'] })} onKeyDown={intro}>
             {TIPOS_NIF.map((t) => <option key={t.valor} value={t.valor}>{t.texto}</option>)}
           </select>
         </Casilla>
-        {texto('comercial', 'Nombre comercial')}
+        {texto('comercial', 'Nombre comercial', { mide: 'nombre' })}
       </div>
-      <div className="ft-fila ft-f-domicilio">{texto('domicilio', 'Domicilio')}{texto('postal', 'C. postal')}{texto('poblacion', 'Población')}</div>
-      <div className="ft-fila ft-f-provincia">
-        {texto('provincia', 'Provincia')}
+      <div className="ft-fila">{texto('domicilio', 'Domicilio', { className: 'ft-domicilio' })}{texto('postal', 'C. postal', { className: 'ft-postal' })}{texto('poblacion', 'Población', { mide: 'medio' })}</div>
+      <div className="ft-fila">
+        {texto('provincia', 'Provincia', { mide: 'medio' })}
         <Casilla rotulo="País" htmlFor="ft-pais" ambar={ambar('pais')} className="ft-con-nombre">
-          <span className="ft-lupa">
+          <span className="ft-lupa" style={{ width: 56 }}>
             <CasillaLupa id="ft-pais" etiqueta="País" registros={PAISES} valor={b.pais.toUpperCase() || null}
               resolver={(t) => { const c = t.trim().toUpperCase(); const r = PAISES.find((p) => p.codigo === c || p.descripcion === c) ?? null; return { registro: r, abrir: !r } }}
               poner={(r) => poner({ pais: r?.codigo ?? '' })}
               alIntro={() => siguienteDe('#ft-pais')}
               teclas={(e) => { if (e.key === 'Enter' && !e.defaultPrevented) { e.preventDefault(); siguiente(e.currentTarget) } }} />
           </span>
-          <input className="ft-gris" readOnly tabIndex={-1} aria-label="País: su nombre" value={nombrePais(b.pais)} />
+          <input className="ft-gris" style={{ width: 170 }} readOnly tabIndex={-1} aria-label="País: su nombre" value={nombrePais(b.pais)} />
         </Casilla>
       </div>
-      <div className="ft-fila ft-f-contacto">{texto('telefono', 'Teléfonos')}{texto('correo', 'Correo electrónico')}</div>
-      <div className="ft-fila">{texto('observaciones', 'Observaciones')}</div>
+      <div className="ft-fila">{texto('telefono', 'Teléfonos', { className: 'ft-telefono' })}{texto('correo', 'Correo electrónico', { className: 'ft-correo' })}{texto('web', 'Página web', { className: 'ft-web' })}</div>
+      <div className="ft-fila">{texto('observaciones', 'Observaciones', { mide: 'largo' })}</div>
       <div className="ft-marcas">
         {marca('recargo', 'Recargo de equivalencia')}
         {marca('no347', 'No incluir en 347')}
       </div>
     </Bloque>
   )
-  const tipoIva = (k: 'iva1' | 'iva2', rotulo: string) => lupa(k, rotulo, base.tasas, { conNombre: true, vista: (r) => r.codigo })
+  const tipoIva = (k: 'iva1' | 'iva2', rotulo: string) => lupa(k, rotulo, base.tasas, { vista: (r) => r.codigo, codigo: 56, nombre: 170 })
   const derechaDatos = (
     <div className="ft-derecha">
-      <Bloque titulo="Datos por defecto en facturas">
+      <Bloque titulo="Datos por defecto en facturas" recuadro>
         <div className="ft-rotulo-solo">Tipos de I.V.A.</div>
         <div className="ft-fila ft-f-ivas">{tipoIva('iva1', 'Tipo de I.V.A. 1')}{tipoIva('iva2', 'Tipo de I.V.A. 2')}</div>
-        <div className={`ft-fila ${prov ? 'ft-f-retencion' : 'ft-f-retencion-cliente'}`}>
+        <div className="ft-fila">
           {prov && ficha?.retencionPct && !base.retenciones.some((r) => r.id === b.retencion) && b.retencion
-            ? texto('retencion', 'Retención (%)', { cifra: true })
-            : lupa('retencion', 'Retención', base.retenciones, { conNombre: true, vista: (r) => r.codigo })}
-          {prov && texto('deducible', '% I.V.A. deducible', { cifra: true })}
+            ? texto('retencion', 'Retención (%)', { cifra: true, className: 'ft-deducible' })
+            : lupa('retencion', 'Retención', base.retenciones, { vista: (r) => r.codigo, codigo: 56, nombre: 170 })}
+          {prov && texto('deducible', '% I.V.A. deducible', { cifra: true, className: 'ft-deducible' })}
           {prov
-            ? <Casilla rotulo="Tipo de operación" htmlFor="ft-operacion" gris><input id="ft-operacion" readOnly value={ficha?.operacion ?? ''} title="La calcula Sumied con su país, su NIF-IVA y su régimen. Se cambia en la factura." /></Casilla>
-            : <Casilla rotulo="Tipo de operación" htmlFor="ft-operacion">
+            ? <Casilla rotulo="Tipo de operación" htmlFor="ft-operacion" gris mide="medio"><input id="ft-operacion" readOnly value={ficha?.operacion ?? ''} title="La calcula Sumied con su país, su NIF-IVA y su régimen. Se cambia en la factura." /></Casilla>
+            : <Casilla rotulo="Tipo de operación" htmlFor="ft-operacion" mide="medio">
                 <select id="ft-operacion" data-orden value={b.operacion || 'domestic'} onChange={(e) => poner({ operacion: e.target.value })} onKeyDown={intro}>
                   {OPERACIONES_CLIENTE.map((o) => <option key={o.valor} value={o.valor}>{o.texto}</option>)}
                 </select>
               </Casilla>}
         </div>
-        {prov && <div className="ft-fila">{lupa('gasto', 'Subcuenta de gasto', base.subcuentas, { conNombre: true, className: 'ft-subcuenta' })}</div>}
         {prov && (
-          <div className="ft-fila ft-f-analitica">
-            {lupa('local', 'Local', base.locales, { vista: (r) => r.descripcion })}
-            {lupa('marca', 'Marca', base.marcas, { vista: (r) => r.descripcion })}
-            {lupa('plataforma', 'Plataforma', base.plataformas, { vista: (r) => r.descripcion })}
+          <div className="ft-fila">
+            {lupa('gasto', 'Subcuenta de gasto', base.subcuentas, { codigo: 120, nombre: 180 })}
+            {lupa('suplidos', 'Subcuenta suplidos', base.subcuentas.filter((c) => c.codigo.startsWith('6')), { codigo: 120, nombre: 160 })}
+          </div>
+        )}
+        {prov && (
+          <div className="ft-fila">
+            {lupa('local', 'Local', base.locales, { vista: (r) => r.descripcion, codigo: 0, className: 'ft-analitica' })}
+            {lupa('marca', 'Marca', base.marcas, { vista: (r) => r.descripcion, codigo: 0, className: 'ft-analitica' })}
+            {lupa('plataforma', 'Plataforma', base.plataformas, { vista: (r) => r.descripcion, codigo: 0, className: 'ft-analitica' })}
           </div>
         )}
       </Bloque>
-      <Bloque titulo={prov ? 'Datos de pago' : 'Datos de cobro'}>
+      <Bloque titulo={prov ? 'Datos de pago' : 'Datos de cobro'} recuadro>
         <div className="ft-fila">
-          {prov ? lupa('pago', 'Subcuenta de pago', base.subcuentas.filter((c) => c.id !== sub?.id), { conNombre: true, className: 'ft-subcuenta' })
-            : lupa('pago', 'Subcuenta de cobro', base.cobros, { conNombre: true, className: 'ft-subcuenta' })}
+          {prov ? lupa('pago', 'Subcuenta de pago', base.subcuentas.filter((c) => c.id !== sub?.id), { codigo: 120, nombre: 300 })
+            : lupa('pago', 'Subcuenta de cobro', base.cobros, { codigo: 120, nombre: 300 })}
         </div>
-        <div className="ft-fila ft-f-pago">
-          <Casilla rotulo="Forma de pago" htmlFor="ft-forma">
+        <div className="ft-fila">
+          <Casilla rotulo="Forma de pago" htmlFor="ft-forma" className="ft-forma">
             <select id="ft-forma" data-orden value={b.forma} onChange={(e) => poner({ forma: e.target.value as Borrador['forma'] })} onKeyDown={intro}>
               <option value="">—</option>
               {FORMAS_PAGO.map((f) => <option key={f.valor} value={f.valor}>{f.texto}</option>)}
             </select>
           </Casilla>
-          {texto('dias', 'Días', { cifra: true })}
-          {texto('iban', 'IBAN')}
+          {texto('dias', 'Días', { cifra: true, mide: 'cifra' })}
+          {texto('iban', 'IBAN', { className: 'ft-iban' })}
         </div>
         {prov && <div className="ft-marcas">{marca('pagoDirecto', 'Pago directo al contabilizar la factura', 'La factura propone el pago con la subcuenta de pago en su fecha, sin esperar al vencimiento.')}</div>}
       </Bloque>
@@ -285,7 +293,7 @@ export function FichaTercero({ tipo, id: idRuta }: { tipo: TipoTercero; id: stri
   const colSub: Columna[] = [{ clave: 'rol', titulo: 'Para qué', ancho: '30%' }, { clave: 'codigo', titulo: 'Subcuenta', ancho: '18%' }, { clave: 'nombre', titulo: 'Nombre' }]
   const ejercicio = base.ejercicios.find((e) => hoy >= e.inicio && hoy <= e.fin) ?? base.ejercicios[0] ?? null
   const conS = lista ? conSaldo(lista, tipo) : []
-  const saldos = lista && ejercicio ? saldosPorMes(lista, ejercicio, tipo) : null
+  const saldos = lista && ejercicio ? saldosPorMes(lista, ejercicio) : null
   const colMov: Columna[] = [
     { clave: 'fecha', titulo: 'Fecha', ancho: '11%' }, { clave: 'documento', titulo: 'Documento', ancho: '14%' }, { clave: 'concepto', titulo: 'Concepto' },
     { clave: 'debe', titulo: 'Debe', cifra: true, ancho: '12%' }, { clave: 'haber', titulo: 'Haber', cifra: true, ancho: '12%' }, { clave: 'saldo', titulo: 'Saldo', cifra: true, ancho: '12%' },
@@ -339,10 +347,10 @@ export function FichaTercero({ tipo, id: idRuta }: { tipo: TipoTercero; id: stri
         />
         <div className="ft-cuerpo">
           <div className="ft-cabeza">
-            <Casilla rotulo="Subcuenta" htmlFor="ft-subcuenta" gris>
+            <Casilla rotulo="Subcuenta" htmlFor="ft-subcuenta" gris mide="subcuenta">
               <input id="ft-subcuenta" readOnly value={sub?.codigo ?? ''} placeholder={id ? '' : `La siguiente de la ${prefijo}`} title={sub ? sub.descripcion : `Al darlo de alta, la siguiente libre de la ${prefijo}`} />
             </Casilla>
-            <Casilla rotulo="Nombre" htmlFor="ft-nombre" ambar={ambar('nombre')}>
+            <Casilla rotulo="Nombre" htmlFor="ft-nombre" ambar={ambar('nombre')} mide="largo">
               <input id="ft-nombre" data-orden value={b.nombre} onChange={(e) => poner({ nombre: e.target.value })} onKeyDown={intro} />
             </Casilla>
           </div>

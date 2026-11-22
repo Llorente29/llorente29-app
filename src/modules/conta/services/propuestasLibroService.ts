@@ -13,7 +13,7 @@
 import { hojaDelProveedor, siguienteLibre } from '@/modules/conta/lib/planEmpresa'
 import { leerNoDeducibles, type IvaNoDeducible } from '@/modules/conta/services/ivaNoDeducibleService'
 import { porQueNoDeducible } from '@/modules/conta/lib/ivaNoDeducible'
-import { aplicarAsientoAMano, aplicarDatosDeLineas, aplicarReparto, cuentaDelReparto, lineasYCuotas, type LineaConCanal } from '@/modules/conta/lib/recibidaGuardada'
+import { aplicarAsientoAMano, aplicarDatosDeLineas, aplicarReparto, conSuplidos, cuentaDelReparto, lineasYCuotas, type LineaConCanal } from '@/modules/conta/lib/recibidaGuardada'
 import { supabase } from '@/lib/supabase'
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
@@ -498,7 +498,8 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       // S01o·3 · Común a todos los locales por su ficha: queda común porque lo dice la ficha, no por no saberlo.
       comunPorFicha: prov.default_common === true,
       // D01 · Una línea puede llevar su propia cuenta (la factura de comisión de una liquidación: comisión y anuncios).
-      lineas: lote?.lineas ?? (f.source === 'liquidacion' ? deLineas : lc.lineas),
+      // X27c · La base no sujeta, a la «Subcuenta suplidos» de su ficha (si la tiene).
+      lineas: lote?.lineas ?? (f.source === 'liquidacion' ? deLineas : conSuplidos(lc.lineas, ctx.enlace('supplier', sup, 'suplidos'))),
       ...(lote ? { cuotas: lote.cuotas, reparto: lote.reparto } : lc.cuotas ? { cuotas: lc.cuotas } : {}),
       // K10b · La marca de la factura va a sus apuntes, como el local (antes, solo la de una liquidación).
       marcaId: s(f.brand_id),

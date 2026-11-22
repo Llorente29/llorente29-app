@@ -35,6 +35,16 @@ export function lineasYCuotas(lineas: readonly LineaDeFactura[], impuestos: read
   }
 }
 
+/**
+ * X27c · «Subcuenta suplidos» de la ficha del proveedor (company_account_link, rol «suplidos»): los gastos que paga por
+ * cuenta de la empresa y repercute sin IVA. La base no sujeta (con su tipo al 0 %) de su factura va a esa subcuenta, no
+ * a la de gasto. Sin subcuenta de suplidos en su ficha, nada cambia.
+ */
+export function conSuplidos(lineas: readonly LineaDeFactura[], suplidos: string | null): LineaDeFactura[] {
+  if (!suplidos) return [...lineas]
+  return lineas.map((l) => (l.tipo && l.tipo.porcentaje === 0 && l.base !== 0 ? { ...l, cuentaGasto: suplidos } : l))
+}
+
 export interface RepartoGuardado { cuenta: string; local: string | null; comun: boolean; importe: number }
 
 const esGasto = (l: LineaAsiento) => l.debe > 0 && !l.iva && !l.retencion && /^6/.test(l.cuenta)

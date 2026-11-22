@@ -34,6 +34,8 @@ export interface Borrador {
   pais: string
   telefono: string
   correo: string
+  /** X27c · «Página web» (supplier.website; customer_fiscal.website, de la 1530). */
+  web: string
   observaciones: string
   recargo: boolean
   no347: boolean
@@ -45,6 +47,8 @@ export interface Borrador {
   /** Solo el proveedor: % IVA deducible, subcuenta de gasto, local, marca, plataforma y pago directo. */
   deducible: string
   gasto: string
+  /** X27c · «Subcuenta suplidos» (company_account_link, rol «suplidos»): la base no sujeta (0 %) de sus facturas va ahí. */
+  suplidos: string
   local: string
   marca: string
   plataforma: string
@@ -60,8 +64,8 @@ export interface Borrador {
 
 export const borradorVacio = (): Borrador => ({
   nombre: '', nif: '', tipoNif: 'nif_es', comercial: '', domicilio: '', postal: '', poblacion: '', provincia: '', pais: 'ES',
-  telefono: '', correo: '', observaciones: '', recargo: false, no347: false, iva1: '', iva2: '', retencion: '',
-  deducible: '', gasto: '', local: '', marca: '', plataforma: '', pagoDirecto: false, pago: '', forma: '', dias: '', iban: '', operacion: '',
+  telefono: '', correo: '', web: '', observaciones: '', recargo: false, no347: false, iva1: '', iva2: '', retencion: '',
+  deducible: '', gasto: '', suplidos: '', local: '', marca: '', plataforma: '', pagoDirecto: false, pago: '', forma: '', dias: '', iban: '', operacion: '',
 })
 
 /** Lo que ha cambiado, casilla a casilla (para «Guardar» y para la pregunta al salir). */
@@ -154,11 +158,12 @@ const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', '
 
 /**
  * La pestaña «Saldos», como la captura 07 de ERP10: los doce meses del ejercicio, con el debe, el haber y el saldo
- * acumulado al final de cada mes (en su naturaleza); lo de antes del ejercicio entra como saldo de apertura.
+ * acumulado al final de cada mes; lo de antes del ejercicio entra como saldo de apertura. X27c · El saldo con su signo,
+ * como ERP10: debe menos haber, también el del proveedor (242 al haber sale −242,00). Movimientos sigue en su naturaleza.
  */
-export function saldosPorMes(movs: readonly Movimiento[], ejercicio: { inicio: string; fin: string }, tipo: TipoTercero): { apertura: number; meses: SaldoMes[] } {
+export function saldosPorMes(movs: readonly Movimiento[], ejercicio: { inicio: string; fin: string }): { apertura: number; meses: SaldoMes[] } {
   const validos = movs.filter((m) => !m.anulado)
-  const signo = (m: Movimiento) => (tipo === 'proveedor' ? cent(m.haber) - cent(m.debe) : cent(m.debe) - cent(m.haber))
+  const signo = (m: Movimiento) => cent(m.debe) - cent(m.haber)
   let s = validos.filter((m) => m.fecha < ejercicio.inicio).reduce((t, m) => t + signo(m), 0)
   const apertura = s / 100
   const meses: SaldoMes[] = []
@@ -168,9 +173,12 @@ export function saldosPorMes(movs: readonly Movimiento[], ejercicio: { inicio: s
     if (`${mes}-01` > ejercicio.fin) break
     const del = validos.filter((m) => m.fecha.slice(0, 7) === mes && m.fecha >= ejercicio.inicio && m.fecha <= ejercicio.fin)
     const debe = del.reduce((t, m) => t + cent(m.debe), 0); const haber = del.reduce((t, m) => t + cent(m.haber), 0)
-    s += tipo === 'proveedor' ? haber - debe : debe - haber
+    s += debe - haber
     meses.push({ mes, nombre: `${MESES[mm - 1]} ${y}`, debe: debe / 100, haber: haber / 100, saldo: s / 100 })
     mm += 1; if (mm > 12) { mm = 1; y += 1 }
   }
   return { apertura, meses }
 }
+
+/** X27c · Una frase que acaba en punto, sin punto doble cuando el nombre ya lo lleva («…, S.L.» y no «…, S.L..»). */
+export const conPunto = (frase: string): string => (/[.!?…]$/.test(frase.trim()) ? frase.trim() : `${frase.trim()}.`)
