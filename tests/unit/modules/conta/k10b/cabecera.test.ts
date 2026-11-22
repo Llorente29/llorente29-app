@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   OPERACIONES, claseParaElAsiento, operacionDeLaClase, origenOperacion, presentadosDe, trimestrePropuesto, trimestresParaElegir,
 } from '@/modules/conta/nucleo/recibida/cabecera'
+import { etiquetaDelAsiento } from '@/modules/conta/nucleo/recibida/estado'
 
 const nada = new Set<string>()
 const tresT = new Set(['2026-3T'])
@@ -69,5 +70,18 @@ describe('la clase con que se propone el asiento', () => {
   it('los nombres cortos caben en la casilla (como mucho 19 letras) y los seis tipos de ERP10 están', () => {
     expect(OPERACIONES.map((o) => o.valor)).toEqual(['interior', 'isp_interior', 'intra_bienes', 'intra_servicios', 'fuera_ue', 'exenta'])
     for (const o of OPERACIONES) expect(o.corto.length, o.corto).toBeLessThanOrEqual(19)
+  })
+})
+
+describe('sin propuesta, la ficha lo dice (regla 8)', () => {
+  it('sin propuesta y sin nada escrito: «Sin propuesta» en ámbar, nunca «Se forma al escribir»', () => {
+    expect(etiquetaDelAsiento({ debe: 0, haber: 0, cuadra: false, faltan: [], lineas: 0, sinPropuesta: 'A Proveedor de Prueba le falta el NIF.' }))
+      .toEqual({ texto: 'Sin propuesta', tono: 'ambar' })
+  })
+  it('sin propuesta pero con lo escrito a mano: manda lo escrito (regla 30)', () => {
+    expect(etiquetaDelAsiento({ debe: 100, haber: 100, cuadra: true, faltan: [], lineas: 2, sinPropuesta: 'A Proveedor de Prueba le falta el NIF.' }).texto).toMatch(/^Cuadra/)
+  })
+  it('con propuesta y nada escrito, lo de siempre', () => {
+    expect(etiquetaDelAsiento({ debe: 0, haber: 0, cuadra: false, faltan: [], lineas: 0 })).toEqual({ texto: 'Se forma al escribir', tono: 'vacio' })
   })
 })

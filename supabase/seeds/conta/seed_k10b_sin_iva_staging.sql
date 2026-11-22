@@ -6,7 +6,12 @@
 -- (semilla K02). SOLO STAGING. Todo inventado (T11).
 --   · por tamaño (t = 1 a 1456, t = 2 a 1366), su proveedor de prueba con su
 --     subcuenta (40000084, 40000085: los mismos que la semilla K10b, que los
---     encuentra hechos) y su factura del 17/10 sin IVA, leída, por revisar.
+--     encuentra hechos) y su factura del 17/10 sin IVA, leída, por revisar (n = 3).
+--     Estos no tienen NIF: sin él no hay propuesta («le falta el NIF»), y la ficha
+--     lo dice (regla 8, e2e 44960214725);
+--   · y por tamaño, otro proveedor de prueba CON NIF inventado (B00010843,
+--     B00010850: todo ceros y su dígito de control), su subcuenta (40000086,
+--     40000087) y su factura del 17/10 sin IVA (n = 4): la del tipo cambiado.
 -- Va la PRIMERA del manifiesto de staging, y por eso no necesita nada de la rama:
 -- delante de la 2150 nada la deja en ROLLBACK (W07). Acaba con «set constraints
 -- all immediate»: sus facturas no dejan disparadores pendientes a la 2150, que
@@ -30,21 +35,25 @@ begin
 
   insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source, created_at, updated_at)
   values (k_cuenta, k_emp2, 'pymes', '40000084', '4000', 'Proveedor de Prueba K10b Uno', 'own', 'manual', cuando, cuando),
-         (k_cuenta, k_emp2, 'pymes', '40000085', '4000', 'Proveedor de Prueba K10b Dos', 'own', 'manual', cuando, cuando)
+         (k_cuenta, k_emp2, 'pymes', '40000085', '4000', 'Proveedor de Prueba K10b Dos', 'own', 'manual', cuando, cuando),
+         (k_cuenta, k_emp2, 'pymes', '40000086', '4000', 'Proveedor de Prueba K10b Tres', 'own', 'manual', cuando, cuando),
+         (k_cuenta, k_emp2, 'pymes', '40000087', '4000', 'Proveedor de Prueba K10b Cuatro', 'own', 'manual', cuando, cuando)
   on conflict (company_id, code) do nothing;
-  insert into public.supplier (id, account_id, name, legal_name, country_code, vat_regime, created_by_name, created_at)
-  select ('c0eb0000-0000-4000-8000-0000000000b' || t)::uuid, k_cuenta, x.nombre, x.nombre, 'ES', 'general', 'Semilla K10b', cuando
-    from (values (1, 'Proveedor de Prueba K10b Uno, S.L.'), (2, 'Proveedor de Prueba K10b Dos, S.L.')) x(t, nombre)
+  insert into public.supplier (id, account_id, name, legal_name, tax_id, country_code, vat_regime, created_by_name, created_at)
+  select ('c0eb0000-0000-4000-8000-0000000000b' || t)::uuid, k_cuenta, x.nombre, x.nombre, x.nif, 'ES', 'general', 'Semilla K10b', cuando
+    from (values (1, 'Proveedor de Prueba K10b Uno, S.L.', null), (2, 'Proveedor de Prueba K10b Dos, S.L.', null),
+                 (3, 'Proveedor de Prueba K10b Tres, S.L.', 'B00010843'), (4, 'Proveedor de Prueba K10b Cuatro, S.L.', 'B00010850')) x(t, nombre, nif)
   on conflict (id) do nothing;
   insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
   select k_cuenta, k_emp2, a.id, 'supplier', x.de, 'principal', 'manual'
-    from (values ('40000084', 'c0eb0000-0000-4000-8000-0000000000b1'), ('40000085', 'c0eb0000-0000-4000-8000-0000000000b2')) x(codigo, de)
+    from (values ('40000084', 'c0eb0000-0000-4000-8000-0000000000b1'), ('40000085', 'c0eb0000-0000-4000-8000-0000000000b2'),
+                 ('40000086', 'c0eb0000-0000-4000-8000-0000000000b3'), ('40000087', 'c0eb0000-0000-4000-8000-0000000000b4')) x(codigo, de)
     join public.company_account a on a.company_id = k_emp2 and a.code = x.codigo
   on conflict (company_id, entity, entity_id, role) do nothing;
 
   insert into public.supplier_invoice (id, account_id, company_id, supplier_id, invoice_number, invoice_date, due_date, status, source,
     grand_total, tax_base_total, tax_total, needs_review, created_by_name, arrival_channel, reading_confidence, reading, created_at, updated_at)
-  select ('c0eb0000-0000-4000-8000-000000000d' || x.t || '3')::uuid, k_cuenta, k_emp2, ('c0eb0000-0000-4000-8000-0000000000b' || x.t)::uuid,
+  select ('c0eb0000-0000-4000-8000-000000000d' || x.t || x.n)::uuid, k_cuenta, k_emp2, ('c0eb0000-0000-4000-8000-0000000000b' || x.prov)::uuid,
          x.numero, date '2026-10-17', date '2026-11-16', 'en_revision', 'ocr', x.base, x.base, 0, true, 'Semilla K10b sin IVA', 'correo', 'probable',
          jsonb_build_object(
            'porque', jsonb_build_array('Leída de su PDF (semilla K10b).'), 'comprobaciones', '[]'::jsonb, 'confianza', 'probable',
@@ -54,8 +63,10 @@ begin
              'numero', x.numero, 'fecha', '2026-10-17', 'vencimiento', '2026-11-16',
              'base', x.base, 'cuota', 0, 'total', x.base, 'desgloseDe', 'papel')),
          cuando, cuando
-    from (values (1, 'K10B-1-0003', 375.20, 'Proveedor de Prueba K10b Uno, S.L.'),
-                 (2, 'K10B-2-0003', 376.40, 'Proveedor de Prueba K10b Dos, S.L.')) x(t, numero, base, nombre)
+    from (values (1, 3, 1, 'K10B-1-0003', 375.20, 'Proveedor de Prueba K10b Uno, S.L.'),
+                 (2, 3, 2, 'K10B-2-0003', 376.40, 'Proveedor de Prueba K10b Dos, S.L.'),
+                 (1, 4, 3, 'K10B-1-0004', 377.60, 'Proveedor de Prueba K10b Tres, S.L.'),
+                 (2, 4, 4, 'K10B-2-0004', 378.80, 'Proveedor de Prueba K10b Cuatro, S.L.')) x(t, n, prov, numero, base, nombre)
   on conflict (id) do nothing;
   insert into public.supplier_invoice_tax (account_id, supplier_invoice_id, vat_pct, base, vat_amount)
   select k_cuenta, i.id, 0, i.tax_base_total, 0
@@ -69,7 +80,7 @@ begin
      and not exists (select 1 from public.supplier_invoice_line z where z.supplier_invoice_id = i.id);
 
   select count(*) into v_n from public.supplier_invoice where company_id = k_emp2 and created_by_name = 'Semilla K10b sin IVA';
-  if v_n <> 2 then raise exception 'Semilla K10b sin IVA: hay % facturas y tenían que ser 2.', v_n; end if;
-  raise notice 'Semilla K10b sin IVA OK: dos proveedores de prueba (40000084, 40000085) con su factura del 17/10 sin IVA.';
+  if v_n <> 4 then raise exception 'Semilla K10b sin IVA: hay % facturas y tenían que ser 4.', v_n; end if;
+  raise notice 'Semilla K10b sin IVA OK: cuatro proveedores de prueba (40000084 a 40000087, los dos últimos con NIF) con su factura del 17/10 sin IVA.';
 end $$;
 set constraints all immediate;

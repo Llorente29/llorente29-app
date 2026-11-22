@@ -178,9 +178,11 @@ export function emisorDesconocido(o: { aMano: boolean; proveedorId: string; leid
 }
 
 /** La etiqueta del asiento: «Cuadra · 357,44», lo que le falta, o «Se forma al escribir». */
-export function etiquetaDelAsiento(a: { debe: number; haber: number; cuadra: boolean; faltan: readonly string[]; lineas: number }):
+export function etiquetaDelAsiento(a: { debe: number; haber: number; cuadra: boolean; faltan: readonly string[]; lineas: number; sinPropuesta?: string | null }):
   { texto: string; tono: 'bien' | 'ambar' | 'vacio' } {
-  if (a.lineas === 0 || (a.debe === 0 && a.haber === 0)) return { texto: 'Se forma al escribir', tono: 'vacio' }
+  // K10b · Sin propuesta (le falta el NIF, el tipo de gasto…) y sin nada escrito, no se calla con «Se forma al escribir»
+  // (regla 8): «Sin propuesta», y el motivo debajo. Lo escrito a mano manda (regla 30).
+  if (a.lineas === 0 || (a.debe === 0 && a.haber === 0)) return a.sinPropuesta ? { texto: 'Sin propuesta', tono: 'ambar' } : { texto: 'Se forma al escribir', tono: 'vacio' }
   if (a.faltan.length) return { texto: `Falta ${a.faltan[0]}`, tono: 'ambar' }
   if (a.cuadra) return { texto: `Cuadra · ${cifra(a.debe)}`, tono: 'bien' }
   const d = Math.round((a.debe - a.haber) * 100) / 100

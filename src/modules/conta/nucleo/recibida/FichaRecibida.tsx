@@ -665,7 +665,11 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const subcuenta = delProv?.subcuenta?.codigo ?? ''
   const conEstaFactura = mayor ? mayor.saldo + (validada ? 0 : totales.total) : null
   const cola = !aMano && pos >= 0 ? `${pos + 1} de ${ids.length} por revisar` : aMano ? 'Nueva' : ''
-  const etiqueta = previa ? etiquetaDelAsiento({ debe: previa.debe, haber: previa.haber, cuadra: previa.cuadra, faltan: previa.faltan, lineas: previa.lineas.length }) : { texto: 'Se forma al escribir', tono: 'vacio' as const }
+  // K10b · Sin propuesta, su porqué (regla 8: nunca «Se forma al escribir» en silencio; e2e 44960214725, «le falta el NIF»).
+  const porqueSinPropuesta = !aMano && !fac?.asiento && vistaDatos && vistaDatos.propuesta === null ? vistaDatos.porque : null
+  // Lo escrito a mano sin propuesta sigue saliendo (regla 30): «Sin propuesta» solo cuando el asiento está vacío; el porqué, siempre.
+  const etiqueta = previa ? etiquetaDelAsiento({ debe: previa.debe, haber: previa.haber, cuadra: previa.cuadra, faltan: previa.faltan, lineas: previa.lineas.length, sinPropuesta: porqueSinPropuesta })
+    : porqueSinPropuesta ? etiquetaDelAsiento({ debe: 0, haber: 0, cuadra: false, faltan: [], lineas: 0, sinPropuesta: porqueSinPropuesta }) : { texto: 'Se forma al escribir', tono: 'vacio' as const }
   const documento = aMano
     ? (fichero ? { url: fichero.url, foto: !/pdf/i.test(fichero.file.type), titulo: fichero.file.name } : null)
     : fichero ? { url: fichero.url, foto: !/pdf/i.test(fichero.file.type), titulo: fichero.file.name }
@@ -989,7 +993,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
 
             {modo === 'contabilizada'
               ? <AsientoQueSale lineas={lineasValidado} etiqueta={{ texto: etiquetaValidado(fac?.asiento?.numero ?? null), tono: 'bien' }} />
-              : <AsientoQueSale lineas={previa && totales.total !== 0 ? previa.lineas : []} etiqueta={etiqueta}
+              : <AsientoQueSale lineas={previa && totales.total !== 0 ? previa.lineas : []} etiqueta={etiqueta} nota={porqueSinPropuesta}
                   editar={!aMano && id && !soloLectura ? { texto: 'Editar el asiento', hacer: () => setCompleta(true) } : null} />}
           </fieldset>}
         </div>

@@ -4,7 +4,9 @@
 // K10b · La cabecera de la recibida, como ERP10, contra staging, con la cuenta del núcleo (semilla K02) en su
 // gestoría y la semilla K10b, a 1456 × 816 y a 1366 × 768:
 //   1. una de septiembre, con el 3T presentado, propone el 4T y lo dice en la franja ámbar;
-//   2. una de octubre sin IVA (como llega una intracomunitaria de servicios): el tipo de operación «De su ficha»
+//   1b. una sin propuesta (su proveedor no tiene NIF): la ficha lo dice («Sin propuesta» y el porqué), nunca «Se forma
+//      al escribir» en silencio (regla 8; e2e 44960214725);
+//   2. una de octubre sin IVA, de un proveedor con NIF (como llega una intracomunitaria de servicios): el tipo de operación «De su ficha»
 //      se cambia a «Intracom. servicios» («Cambiado», y «Cambiado en esta factura» al pasar el ratón); el concepto
 //      se escribe, las observaciones y la marca se ponen, y la base lo guarda;
 //   3. al pulsar Intro, su asiento sale con la inversión (el 472 con «Compra en otro país de la UE» y la 477),
@@ -112,7 +114,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     page.on('pageerror', (e) => errores.push(`${page.url()}: ${e.message}`))
     await page.setViewportSize({ width: ancho, height: alto })
     const s = await entrarEnLaGestoria(page)
-    await ponerDocumento(s, factura(t, 3), 'k10b.pdf')
+    await ponerDocumento(s, factura(t, 4), 'k10b.pdf')
     if (alto < 800) {
       const plegar = page.getByRole('button', { name: /Plegar los botones/ })
       if (await plegar.isVisible()) await plegar.click()
@@ -125,9 +127,15 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(ficha(page).locator('.kf-comprobaciones')).toContainText('El 3T ya está presentado: va al 4T')
     await expect(ficha(page).locator('#kf-deduce option[value="2026-07-01"]')).toBeDisabled()
 
-    // ── 2 · La de octubre sin IVA: el tipo, el concepto, las observaciones y la marca. Con IVA español, la
-    //    autoliquidación no se propone («o la factura o su ficha están mal», e2e 44953178165). ──
+    // ── 1b · Sin propuesta (su proveedor no tiene NIF): la ficha lo dice. ──
     await page.goto(`/conta/documentos/recibidas/${factura(t, 3)}?ver=por-revisar`, { timeout: 30_000 })
+    await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
+    await expect(ficha(page).locator('[data-prueba="cuadra"]')).toHaveText('Sin propuesta', { timeout: 30_000 })
+    await expect(ficha(page).locator('[data-prueba="sin-propuesta"]')).toContainText('le falta el NIF')
+
+    // ── 2 · La de octubre sin IVA, de un proveedor con NIF: el tipo, el concepto, las observaciones y la marca. Con
+    //    IVA español la autoliquidación no se propone (e2e 44953178165), y sin NIF no hay propuesta (e2e 44960214725). ──
+    await page.goto(`/conta/documentos/recibidas/${factura(t, 4)}?ver=por-revisar`, { timeout: 30_000 })
     await fichaLista(page)
     const origen = ficha(page).locator('[data-prueba="origen-operacion"]')
     await expect(ficha(page).locator('#kf-operacion')).toHaveValue('interior', { timeout: 30_000 })
@@ -155,7 +163,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(aviso(page)).toContainText(`Marca: ${MARCA}`, { timeout: 30_000 })
 
     const [f] = await rest<{ vat_operation: string | null; entry_concept: string | null; notes: string | null; brand_id: string | null }[]>(s,
-      `supplier_invoice?select=vat_operation,entry_concept,notes,brand_id&account_id=eq.${NUCLEO.id}&id=eq.${factura(t, 3)}`)
+      `supplier_invoice?select=vat_operation,entry_concept,notes,brand_id&account_id=eq.${NUCLEO.id}&id=eq.${factura(t, 4)}`)
     expect(f.vat_operation).toBe('intra_servicios')
     expect(f.entry_concept).toBe(concepto)
     expect(f.notes).toBe(`Observación de prueba K10b ${t}`)
@@ -169,7 +177,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await introFuera(page)
     await expect(aviso(page)).toContainText(/Apuntada y validada|sin validar/i, { timeout: 60_000 })
     const asientos = await rest<{ id: string; concept: string; status: string }[]>(s,
-      `journal_entry?select=id,concept,status&account_id=eq.${NUCLEO.id}&source_type=eq.supplier_invoice&source_id=eq.${factura(t, 3)}`)
+      `journal_entry?select=id,concept,status&account_id=eq.${NUCLEO.id}&source_type=eq.supplier_invoice&source_id=eq.${factura(t, 4)}`)
     expect(asientos.length, 'su asiento').toBe(1)
     expect(asientos[0].concept).toBe(concepto)
     const lineas = await rest<Linea[]>(s, `journal_line?select=debit,credit,brand_id,tax_rate:tax_rate_id(code),company_account:company_account_id(code)&entry_id=eq.${asientos[0].id}`)
