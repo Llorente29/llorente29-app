@@ -121,11 +121,11 @@ export function FichaTercero({ tipo, id: idRuta }: { tipo: TipoTercero; id: stri
     setOcupado(true); setFallo(null)
     try {
       const r = prov
-        ? await guardarProveedor({ accountId, companyId: activa.id, id, antes, ahora: b, retenciones: base?.retenciones ?? [], quien: userName ?? null, userId: userId ?? null })
+        ? await guardarProveedor({ accountId, companyId: activa.id, id, antes, ahora: b, retenciones: base?.retenciones ?? [], subcuentas: base?.subcuentas ?? [], quien: userName ?? null, userId: userId ?? null })
         : await guardarCliente({ accountId, companyId: activa.id, id, ahora: b, quien: userName ?? null })
       const quedan = `${r.texto}${cambiadas.length && id ? ` ${cambiadas.length === 1 ? 'Una casilla cambiada' : `${cambiadas.length} casillas cambiadas`}.` : ''}`
-      if (!id) { navegar(rutaDe(r.id), { state: { aviso: { texto: quedan, tono: 'bien' } } }); return true }
-      setAviso({ texto: quedan, tono: 'bien' }); setVuelta((v) => v + 1)
+      if (!id) { navegar(rutaDe(r.id), { state: { aviso: { texto: quedan, tono: r.tono } } }); return true }
+      setAviso({ texto: quedan, tono: r.tono }); setVuelta((v) => v + 1)
       return true
     } catch (e) { setFallo(e instanceof Error ? e.message : String(e)); return false }
     finally { setOcupado(false) }

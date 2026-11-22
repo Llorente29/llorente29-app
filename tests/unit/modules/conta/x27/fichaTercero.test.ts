@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  PAISES, borradorVacio, cambios, conSaldo, nombrePais, porQueNoSeGuarda, retencionQueEncaja, saldosPorMes, type Movimiento,
+  PAISES, borradorVacio, cambios, hojaDeAlta, conSaldo, nombrePais, porQueNoSeGuarda, retencionQueEncaja, saldosPorMes, type Movimiento,
 } from '@/modules/conta/nucleo/terceros/fichaTercero'
 import { fechaDelPago } from '@/modules/conta/nucleo/recibida/pago'
 
@@ -36,6 +36,15 @@ describe('X27 · la retención que encaja con el porcentaje guardado', () => {
     expect(retencionQueEncaja(0, lista)).toBeNull()
     expect(retencionQueEncaja(null, lista)).toBeNull()
     expect(retencionQueEncaja(2, lista)).toBeNull()
+  })
+})
+
+describe('X27 · el alta: la hoja de su subcuenta (e2e 45027027471: la 400 no es hoja)', () => {
+  it('el proveedor, la 4000; con un gasto que no es de compras (60), la 4100; el cliente, la 4300', () => {
+    expect(hojaDeAlta('proveedor', null)).toBe('4000')
+    expect(hojaDeAlta('proveedor', '60000000')).toBe('4000')
+    expect(hojaDeAlta('proveedor', '62800000')).toBe('4100')
+    expect(hojaDeAlta('cliente', null)).toBe('4300')
   })
 })
 

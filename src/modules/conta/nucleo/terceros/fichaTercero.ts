@@ -97,6 +97,19 @@ export function retencionQueEncaja<T extends { id: string; rate: number }>(pct: 
   return lista.find((r) => Math.abs(r.rate - pct) < 0.005) ?? null
 }
 
+// ── El alta: de qué hoja del plan cuelga su subcuenta ───────────────────────
+
+/**
+ * La hoja del plan donde nace la subcuenta del alta (la 400 o la 430 no son hojas: sus subcuentas cuelgan de las de
+ * cuatro cifras; e2e 45027027471, «La 400 no es una cuenta del plan en la que se pueda apuntar»). El cliente, la 4300.
+ * El proveedor, la 4000; si su subcuenta de gasto no es de compras (60), la 4100 de acreedores, como la recibida
+ * (planEmpresa.hojaDelProveedor).
+ */
+export function hojaDeAlta(tipo: TipoTercero, gasto: string | null): '4000' | '4100' | '4300' {
+  if (tipo === 'cliente') return '4300'
+  return gasto && !/^60/.test(gasto) ? '4100' : '4000'
+}
+
 // ── Los países ──────────────────────────────────────────────────────────────
 
 /** Los que salen en la lupa: España, la UE y los de fuera que más facturan a la hostelería. */

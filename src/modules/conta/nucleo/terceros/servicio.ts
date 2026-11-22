@@ -8,7 +8,8 @@
 //   · cliente: party y customer_fiscal con party_save_customer, y lo del X27 (phone, email, notes, trade_name,
 //     usual_tax_rate_ids) con un update de customer_fiscal; su 430, el rol «principal» de entity «customer».
 //   · el alta: el proveedor (crearProveedor) o el cliente (party_save_customer), y su subcuenta con
-//     company_account_add (la siguiente libre de la 400 o de la 430, enlazada como «principal»).
+//     company_account_add (la siguiente libre de la 4000, la 4100 o la 4300, enlazada como «principal»). Si la
+//     subcuenta no se crea, el tercero ya existe: se abre su ficha y se dice por qué (nunca otro alta al reintentar).
 
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { crearProveedor, guardarFicha, obtenerFicha } from '@/modules/conta/services/proveedorService'
@@ -17,7 +18,7 @@ import { leerEjercicios, localesDeLaCuenta, type EjercicioLibro } from '@/module
 import { marcasDeLaCuenta, plataformasDeLaCuenta, type Opcion } from '@/modules/conta/services/asientoGeneralService'
 import { delProveedor } from '@/modules/conta/nucleo/recibida/servicio'
 import { textoDeOperacion } from '@/modules/conta/nucleo/recibida/cabecera'
-import { borradorVacio, porcentaje, dias as diasDe, retencionQueEncaja, type Borrador, type Movimiento, type TipoTercero } from './fichaTercero'
+import { borradorVacio, hojaDeAlta, porcentaje, dias as diasDe, retencionQueEncaja, type Borrador, type Movimiento, type TipoTercero } from './fichaTercero'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
@@ -184,17 +185,19 @@ function retencionPct(b: Borrador, retenciones: readonly Tasa[]): number | null 
 /** Guarda la ficha del proveedor; con `nuevo`, primero el alta y su 400. Devuelve su id y lo que ha hecho. */
 export async function guardarProveedor(o: {
   accountId: string; companyId: string; id: string | null; antes: Borrador; ahora: Borrador; retenciones: readonly Tasa[]
-  quien: string | null; userId: string | null
-}): Promise<{ id: string; texto: string }> {
+  quien: string | null; userId: string | null; subcuentas: readonly Subcuenta[]
+}): Promise<Guardado> {
   const b = o.ahora
   let id = o.id
   let alta: string | null = null
+  let falloSub: string | null = null
   if (!id) {
     const nombre = (b.comercial.trim() || b.nombre.trim())
     const f = await crearProveedor({ accountId: o.accountId, name: nombre, taxId: nulo(b.nif), taxIdType: b.tipoNif || null, nifComprobado: false, entityKind: null, createdBy: o.userId, createdByName: o.quien })
     id = f.id
-    const c = await rpc<{ id: string; code: string }>('company_account_add', { p_company: o.companyId, p_hoja: '400', p_nombre: b.nombre.trim(), p_plain_name: null, p_entity: 'supplier', p_entity_id: id, p_quien_nombre: o.quien, p_source: 'manual' })
-    alta = c.code
+    const hoja = hojaDeAlta('proveedor', o.subcuentas.find((c) => c.id === b.gasto)?.codigo ?? null)
+    const sub = await subcuentaDelAlta(o.companyId, hoja, b.nombre.trim(), 'supplier', id, o.quien)
+    if ('fallo' in sub) falloSub = sub.fallo; else alta = sub.code
   }
   const ivas = [b.iva1, b.iva2].filter(Boolean)
   await guardarFicha(id, {
@@ -213,11 +216,21 @@ export async function guardarProveedor(o: {
   if (error) throw new Error(mensaje('No se ha guardado lo que propone la factura', error))
   await enlazar(o.companyId, 'supplier', id, 'gasto', o.id ? o.antes.gasto : '', b.gasto, o.quien)
   await enlazar(o.companyId, 'supplier', id, 'pago', o.id ? o.antes.pago : '', b.pago, o.quien)
-  return { id, texto: alta ? `Dado de alta: ${b.nombre.trim()}, con la subcuenta ${alta}.` : `Guardado: ${b.nombre.trim()}.` }
+  if (falloSub) return { id, texto: `Dado de alta: ${b.nombre.trim()}, pero sin subcuenta: ${falloSub}`, tono: 'ambar' }
+  return { id, texto: alta ? `Dado de alta: ${b.nombre.trim()}, con la subcuenta ${alta}.` : `Guardado: ${b.nombre.trim()}.`, tono: 'bien' }
+}
+
+export interface Guardado { id: string; texto: string; tono: 'bien' | 'ambar' }
+
+/** La subcuenta del alta, o por qué no se ha creado (sin lanzar: el tercero ya existe). */
+async function subcuentaDelAlta(companyId: string, hoja: string, nombre: string, entity: 'supplier' | 'customer', id: string, quien: string | null): Promise<{ code: string } | { fallo: string }> {
+  try {
+    return await rpc<{ id: string; code: string }>('company_account_add', { p_company: companyId, p_hoja: hoja, p_nombre: nombre, p_plain_name: null, p_entity: entity, p_entity_id: id, p_quien_nombre: quien, p_source: 'manual' })
+  } catch (e) { return { fallo: (e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, '') } }
 }
 
 /** Guarda la ficha del cliente; con `nuevo`, primero el alta y su 430. */
-export async function guardarCliente(o: { accountId: string; companyId: string; id: string | null; ahora: Borrador; quien: string | null }): Promise<{ id: string; texto: string }> {
+export async function guardarCliente(o: { accountId: string; companyId: string; id: string | null; ahora: Borrador; quien: string | null }): Promise<Guardado> {
   const b = o.ahora
   const r = await rpc<{ party_id: string; nuevo: boolean }>('party_save_customer', {
     p_account: o.accountId, p_party: o.id, p_nombre: b.nombre.trim(), p_nif: nulo(b.nif), p_quien_nombre: o.quien,
@@ -238,11 +251,12 @@ export async function guardarCliente(o: { accountId: string; companyId: string; 
   if (!o.id) {
     const ya = await leer(tabla('company_account_link').select('company_account_id').eq('company_id', o.companyId).eq('entity', 'customer').eq('entity_id', id).eq('role', 'principal'), 'su subcuenta')
     if (!ya.length) {
-      const c = await rpc<{ id: string; code: string }>('company_account_add', { p_company: o.companyId, p_hoja: '430', p_nombre: b.nombre.trim(), p_plain_name: null, p_entity: 'customer', p_entity_id: id, p_quien_nombre: o.quien, p_source: 'manual' })
-      alta = c.code
+      const sub = await subcuentaDelAlta(o.companyId, hojaDeAlta('cliente', null), b.nombre.trim(), 'customer', id, o.quien)
+      if ('fallo' in sub) return { id, texto: `Dado de alta: ${b.nombre.trim()}, pero sin subcuenta: ${sub.fallo}`, tono: 'ambar' }
+      alta = sub.code
     }
   }
-  return { id, texto: alta ? `Dado de alta: ${b.nombre.trim()}, con la subcuenta ${alta}.` : `Guardado: ${b.nombre.trim()}.` }
+  return { id, texto: alta ? `Dado de alta: ${b.nombre.trim()}, con la subcuenta ${alta}.` : `Guardado: ${b.nombre.trim()}.`, tono: 'bien' }
 }
 
 /** ¿Este tercero es un cliente? (la ficha de cliente del núcleo solo abre los que lo son). */
