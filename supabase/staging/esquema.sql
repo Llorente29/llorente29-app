@@ -107408,6 +107408,76 @@ $$;
 
 
 --
+-- Name: tg_x27_linea_plataforma(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_x27_linea_plataforma() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_canal uuid;
+begin
+  select s.default_channel_id into v_canal
+    from public.supplier_invoice i join public.supplier s on s.id = i.supplier_id and s.account_id = i.account_id
+   where i.id = new.supplier_invoice_id
+     and not exists (select 1 from public.journal_entry e where e.id = i.journal_entry_id and e.status = 'validado');
+  if v_canal is null then return null; end if;
+  insert into public.supplier_invoice_expense_dato (account_id, supplier_invoice_id, position, channel_id)
+  values (new.account_id, new.supplier_invoice_id, new.position, v_canal)
+  on conflict (supplier_invoice_id, position) do nothing;
+  return null;
+end $$;
+
+
+--
+-- Name: FUNCTION tg_x27_linea_plataforma(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_x27_linea_plataforma() IS 'X27 · Cada línea de gasto nace con la plataforma de la ficha de su proveedor (supplier_invoice_expense_dato), si aún no tiene sus datos. Una línea que ya los tiene (o a la que se quitó la plataforma) no se toca.';
+
+
+--
+-- Name: tg_x27_recibida_nace(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_x27_recibida_nace() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_s public.supplier;
+begin
+  if new.supplier_id is null then return new; end if;
+  if tg_op = 'UPDATE' and new.supplier_id is not distinct from old.supplier_id then return new; end if;
+  -- Nunca con su asiento validado.
+  if new.journal_entry_id is not null
+     and exists (select 1 from public.journal_entry e where e.id = new.journal_entry_id and e.status = 'validado') then
+    return new;
+  end if;
+  select * into v_s from public.supplier where id = new.supplier_id and account_id = new.account_id;
+  if v_s.id is null then return new; end if;
+  if new.vat_deductible_pct is null then new.vat_deductible_pct := v_s.vat_deductible_pct; end if;
+  if new.exclude_from_347 is null and v_s.exclude_from_347 then new.exclude_from_347 := true; end if;
+  if new.brand_id is null then new.brand_id := v_s.default_brand_id; end if;
+  -- Al cambiarle el proveedor (R14 lo pone después de leer el documento), sus líneas que aún no tienen datos toman
+  -- su plataforma, como las que nacen después (x27_linea_plataforma).
+  if tg_op = 'UPDATE' and v_s.default_channel_id is not null then
+    insert into public.supplier_invoice_expense_dato (account_id, supplier_invoice_id, position, channel_id)
+    select x.account_id, x.supplier_invoice_id, x.position, v_s.default_channel_id
+      from public.supplier_invoice_expense x where x.supplier_invoice_id = new.id
+    on conflict (supplier_invoice_id, position) do nothing;
+  end if;
+  return new;
+end $$;
+
+
+--
+-- Name: FUNCTION tg_x27_recibida_nace(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.tg_x27_recibida_nace() IS 'X27 · La recibida nace con lo de la ficha de su proveedor: al insertarla o al cambiarle el proveedor, sin su asiento validado, lo VACÍO (% deducible, 347 y marca) toma lo de la ficha. Lo que ya tiene no se toca.';
+
+
+--
 -- Name: theoretical_qty_at(uuid, uuid, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -150989,6 +151059,20 @@ CREATE TRIGGER withholding_rate_vigencia BEFORE INSERT OR UPDATE ON public.withh
 
 
 --
+-- Name: supplier_invoice_expense x27_linea_plataforma; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER x27_linea_plataforma AFTER INSERT ON public.supplier_invoice_expense FOR EACH ROW EXECUTE FUNCTION public.tg_x27_linea_plataforma();
+
+
+--
+-- Name: supplier_invoice x27_recibida_nace; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER x27_recibida_nace BEFORE INSERT OR UPDATE OF supplier_id ON public.supplier_invoice FOR EACH ROW EXECUTE FUNCTION public.tg_x27_recibida_nace();
+
+
+--
 -- Name: identities identities_user_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: -
 --
 
@@ -193831,6 +193915,22 @@ GRANT ALL ON FUNCTION public.tg_supplier_invoice_no_repetida() TO service_role;
 
 REVOKE ALL ON FUNCTION public.tg_training_notice_on_assign() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.tg_training_notice_on_assign() TO service_role;
+
+
+--
+-- Name: FUNCTION tg_x27_linea_plataforma(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_x27_linea_plataforma() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_x27_linea_plataforma() TO service_role;
+
+
+--
+-- Name: FUNCTION tg_x27_recibida_nace(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_x27_recibida_nace() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_x27_recibida_nace() TO service_role;
 
 
 --
