@@ -6482,7 +6482,7 @@ begin
                   where nullif(l->'iva'->>'libro', '') is not null or l->>'cuenta' like '472%' or l->>'cuenta' like '477%') then
     return p_entry;
   end if;
-  v_p := public.conta_iva_presentado(p_company, v_fecha);
+  v_p := public.conta_iva_presentado(p_company, public._conta_fecha_fiscal(p_entry->>'source_type', nullif(p_entry->>'source_id', '')::uuid, v_fecha));   -- K11f1: la fecha fiscal
   if v_p is null then return p_entry; end if;
   -- Solo se mueve una recibida: una expedida (o las ventas de un día) es del
   -- periodo en que se expidió, y ése ya está presentado.
@@ -6545,7 +6545,7 @@ begin
               or exists (select 1 from public.company_account a where a.id = old.company_account_id and (a.code like '472%' or a.code like '477%'))))) then
     return new;
   end if;
-  v_p := public.conta_iva_presentado(v_e.company_id, v_e.entry_date);
+  v_p := public.conta_iva_presentado(v_e.company_id, public._conta_fecha_fiscal(v_e.source_type, v_e.source_id, v_e.entry_date));   -- K11f1: la fecha fiscal
   if v_p is null then return new; end if;
   raise exception '%', public.conta_iva_presentado_mensaje(v_e.company_id, v_p, 'factura') using errcode = '23514', hint = 'iva_presentado';
 end $$;
@@ -6566,7 +6566,7 @@ begin
   if public._conta_iva_exento(new.source_type, new.source_id, new.company_id) then return new; end if;
   if not public._conta_iva_asiento_con_iva(new.id) then return new; end if;
   -- Anular uno validado le quita su IVA al periodo en que estaba.
-  v_dia := case when new.status = 'anulado' then old.entry_date else new.entry_date end;
+  v_dia := public._conta_fecha_fiscal(new.source_type, new.source_id, case when new.status = 'anulado' then old.entry_date else new.entry_date end);   -- K11f1: la fecha fiscal
   v_p := public.conta_iva_presentado(new.company_id, v_dia);
   if v_p is null then return new; end if;
   raise exception '%', public.conta_iva_presentado_mensaje(new.company_id, v_p,
@@ -7956,7 +7956,7 @@ begin
   select * into v_y from public.fiscal_year where id = v_e.fiscal_year_id;
   v_traido := v_y.imported_until is not null and v_e.entry_date <= v_y.imported_until;
   v_mes := public.conta_mes_cerrado(v_e.company_id, v_e.entry_date);
-  v_iva := public.conta_iva_presentado(v_e.company_id, v_e.entry_date);
+  v_iva := public.conta_iva_presentado(v_e.company_id, public._conta_fecha_fiscal(v_e.source_type, v_e.source_id, v_e.entry_date));   -- K11f1: la fecha fiscal
   if v_traido or v_mes or v_iva is not null then
     v_t := public._conta_asiento_lleva_iva(v_e.id);
     if v_t is not null then
@@ -9828,7 +9828,9 @@ begin
     end;
   end if;
   -- S01p·4: su fecha, salvo que no esté abierta (303 presentado, corte con Diez, ejercicio cerrado).
-  v_nueva := public.conta_primer_dia_iva_abierto(p_company, v_fecha);
+  v_nueva := case when exists (select 1 from public.supplier_invoice si where si.id = nullif(p_entry->>'source_id', '')::uuid and si.deduct_from is not null)
+                   then public._conta_primer_dia_contable(p_company, v_fecha)   -- K11f1: con fecha fiscal, el IVA lo decide ella
+                   else public.conta_primer_dia_iva_abierto(p_company, v_fecha) end;
   if v_nueva is null or v_nueva = v_fecha then return p_entry; end if;
   v_p := public.conta_iva_presentado(p_company, v_fecha);
   v_aviso := case when v_p is not null
@@ -20591,7 +20593,7 @@ declare v_p jsonb;
 begin
   if tg_op = 'UPDATE' and new.entry_date is not distinct from old.entry_date then return new; end if;
   if public._conta_iva_exento(new.source_type, new.source_id, new.company_id) then return new; end if;
-  v_p := public.conta_iva_presentado(new.company_id, new.entry_date);
+  v_p := public.conta_iva_presentado(new.company_id, public._conta_fecha_fiscal(new.source_type, new.source_id, new.entry_date));   -- K11f1: la fecha fiscal
   if v_p is null then return new; end if;
   -- S01p·13: lo que no lleva IVA entra (queda marcado en conta_mes_cambio).
   if not public._conta_origen_con_iva(new.source_type)
@@ -59574,14 +59576,14 @@ declare
   v_f public.supplier_invoice;
   v_c jsonb := coalesce(p_cambios, '{}'::jsonb);
   v_quien text := coalesce(nullif(trim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
-  v_claves constant text[] := array['tipo_factura', 'clave_regimen', 'no_iva', 'rectificacion', 'no_347', 'iva_deducible', 'lineas'];
+  v_claves constant text[] := array['tipo_factura', 'clave_regimen', 'no_iva', 'rectificacion', 'no_347', 'iva_deducible', 'lineas', 'fecha_contable', 'fecha_fiscal'];   -- K11f1: las dos fechas
   v_raras text[];
   v_cambios jsonb := '[]'::jsonb;
   v_textos text[] := '{}';
   v_al_asiento boolean := false;
   v_quitados int := 0;
   v_txt text; v_bool boolean; v_num numeric; v_l jsonb; v_pos int; v_uuid uuid; v_antes jsonb; v_ahora jsonb;
-  v_tipo text; v_clave text; v_no_iva boolean; v_rect boolean; v_no_347 boolean; v_pct numeric;
+  v_tipo text; v_clave text; v_no_iva boolean; v_rect boolean; v_no_347 boolean; v_pct numeric; v_contable date; v_fiscal date; v_d date; v_p jsonb;
 begin
   if jsonb_typeof(v_c) <> 'object' then
     raise exception 'Los cambios no se entienden: tiene que ser un objeto con lo que cambia.' using errcode = '22023';
@@ -59603,6 +59605,39 @@ begin
   end if;
   v_tipo := v_f.invoice_type; v_clave := v_f.regime_key; v_no_iva := v_f.exclude_from_vat_return;
   v_rect := v_f.deduction_rectification; v_no_347 := v_f.exclude_from_347; v_pct := v_f.vat_deductible_pct;
+  v_contable := v_f.accounting_date; v_fiscal := v_f.deduct_from;
+
+  -- La fecha contable: el día del asiento, un día abierto en el libro («» o null: la de la factura).
+  if v_c ? 'fecha_contable' then
+    v_d := nullif(v_c ->> 'fecha_contable', '')::date;
+    if v_d is not null and public._conta_primer_dia_contable(v_f.company_id, v_d) is distinct from v_d then
+      raise exception 'El % no está abierto en el libro: la fecha contable va en un día abierto.', to_char(v_d, 'DD/MM/YYYY') using errcode = '23514';
+    end if;
+    if v_d is distinct from v_f.accounting_date then
+      v_contable := v_d; v_al_asiento := true;
+      v_cambios := v_cambios || jsonb_build_object('campo', 'fecha_contable', 'antes', v_f.accounting_date, 'ahora', v_d);
+      v_textos := array_append(v_textos, format('Fecha contable: %s', coalesce(to_char(v_d, 'DD/MM/YYYY'), 'la de la factura')));
+    end if;
+  end if;
+  -- La fecha fiscal: decide el periodo del IVA; nunca en uno presentado ni antes de la factura («» o null: la de siempre).
+  if v_c ? 'fecha_fiscal' then
+    v_d := nullif(v_c ->> 'fecha_fiscal', '')::date;
+    if v_d is not null then
+      v_p := public.conta_iva_presentado(v_f.company_id, v_d);
+      if v_p is not null then
+        raise exception 'El IVA % ya está presentado: la fecha fiscal no va ahí. El IVA presentado no se toca.',
+          public.conta_iva_periodo_frase('de', v_p->>'periodo', (v_p->>'ejercicio')::int) using errcode = '23514';
+      end if;
+      if v_f.invoice_date is not null and v_d < v_f.invoice_date then
+        raise exception 'La fecha fiscal no va antes de la de la factura (%).', to_char(v_f.invoice_date, 'DD/MM/YYYY') using errcode = '22023';
+      end if;
+    end if;
+    if v_d is distinct from v_f.deduct_from then
+      v_fiscal := v_d; v_al_asiento := true;
+      v_cambios := v_cambios || jsonb_build_object('campo', 'fecha_fiscal', 'antes', v_f.deduct_from, 'ahora', v_d);
+      v_textos := array_append(v_textos, format('Fecha fiscal: %s', coalesce(to_char(v_d, 'DD/MM/YYYY'), 'la de siempre')));
+    end if;
+  end if;
 
   if v_c ? 'tipo_factura' then
     v_txt := nullif(upper(trim(v_c ->> 'tipo_factura')), '');
@@ -59701,7 +59736,7 @@ begin
   end if;
   update public.supplier_invoice
      set invoice_type = v_tipo, regime_key = v_clave, exclude_from_vat_return = v_no_iva, deduction_rectification = v_rect,
-         exclude_from_347 = v_no_347, vat_deductible_pct = v_pct, updated_at = now()
+         exclude_from_347 = v_no_347, vat_deductible_pct = v_pct, accounting_date = v_contable, deduct_from = v_fiscal, updated_at = now()
    where id = v_f.id;
   if v_al_asiento then
     delete from public.journal_entry e
@@ -65381,7 +65416,8 @@ begin
       -- aunque se asiente otro día (un periodo cerrado: el primer día abierto);
       -- y se registra el día que entró o, si es después, el del asiento: su IVA
       -- va al periodo en que se asienta (el 303 reparte por esta fecha).
-      select si.invoice_number, greatest(si.created_at::date, v_e.entry_date), case when si.doc_kind = 'credit_note' then 'R1' else 'F1' end,
+      select si.invoice_number, coalesce(si.deduct_from, greatest(si.created_at::date, v_e.entry_date))   -- K11f1: la fecha fiscal, si la tiene
+, case when si.doc_kind = 'credit_note' then 'R1' else 'F1' end,
              (select c.invoice_number from public.supplier_invoice c where c.id = si.corrects_invoice_id),
              wr.rate, si.withholding_amount, si.invoice_date
         into v_num, v_recep, v_tipo, v_corrige, v_ret_tipo, v_ret, v_fac
