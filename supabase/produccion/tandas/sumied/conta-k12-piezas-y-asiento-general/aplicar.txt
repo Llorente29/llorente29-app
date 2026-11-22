@@ -1,0 +1,14 @@
+# K12 · El asiento general como ERP10 (maqueta nucleo_19): lo que su pantalla guarda y no tenía dónde (22/11).
+# Rama conta/k12-piezas-y-asiento-general. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1100  Añade journal_entry.notes (las observaciones, fuera de la huella), conta_user_pref.reparto_documento (el ancho
+#         del documento de cada persona), el historial conta_asiento_modificado y conta_asiento_se_puede_modificar /
+#         conta_asiento_modificar (cambiar un asiento a mano validado mientras su IVA no esté presentado, como el X26).
+#   1101  Cambia el CHECK de la clase de journal_entry_document: solo amplía, con «justificante»; y añade
+#         conta_documento_justificante_guardar. Lo cuenta k12-asiento-general.sql (regla 31: las huellas de los
+#         asientos validados y su cadena, iguales).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k12-asiento-general.sql
+supabase/migrations/20261122T1100_k12_asiento_general.sql
+supabase/migrations/20261122T1101_k12_justificante.sql

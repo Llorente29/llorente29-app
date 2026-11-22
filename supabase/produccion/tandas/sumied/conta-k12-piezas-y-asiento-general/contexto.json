@@ -1,0 +1,28 @@
+{
+ "_que": "K12 · el asiento general · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. 1100 añade dos columnas que admiten nulos, una tabla y dos funciones; 1101 amplía el CHECK de la clase de journal_entry_document y añade una función. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-22T10:00Z",
+ "tanda": {
+  "supabase/migrations/20261122T1100_k12_asiento_general.sql": "7c3d02940eb80ed47f1681cc3d0304aa",
+  "supabase/migrations/20261122T1101_k12_justificante.sql": "67119e5aebcd0031c9ac0ca39b55ced4"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_user_pref",
+   "public.journal_entry",
+   "public.journal_entry_document"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_user_pref": 0,
+   "public.journal_entry": 0,
+   "public.journal_entry_document": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
