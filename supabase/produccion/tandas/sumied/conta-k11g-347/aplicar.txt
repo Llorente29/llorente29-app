@@ -1,0 +1,10 @@
+# K11g · El 347 entero, compras y ventas, desde los libros de IVA, saltando lo marcado (22/11; antes del 31/01).
+# Rama conta/k11g-347. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1855  Añade conta_347_desde_los_libros(empresa, año): por tercero y clave (A compras, B ventas), el total con IVA y
+#         por trimestres, de más de 3.005,06 €. Fuera: sin NIF, intracomunitarias o de fuera de España, y lo marcado
+#         («No incluir en modelo 347» de la recibida o del cliente). Solo lee. Lo cuenta k11g-347.sql (regla 31).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k11g-347.sql
+supabase/migrations/20261122T1855_k11g_347_desde_los_libros.sql

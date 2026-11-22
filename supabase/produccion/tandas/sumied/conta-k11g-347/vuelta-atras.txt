@@ -1,0 +1,3 @@
+# K11g · la vuelta atrás: quita la función.
+cuenta: scripts/conta/produccion/cuentas/k11g-347.sql
+supabase/vuelta-atras/20261122T1855_k11g_347_desde_los_libros.down.sql
