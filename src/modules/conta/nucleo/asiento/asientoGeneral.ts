@@ -7,9 +7,7 @@
 //     cuadrar (en ámbar: lo propone Sumied).
 //   · Totales: debe, haber y descuadre. Con descuadre no se graba: la casilla del descuadre va en ámbar, sin frase.
 
-import { importeMano } from '@/modules/conta/lib/diario'
-import { cifra } from '@/modules/conta/nucleo/ficha/textos'
-import { sumaDeControl } from '@/modules/conta/nucleo/piezas/logica'
+import { formatoImporte, importeVisto, leerImporte, sumaDeControl } from '@/modules/conta/nucleo/piezas/logica'
 
 /** Un apunte como se escribe: los importes, como texto («1.210,00»). */
 export interface ApunteEd {
@@ -21,14 +19,14 @@ export interface ApunteEd {
 export const apunteVacio = (concepto = ''): ApunteEd => ({ cuentaId: null, codigo: '', concepto, local: null, marca: null, plataforma: null, debe: '', haber: '' })
 
 export const totalesDe = (apuntes: readonly ApunteEd[]) =>
-  sumaDeControl(apuntes.map((a) => ({ debe: importeMano(a.debe) || 0, haber: importeMano(a.haber) || 0 })))
+  sumaDeControl(apuntes.map((a) => ({ debe: leerImporte(a.debe) || 0, haber: leerImporte(a.haber) || 0 })))
 
 /** Lo que le falta a una línea para subir a la lista (vacío: sube). */
 export function problemasDeLaLinea(a: ApunteEd): string[] {
   const r: string[] = []
   if (!a.cuentaId) r.push('la subcuenta')
-  const d = a.debe.trim() ? importeMano(a.debe) : 0
-  const h = a.haber.trim() ? importeMano(a.haber) : 0
+  const d = a.debe.trim() ? leerImporte(a.debe) : 0
+  const h = a.haber.trim() ? leerImporte(a.haber) : 0
   if (Number.isNaN(d) || Number.isNaN(h) || d < 0 || h < 0) r.push('un importe que sea un número')
   else if ((d === 0) === (h === 0)) r.push('un importe, al debe o al haber')
   return r
@@ -41,12 +39,14 @@ export function problemasDeLaLinea(a: ApunteEd): string[] {
  */
 export function subirLinea(apuntes: readonly ApunteEd[], linea: ApunteEd, en: number | null):
   { apuntes: ApunteEd[]; nueva: ApunteEd; propuesto: 'debe' | 'haber' | null } {
-  const lista = en === null ? [...apuntes, linea] : apuntes.map((a, i) => (i === en ? linea : a))
+  // K12b · La línea sube con sus importes en formato español («1849.56» → «1.849,56»).
+  const fija = { ...linea, debe: importeVisto(linea.debe), haber: importeVisto(linea.haber) }
+  const lista = en === null ? [...apuntes, fija] : apuntes.map((a, i) => (i === en ? fija : a))
   const nueva: ApunteEd = { ...apunteVacio(linea.concepto), local: linea.local, marca: linea.marca, plataforma: linea.plataforma }
   const t = totalesDe(lista)
   if (t.descuadre === 0) return { apuntes: lista, nueva, propuesto: null }
   const lado = t.descuadre > 0 ? 'haber' as const : 'debe' as const
-  return { apuntes: lista, nueva: { ...nueva, [lado]: cifra(Math.abs(t.descuadre)) }, propuesto: lado }
+  return { apuntes: lista, nueva: { ...nueva, [lado]: formatoImporte(Math.abs(t.descuadre)) }, propuesto: lado }
 }
 
 /** La línea de abajo está vacía (sin subcuenta ni importe escritos por la persona). */
@@ -67,10 +67,10 @@ export function porQueNoSeGraba(c: { fecha: string; concepto: string }, apuntes:
 /** Los apuntes, como los guarda la base. */
 export const aLineas = (apuntes: readonly ApunteEd[]) => apuntes.map((a) => ({
   cuentaId: a.cuentaId!, codigo: a.codigo, concepto: a.concepto,
-  debe: Math.round((importeMano(a.debe) || 0) * 100) / 100, haber: Math.round((importeMano(a.haber) || 0) * 100) / 100,
+  debe: Math.round((leerImporte(a.debe) || 0) * 100) / 100, haber: Math.round((leerImporte(a.haber) || 0) * 100) / 100,
   local: a.local, marca: a.marca, plataforma: a.plataforma,
 }))
 
 /** De la base a la pantalla. */
 export const deLineas = (lineas: readonly { cuentaId: string; codigo: string; concepto: string; debe: number; haber: number; local: string | null; marca: string | null; plataforma: string | null }[]): ApunteEd[] =>
-  lineas.map((l) => ({ cuentaId: l.cuentaId, codigo: l.codigo, concepto: l.concepto, local: l.local, marca: l.marca, plataforma: l.plataforma, debe: l.debe ? cifra(l.debe) : '', haber: l.haber ? cifra(l.haber) : '' }))
+  lineas.map((l) => ({ cuentaId: l.cuentaId, codigo: l.codigo, concepto: l.concepto, local: l.local, marca: l.marca, plataforma: l.plataforma, debe: l.debe ? formatoImporte(l.debe) : '', haber: l.haber ? formatoImporte(l.haber) : '' }))

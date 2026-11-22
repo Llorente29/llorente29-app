@@ -26,7 +26,6 @@ import { useNombreDePestana, useSeVe } from '@/modules/conta/diseno/plantillas/p
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { atajoDeSubcuenta } from '@/modules/conta/lib/asientoNucleo'
 import { fechaEscrita, fechaVista } from '@/modules/conta/nucleo/ficha/teclas'
-import { cifra } from '@/modules/conta/nucleo/ficha/textos'
 import { anular, cuentasDeApunte, leerEjercicios, localesDeLaCuenta, validar, type CuentaPlan, type EjercicioLibro } from '@/modules/conta/services/diarioService'
 import { asientosDeAlLado } from '@/modules/conta/services/asientoNucleoService'
 import {
@@ -40,7 +39,8 @@ import { Barra, Bloque, BotonMas, Casilla, OtrosDatos, Ventana } from '@/modules
 import { CasillaLupa } from '@/modules/conta/nucleo/piezas/Lupa'
 import { ConDocumento, DocumentoDerecha } from '@/modules/conta/nucleo/piezas/Documento'
 import { Lineas, type Columna } from '@/modules/conta/nucleo/piezas/Lineas'
-import { siguienteEscribible } from '@/modules/conta/nucleo/piezas/logica'
+import { CasillaImporte } from '@/modules/conta/nucleo/piezas/Importe'
+import { formatoImporte as cifra, siguienteEscribible } from '@/modules/conta/nucleo/piezas/logica'
 import { aLineas, apunteVacio, deLineas, lineaVacia, porQueNoSeGraba, problemasDeLaLinea, subirLinea, totalesDe, type ApunteEd } from './asientoGeneral'
 import './asientoGeneral.css'
 
@@ -251,6 +251,8 @@ export function AsientoGeneral({ entryId }: { entryId?: string }) {
     if (!accountId || !activa || !base || !escribe) return false
     // Lo que quedó escrito abajo sin subir, sube antes de guardar (si está completo).
     let lista = apuntes
+    // K12b · Lo escrito abajo con un problema (un importe dudoso, sin subcuenta) no se deja atrás: no se guarda nada.
+    if (!lineaVacia(ed, propuesto) && problemasDeLaLinea(ed).length) { enfocarEd(ed.cuentaId ? (ed.debe.trim() ? 'debe' : 'haber') : 'subcuenta'); return false }
     if (!lineaVacia(ed, propuesto) && !problemasDeLaLinea(ed).length) { const r = subirLinea(apuntes, ed, en); lista = r.apuntes; setApuntes(lista); setEd(r.nueva); setEn(null); setPropuesto(r.propuesto) }
     const no = porQueNoSeGraba(cab, lista)
     if (no.length) { if (no[0] === 'concepto') enfocar('#ag-concepto'); else if (no[0] === 'fecha') enfocar('#ag-fecha'); return false }
@@ -465,10 +467,10 @@ export function AsientoGeneral({ entryId }: { entryId?: string }) {
                     poner={(r) => cambiaEd({ plataforma: r?.id ?? null })} alIntro={() => siguienteEd('plataforma')} teclas={(e) => teclaEd('plataforma', e)} />
                 </Casilla>
                 <Casilla rotulo="Debe" htmlFor="ag-ed-debe" ambar={propuesto === 'debe'}>
-                  <input id="ag-ed-debe" data-ed="debe" className="kp-num" inputMode="decimal" value={ed.debe} onChange={(e) => cambiaEd({ debe: e.target.value })} onKeyDown={(e) => teclaEd('debe', e)} />
+                  <CasillaImporte id="ag-ed-debe" valor={ed.debe} poner={(v) => cambiaEd({ debe: v })} teclas={(e) => teclaEd('debe', e)} />
                 </Casilla>
                 <Casilla rotulo="Haber" htmlFor="ag-ed-haber" ambar={propuesto === 'haber'}>
-                  <input id="ag-ed-haber" data-ed="haber" className="kp-num" inputMode="decimal" value={ed.haber} onChange={(e) => cambiaEd({ haber: e.target.value })} onKeyDown={(e) => teclaEd('haber', e)} />
+                  <CasillaImporte id="ag-ed-haber" valor={ed.haber} poner={(v) => cambiaEd({ haber: v })} teclas={(e) => teclaEd('haber', e)} />
                 </Casilla>
               </div>
             ) : undefined}
