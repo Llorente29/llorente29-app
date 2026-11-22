@@ -222,6 +222,14 @@ export async function leerAsientosPorSalir(companyId: string, mes: string): Prom
 // plantilla, nombre, debe, haber, tipoIva, baseIva, libro]; contado [codigo, plantilla, nombre];
 // cuentas; yaSalidas).
 
-export async function leerDiasTpvPorSalir(companyId: string, mes: string): Promise<DiasPorSalir> {
-  return aDias(await rpc<Record<string, unknown>>('conta_erp10_dias_tpv_por_salir', { p_company: companyId, p_mes: mes }))
+// R16 · Nombres dentro de cadena (regla 40), de la migración 20261122T0810_r16_erp10_dia_por_serie_anade y cruzados con su prueba
+// de staging: conta_erp10_clientes_tpv (nif, nombre, codigo, nuevo) y conta_erp10_dias_tpv_libro (dias: {entryId: filas}; cuentas).
+// Antes de leer los días, la salida da de alta en Sumied a los clientes con NIF que no tienen su 430 (y lo dice).
+export async function leerDiasTpvPorSalir(companyId: string, mes: string, quien: string | null = null): Promise<DiasPorSalir> {
+  const altas = await rpc<{ nif: string; nombre: string; codigo: string; nuevo: boolean }[] | null>('conta_erp10_clientes_tpv', { p_company: companyId, p_mes: mes, p_quien_nombre: quien })
+  const [dias, libro] = await Promise.all([
+    rpc<Record<string, unknown>>('conta_erp10_dias_tpv_por_salir', { p_company: companyId, p_mes: mes }),
+    rpc<Record<string, unknown>>('conta_erp10_dias_tpv_libro', { p_company: companyId, p_mes: mes }),
+  ])
+  return { ...aDias(dias, libro), altas: (altas ?? []).filter((x) => x.nuevo).map((x) => ({ nif: x.nif, nombre: x.nombre, codigo: x.codigo })) }
 }

@@ -1,0 +1,23 @@
+{
+ "_que": "R16 · el día del TPV a ERP10 como su libro de IVA · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: esta sesión no lee producción. 0810 solo añade (tres funciones nuevas). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-22T09:30Z",
+ "tanda": {
+  "supabase/migrations/20261122T0810_r16_erp10_dia_por_serie_anade.sql": "facaecbf2691aba1e7219d8baa3a2c65"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_tpv_dia",
+   "public.vat_book_entry",
+   "public.party"
+  ],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
