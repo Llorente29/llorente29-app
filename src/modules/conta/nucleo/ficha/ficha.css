@@ -319,3 +319,10 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 .kf-cuenta-de-pago [data-tono='mal'] { color: var(--k-rojo, #b42318); }
 /* K10 · Un aviso de una línea, en ámbar y pequeño (la contrapartida al inmovilizado). */
 .kf-aviso-linea { margin: 2px 0 0; font-size: 12px; color: var(--kf-ambar-tinta, #b54708); }
+
+/* K10b · «Observaciones +»: plegadas en una línea, al lado del concepto, para que la ficha siga cabiendo entera. */
+.kf-obs-boton { align-self: end; white-space: nowrap; padding-bottom: 6px; }
+.kf-recibida textarea#kf-observaciones { width: 100%; resize: vertical; font: inherit; }
+
+/* K10b · Sin propuesta: su porqué, debajo de la cabecera del asiento (regla 8). */
+.kf-asiento-nota { margin: 6px 0 0; font-size: 13px; color: var(--kf-ambar-tinta, #8a5a00); }

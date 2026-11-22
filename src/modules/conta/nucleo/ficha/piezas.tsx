@@ -93,8 +93,10 @@ export function Duda({ fuerte = 'Mira esto.', texto, principal, secundario }: {
 export interface LineaAsiento { codigo: string; nombre: string; debe: number | null; haber: number | null; aMano?: boolean }
 
 
-export function AsientoQueSale({ lineas, etiqueta, editar }: {
+export function AsientoQueSale({ lineas, etiqueta, editar, nota }: {
   lineas: readonly LineaAsiento[]
+  /** K10b · Por qué no hay asiento propuesto (regla 8), debajo de la cabecera. */
+  nota?: string | null
   /** «Cuadra · 357,44» (verde), lo que le falta (ámbar), o «Se forma al escribir» (verde claro). */
   etiqueta: { texto: string; tono: 'bien' | 'ambar' | 'vacio' }
   editar?: { texto: string; hacer: () => void } | null
@@ -107,6 +109,7 @@ export function AsientoQueSale({ lineas, etiqueta, editar }: {
         <span className="kf-apoyo">Debe a la izquierda, haber a la derecha</span>
         {editar && <button type="button" className="kf-enlace kf-asiento-editar" onClick={editar.hacer}>{editar.texto}</button>}
       </header>
+      {nota && <p className="kf-asiento-nota" role="status" data-prueba="sin-propuesta">{nota}</p>}
       {lineas.length > 0 && (
         <table>
           <tbody>
