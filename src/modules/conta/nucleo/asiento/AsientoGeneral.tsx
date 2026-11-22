@@ -251,6 +251,8 @@ export function AsientoGeneral({ entryId }: { entryId?: string }) {
     if (!accountId || !activa || !base || !escribe) return false
     // Lo que quedó escrito abajo sin subir, sube antes de guardar (si está completo).
     let lista = apuntes
+    // K12b · Lo escrito abajo con un problema (un importe dudoso, sin subcuenta) no se deja atrás: no se guarda nada.
+    if (!lineaVacia(ed, propuesto) && problemasDeLaLinea(ed).length) { enfocarEd(ed.cuentaId ? (ed.debe.trim() ? 'debe' : 'haber') : 'subcuenta'); return false }
     if (!lineaVacia(ed, propuesto) && !problemasDeLaLinea(ed).length) { const r = subirLinea(apuntes, ed, en); lista = r.apuntes; setApuntes(lista); setEd(r.nueva); setEn(null); setPropuesto(r.propuesto) }
     const no = porQueNoSeGraba(cab, lista)
     if (no.length) { if (no[0] === 'concepto') enfocar('#ag-concepto'); else if (no[0] === 'fecha') enfocar('#ag-fecha'); return false }

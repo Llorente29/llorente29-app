@@ -104,10 +104,26 @@ export function formatoImporte(n: number): string {
   return `${n < 0 && c > 0 ? '-' : ''}${enteros},${String(c % 100).padStart(2, '0')}`
 }
 
-/** El importe escrito, como número (0 si está vacío; NaN si no es un importe). */
+/** Lo que se dice al pasar el ratón por un importe dudoso. */
+export const MOTIVO_IMPORTE_DUDOSO = '¿Miles o decimales? Escribe 1234 o 1,23'
+
+/**
+ * K12b (Julio, 22/11): más de dos cifras tras el decimal («1.234», «12.345», «1,234») es dudoso: ¿miles o decimales?
+ * No se redondea ni se da por bueno; la casilla se queda en ámbar con lo escrito y no se guarda hasta corregirlo.
+ * Varios puntos sin coma («1.234.567») son miles y no son dudosos.
+ */
+export function importeDudoso(texto: string): boolean {
+  const t = texto.replace(/[\s€]/g, '')
+  if (!t) return false
+  const decimal = t.includes(',') ? t.slice(t.lastIndexOf(',') + 1) : (t.match(/\./g) ?? []).length === 1 ? t.slice(t.indexOf('.') + 1) : ''
+  return /^\d{3,}$/.test(decimal)
+}
+
+/** El importe escrito, como número (0 si está vacío; NaN si no es un importe o es dudoso). */
 export function leerImporte(texto: string): number {
   let t = texto.replace(/[\s€]/g, '')
   if (!t) return 0
+  if (importeDudoso(t)) return NaN
   if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.')
   else if ((t.match(/\./g) ?? []).length > 1) t = t.replace(/\./g, '')
   if (!/^-?(\d+\.?\d*|\.\d+)$/.test(t)) return NaN
