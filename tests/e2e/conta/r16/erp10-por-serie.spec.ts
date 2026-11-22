@@ -157,12 +157,14 @@ test('a 1456 × 816: el día sale a ERP10 como su libro de IVA, con sus facturas
     await expect(lista.locator('[data-prueba="parte-erp10"][data-clase="devolucion"]')).toContainText('−11,00')
   } catch (e) { await contarPantalla(page, 'la lista de los días'); throw e }
   await cargada(page, 'la salida a ERP10 con el día repartido')
+  await lista.scrollIntoViewIfNeeded()
   await page.screenshot({ path: `${DIR}/salida-dia-repartido-1456.png` })
 
   // «Primero, las fichas nuevas»: el cliente, con su NIF.
   await tabla.getByRole('row').filter({ hasText: 'Cuentas nuevas' }).click()
   const cuentas = zona.getByRole('table', { name: 'Cuentas nuevas' })
   await expect(cuentas.getByRole('row').filter({ hasText: 'B00000000' })).toContainText(/4300\d{4}/, { timeout: 30_000 })
+  await cuentas.scrollIntoViewIfNeeded()
   await page.screenshot({ path: `${DIR}/salida-cuentas-nuevas-1456.png` })
   expect(errores, 'sin errores de la página').toEqual([])
 })
@@ -181,6 +183,7 @@ test('a 1366 × 768: la lista del día repartido cabe sin rodar de lado', async 
   const lista = zona.getByRole('table', { name: 'Días de ventas del TPV' })
   await expect(lista.locator('[data-prueba="parte-erp10"]')).toHaveCount(5, { timeout: 30_000 })
   await cargada(page, 'la salida a ERP10 a 1366')
+  await lista.scrollIntoViewIfNeeded()
   const lado = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(lado, 'la página no rueda de lado').toBeLessThanOrEqual(1)
   const cortados = await lista.evaluate((t) => [...t.querySelectorAll('td, th')].filter((e) => (e as HTMLElement).scrollWidth > (e as HTMLElement).clientWidth + 1).map((e) => (e as HTMLElement).innerText.slice(0, 60)))
