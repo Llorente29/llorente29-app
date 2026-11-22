@@ -1,0 +1,19 @@
+{
+ "_que": "K11f2 · el 303 lee «Otros datos» y el contraasiento la plataforma · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. 1815 cambia dos funciones con la misma firma. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-22T17:13Z",
+ "tanda": {
+  "supabase/migrations/20261122T1815_k11f2_303_otros_datos.sql": "4eeb70b6a30e579360187724c981f69d"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

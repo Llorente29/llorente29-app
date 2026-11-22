@@ -1,0 +1,11 @@
+# K11f2 · El 303 lee «Otros datos» de la recibida, y el contraasiento copia la plataforma (22/11). El 347, en el K11g.
+# Rama conta/k11f2-otros-datos-303-347. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1815  Cambia conta_impuesto_303_cajas: una recibida con «No incluir en declaración de IVA» no va a ninguna casilla, y
+#         una con «Rectificación de deducciones» va a la [40] y la [41]. Y journal_entry_anular: el contraasiento copia
+#         la plataforma. Sin marcar, lo de siempre. Lo cuenta k11f2-303-otros-datos.sql (regla 31: cada 303 presentado,
+#         recalculado, igual).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k11f2-303-otros-datos.sql
+supabase/migrations/20261122T1815_k11f2_303_otros_datos.sql
