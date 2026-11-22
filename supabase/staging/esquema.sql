@@ -35505,6 +35505,218 @@ COMMENT ON FUNCTION public.conta_asiento_envio(p_entry uuid) IS 'C07 · Lo que e
 
 
 --
+-- Name: conta_asiento_modificar(uuid, jsonb, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_asiento_modificar(p_entry uuid, p_cabecera jsonb, p_lineas jsonb, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  e public.journal_entry; d public.journal_entry; y public.fiscal_year; v_se jsonb; v_quien text; x jsonb;
+  v_cta public.company_account; v_debe numeric; v_haber numeric; v_sd numeric := 0; v_sh numeric := 0; v_pos int := 0;
+  v_fecha date; v_concepto text; v_local uuid; v_comun boolean; v_marca uuid; v_canal uuid; v_p jsonb; v_mal text;
+  v_antes jsonb; v_despues jsonb; v_cab_antes jsonb; v_cab_despues jsonb; v_cadena jsonb; v_prev text; r record;
+  v_canon_antes text; v_canon_despues text; v_nota_antes text; v_reg uuid;
+  c_cab constant text[] := array['entry_date', 'concept', 'notes', 'party_id', 'document_ref', 'document_date'];
+begin
+  select * into e from public.journal_entry where id = p_entry for update;
+  v_se := public.conta_asiento_se_puede_modificar(p_entry);
+  if not coalesce((v_se->>'puede')::boolean, false) then raise exception '%', v_se->>'porque' using errcode = '23514'; end if;
+  v_quien := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  perform pg_advisory_xact_lock(hashtextextended('journal_entry_numero:' || e.company_id, 0));
+
+  -- La cabecera, comprobada antes de tocar nada.
+  p_cabecera := coalesce(p_cabecera, '{}');
+  v_fecha := coalesce(nullif(p_cabecera->>'fecha', '')::date, e.entry_date);
+  v_concepto := coalesce(nullif(btrim(p_cabecera->>'concepto'), ''), case when p_cabecera ? 'concepto' then null else e.concept end);
+  if v_concepto is null then raise exception 'El asiento lleva su concepto.' using errcode = '22023'; end if;
+  select * into y from public.fiscal_year where id = e.fiscal_year_id;
+  if v_fecha not between y.starts_on and y.ends_on then
+    raise exception 'El % no es del ejercicio %: el asiento no cambia de ejercicio.', to_char(v_fecha, 'DD/MM/YYYY'), y.code using errcode = '22023';
+  end if;
+  if v_fecha <> e.entry_date then
+    v_p := public.conta_iva_presentado(e.company_id, v_fecha);
+    if v_p is not null then raise exception 'El IVA del % ya está presentado: el asiento no va a esa fecha.', v_p->>'periodo' using errcode = '23514'; end if;
+    if public.conta_mes_cerrado(e.company_id, v_fecha) then
+      raise exception 'El mes de % está cerrado: el asiento no va a esa fecha.', to_char(v_fecha, 'MM/YYYY') using errcode = '23514';
+    end if;
+  end if;
+
+  -- Las líneas, comprobadas antes de tocar nada: dos o más, cada una a un lado, cuentas de la empresa, y cuadra.
+  if jsonb_typeof(coalesce(p_lineas, 'null')) <> 'array' or jsonb_array_length(p_lineas) < 2 then
+    raise exception 'Un asiento lleva al menos dos apuntes.' using errcode = '22023';
+  end if;
+  for x in select * from jsonb_array_elements(p_lineas) loop
+    v_pos := v_pos + 1;
+    select * into v_cta from public.company_account
+     where company_id = e.company_id and account_id = e.account_id and code = btrim(coalesce(x->>'cuenta', ''));
+    if v_cta.id is null then raise exception 'Línea %: la cuenta % no está en el plan de la empresa.', v_pos, coalesce(nullif(btrim(x->>'cuenta'), ''), '(vacía)') using errcode = '22023'; end if;
+    if v_cta.status = 'cerrada' then raise exception 'Línea %: la % está cerrada.', v_pos, v_cta.code using errcode = '22023'; end if;
+    if exists (select 1 from public.company_account h where h.company_id = e.company_id and h.account_id = e.account_id
+                 and length(h.code) > length(v_cta.code) and left(h.code, length(v_cta.code)) = v_cta.code) then
+      raise exception 'Línea %: la % tiene subcuentas; se apunta en una de ellas.', v_pos, v_cta.code using errcode = '22023';
+    end if;
+    v_debe := round(coalesce(nullif(x->>'debe', '')::numeric, 0), 2);
+    v_haber := round(coalesce(nullif(x->>'haber', '')::numeric, 0), 2);
+    if v_debe < 0 or v_haber < 0 or (v_debe = 0) = (v_haber = 0) then
+      raise exception 'Línea %: un importe, al debe o al haber.', v_pos using errcode = '22023';
+    end if;
+    v_sd := v_sd + v_debe; v_sh := v_sh + v_haber;
+  end loop;
+  if v_sd <> v_sh then raise exception 'No cuadra: debe % y haber %, descuadre %.', v_sd, v_sh, v_sd - v_sh using errcode = '23514'; end if;
+
+  -- Lo de antes: la cabecera, las líneas, la huella y la cadena de este asiento y de todos los de detrás.
+  v_cab_antes := jsonb_build_object('fecha', e.entry_date, 'concepto', e.concept, 'notas', e.notes, 'tercero', e.party_id,
+                                    'documento', e.document_ref, 'fecha_documento', e.document_date);
+  select coalesce(jsonb_agg(to_jsonb(j) order by j.position), '[]') into v_antes from public.journal_line j where j.entry_id = e.id;
+  select coalesce(jsonb_agg(jsonb_build_object('entry_id', o.id, 'chain_seq', o.chain_seq, 'prev_hash', o.prev_hash, 'hash', o.hash) order by o.chain_seq), '[]')
+    into v_cadena from public.journal_entry o where o.company_id = e.company_id and o.chain_seq >= e.chain_seq;
+  v_canon_antes := public.journal_entry_canonico(e.id);
+  v_nota_antes := e.notes;
+
+  -- Solo en esta transacción: sin los dos candados de «inalterable» (como el X26 y el «Borrar» del S01q).
+  set constraints public.trg_journal_entry_valida_con_pdf immediate;
+  alter table public.journal_entry disable trigger trg_journal_entry_inalterable;
+  alter table public.journal_line disable trigger trg_journal_line_inalterable;
+
+  update public.journal_entry set
+    entry_date = v_fecha, concept = v_concepto,
+    notes = case when p_cabecera ? 'notas' then nullif(btrim(p_cabecera->>'notas'), '') else notes end,
+    party_id = case when p_cabecera ? 'tercero' then nullif(p_cabecera->>'tercero', '')::uuid else party_id end,
+    document_ref = case when p_cabecera ? 'documento' then nullif(btrim(p_cabecera->>'documento'), '') else document_ref end,
+    document_date = case when p_cabecera ? 'fecha_documento' then nullif(p_cabecera->>'fecha_documento', '')::date else document_date end,
+    updated_at = now()
+   where id = e.id;
+
+  delete from public.journal_line where entry_id = e.id;
+  v_pos := 0;
+  for x in select * from jsonb_array_elements(p_lineas) loop
+    v_pos := v_pos + 1;
+    select * into v_cta from public.company_account where company_id = e.company_id and account_id = e.account_id and code = btrim(x->>'cuenta');
+    v_comun := coalesce(x->>'local', '') = 'comun';
+    v_local := case when coalesce(x->>'local', '') ~ '^[0-9a-f-]{36}$' then (x->>'local')::uuid end;
+    v_marca := case when coalesce(x->>'marca', '') ~ '^[0-9a-f-]{36}$' then (x->>'marca')::uuid end;
+    v_canal := case when coalesce(x->>'plataforma', '') ~ '^[0-9a-f-]{36}$' then (x->>'plataforma')::uuid end;
+    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, concept,
+                                     location_id, is_common, brand_id, channel_id)
+    values (e.account_id, e.company_id, e.id, v_pos, v_cta.id,
+            round(coalesce(nullif(x->>'debe', '')::numeric, 0), 2), round(coalesce(nullif(x->>'haber', '')::numeric, 0), 2),
+            nullif(btrim(coalesce(x->>'concepto', '')), ''), v_local, v_comun, v_marca, v_canal);
+  end loop;
+
+  -- Las reglas de validar, sobre el asiento cambiado (el local con el eje encendido, la fecha abierta…).
+  select m.motivo into v_mal from public.conta_motivos_para_validar(e.id) m order by m.orden limit 1;
+  if v_mal is not null then raise exception '%', v_mal using errcode = '23514'; end if;
+
+  select * into d from public.journal_entry where id = e.id;
+  v_canon_despues := public.journal_entry_canonico(e.id);
+  if v_canon_despues is distinct from v_canon_antes then
+    -- La cadena: desde este asiento, cada huella con la función de siempre (los eslabones y su orden no cambian).
+    select hash into v_prev from public.journal_entry where company_id = e.company_id and chain_seq is not null and chain_seq < e.chain_seq order by chain_seq desc limit 1;
+    for r in select o.id from public.journal_entry o where o.company_id = e.company_id and o.chain_seq >= e.chain_seq order by o.chain_seq loop
+      update public.journal_entry set prev_hash = v_prev where id = r.id;
+      update public.journal_entry set hash = public.journal_huella(v_prev, public.journal_entry_canonico(r.id)) where id = r.id returning hash into v_prev;
+    end loop;
+  end if;
+
+  alter table public.journal_line enable trigger trg_journal_line_inalterable;
+  alter table public.journal_entry enable trigger trg_journal_entry_inalterable;
+  set constraints public.trg_journal_entry_valida_con_pdf deferred;
+
+  select coalesce(jsonb_agg(to_jsonb(j) order by j.position), '[]') into v_despues from public.journal_line j where j.entry_id = e.id;
+  v_cab_despues := jsonb_build_object('fecha', d.entry_date, 'concepto', d.concept, 'notas', d.notes, 'tercero', d.party_id,
+                                      'documento', d.document_ref, 'fecha_documento', d.document_date);
+  if v_canon_despues is not distinct from v_canon_antes and d.notes is not distinct from v_nota_antes
+     and (select coalesce(jsonb_agg(jsonb_build_object('c', j->'concept', 'p', j->'channel_id') order by (j->>'position')::int), '[]') from jsonb_array_elements(v_antes) j)
+       = (select coalesce(jsonb_agg(jsonb_build_object('c', j->'concept', 'p', j->'channel_id') order by (j->>'position')::int), '[]') from jsonb_array_elements(v_despues) j) then
+    -- Nada distinto: se deshace lo escrito (las mismas líneas con otros id) para no dejar historial de un no-cambio.
+    raise exception using errcode = 'P0001', message = 'k12:sin-cambios';
+  end if;
+  if public._conta_cadena_rota(e.company_id) <> 0 then
+    raise exception 'No se cambia nada: después de cambiarlo, la cadena de huellas no cuadra.' using errcode = '23514';
+  end if;
+
+  insert into public.conta_asiento_modificado (account_id, company_id, entry_id, numero, cabecera_antes, cabecera_despues, lineas_antes, lineas_despues, cadena_antes, quien)
+  values (e.account_id, e.company_id, e.id, e.number, v_cab_antes, v_cab_despues, v_antes, v_despues, v_cadena, v_quien) returning id into v_reg;
+  return jsonb_build_object('texto', format('Cambiado: el asiento %s sigue siendo el %s, con %s apuntes y %s al debe y al haber.',
+                                            e.number, e.number, v_pos, translate(to_char(v_sd, 'FM999,999,990.00'), ',.', '.,')),
+                            'numero', e.number, 'serie', e.series, 'apuntes', v_pos, 'registro', v_reg);
+exception when sqlstate 'P0001' then
+  if sqlerrm = 'k12:sin-cambios' then
+    return jsonb_build_object('texto', 'No había nada distinto: el asiento se queda como estaba.', 'numero', e.number, 'serie', e.series, 'apuntes', 0);
+  end if;
+  raise;
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_asiento_modificar(p_entry uuid, p_cabecera jsonb, p_lineas jsonb, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_asiento_modificar(p_entry uuid, p_cabecera jsonb, p_lineas jsonb, p_quien_nombre text) IS 'K12 · Cambiar un asiento manual validado (el asiento general), en el mismo asiento y con el mismo número: cabecera {fecha, concepto, notas, tercero, documento, fecha_documento} y líneas [{cuenta, concepto, debe, haber, local?: uuid | ''comun'', marca?, plataforma?}]. Respaldo, candados quitados solo en la transacción, las reglas de validar, cadena vuelta a encadenar y comprobada.';
+
+
+--
+-- Name: conta_asiento_se_puede_modificar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_asiento_se_puede_modificar(p_entry uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  e public.journal_entry; y public.fiscal_year; v_p jsonb; v_no text;
+begin
+  select * into e from public.journal_entry where id = p_entry;
+  if e.id is null or not public.belongs_to_account(e.account_id) then
+    return jsonb_build_object('puede', false, 'porque', 'Ese asiento no está.');
+  end if;
+  if e.status <> 'validado' then
+    return jsonb_build_object('puede', false, 'porque', format('El asiento está %s: no se cambia aquí.', e.status));
+  end if;
+  if e.source_type <> 'manual' then
+    return jsonb_build_object('puede', false, 'porque', 'No es un asiento a mano: se cambia en su ficha.');
+  end if;
+  if not public.current_user_is_admin_or_manager_of(e.account_id) then
+    v_no := 'Solo un administrador o un encargado de la cuenta cambia un asiento validado.';
+  end if;
+  if v_no is null then
+    v_p := public.conta_iva_presentado(e.company_id, e.entry_date);
+    if v_p is not null then
+      v_no := format('El IVA del %s ya está presentado: este asiento no se cambia.',
+                     case when v_p->>'periodo' ~ 'T$' then v_p->>'periodo' else 'mes ' || (v_p->>'periodo') end);
+    end if;
+  end if;
+  if v_no is null then
+    select * into y from public.fiscal_year where id = e.fiscal_year_id;
+    if y.status is distinct from 'open' then v_no := format('El ejercicio %s está cerrado: este asiento no se cambia.', coalesce(y.code, '')); end if;
+  end if;
+  if v_no is null and public.conta_mes_cerrado(e.company_id, e.entry_date) then
+    v_no := format('El mes de %s está cerrado: reábrelo antes de cambiar este asiento.', to_char(e.entry_date, 'MM/YYYY'));
+  end if;
+  if v_no is null and exists (select 1 from public.external_send x where x.entry_id = e.id and x.status in ('enviado', 'enlazado')) then
+    v_no := 'Este asiento ya salió a Diez o a ERP10: se cambia allí, no aquí.';
+  end if;
+  if v_no is null and exists (select 1 from public.journal_line l where l.entry_id = e.id
+                                and (l.tax_rate_id is not null or l.vat_book is not null or l.withholding_rate_id is not null)) then
+    v_no := 'Este asiento lleva IVA o retención: se anula y se hace de nuevo.';
+  end if;
+  if v_no is null and public._conta_cadena_rota(e.company_id) <> 0 then
+    v_no := 'La cadena de huellas de la empresa ya estaba rota: no se cambia nada hasta arreglarla.';
+  end if;
+  return jsonb_build_object('puede', v_no is null, 'porque', v_no, 'numero', e.number, 'serie', e.series, 'asiento', e.id);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_asiento_se_puede_modificar(p_entry uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_asiento_se_puede_modificar(p_entry uuid) IS 'K12 · Si un asiento manual validado se puede cambiar y, si no, por qué (no es manual, IVA presentado, ejercicio o mes cerrado, ya en Diez o ERP10, lleva IVA, cadena rota, sin permiso).';
+
+
+--
 -- Name: conta_aviso_configurar(uuid, text, text, uuid, text, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -41512,6 +41724,73 @@ end $_$;
 --
 
 COMMENT ON FUNCTION public.conta_documento_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text) IS 'R15 · Enlaza a su asiento validado el Resumen de ventas ya subido a conta-documentos. Comprueba ruta, fichero y tamaño; uno por asiento, y no se cambia.';
+
+
+--
+-- Name: conta_documento_justificante_guardar(uuid, text, text, text, integer, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_documento_justificante_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'storage'
+    AS $_$
+declare
+  v_e public.journal_entry; v_x public.journal_entry_document; v_obj record; v_prefijo text;
+begin
+  select * into v_e from public.journal_entry where id = p_entry for update;
+  if v_e.id is null or not public.belongs_to_account(v_e.account_id) then
+    raise exception 'Ese asiento no está.' using errcode = 'P0002';
+  end if;
+  if not public.current_user_is_admin_or_manager_of(v_e.account_id) then
+    raise exception 'Solo un administrador o un encargado de la cuenta guarda el documento de un asiento.' using errcode = '42501';
+  end if;
+  if v_e.status <> 'validado' then
+    raise exception 'El documento se guarda con el asiento validado; este está %.', v_e.status using errcode = '23514';
+  end if;
+  if v_e.source_type <> 'manual' then
+    raise exception 'Ese asiento no es a mano: su documento es el de su ficha.' using errcode = '22023';
+  end if;
+  if p_sha256 is null or p_sha256 !~ '^[0-9a-f]{64}$' then
+    raise exception 'La huella del documento no es un sha256.' using errcode = '22023';
+  end if;
+
+  select * into v_x from public.journal_entry_document where entry_id = v_e.id and kind = 'justificante';
+  if v_x.id is not null then
+    if v_x.sha256 = p_sha256 and v_x.storage_path = p_ruta then
+      return jsonb_build_object('id', v_x.id, 'ruta', v_x.storage_path, 'nombre', v_x.file_name, 'ya_estaba', true);
+    end if;
+    raise exception 'Ese asiento ya tiene su justificante (guardado el % por %): no se cambia.',
+      to_char(v_x.created_at at time zone 'Europe/Madrid', 'DD/MM/YYYY HH24:MI'), coalesce(v_x.created_by_name, 'alguien') using errcode = '23505';
+  end if;
+
+  v_prefijo := v_e.account_id::text || '/' || v_e.id::text || '/';
+  if p_ruta is null or left(p_ruta, length(v_prefijo)) <> v_prefijo or substr(p_ruta, length(v_prefijo) + 1) !~ '^[0-9a-f]{16,64}\.pdf$' then
+    raise exception 'La ruta del documento no es la de este asiento (%<huella>.pdf).', v_prefijo using errcode = '22023';
+  end if;
+  select o.name, (o.metadata->>'size')::bigint as bytes, o.metadata->>'mimetype' as tipo into v_obj
+    from storage.objects o where o.bucket_id = 'conta-documentos' and o.name = p_ruta;
+  if v_obj.name is null then
+    raise exception 'El justificante no está subido (%): no se enlaza nada.', p_ruta using errcode = 'P0002';
+  end if;
+  if v_obj.bytes is not null and v_obj.bytes <> p_bytes then
+    raise exception 'El justificante subido tiene % bytes y se dijeron %: no se enlaza.', v_obj.bytes, p_bytes using errcode = '22023';
+  end if;
+  if v_obj.tipo is not null and v_obj.tipo <> 'application/pdf' then
+    raise exception 'El justificante subido no es un PDF (%): una foto se convierte a PDF antes.', v_obj.tipo using errcode = '22023';
+  end if;
+
+  insert into public.journal_entry_document (account_id, company_id, entry_id, kind, storage_path, file_name, sha256, size_bytes, created_by, created_by_name)
+  values (v_e.account_id, v_e.company_id, v_e.id, 'justificante', p_ruta, p_nombre, p_sha256, p_bytes, auth.uid(), p_quien_nombre)
+  returning * into v_x;
+  return jsonb_build_object('id', v_x.id, 'ruta', v_x.storage_path, 'nombre', v_x.file_name, 'ya_estaba', false);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_documento_justificante_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_documento_justificante_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text) IS 'K12 · El justificante (PDF ya subido a conta-documentos/<cuenta>/<asiento>/<huella>.pdf) de un asiento a mano validado, de cualquier serie. Uno por asiento; el mismo fichero otra vez no falla.';
 
 
 --
@@ -116978,6 +117257,33 @@ ALTER SEQUENCE public.conta_asiento_borrado_id_seq OWNED BY public.conta_asiento
 
 
 --
+-- Name: conta_asiento_modificado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_asiento_modificado (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    entry_id uuid NOT NULL,
+    numero integer,
+    cabecera_antes jsonb NOT NULL,
+    cabecera_despues jsonb NOT NULL,
+    lineas_antes jsonb NOT NULL,
+    lineas_despues jsonb NOT NULL,
+    cadena_antes jsonb NOT NULL,
+    quien text NOT NULL,
+    at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_asiento_modificado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_asiento_modificado IS 'K12 · Cada cambio de un asiento manual validado: la cabecera y las líneas antes y después, y la cadena de huellas de antes de cada asiento que se volvió a encadenar (para saber qué era y poder volver).';
+
+
+--
 -- Name: conta_aviso; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -122756,9 +123062,11 @@ CREATE TABLE public.conta_user_pref (
     documento_oculto boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    reparto_documento numeric,
     CONSTRAINT conta_user_pref_densidad_check CHECK ((densidad = ANY (ARRAY['compacta'::text, 'comoda'::text]))),
     CONSTRAINT conta_user_pref_favoritos_check CHECK ((jsonb_typeof(favoritos) = 'array'::text)),
-    CONSTRAINT conta_user_pref_nivel_check CHECK ((nivel = ANY (ARRAY['sin_experiencia'::text, 'medio'::text, 'experto'::text])))
+    CONSTRAINT conta_user_pref_nivel_check CHECK ((nivel = ANY (ARRAY['sin_experiencia'::text, 'medio'::text, 'experto'::text]))),
+    CONSTRAINT conta_user_pref_reparto_documento_check CHECK (((reparto_documento IS NULL) OR ((reparto_documento > (0)::numeric) AND (reparto_documento <= (1)::numeric))))
 );
 
 
@@ -122781,6 +123089,13 @@ COMMENT ON COLUMN public.conta_user_pref.nivel IS 'sin_experiencia · medio · e
 --
 
 COMMENT ON COLUMN public.conta_user_pref.favoritos IS 'Lista de ids del catálogo de órdenes del front (src/modules/conta/esqueleto/ordenes.ts), en el orden en que se fijaron. No son direcciones.';
+
+
+--
+-- Name: COLUMN conta_user_pref.reparto_documento; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_user_pref.reparto_documento IS 'K12 · La parte de la pantalla del documento (0–1) que dejó esta persona al mover el separador; 1 = el formulario plegado con «‹». Vacío: el de siempre.';
 
 
 --
@@ -126438,6 +126753,7 @@ CREATE TABLE public.journal_entry (
     external_year text,
     external_hash text,
     import_run_id uuid,
+    notes text,
     CONSTRAINT journal_entry_anulado_completo CHECK ((((status = 'anulado'::text) = (voided_by_entry_id IS NOT NULL)) AND ((status <> 'anulado'::text) OR ((voided_at IS NOT NULL) AND (length(TRIM(BOTH FROM COALESCE(void_reason, ''::text))) > 0))))),
     CONSTRAINT journal_entry_concept_check CHECK ((length(TRIM(BOTH FROM concept)) > 0)),
     CONSTRAINT journal_entry_confidence_check CHECK (((confidence IS NULL) OR (confidence = ANY (ARRAY['seguro'::text, 'probable'::text, 'duda'::text])))),
@@ -126490,6 +126806,13 @@ COMMENT ON COLUMN public.journal_entry.external_hash IS 'Huella de cómo era el 
 
 
 --
+-- Name: COLUMN journal_entry.notes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.journal_entry.notes IS 'K12 · Las «Observaciones» del asiento (ERP10). Fuera de la huella. En un asiento validado, solo por conta_asiento_modificar.';
+
+
+--
 -- Name: journal_entry_document; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -126508,7 +126831,7 @@ CREATE TABLE public.journal_entry_document (
     created_by_name text,
     original_name text,
     CONSTRAINT journal_entry_document_file_name_check CHECK ((file_name ~ '^[A-Za-z0-9._-]+\.pdf$'::text)),
-    CONSTRAINT journal_entry_document_kind_check CHECK ((kind = ANY (ARRAY['resumen_ventas'::text, 'factura_recibida'::text, 'factura_expedida'::text]))),
+    CONSTRAINT journal_entry_document_kind_check CHECK ((kind = ANY (ARRAY['resumen_ventas'::text, 'factura_recibida'::text, 'factura_expedida'::text, 'justificante'::text]))),
     CONSTRAINT journal_entry_document_sha256_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT journal_entry_document_size_bytes_check CHECK ((size_bytes > 0))
 );
@@ -136791,6 +137114,14 @@ ALTER TABLE ONLY public.conta_asiento_borrado
 
 
 --
+-- Name: conta_asiento_modificado conta_asiento_modificado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_asiento_modificado
+    ADD CONSTRAINT conta_asiento_modificado_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_aviso conta_aviso_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -145035,6 +145366,13 @@ CREATE INDEX idx_compliance_reminder_log_account ON public.compliance_reminder_l
 --
 
 CREATE INDEX idx_compliance_reminder_log_document ON public.compliance_reminder_log USING btree (document_id);
+
+
+--
+-- Name: idx_conta_asiento_modificado_asiento; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_conta_asiento_modificado_asiento ON public.conta_asiento_modificado USING btree (entry_id, at DESC);
 
 
 --
@@ -165822,6 +166160,19 @@ CREATE POLICY connector_write ON public.connector USING (public.current_user_is_
 ALTER TABLE public.conta_asiento_borrado ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: conta_asiento_modificado; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_asiento_modificado ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_asiento_modificado conta_asiento_modificado_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_asiento_modificado_leer ON public.conta_asiento_modificado FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_aviso; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -181509,6 +181860,24 @@ GRANT ALL ON FUNCTION public.conta_asiento_envio(p_entry uuid) TO service_role;
 
 
 --
+-- Name: FUNCTION conta_asiento_modificar(p_entry uuid, p_cabecera jsonb, p_lineas jsonb, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_asiento_modificar(p_entry uuid, p_cabecera jsonb, p_lineas jsonb, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_asiento_modificar(p_entry uuid, p_cabecera jsonb, p_lineas jsonb, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_asiento_modificar(p_entry uuid, p_cabecera jsonb, p_lineas jsonb, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_asiento_se_puede_modificar(p_entry uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_asiento_se_puede_modificar(p_entry uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_asiento_se_puede_modificar(p_entry uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_asiento_se_puede_modificar(p_entry uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_aviso_configurar(p_account uuid, p_origen text, p_crm text, p_company uuid, p_codigo text, p_encender boolean); Type: ACL; Schema: public; Owner: -
 --
 
@@ -182728,6 +183097,15 @@ GRANT ALL ON FUNCTION public.conta_documento_factura_guardar(p_entry uuid, p_rut
 REVOKE ALL ON FUNCTION public.conta_documento_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_documento_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_documento_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_documento_justificante_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_documento_justificante_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_documento_justificante_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_documento_justificante_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text) TO service_role;
 
 
 --
@@ -195845,6 +196223,14 @@ GRANT ALL ON TABLE public.conta_asiento_borrado TO service_role;
 GRANT ALL ON SEQUENCE public.conta_asiento_borrado_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.conta_asiento_borrado_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.conta_asiento_borrado_id_seq TO service_role;
+
+
+--
+-- Name: TABLE conta_asiento_modificado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_asiento_modificado TO service_role;
+GRANT SELECT ON TABLE public.conta_asiento_modificado TO authenticated;
 
 
 --
