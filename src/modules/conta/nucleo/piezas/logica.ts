@@ -90,3 +90,33 @@ export function siguienteEscribible(casillas: readonly { escribible: boolean }[]
   for (let i = actual + 1; i < casillas.length; i++) if (casillas[i].escribible) return i
   return 'fin'
 }
+
+// ── El importe ──────────────────────────────────────────────────────────────────────────────────────────────────
+// K12b (Julio, 22/11, al meter facturas): en la casilla de un importe, el punto y la coma valen como decimal (el punto
+// del teclado numérico, como en ERP10), y al salir de la casilla se enseña siempre en formato español: 1.849,56.
+//   · con coma: la coma es el decimal y los puntos, de miles («1.849,56», «1849,56»);
+//   · sin coma y un solo punto: el punto es el decimal («1849.56», «63.6»), como el del teclado numérico;
+//   · sin coma y varios puntos: son de miles («1.234.567»).
+/** Un importe en formato español, con los miles siempre separados y dos decimales: 1.849,56 (Intl, en es-ES, no separa los de cuatro cifras). */
+export function formatoImporte(n: number): string {
+  const c = Math.round(Math.abs(n) * 100)
+  const enteros = String(Math.floor(c / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return `${n < 0 && c > 0 ? '-' : ''}${enteros},${String(c % 100).padStart(2, '0')}`
+}
+
+/** El importe escrito, como número (0 si está vacío; NaN si no es un importe). */
+export function leerImporte(texto: string): number {
+  let t = texto.replace(/[\s€]/g, '')
+  if (!t) return 0
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.')
+  else if ((t.match(/\./g) ?? []).length > 1) t = t.replace(/\./g, '')
+  if (!/^-?(\d+\.?\d*|\.\d+)$/.test(t)) return NaN
+  return Number(t)
+}
+
+/** Lo escrito, en formato español con dos decimales («1849.56» → «1.849,56»); vacío o lo que no es un importe, tal cual. */
+export function importeVisto(texto: string): string {
+  if (!texto.trim()) return ''
+  const n = leerImporte(texto)
+  return Number.isFinite(n) ? formatoImporte(n) : texto
+}
