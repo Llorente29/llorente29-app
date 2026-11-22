@@ -62,7 +62,7 @@ import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioS
 import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { AsientoQueSale, AyudaTeclas, Casilla, CasillaFecha, Comprobaciones, Duda, EstadoFicha, NombreDeCuenta } from '../ficha/piezas'
-import { accionDocumento, etiquetaValidado, franjaContabilizada, franjaDescartada, franjaModificando, lineasQueCambian, porqueNoModificar, textoNoSeModifica, laAnterior, lineasDelHistorial, opcionesDeMas, textoCasillaProveedor, queFichaSeAbre, textoCambioAlGuardar, type ModoRecibida, type OpcionMas } from './contabilizada'
+import { accionDocumento, etiquetaValidado, franjaContabilizada, franjaDescartada, claveSePuedeModificar, franjaModificando, lineasQueCambian, porqueNoModificar, textoNoSeModifica, laAnterior, lineasDelHistorial, opcionesDeMas, textoCasillaProveedor, queFichaSeAbre, textoCambioAlGuardar, type ModoRecibida, type OpcionMas } from './contabilizada'
 import { cambiarDocumentoContabilizada, leerHistorial, salioAErp10 } from './documentoServicio'
 import { PanelDocumento } from '../ficha/PanelDocumento'
 import { cifra } from '../ficha/textos'
@@ -244,7 +244,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   // X26 · «Modificar» la contabilizada: si se puede (la base dice por qué no) y, mientras se modifica, las cuentas elegidas por línea.
   const [modificando, setModificando] = useState<{ de: string; elegidas: Record<number, string> } | null>(null)
   const enModificar = modificando?.de === invoiceId
-  const sePuede = useLeer(!aMano && invoiceId && fac?.asiento?.estado === 'validado' ? () => sePuedeModificar(invoiceId) : null, `${invoiceId}:se-puede-modificar:${vuelta}`)
+  const asientoValidado = !aMano && invoiceId && fac?.asiento?.estado === 'validado' ? fac.asiento.id : null
+  const sePuede = useLeer(asientoValidado ? () => sePuedeModificar(invoiceId) : null, claveSePuedeModificar({ invoiceId, asientoValidado, vuelta }))
   const enErp10 = useLeer(accountId && asientoId ? () => salioAErp10(accountId, asientoId) : null, `${accountId}:${asientoId}:erp10:${vuelta}`).datos ?? false
   const descarte = useLeer(descartada && id ? () => leerDescarte(id) : null, `${id}:descarte:${descartada ? 'si' : 'no'}:${vuelta}`).datos ?? null
   const [verHistorial, setVerHistorial] = useState<string | null>(null)

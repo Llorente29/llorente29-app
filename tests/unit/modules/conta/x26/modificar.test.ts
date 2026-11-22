@@ -42,3 +42,23 @@ describe('X26 · el porqué escrito al lado del botón apagado (regla 8)', () =>
     expect(textoNoSeModifica(null)).toBeNull()
   })
 })
+
+describe('X26 · la lectura de «¿se puede modificar?» se hace cuando llega el asiento (e2e 44962297448 y #1733)', () => {
+  // El modelo de useLeer (libros/contexto.ts): el efecto lee SOLO cuando cambia la clave; si al cambiar no hay qué leer, no lee.
+  function lecturas(pasos: { leer: boolean; clave: string }[]): number {
+    let n = 0; let antes: string | null = null
+    for (const p of pasos) { if (p.clave !== antes) { antes = p.clave; if (p.leer) n++ } }
+    return n
+  }
+  it('antes: con la clave sin el asiento, al llegar la factura validada no se leía nunca (el botón, apagado)', () => {
+    const clave = 'f-1:se-puede-modificar:0'
+    expect(lecturas([{ leer: false, clave }, { leer: true, clave }])).toBe(0)
+  })
+  it('ahora: la clave cambia con el asiento validado, y se lee una vez', async () => {
+    const { claveSePuedeModificar } = await import('@/modules/conta/nucleo/recibida/contabilizada')
+    const sin = claveSePuedeModificar({ invoiceId: 'f-1', asientoValidado: null, vuelta: 0 })
+    const con = claveSePuedeModificar({ invoiceId: 'f-1', asientoValidado: 'a-11', vuelta: 0 })
+    expect(sin).not.toBe(con)
+    expect(lecturas([{ leer: false, clave: sin }, { leer: true, clave: con }, { leer: true, clave: con }])).toBe(1)
+  })
+})

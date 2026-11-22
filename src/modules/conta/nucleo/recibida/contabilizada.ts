@@ -175,3 +175,11 @@ export function lineasQueCambian(apuntes: readonly { posicion: number; cuenta: s
     .filter((a) => esLineaDeGasto(a.cuenta) && elegidas[a.posicion] && elegidas[a.posicion].trim() !== a.cuenta)
     .map((a) => ({ posicion: a.posicion, cuenta: elegidas[a.posicion].trim() }))
 }
+
+/**
+ * La clave de la lectura de «¿se puede modificar?». useLeer solo vuelve a leer si cambia la clave: tiene que llevar el
+ * asiento validado, que llega DESPUÉS de abrir la ficha (e2e 44962297448 y #1733: con la clave sin él, la lectura se
+ * quedaba en «no leer» de cuando aún no había factura, y «Modificar» no se encendía nunca, sin decir por qué).
+ */
+export const claveSePuedeModificar = (o: { invoiceId: string; asientoValidado: string | null; vuelta: number }) =>
+  `${o.invoiceId}:${o.asientoValidado ?? 'sin-asiento'}:se-puede-modificar:${o.vuelta}`

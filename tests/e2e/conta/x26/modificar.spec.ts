@@ -111,9 +111,11 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     const casilla = ficha(page).locator('[data-prueba="modificar-asiento"] tr[data-cuenta="62800000"] input')
     await casilla.fill(nueva.code)
     await page.getByRole('option', { name: new RegExp(`^${nueva.code} · `) }).click()
-    await expect(ficha(page).locator(`[data-prueba="modificar-asiento"] tr[data-cuenta="${nueva.code}"]`)).toBeVisible()
+    // Elegida, la fila ya es la de la cuenta nueva: Intro, en su casilla.
+    const elegida = ficha(page).locator(`[data-prueba="modificar-asiento"] tr[data-cuenta="${nueva.code}"] input`)
+    await expect(elegida).toHaveValue(nueva.code)
     await page.screenshot({ path: `${DIR}/modificando-${ancho}.png` })
-    await casilla.press('Enter')
+    await elegida.press('Enter')
     await expect(aviso(page)).toContainText(`Modificado: el asiento ${antes.number} sigue siendo el ${antes.number}, con 62800000 → ${nueva.code}.`, { timeout: 60_000 })
     await expect(franja(page)).toContainText(`Contabilizada · asiento ${antes.number}.`, { timeout: 30_000 })
 
