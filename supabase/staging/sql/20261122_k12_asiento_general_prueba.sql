@@ -14,7 +14,8 @@
 --      asiento no depende de sus observaciones (la misma con y sin ellas).
 --   2. Cambiarlo validado: el concepto, las observaciones, el importe, la cuenta de una línea y su plataforma. El mismo
 --      número; la cadena íntegra (también el de detrás, vuelto a encadenar); su respaldo; el libro con lo nuevo.
---   3. Sin cambios: no toca la huella ni deja historial.
+--   3. Sin cambios: no toca la huella ni deja historial. Y regla 31: cambiado y devuelto a lo de antes, la misma huella
+--      que tenía al validarse (el mismo asiento grabado por la pantalla de antes y por la de ahora).
 --   4. Lo que no se puede: un descuadre (y no cambia nada), una línea a los dos lados, una cuenta que no es de apunte,
 --      un asiento que no es a mano, y con el trimestre presentado, con su frase.
 --   5. El justificante: se guarda en el asiento a mano; el mismo otra vez no falla; otro distinto, no; el CHECK lo
@@ -166,6 +167,25 @@ do $$ begin
   end if;
 end $$;
 
+-- 3b · Regla 31: cambiado y devuelto a lo de antes, la misma huella que tenía al validarse ------------------------------
+select set_config('request.jwt.claims', '{"sub":"c0e20000-0000-4000-8000-0000000000e1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare r jsonb; v_e uuid := (select valor::uuid from _k12 where clave = 'asiento');
+  v_marca text := (select valor from _k12 where clave = 'marca'); v_canal text := (select valor from _k12 where clave = 'canal');
+begin
+  r := public.conta_asiento_modificar(v_e, jsonb_build_object('concepto', 'K12 pago de prueba', 'notas', 'Observación de prueba K12', 'documento', '', 'fecha_documento', ''),
+         jsonb_build_array(
+           jsonb_build_object('cuenta', '41000001', 'concepto', 'K12 pago de prueba', 'debe', 63.60, 'marca', v_marca, 'plataforma', v_canal),
+           jsonb_build_object('cuenta', '57200001', 'concepto', 'K12 pago de prueba', 'haber', 63.60)), 'Prueba K12');
+  if public.journal_entry_canonico(v_e) <> (select valor from _k12 where clave = 'canon') then
+    raise exception 'PRUEBA K12 · 3b · regla 31: devuelto a lo de antes, la huella no es la de cuando se validó';
+  end if;
+  raise notice 'PRUEBA K12 · 3b · regla 31: cambiado y devuelto a lo de antes por conta_asiento_modificar, la misma huella que al validarse (md5 %). «%»',
+    left(md5(public.journal_entry_canonico(v_e)), 8), r->>'texto';
+end $$;
+reset role;
+
 -- 4 · Lo que no se puede -------------------------------------------------------------------------------------------------
 select set_config('request.jwt.claims', '{"sub":"c0e20000-0000-4000-8000-0000000000e1","role":"authenticated"}', true);
 set local role authenticated;
@@ -183,7 +203,7 @@ begin
   begin perform public.conta_asiento_modificar(v_e, '{}', '[{"cuenta": "572", "debe": 70}, {"cuenta": "57200001", "haber": 70}]', 'Prueba K12');
   exception when others then v_msg := sqlerrm; end;
   if v_msg is null or v_msg !~ '(tiene subcuentas|no está en el plan)' then raise exception 'PRUEBA K12 · 4: una cuenta que no es de apunte (%)', v_msg; end if;
-  if (select concept from public.journal_entry where id = v_e) <> 'K12 pago cambiado' then raise exception 'PRUEBA K12 · 4: un intento fallido ha cambiado algo'; end if;
+  if (select concept from public.journal_entry where id = v_e) <> 'K12 pago de prueba' then raise exception 'PRUEBA K12 · 4: un intento fallido ha cambiado algo'; end if;
   -- Uno que no es a mano: un pago a proveedor, inventado, validado por el mismo camino.
   insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status, created_by_name)
   select account_id, company_id, fiscal_year_id, 4, '2026-11-12', 'K12 pago de proveedor', 'supplier_payment', 'borrador', 'Prueba K12'

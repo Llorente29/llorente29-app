@@ -245,7 +245,7 @@ begin
   insert into public.conta_asiento_modificado (account_id, company_id, entry_id, numero, cabecera_antes, cabecera_despues, lineas_antes, lineas_despues, cadena_antes, quien)
   values (e.account_id, e.company_id, e.id, e.number, v_cab_antes, v_cab_despues, v_antes, v_despues, v_cadena, v_quien) returning id into v_reg;
   return jsonb_build_object('texto', format('Cambiado: el asiento %s sigue siendo el %s, con %s apuntes y %s al debe y al haber.',
-                                            e.number, e.number, v_pos, to_char(v_sd, 'FM999G999G990D00')),
+                                            e.number, e.number, v_pos, translate(to_char(v_sd, 'FM999,999,990.00'), ',.', '.,')),
                             'numero', e.number, 'serie', e.series, 'apuntes', v_pos, 'registro', v_reg);
 exception when sqlstate 'P0001' then
   if sqlerrm = 'k12:sin-cambios' then
