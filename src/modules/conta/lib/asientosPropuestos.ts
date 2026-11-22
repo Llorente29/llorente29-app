@@ -28,6 +28,7 @@
 
 import { NORMAS } from './normas'
 import { eurosExactos } from './formato'
+import { partirIvaDeducible, repartirPorPeso } from './ivaDeducible'
 import {
   baseDeTotal, cent, cuotaIva, deCent, peor,
   type Confianza, type LineaAsiento, type Propuesta, type Razon,
@@ -385,6 +386,8 @@ export interface EntradaFactura {
    * recibidas como deducible (supplier_invoice.vat_non_deductible).
    */
   ivaNoDeducible?: boolean
+  /** K11a · El % de IVA deducible de «Otros datos» (0 a 100; null = 100). Lo no deducible va a la cuenta de gasto de sus líneas. */
+  ivaDeduciblePct?: number | null
   /** D07 · Por qué no se deduce, dicho para la persona («el ticket no lleva NIF»). Sin él, «no va a nombre de tu empresa». */
   motivoNoDeducible?: string | null
   /** S01o·3 · Su ficha dice que es común a todos los locales. */
@@ -545,8 +548,16 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
     if (dicha && cent(dicha.base) !== x.base) { avisos.push(`La base del ${pct} % de la factura (${eurosExactos(dicha.base)}) no es la de sus líneas (${eurosExactos(base)}).`); confs.push('duda') }
     const cuota = dicha ? dicha.cuota : cuotaIva(base, pct)
     ivaTotal += cent(cuota)
-    lineas.push({ cuenta: cta.cuenta, debe: cuota, haber: 0, localId: loc, comun: !loc, documento: f.numero, ...(marca ? { marcaId: marca } : {}),
-      iva: { tipoId: cta.tipoId, tipo: pct, base, libro: 'received', deducible: 'yes' } })
+    // K11a · El % deducible: lo deducible a la 472; lo no deducible, a la cuenta de gasto de sus líneas de este tipo.
+    const parte = partirIvaDeducible(cent(cuota), x.base, f.ivaDeduciblePct)
+    if (parte.cuota) {
+      lineas.push({ cuenta: cta.cuenta, debe: deCent(parte.cuota), haber: 0, localId: loc, comun: !loc, documento: f.numero, ...(marca ? { marcaId: marca } : {}),
+        iva: { tipoId: cta.tipoId, tipo: pct, base: deCent(parte.base), libro: 'received', deducible: 'yes' } })
+    }
+    lineas.push(...ivaNoDeducibleAlGasto(f, pct, cta.tipoId, parte, loc, marca))
+  }
+  if (f.ivaDeduciblePct !== null && f.ivaDeduciblePct !== undefined && f.ivaDeduciblePct < 100) {
+    razones.push({ decision: `IVA deducible al ${f.ivaDeduciblePct} %`, porque: 'lo dice «Otros datos» de la factura: lo no deducible va a la cuenta de gasto de su línea, y al libro de recibidas como no deducible (no entra en el 303)' })
   }
   if (f.retencion) {
     lineas.push({ cuenta: c.retencion, debe: 0, haber: f.retencion.importe, localId: loc, comun: !loc, documento: f.numero,
@@ -607,8 +618,13 @@ function autoliquidada(f: EntradaFactura, c: CuentasFactura, gastos: Map<string,
   const baseC = f.lineas.reduce((x, l) => x + cent(l.base), 0)
   const base = deCent(baseC)
   const cuota = cuotaIva(base, t.porcentaje)
-  lineas.push({ cuenta: t.soportado, debe: cuota, haber: 0, localId: loc, comun: !loc, documento: f.numero, ...m,
-    iva: { tipoId: t.tipoId, tipo: t.porcentaje, base, libro: 'received', deducible: 'yes' } })
+  // K11a · El % deducible: la 477 lleva la cuota entera; la 472, solo lo deducible; lo demás, a la cuenta de gasto.
+  const parte = partirIvaDeducible(cent(cuota), baseC, f.ivaDeduciblePct)
+  if (parte.cuota) {
+    lineas.push({ cuenta: t.soportado, debe: deCent(parte.cuota), haber: 0, localId: loc, comun: !loc, documento: f.numero, ...m,
+      iva: { tipoId: t.tipoId, tipo: t.porcentaje, base: deCent(parte.base), libro: 'received', deducible: 'yes' } })
+  }
+  lineas.push(...ivaNoDeducibleAlGasto({ ...f, lineas: f.lineas.map((l) => ({ ...l, tipo: { id: t.tipoId, porcentaje: t.porcentaje } })) }, t.porcentaje, t.tipoId, parte, loc, marca))
   lineas.push({ cuenta: t.repercutido, debe: 0, haber: cuota, localId: loc, comun: !loc, documento: f.numero, ...m })
   if (f.retencion) {
     lineas.push({ cuenta: c.retencion, debe: 0, haber: f.retencion.importe, localId: loc, comun: !loc, documento: f.numero,
@@ -636,6 +652,26 @@ function autoliquidada(f: EntradaFactura, c: CuentasFactura, gastos: Map<string,
       razones, avisos, terceroId: f.terceroId, documento: f.numero,
     },
   }
+}
+
+/**
+ * K11a · La parte no deducible del IVA de un tipo, a la cuenta de gasto de sus líneas de ese tipo (repartida según
+ * su base), con su tipo y su base al libro de recibidas como no deducible: sale en el libro y no entra en el 303.
+ */
+function ivaNoDeducibleAlGasto(f: EntradaFactura, pct: number, tipoId: string, parte: { cuotaNo: number; baseNo: number },
+  loc: string | null, marca: string | null): LineaAsiento[] {
+  if (!parte.cuotaNo) return []
+  const porCuenta = new Map<string, number>()
+  for (const l of f.lineas) if ((l.tipo?.porcentaje ?? 0) === pct && l.cuentaGasto) porCuenta.set(l.cuentaGasto, (porCuenta.get(l.cuentaGasto) ?? 0) + cent(l.base))
+  if (porCuenta.size === 0) for (const l of f.lineas) if (l.cuentaGasto) porCuenta.set(l.cuentaGasto, (porCuenta.get(l.cuentaGasto) ?? 0) + cent(l.base))
+  const pesos = [...porCuenta.entries()]
+  const cuotas = repartirPorPeso(parte.cuotaNo, pesos)
+  const bases = repartirPorPeso(parte.baseNo, pesos)
+  return cuotas.filter(([, c]) => c !== 0).map(([cuenta, c]) => ({
+    cuenta, debe: deCent(c), haber: 0, localId: loc, comun: !loc, documento: f.numero, ...(marca ? { marcaId: marca } : {}),
+    concepto: `IVA no deducible ${pct} %`,
+    iva: { tipoId, tipo: pct, base: deCent(bases.find(([k]) => k === cuenta)?.[1] ?? 0), libro: 'received' as const, deducible: 'no' as const },
+  }))
 }
 
 export function pagoFactura(p: { facturaId: string; fecha: string; proveedor: string; numero: string | null; importe: number; localId: string | null; terceroId: string | null },
