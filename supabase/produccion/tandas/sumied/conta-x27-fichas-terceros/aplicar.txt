@@ -2,11 +2,12 @@
 # Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
 #
 #   1315  Añade a supplier lo que la factura usa de su ficha (% deducible, marca, plataforma, «No incluir en 347» y
-#         «Pago directo»), a customer_fiscal los datos de la ficha del cliente (teléfono, correo, observaciones, nombre
-#         comercial y tipos de IVA), y dos disparadores: la recibida nace con lo de su proveedor, solo en lo vacío y
-#         nunca con su asiento validado (cambia: supplier_invoice y supplier_invoice_expense). Con las columnas nuevas
-#         vacías, ninguna recibida cambia.
+#         «Pago directo»), y a customer_fiscal los datos de la ficha del cliente (teléfono, correo, observaciones,
+#         nombre comercial y tipos de IVA). Columnas vacías: no escribe en ninguna fila.
+#   1316  Dos disparadores: la recibida nace con lo de su proveedor, solo en lo vacío y nunca con su asiento validado
+#         (cambia: supplier_invoice y supplier_invoice_expense). Con las columnas de la 1315 vacías, ninguna cambia.
 #
 # Nada en el camino del pedido. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/x27-fichas-terceros.sql
 supabase/migrations/20261122T1315_x27_fichas_terceros.sql
+supabase/migrations/20261122T1316_x27_la_factura_usa_su_ficha.sql

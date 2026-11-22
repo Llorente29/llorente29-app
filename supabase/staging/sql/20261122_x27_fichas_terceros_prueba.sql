@@ -1,7 +1,7 @@
 -- supabase/staging/sql/20261122_x27_fichas_terceros_prueba.sql
 --
--- SOLO STAGING. Prueba del X27 (20261122T1315_x27_fichas_terceros), que el ensayo de staging pone delante en la misma
--- sesión. Todo en una transacción con ROLLBACK: staging no cambia. Nombra lo que cambia: public.supplier_invoice (el
+-- SOLO STAGING. Prueba del X27 (20261122T1315_x27_fichas_terceros y 20261122T1316_x27_la_factura_usa_su_ficha), que el
+-- ensayo de staging pone delante en la misma sesión. Todo en una transacción con ROLLBACK: staging no cambia. Nombra lo que cambia: public.supplier_invoice (el
 -- disparador x27_recibida_nace) y public.supplier_invoice_expense (el disparador x27_linea_plataforma); y lo nuevo:
 -- public.supplier, public.customer_fiscal, public.tg_x27_recibida_nace() y public.tg_x27_linea_plataforma().
 --
@@ -25,7 +25,7 @@ do $$ begin
   if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
     raise exception 'PRUEBA X27: esta base tiene cuentas de producción. No se toca nada.';
   end if;
-  if to_regprocedure('public.tg_x27_recibida_nace()') is null then raise exception 'PRUEBA X27 · 0: falta la 1315 delante.'; end if;
+  if to_regprocedure('public.tg_x27_recibida_nace()') is null then raise exception 'PRUEBA X27 · 0: faltan la 1315 y la 1316 delante.'; end if;
   if not exists (select 1 from public.supplier where id = 'c0e40000-0000-4000-8000-0000000000a1') then
     raise exception 'PRUEBA X27 · 0: falta el proveedor de la semilla K04.';
   end if;
@@ -156,6 +156,7 @@ begin
 end $$;
 
 -- 7 · La vuelta atrás -----------------------------------------------------------------------------------------------
+\i supabase/vuelta-atras/20261122T1316_x27_la_factura_usa_su_ficha.down.sql
 \i supabase/vuelta-atras/20261122T1315_x27_fichas_terceros.down.sql
 do $$
 declare v jsonb;
