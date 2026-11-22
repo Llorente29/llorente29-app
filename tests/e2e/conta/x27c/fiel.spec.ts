@@ -5,11 +5,13 @@
 //     no pasan del ancho máximo de la ventana (el de la maqueta a 1366);
 //   · ninguna casilla corta se estira: el NIF, el código postal, los días y el % deducible miden lo mismo a 1366 que a
 //     1920, y el rótulo «% I.V.A. deducible» se lee entero;
-//   · los tres bloques, en su recuadro, y «Página web» y «Subcuenta suplidos» en la ficha.
+//   · los tres bloques, en su recuadro, y «Página web» y «Subcuenta suplidos» en la ficha;
+//   · el teléfono se guarda en el contacto principal del proveedor (una sola verdad, la de Cocina), y el aviso sin
+//     punto doble («…, S.L.»).
 // Nombres inventados (T11).
 
 import { test, expect, type Page } from '@playwright/test'
-import { enCarril, entrarComo } from '../sesion'
+import { STAGING_URL, anonKey, enCarril, entrarComo, type Sesion } from '../sesion'
 import { abierta, GESTORIA, NUCLEO } from '../k02/comun'
 
 test.use({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
@@ -21,8 +23,8 @@ const CLIENTE = () => enCarril('c0e50000-0000-4000-8000-0000000000c1')
 const VENTANA_MAX = 1351
 const zona = (page: Page) => page.locator('.k-zona[data-activa="si"]')
 
-async function entrarEnLaGestoria(page: Page) {
-  await entrarComo(page, NUCLEO.email)
+async function entrarEnLaGestoria(page: Page): Promise<Sesion> {
+  const s = await entrarComo(page, NUCLEO.email)
   await page.goto('/conta/inicio?marca=sumied', { timeout: 30_000 })
   await expect(page.locator('.k-nucleo')).toBeVisible({ timeout: 30_000 })
   await page.evaluate(() => window.sessionStorage.removeItem('folvy.conta.nucleo.pestanas'))
@@ -30,6 +32,7 @@ async function entrarEnLaGestoria(page: Page) {
   await page.getByRole('group', { name: 'Empresa y ejercicio' }).getByRole('button', { name: new RegExp(`^${GESTORIA}`) }).click()
   await expect(page.getByRole('button', { name: new RegExp(`^${GESTORIA}`) })).toBeVisible({ timeout: 30_000 })
   await abierta(page, 'Inicio')
+  return s
 }
 
 /** Lo que mide cada casilla (px) y la ventana. */
@@ -47,7 +50,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     const errores: string[] = []
     page.on('pageerror', (e) => errores.push(`${page.url()}: ${e.message}`))
     await page.setViewportSize({ width: ancho, height: alto })
-    await entrarEnLaGestoria(page)
+    const s = await entrarEnLaGestoria(page)
 
     // La ficha del proveedor.
     await page.goto(`/conta/clientes-y-proveedores/proveedor/${PROVEEDOR()}`, { timeout: 30_000 })
@@ -68,6 +71,16 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     expect(await rotulo.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), 'el rótulo «% I.V.A. deducible», entero').toBe(true)
     await expect(ficha.locator('[data-pieza="bloque"][data-recuadro="si"]')).toHaveCount(3)
     await page.screenshot({ path: `${DIR}/proveedor-${ancho}.png` })
+
+    // El teléfono, una sola verdad: el contacto principal del proveedor (supplier_contact), el que usa Cocina.
+    const tel = `9${String(Date.now() % 100000000).padStart(8, '0')}`
+    await page.locator('#ft-telefono').fill(tel)
+    await ficha.locator('[data-boton="guardar"]').click()
+    await expect(ficha.locator('.kp-barra-aviso')).toContainText('Guardado: Proveedor de Prueba Ficha Uno, S.L.', { timeout: 30_000 })
+    await expect(ficha.locator('.kp-barra-aviso')).not.toContainText('S.L..')
+    const r = await fetch(`${STAGING_URL}/rest/v1/supplier_contact?select=phone&supplier_id=eq.${PROVEEDOR()}&is_primary=eq.true`,
+      { headers: { apikey: anonKey(), Authorization: `Bearer ${s.access_token}` } })
+    expect(await r.json(), 'el teléfono, en su contacto principal').toEqual([{ phone: tel }])
 
     // La del cliente.
     await page.goto(`/conta/clientes-y-proveedores/${CLIENTE()}`, { timeout: 30_000 })

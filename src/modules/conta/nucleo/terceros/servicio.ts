@@ -5,6 +5,8 @@
 //   · proveedor: supplier (su ficha, con lo del X27: vat_deductible_pct, default_brand_id, default_channel_id,
 //     exclude_from_347 y pay_on_post) y company_account_link de la empresa (rol «principal», su 400; «gasto»; «pago»,
 //     la del K10). Lo de siempre se guarda con guardarFicha (que quita el «de la factura» de un dato cambiado a mano).
+//   · el teléfono y el correo del proveedor: una sola verdad, su contacto principal (supplier_contact), el mismo que
+//     usa Cocina (Julio, 22/11). supplier.phone y supplier.email (de la 1315) ya no se usan: se quitan en otra tanda.
 //   · cliente: party y customer_fiscal con party_save_customer, y lo del X27 (phone, email, notes, trade_name,
 //     usual_tax_rate_ids) con un update de customer_fiscal; su 430, el rol «principal» de entity «customer».
 //   · el alta: el proveedor (crearProveedor) o el cliente (party_save_customer), y su subcuenta con
@@ -12,7 +14,7 @@
 //     subcuenta no se crea, el tercero ya existe: se abre su ficha y se dice por qué (nunca otro alta al reintentar).
 
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
-import { crearProveedor, guardarFicha, obtenerFicha } from '@/modules/conta/services/proveedorService'
+import { actualizarContacto, crearContacto, crearProveedor, guardarFicha, listarContactos, obtenerFicha } from '@/modules/conta/services/proveedorService'
 import { apuntesDeCuentas } from '@/modules/conta/services/libroService'
 import { leerEjercicios, localesDeLaCuenta, type EjercicioLibro } from '@/modules/conta/services/diarioService'
 import { marcasDeLaCuenta, plataformasDeLaCuenta, type Opcion } from '@/modules/conta/services/asientoGeneralService'
@@ -99,13 +101,15 @@ async function enlaces(accountId: string, companyId: string, entity: 'supplier' 
 }
 
 export async function leerProveedor(accountId: string, companyId: string, supplierId: string, retenciones: readonly Tasa[]): Promise<FichaLeida | null> {
-  const [f, extra, ls, del] = await Promise.all([
+  const [f, extra, ls, del, contactos] = await Promise.all([
     obtenerFicha(supplierId),
-    leer(tabla('supplier').select('vat_deductible_pct, default_brand_id, default_channel_id, exclude_from_347, pay_on_post, phone, email').eq('account_id', accountId).eq('id', supplierId), 'su ficha'),
+    leer(tabla('supplier').select('vat_deductible_pct, default_brand_id, default_channel_id, exclude_from_347, pay_on_post').eq('account_id', accountId).eq('id', supplierId), 'su ficha'),
     enlaces(accountId, companyId, 'supplier', supplierId),
     delProveedor(accountId, companyId, supplierId).catch(() => null),
+    listarContactos(supplierId),
   ])
   if (!f || f.accountId !== accountId) return null
+  const principal = contactos.find((c) => c.isPrimary) ?? null
   const x = extra[0] ?? {}
   const de = (rol: string) => ls.find((l) => l.rol === rol)?.subcuenta ?? null
   const ret = retencionQueEncaja(f.irpfWithholdingPct, retenciones)
@@ -113,7 +117,7 @@ export async function leerProveedor(accountId: string, companyId: string, suppli
     ...borradorVacio(),
     nombre: f.legalName ?? f.name, nif: f.taxId ?? '', tipoNif: f.taxIdType ?? 'nif_es', comercial: f.legalName && f.legalName !== f.name ? f.name : '',
     domicilio: f.fiscalStreet ?? '', postal: f.fiscalPostalCode ?? '', poblacion: f.fiscalCity ?? '', provincia: f.fiscalProvince ?? '', pais: f.countryCode ?? 'ES',
-    telefono: s(x.phone), correo: s(x.email), web: f.website ?? '', observaciones: f.notes ?? '',
+    telefono: principal?.phone ?? '', correo: principal?.email ?? '', web: f.website ?? '', observaciones: f.notes ?? '',
     recargo: f.vatRegime === 'recargo_equivalencia', no347: x.exclude_from_347 === true,
     iva1: f.usualTaxRateIds[0] ?? '', iva2: f.usualTaxRateIds[1] ?? '',
     retencion: ret ? ret.id : f.irpfWithholdingPct ? String(f.irpfWithholdingPct).replace('.', ',') : '',
@@ -210,10 +214,20 @@ export async function guardarProveedor(o: {
   })
   const pct = porcentaje(b.deducible)
   const { error } = await tabla('supplier').update({
-    phone: nulo(b.telefono), email: nulo(b.correo), vat_deductible_pct: pct, exclude_from_347: b.no347 || null, pay_on_post: b.pagoDirecto || null,
+    vat_deductible_pct: pct, exclude_from_347: b.no347 || null, pay_on_post: b.pagoDirecto || null,
     default_brand_id: b.marca || null, default_channel_id: b.plataforma || null,
   }).eq('account_id', o.accountId).eq('id', id)
   if (error) throw new Error(mensaje('No se ha guardado lo que propone la factura', error))
+  // El teléfono y el correo, en su contacto principal; sin él, se le crea uno (si hay algo que poner).
+  if (b.telefono !== (o.id ? o.antes.telefono : '') || b.correo !== (o.id ? o.antes.correo : '')) {
+    const principal = (await listarContactos(id)).find((c) => c.isPrimary) ?? null
+    if (principal) {
+      await actualizarContacto(principal.id, { name: principal.name, role: principal.role, phone: nulo(b.telefono), email: nulo(b.correo), notes: principal.notes })
+    } else if (nulo(b.telefono) || nulo(b.correo)) {
+      await crearContacto(o.accountId, id, { name: b.comercial.trim() || b.nombre.trim(), role: 'other', phone: nulo(b.telefono), email: nulo(b.correo), notes: null },
+        { id: o.userId, name: o.quien }, true)
+    }
+  }
   await enlazar(o.companyId, 'supplier', id, 'gasto', o.id ? o.antes.gasto : '', b.gasto, o.quien)
   await enlazar(o.companyId, 'supplier', id, 'pago', o.id ? o.antes.pago : '', b.pago, o.quien)
   await enlazar(o.companyId, 'supplier', id, 'suplidos', o.id ? o.antes.suplidos : '', b.suplidos, o.quien)
