@@ -1,0 +1,19 @@
+{
+ "_que": "K11g · el 347 desde los libros · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. 1855 añade una función que solo lee. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-22T17:53Z",
+ "tanda": {
+  "supabase/migrations/20261122T1855_k11g_347_desde_los_libros.sql": "6a0134f197ea192cf8d7cf330c06235c"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
