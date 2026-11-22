@@ -22,6 +22,7 @@ import {
 } from '@/modules/conta/lib/asientosPropuestos'
 import { avisoPeriodoCerrado, diaAbierto, fechaPropuesta, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta, type Razon } from '@/modules/conta/lib/libro'
 import { claseIva, nombrePais, tipoDeLaClase, type ClaseIva, type FichaIva } from '@/modules/conta/lib/ivaProveedor'
+import { claseParaElAsiento, esOperacion, textoDeOperacion } from '@/modules/conta/nucleo/recibida/cabecera'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -328,8 +329,13 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada', 'pagada'] : ['aprobada', 'pagada']).or(`company_id.is.null,company_id.eq.${companyId}`)
     .gte('invoice_date', desde).lte('invoice_date', hasta).match(soloFactura ? { id: soloFactura } : {}).order('invoice_date', { ascending: false })
   const conLaFicha = async (): Promise<Fila[]> => {
-    const x = await consulta(`${SELECT}, entry_overrides, supplier_invoice_expense(position, account_code, location_id, is_common, amount)`)
-    if (x.error && /does not exist|could not find|relationship/i.test(x.error.message)) return leer(consulta(SELECT), 'las facturas')
+    const falta = (e: { message: string } | null) => !!e && /does not exist|could not find|relationship/i.test(e.message)
+    const ficha = `${SELECT}, entry_overrides, supplier_invoice_expense(position, account_code, location_id, is_common, amount)`
+    // K10b · 2150: el tipo de operación, el trimestre y el concepto de la factura. Sin ellos (antes de aplicarla), lo de antes.
+    const k10b = await consulta(`${ficha}, vat_operation, deduct_from, entry_concept`)
+    if (!falta(k10b.error)) return leer(Promise.resolve(k10b), 'las facturas')
+    const x = await consulta(ficha)
+    if (falta(x.error)) return leer(consulta(SELECT), 'las facturas')
     return leer(Promise.resolve(x), 'las facturas')
   }
   const [leidas, socios] = await Promise.all([
@@ -365,7 +371,10 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     // cerrado por una persona (se marca «entró después del cierre», no se mueve).
     let fecha = fechaFactura
     let avisoFecha: string | null = null
-    const enLaBase = await fechaEnLaBase(companyId, fechaFactura, fechasBase)
+    // K10b · «Se deduce en»: el trimestre elegido en la factura (su primer día, si es después de su fecha). Lo manda
+    // la fecha del asiento (Julio, 21/11); la base la vuelve a mirar y nunca la deja en uno presentado.
+    const deduceEn = s(f.deduct_from) && String(f.deduct_from) > fechaFactura ? String(f.deduct_from) : null
+    const enLaBase = await fechaEnLaBase(companyId, deduceEn ?? fechaFactura, fechasBase)
     if (enLaBase) {
       if (!enLaBase.fecha) {
         if (soloFactura || ver) r.sinPropuesta.push({ id: String(f.id), que: `Factura${f.invoice_number ? ` ${String(f.invoice_number)}` : ''}`, porque: enLaBase.aviso ?? 'No hay ningún día abierto para apuntarla.' })
@@ -376,7 +385,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
         // se apunta al mirarla o validarla una a una (o en bloque), con su aviso.
         if (!(soloFactura || ver)) continue
         fecha = enLaBase.fecha
-        avisoFecha = enLaBase.aviso ?? avisoPeriodoCerrado(fechaFactura, enLaBase.fecha)
+        avisoFecha = deduceEn && enLaBase.fecha === deduceEn ? null : enLaBase.aviso ?? avisoPeriodoCerrado(fechaFactura, enLaBase.fecha)
       }
     } else if (!abierto(fecha)) {
       // Sin conta_recibida_fecha (la 0913 sin aplicar): lo de antes, el primer día abierto (D07b).
@@ -438,7 +447,9 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       pais: s(prov.country_code), tipoNif: s(prov.tax_id_type) as FichaIva['tipoNif'], nif: s(prov.tax_id),
       vies: s(prov.tax_id_check_status) as FichaIva['vies'], regimen: s(prov.vat_regime) as FichaIva['regimen'],
     }
-    const clase = claseIva(ficha)
+    // K10b · El tipo de operación de la factura, si se cambió en ella; si no, el de su ficha (lo de siempre).
+    const operacion = esOperacion(f.vat_operation) ? f.vat_operation : null
+    const clase = claseParaElAsiento(operacion, claseIva(ficha))
     const nombreProv = s(prov.name) ?? 'El proveedor'
     if (clase === 'ue_sin_nif_iva' && f.vat_non_deductible !== true) {
       r.sinPropuesta.push({ id: String(f.id), que, porque: `${nombreProv} es de ${nombrePais(ficha.pais)} y no tiene un NIF-IVA europeo válido: sin él su compra no es intracomunitaria. Ponlo en su ficha (se comprueba en VIES) y la factura se propone.` })
@@ -470,9 +481,11 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       // D01 · Una línea puede llevar su propia cuenta (la factura de comisión de una liquidación: comisión y anuncios).
       lineas: lote?.lineas ?? (f.source === 'liquidacion' ? deLineas : lc.lineas),
       ...(lote ? { cuotas: lote.cuotas, reparto: lote.reparto } : lc.cuotas ? { cuotas: lc.cuotas } : {}),
+      // K10b · La marca de la factura va a sus apuntes, como el local (antes, solo la de una liquidación).
+      marcaId: s(f.brand_id),
       ...(f.source === 'liquidacion' ? {
         cuotas: impuestos,
-        marcaId: s(f.brand_id), faltaNumero: !s(f.invoice_number),
+        faltaNumero: !s(f.invoice_number),
         porAclarar: (((f.reading as Fila | null)?.requisitos ?? []) as Fila[]).filter((x) => (x.id === 'solape' || x.id === 'cuadre') && x.ok === false).map((x) => String(x.texto)),
       } : {}),
       retencion: rr && f.withholding_amount !== null ? { tipoId: String(rr.id), porcentaje: n(rr.rate), base: 0, importe: imp(n(f.withholding_amount)), modelo: (String(rr.filed_in) as '111' | '115' | '123') } : null,
@@ -505,8 +518,11 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     res.propuesta.razones.push(fecha === fechaFactura
       ? { decision: `Fecha: ${fechaFactura.split('-').reverse().join('/')}, la de la factura`,
           porque: 'Una factura recibida se apunta con su fecha de factura mientras su trimestre no tenga el IVA presentado' }
-      : { decision: `Fecha: ${fecha.split('-').reverse().join('/')}, no la de la factura (${fechaFactura.split('-').reverse().join('/')})`,
+      : deduceEn && fecha === deduceEn
+        ? { decision: `Fecha: ${fecha.split('-').reverse().join('/')}, el primer día del trimestre en que se deduce`, porque: 'Se eligió en la factura: el trimestre lo manda la fecha del asiento. Su fecha de factura no cambia' }
+        : { decision: `Fecha: ${fecha.split('-').reverse().join('/')}, no la de la factura (${fechaFactura.split('-').reverse().join('/')})`,
           porque: avisoFecha ?? 'Su día no está abierto en el libro' })
+    if (operacion) res.propuesta.razones.push({ decision: `Tipo de operación: ${textoDeOperacion(operacion)}`, porque: 'Se cambió en esta factura; su ficha no cambia' })
     if (clase === 'intracomunitaria' && ficha.vies !== 'valid') {
       res.propuesta.avisos.push(`El NIF-IVA de ${nombreProv} está sin comprobar en VIES: ábrelo en su ficha y se vuelve a preguntar.`)
       res.propuesta.confianza = peor(res.propuesta.confianza, 'probable')
@@ -527,7 +543,9 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     const reparto = ((f.supplier_invoice_expense ?? []) as Fila[]).sort((a, b) => n(a.position) - n(b.position))
       .map((x) => ({ cuenta: String(x.account_code), local: s(x.location_id), comun: x.is_common === true, importe: n(x.amount) }))
     const aprendida = await aprender(companyId, res.propuesta, `supplier_invoice:${sup}`, ctx)
-    const final = aplicarAsientoAMano(f.vat_non_deductible === true ? aprendida : aplicarReparto(aprendida, reparto), f.entry_overrides ?? null)
+    const conAMano = aplicarAsientoAMano(f.vat_non_deductible === true ? aprendida : aplicarReparto(aprendida, reparto), f.entry_overrides ?? null)
+    // K10b · El concepto del asiento escrito en la ficha manda sobre el propuesto.
+    const final = s(f.entry_concept) ? { ...conAMano, concepto: String(f.entry_concept).trim() } : conAMano
     // N23 «Cómo se apunta»: la misma propuesta, sin escribirla.
     if (ver) ver(final)
     else await proponer(companyId, final, null, r, ctx, quien)
