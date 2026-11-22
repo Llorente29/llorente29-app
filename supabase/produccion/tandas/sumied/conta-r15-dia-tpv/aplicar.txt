@@ -1,0 +1,12 @@
+# R15 · Los días del TPV se contabilizan al subirlos y se pueden abrir (encargo R15, 21/11,
+# camino A). Rama conta/r15-dia-tpv. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   1712  Solo añade: la subida (conta_tpv_subida y conta_tpv_dia.subida_id, que admite
+#         nulos), conta_tpv_subida_apuntar, la ficha del día (conta_tpv_dia_ficha) y los
+#         días como facturas expedidas (conta_tpv_emitidas). No cambia nada de lo que
+#         existe: contabilizar al subir es la misma pieza que «Validar los N listos».
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r15-dia-tpv.sql
+supabase/migrations/20261121T1712_r15_dia_tpv_anade.sql

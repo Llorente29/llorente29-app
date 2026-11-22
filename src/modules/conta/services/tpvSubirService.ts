@@ -13,20 +13,21 @@ import { rpc, hayBase } from '@/modules/conta/services/bd'
 import type { LecturaDia } from '@/modules/conta/lib/lectorRevo'
 import type { DiaYaGuardado, FormaCuenta } from '@/modules/conta/lib/subirTpv'
 import type { CuentaHoja } from '@/modules/conta/diseno/plantillas'
+import type { FilaLibroDia } from '@/modules/conta/lib/diaTpv'
 
 const limpio = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, '')
 
 /** Los días del TPV ya guardados de la empresa (para «Ya estaba» y para la lista). */
-export async function leerGuardados(companyId: string): Promise<DiaYaGuardado[]> {
-  const r = await rpc<DiaYaGuardado[] | null>('conta_tpv_dias', { p_company: companyId, p_desde: null, p_hasta: null })
+export async function leerGuardados(companyId: string): Promise<(DiaYaGuardado & { id: string; motivo: string | null })[]> {
+  const r = await rpc<(DiaYaGuardado & { id: string; motivo: string | null })[] | null>('conta_tpv_dias', { p_company: companyId, p_desde: null, p_hasta: null })
   return (r ?? []).map((x) => ({ ...x, total: Number(x.total) }))
 }
 
 /** Guardar un día leído. Dice qué ha guardado, o por qué no (la frase de la base). */
-export async function guardarDia(companyId: string, dia: string, lectura: LecturaDia, quien: string | null): Promise<{ ok: true; facturas: number; total: number } | { ok: false; error: string }> {
+export async function guardarDia(companyId: string, dia: string, lectura: LecturaDia, quien: string | null, programa = 'revo'): Promise<{ ok: true; id: string; facturas: number; total: number } | { ok: false; error: string }> {
   try {
-    const r = await rpc<{ documentos: number; total: number }>('conta_tpv_dia_guardar', { p_company: companyId, p_dia: dia, p_programa: 'revo', p_lectura: lectura, p_quien_nombre: quien })
-    return { ok: true, facturas: Number(r.documentos), total: Number(r.total) }
+    const r = await rpc<{ id: string; documentos: number; total: number }>('conta_tpv_dia_guardar', { p_company: companyId, p_dia: dia, p_programa: programa, p_lectura: lectura, p_quien_nombre: quien })
+    return { ok: true, id: String(r.id), facturas: Number(r.documentos), total: Number(r.total) }
   } catch (e) {
     return { ok: false, error: limpio(e) }
   }
@@ -123,5 +124,67 @@ export async function diaEjemplo(diaId: string, elecciones: Eleccion[], facturaI
   return {
     dia: r.dia, motivo: r.motivo, primero: r.primero == null ? null : String(r.primero), ultimo: r.ultimo == null ? null : String(r.ultimo), facturas: r.facturas == null ? null : Number(r.facturas),
     factura: asiento(r.factura), cobro: asiento(r.cobro), sinCuenta: Number(r.sin_cuenta ?? 0),
+  }
+}
+
+// ── R15 · La subida, la ficha del día y los días en «Facturas emitidas» ─────────────
+// Nombres dentro de cadenas (regla 40): conta_tpv_subida_apuntar, conta_tpv_dia_ficha y
+// conta_tpv_emitidas son del R15 (20261121T1712). Los días en «Facturas emitidas», en ventasService.ts.
+
+/** Apuntar la subida en sus días: el identificador que llevan los días y, por ellos, sus asientos. */
+export async function apuntarSubida(companyId: string, dias: string[], quien: string | null, programa = 'revo'): Promise<string> {
+  return String(await rpc<string>('conta_tpv_subida_apuntar', { p_company: companyId, p_dias: dias, p_programa: programa, p_quien_nombre: quien }))
+}
+
+export interface FichaDiaTpv {
+  id: string; company_id: string; dia: string; programa: string; programa_nombre: string
+  estado: 'validado' | 'en_espera' | 'por_validar'; motivo: string | null
+  documentos: number; primero: number | null; ultimo: number | null; base: number; cuota: number; total: number
+  subido_por: string | null; subido_en: string | null
+  subida: { id: string; cuando: string; quien: string | null; dias: number } | null
+  contadores: { contador: string | null; facturas: number; primero: number | string | null; ultimo: number | string | null; total: number }[]
+  con_nif: { numero: string; contador: string | null; nif: string; cliente: string | null; base: number; cuota: number; total: number }[]
+  devoluciones: { numero: string; contador: string | null; total: number }[]
+  sobre_limite: { numero: string; total: number }[]
+  limite: number
+  iva: { tipo: number; base: number; cuota: number; facturas: number }[]
+  cobros: { forma: string; importe: number; pagos: number; cuenta: string | null; nombre: string | null; por_canal: boolean }[]
+  factura: { id: string; serie: number | null; numero: number | null; estado: string } | null
+  cobro: { id: string; serie: number | null; numero: number | null; estado: string } | null
+  pdf: { ruta: string; nombre: string | null } | null
+  erp10: { estado: string; serie: string | null; documento: string | null; cuando: string | null } | null
+}
+
+const num = (x: unknown) => Number(x ?? 0)
+
+/** Un día del TPV por dentro: sus facturas, su IVA, sus cobros, sus asientos, su PDF y su salida a ERP10. */
+export async function leerFichaDia(diaId: string): Promise<FichaDiaTpv> {
+  const r = await rpc<FichaDiaTpv>('conta_tpv_dia_ficha', { p_dia: diaId })
+  return {
+    ...r,
+    documentos: num(r.documentos), base: num(r.base), cuota: num(r.cuota), total: num(r.total), limite: num(r.limite),
+    contadores: (r.contadores ?? []).map((c) => ({ ...c, facturas: num(c.facturas), total: num(c.total) })),
+    con_nif: (r.con_nif ?? []).map((c) => ({ ...c, base: num(c.base), cuota: num(c.cuota), total: num(c.total) })),
+    devoluciones: (r.devoluciones ?? []).map((d) => ({ ...d, total: num(d.total) })),
+    sobre_limite: (r.sobre_limite ?? []).map((d) => ({ ...d, total: num(d.total) })),
+    iva: (r.iva ?? []).map((t) => ({ tipo: num(t.tipo), base: num(t.base), cuota: num(t.cuota), facturas: num(t.facturas) })),
+    cobros: (r.cobros ?? []).map((c) => ({ ...c, importe: num(c.importe), pagos: num(c.pagos), por_canal: !!c.por_canal })),
+  }
+}
+
+// ── R15b · El día en el libro de IVA ────────────────────────────────────────────────
+// Nombre dentro de cadena (regla 40): conta_tpv_dia_libro es del R15b (20261121T2347).
+
+export interface LibroDia { enLibro: boolean; repartido: boolean; filas: FilaLibroDia[] }
+
+/** Las filas del libro de IVA de un día (o las que tendrá). Null si la base aún no tiene la 2347. */
+export async function leerLibroDia(diaId: string): Promise<LibroDia | null> {
+  try {
+    const r = await rpc<{ en_libro: boolean; repartido: boolean; filas: FilaLibroDia[] }>('conta_tpv_dia_libro', { p_dia: diaId })
+    return { enLibro: !!r.en_libro, repartido: !!r.repartido,
+      filas: (r.filas ?? []).map((f) => ({ ...f, tipo: num(f.tipo), base: num(f.base), cuota: num(f.cuota), total: num(f.total), documentos: num(f.documentos) })) }
+  } catch (e) {
+    if (/PGRST202|could not find the function|does not exist/i.test(e instanceof Error ? e.message : String(e))) return null
+    throw e
   }
 }

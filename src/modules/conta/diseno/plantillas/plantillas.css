@@ -92,6 +92,8 @@ th.s-lista-cifra { text-align: right; }
 .s-lista-tarjeta:focus-visible { outline: none; box-shadow: var(--s-foco); }
 .s-tarjeta-cabeza { display: flex; justify-content: space-between; gap: var(--s-3); }
 .s-tarjeta-apoyo { font-size: var(--s-t-s); color: var(--s-apoyo); }
+/* R15b · La devolución de un día del TPV, en rojo. */
+.s-tarjeta-apoyo[data-tono='falta'] { color: var(--s-falta); }
 .s-tarjeta-pie { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 
 /* ── FICHA ───────────────────────────────────────────────────────────── */

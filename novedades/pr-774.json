@@ -1,0 +1,29 @@
+[
+ {
+  "id": "774-1",
+  "pr": 774,
+  "fecha": "2026-11-21T22:34:07Z",
+  "producto": "sumied",
+  "apartado": "Subir las ventas del TPV",
+  "frase": "«Contabilizar N días» contabiliza al subirlos los días que cuadran y tienen cuenta (la factura del día, su cobro y su PDF); los demás quedan en espera con su motivo, y si falta una cuenta primero se elige y sigue solo.",
+  "ruta": null
+ },
+ {
+  "id": "774-2",
+  "pr": 774,
+  "fecha": "2026-11-21T22:34:07Z",
+  "producto": "sumied",
+  "apartado": "Cierres del día",
+  "frase": "un día del TPV se abre: sus facturas, IVA, cobros, asientos, PDF y salida a ERP10, y si espera se arregla desde ahí. «Ayer» solo si es ayer; si no, «Último día subido».",
+  "ruta": null
+ },
+ {
+  "id": "774-3",
+  "pr": 774,
+  "fecha": "2026-11-21T22:34:07Z",
+  "producto": "sumied",
+  "apartado": "Facturas emitidas",
+  "frase": "cada día del TPV sale en una fila con su PDF, y sus facturas con NIF una a una, dentro del día.",
+  "ruta": null
+ }
+]

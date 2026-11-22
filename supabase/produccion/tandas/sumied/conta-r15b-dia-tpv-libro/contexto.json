@@ -1,0 +1,27 @@
+{
+ "_que": "R15b · el día del TPV en el libro de IVA · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: esta sesión no lee producción. 2346 solo añade (una tabla y seis funciones nuevas); 2347 cambia en caliente, por trozos y con su respaldo, conta_tpv_dia_validar y conta_impuesto_303_cajas (la misma firma). 2350 escribe sobre el libro de IVA de los días ya contabilizados (autorizo). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-22T00:30Z",
+ "tanda": {
+  "supabase/migrations/20261121T2346_r15b_libro_del_dia_anade.sql": "90727504692b4adc63e992942ff51a91",
+  "supabase/migrations/20261121T2347_r15b_libro_del_dia.sql": "64f89a314fa316a7ad60037d17d75a80",
+  "supabase/migrations/20261121T2350_r15b_rehacer_dias.sql": "d38e5ff5d0eaec736ecb5261a69f859c"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_tpv_dia",
+   "public.vat_book_entry"
+  ],
+  "funciones": [
+   "public.conta_tpv_dia_validar",
+   "public.conta_impuesto_303_cajas"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

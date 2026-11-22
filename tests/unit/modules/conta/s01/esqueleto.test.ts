@@ -78,7 +78,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     facturasVenta: 'facturacion.emitidas', nuevaFacturaVenta: 'facturacion.emitidas', facturaVenta: 'facturacion.emitidas',
     // K05 · La emitida del núcleo: desde su asiento, a mano (la contable) y Asientos › «Emitidas»: cuelgan de las facturas emitidas.
     emitidaAsiento: 'facturacion.emitidas', emitidaAMano: 'facturacion.emitidas', emitidasPorRevisar: 'facturacion.emitidas',
-    cierres: 'facturacion.cierres', cierre: 'facturacion.cierres',
+    // R15 · La ficha de un día del TPV cuelga de los cierres.
+    cierres: 'facturacion.cierres', cierre: 'facturacion.cierres', diaTpv: 'facturacion.cierres',
     // V01 · Entrega 3 · Ventas › Liquidaciones y la ficha de una fila de plataforma.
     liquidacionesVentas: 'facturacion.liquidacionesVentas', liquidacionPlataforma: 'facturacion.liquidacionesVentas',
     // S01j·2 · La ficha de UNA liquidación (de Correo de facturas y de su factura de comisión).

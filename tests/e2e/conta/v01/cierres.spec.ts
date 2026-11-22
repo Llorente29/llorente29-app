@@ -43,7 +43,8 @@ test('la lista: Ventas lleva aquí, el resumen de ayer, las pestañas y el bloqu
   const pestanas = page.getByRole('tablist', { name: 'Estado de los cierres' })
   for (const p of ['Por validar', 'En espera', 'Validados', 'Todos']) await expect(pestanas.getByRole('tab', { name: new RegExp(`^${p}`) })).toBeVisible()
   await expect(page.locator('.s-lista-cargando')).toHaveCount(0, { timeout: 30_000 })
-  await expect(page.locator('.s-bandeja-cifra-etiqueta', { hasText: /^Ayer · / })).toBeVisible()
+  // R15 · «Ayer» solo si es ayer; si no, «Último día subido» (con días del TPV) o «Último día».
+  await expect(page.locator('.s-bandeja-cifra-etiqueta', { hasText: /^(Ayer|Último día( subido)?) · / })).toBeVisible()
   // El de Glovo del 24/09, por validar (en el ordenador, fila de la tabla; en el móvil, tarjeta).
   await page.getByRole('searchbox', { name: 'Buscar cierre' }).fill('2026-09-24')
   await expect(page.getByText('Glovo', { exact: false }).first()).toBeVisible()

@@ -6,11 +6,12 @@
 //
 //   1. A 1456 × 816: se sueltan los cuatro ficheros con tres días; el 09/11 «Ya
 //      estaba, igual» (se guarda antes por la API), el 10/11 «Cuadra» con una
-//      forma de pago sin cuenta y el 11/11 «No cuadra», con su frase. Se guarda
-//      y lo dice con contenido (regla 8); la lista dice la última subida y lo que
-//      falta por subir. Desde «Decir a qué cuenta va»: la forma nueva, el asiento
-//      de ejemplo con ella «sin cuenta», «Guardar» apagado y lo dice; se elige la
-//      cuenta, el asiento cambia, se guarda y el 10/11 pasa a «Listo para validar».
+//      forma de pago sin cuenta y el 11/11 «No cuadra», con su frase. R15: al
+//      pulsar «Contabilizar 1 día» se abre primero «A qué cuenta va»: la forma
+//      nueva, el asiento de ejemplo con ella «sin cuenta», «Guardar» apagado y lo
+//      dice; se elige la cuenta, el asiento cambia, se guarda y sigue solo: el
+//      10/11 se contabiliza y el paso 3 lo dice con contenido (regla 8). La lista
+//      dice la última subida y lo que falta por subir.
 //   2. A 1366 × 768, las dos ventanas caben sin que ruede la página.
 // Las capturas, en docs/conta/capturas/r06 (van al artefacto del run).
 
@@ -83,7 +84,7 @@ const sinRodar = async (page: Page) => {
   expect(m, 'arriba, abajo, derecha, sin rodar de lado, pie a la vista').toBe('true,true,true,true,true')
 }
 
-test('subir los ficheros del TPV: lo que cuadra se guarda, lo que no lo dice; y a qué cuenta va la forma de pago nueva', async ({ page }, info) => {
+test('subir los ficheros del TPV: lo que cuadra se contabiliza, lo que no lo dice; y primero a qué cuenta va la forma de pago nueva', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Las ventanas del TPV son de ordenador; el móvil lo prueba la lista (R05)')
   test.setTimeout(180_000)
   await page.setViewportSize({ width: 1456, height: 816 })
@@ -116,22 +117,17 @@ test('subir los ficheros del TPV: lo que cuadra se guarda, lo que no lo dice; y 
   await expect(v.getByText('Too Good To Go')).toBeVisible()
   await expect(v.getByRole('button', { name: 'Cuenta sin elegir' })).toBeVisible()
   await expect(v.getByText('Sigue a la última factura del día anterior (5048)')).toBeVisible()
-  await expect(v.getByText('Guardar no contabiliza: los días quedan en «Por validar», como los demás.')).toBeVisible()
+  await expect(v.getByText('Los días que cuadran y tienen la cuenta de cada forma de pago se contabilizan: la factura del día, su cobro y su PDF. Los demás quedan en espera, con su motivo.')).toBeVisible()
   await sinRodar(page)
   await page.screenshot({ path: `${DIR}/subir-paso2-1456.png` })
 
-  // 3 · Guardado, con contenido
-  await v.getByRole('button', { name: 'Guardar 1 día' }).click()
-  await expect(v.locator('[data-prueba="resultado-subir"]')).toHaveText(
-    'Guardado 1 día, el 10/11: 48 facturas, 1.100,00 €. El 11/11 no se ha guardado. El 09/11 ya estaba igual: no se ha tocado.', { timeout: 60_000 })
-  await page.screenshot({ path: `${DIR}/subir-paso3-1456.png` })
-
-  // 4 · A qué cuenta va «Too Good To Go»
-  await v.getByRole('button', { name: 'Decir a qué cuenta va' }).click()
+  // 3 · R15 · «Contabilizar 1 día»: el 10/11 lleva una forma sin cuenta, así que primero se abre «A qué cuenta va».
+  await v.getByRole('button', { name: 'Contabilizar 1 día' }).click()
   const f = page.getByRole('dialog', { name: 'A qué cuenta va cada forma de pago' })
   await expect(f.locator('[data-prueba="aviso-forma-nueva"]')).toHaveText(
-    'Hay una forma de pago nueva: Too Good To Go. Dime a qué cuenta va y no te lo vuelvo a preguntar. Hasta entonces, los días que la llevan no se pueden validar.', { timeout: 30_000 })
-  const asiento = f.getByRole('table', { name: 'Cómo queda el asiento de un día' })
+    'Hay una forma de pago nueva: Too Good To Go. Dime a qué cuenta va y no te lo vuelvo a preguntar. Hasta entonces, los días que la llevan no se pueden validar.', { timeout: 60_000 })
+  // Con la 0900 en staging el día va en dos asientos («La factura del día» y su cobro); sin ella, en uno.
+  const asiento = f.getByRole('table', { name: /^(Cómo queda el asiento de un día|La factura del día)$/ })
   await expect(asiento.getByRole('row').filter({ hasText: 'Too Good To Go · sin cuenta' })).toContainText('17,24', { timeout: 30_000 })
   await expect(asiento).toContainText('Ejemplo: el 10/11')
   await expect(f.getByRole('button', { name: 'Guardar' })).toBeDisabled()
@@ -144,13 +140,19 @@ test('subir los ficheros del TPV: lo que cuadra se guarda, lo que no lo dice; y 
   await expect(asiento.getByText('Too Good To Go · sin cuenta')).toHaveCount(0, { timeout: 30_000 })
   await expect(f.getByRole('button', { name: 'Guardar' })).toBeEnabled()
   await f.getByRole('button', { name: 'Guardar' }).click()
-  await expect(f.locator('[data-prueba="resultado-formas"]')).toHaveText(/^Guardado: Too Good To Go a la 570\d+ · .+\. El 10\/11 pasa a «Listo para validar»\. Vale para los días que aún no están validados\.$/, { timeout: 30_000 })
-  await f.getByRole('button', { name: 'Ver la lista' }).click()
+
+  // 4 · Al guardar la cuenta sigue solo, y el paso 3 lo dice con contenido.
+  await expect(v.locator('[data-prueba="resultado-cuentas"]')).toHaveText(/^Guardado: Too Good To Go a la 570\d+ · .+\. El 10\/11 pasa a «Listo para validar»\. Vale para los días que aún no están validados\.$/, { timeout: 60_000 })
+  await expect(v.locator('[data-prueba="resultado-contabilizados"]')).toHaveText(/^Contabilizado 1 día: 2 asientos, el nº \d+ y el nº \d+\.$/, { timeout: 60_000 })
+  await expect(v.locator('[data-prueba="resultado-guardado"]')).toHaveText(
+    'Guardado 1 día, el 10/11: 48 facturas, 1.100,00 €. El 11/11 no se ha guardado. El 09/11 ya estaba igual: no se ha tocado.')
+  await page.screenshot({ path: `${DIR}/subir-paso3-1456.png` })
+  await v.getByRole('button', { name: 'Ver la lista' }).click()
 
   // 5 · La lista, con lo guardado
   await expect(page.locator('[data-prueba="ultima-subida"]')).toHaveText(/^Última subida: hoy, hasta el 10\/11$/, { timeout: 30_000 })
   const fila = page.getByRole('row').filter({ hasText: '5049 a 5096' })
-  await expect(fila).toContainText('Listo para validar', { timeout: 30_000 })
+  await expect(fila).toContainText('Validado', { timeout: 30_000 })
   await expect(page.locator('[data-prueba="falta-por-subir"]')).toContainText(/^Falta por subir: del 11\/11 a ayer$/)
   expect(errores).toEqual([])
 })
