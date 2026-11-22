@@ -1,0 +1,36 @@
+/* src/modules/conta/nucleo/asiento/asientoGeneral.css
+ *
+ * K12 · El asiento general, con las medidas de la maqueta nucleo_19 a 1366 (las de la maqueta entre 1,464). Lo común
+ * (la ventana, la barra, las casillas, la rejilla, el documento) va en nucleo/piezas/piezas.css: aquí solo cómo se
+ * reparten las casillas de esta pantalla.
+ */
+
+.ag { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ag-cargando { padding: 12px; color: var(--kp-gris-tinta); }
+.ag-pantalla { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ag-cuerpo { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 10px 6px 10px; }
+
+/* Datos asiento: tipo 259 · periodo 89 + 227 · documento 97 · fecha 146 (px de la maqueta a 1366). */
+.ag-fila-datos { display: grid; grid-template-columns: minmax(0, 259fr) minmax(0, 322fr) minmax(0, 97fr) minmax(0, 146fr); gap: 0 6px; }
+.ag-periodo .kp-casilla-dentro { display: grid; grid-template-columns: minmax(0, 89fr) minmax(0, 227fr); gap: 6px; }
+.ag-fila-concepto { position: relative; display: flex; align-items: flex-end; gap: 6px; margin-top: 2px; }
+.ag-fila-concepto > .kp-casilla { flex: 1; }
+.ag-fila-concepto > .kp-mas { margin-bottom: 0; }
+
+/* Apuntes: la rejilla crece; la línea que se edita, como la de ERP10, con «saldo a la fecha». */
+.ag-apuntes { margin-top: 2px; }
+.ag-con-lupa-cabeza { display: inline-flex; align-items: center; gap: 4px; }
+.ag-edicion { display: grid; grid-template-columns: minmax(0, 80fr) minmax(0, 118fr) minmax(0, 92fr) minmax(0, 150fr) minmax(0, 64fr) minmax(0, 56fr) minmax(0, 70fr) minmax(0, 76fr) minmax(0, 76fr); gap: 0 5px; }
+.ag-haber { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.ag-quitar { width: 14px; height: 14px; padding: 0; border: 0; background: none; color: var(--kp-gris-tinta); cursor: pointer; line-height: 1; visibility: hidden; }
+.kp-lineas tbody tr:hover .ag-quitar, .kp-lineas tbody tr[aria-selected='true'] .ag-quitar { visibility: visible; }
+
+/* Totales: debe, haber y descuadre, a la derecha (110 px cada uno). */
+.ag-totales { display: grid; grid-template-columns: repeat(3, 112px); gap: 0 6px; }
+
+.ag-observaciones { margin-top: 0; }
+.ag-observaciones input { width: 100%; }
+
+.ag-confirmar { width: min(420px, 92vw); }
+.ag-confirmar-cuerpo { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.ag-confirmar-botones { display: flex; gap: 8px; }
