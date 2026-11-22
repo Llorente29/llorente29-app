@@ -4,7 +4,7 @@
 // deduce (abierto, presentado y elegido), el origen del tipo de operación y la clase con que se propone el asiento.
 import { describe, expect, it } from 'vitest'
 import {
-  OPERACIONES, claseParaElAsiento, operacionDeLaClase, origenOperacion, presentadosDe, trimestrePropuesto, trimestresParaElegir,
+  OPERACIONES, claseParaElAsiento, marcaCorta, operacionDeLaClase, origenOperacion, presentadosDe, trimestrePropuesto, trimestresParaElegir,
 } from '@/modules/conta/nucleo/recibida/cabecera'
 import { etiquetaDelAsiento } from '@/modules/conta/nucleo/recibida/estado'
 
@@ -83,5 +83,15 @@ describe('sin propuesta, la ficha lo dice (regla 8)', () => {
   })
   it('con propuesta y nada escrito, lo de siempre', () => {
     expect(etiquetaDelAsiento({ debe: 0, haber: 0, cuadra: false, faltan: [], lineas: 0 })).toEqual({ texto: 'Se forma al escribir', tono: 'vacio' })
+  })
+})
+
+describe('la marca, como cabe en su casilla', () => {
+  it('las cortas, enteras (las de Piri Piri: PP, LBSN, PUERTO PANA)', () => {
+    expect(['PP', 'LBSN', 'PUERTO PANA'].map((m) => marcaCorta(m))).toEqual(['PP', 'LBSN', 'PUERTO PANA'])
+  })
+  it('una larga, sus 17 primeras y «…» (e2e a mano #1731: «Marca de Prueba K10b Uno» se cortaba)', () => {
+    expect(marcaCorta('Marca de Prueba K10b Uno')).toBe('Marca de Prueba K…')
+    expect(marcaCorta('Marca de Prueba K10b Uno').length).toBe(18)
   })
 })

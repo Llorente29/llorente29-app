@@ -159,8 +159,13 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(aviso(page)).toContainText('Observaciones', { timeout: 30_000 })
     await expect(ficha(page).locator('[data-prueba="observaciones-boton"]')).toHaveText('Observaciones ✓', { timeout: 30_000 })
 
-    await ficha(page).locator('#kf-marca').selectOption({ label: MARCA })
+    // La casilla enseña el nombre corto («Marca de Prueba K…»: el entero no cabe, e2e a mano #1731) y el entero al pasar el ratón.
+    const [marca] = await rest<{ id: string }[]>(s, `brand?select=id&account_id=eq.${NUCLEO.id}&name=eq.${encodeURIComponent(MARCA)}`)
+    expect(marca, 'la marca de la semilla K10b').toBeTruthy()
+    await expect(ficha(page).locator(`#kf-marca option[value="${marca.id}"]`)).toHaveText('Marca de Prueba K…')
+    await ficha(page).locator('#kf-marca').selectOption(marca.id)
     await expect(aviso(page)).toContainText(`Marca: ${MARCA}`, { timeout: 30_000 })
+    await expect(ficha(page).locator('#kf-marca')).toHaveAttribute('title', MARCA, { timeout: 30_000 })
 
     const [f] = await rest<{ vat_operation: string | null; entry_concept: string | null; notes: string | null; brand_id: string | null }[]>(s,
       `supplier_invoice?select=vat_operation,entry_concept,notes,brand_id&account_id=eq.${NUCLEO.id}&id=eq.${factura(t, 4)}`)

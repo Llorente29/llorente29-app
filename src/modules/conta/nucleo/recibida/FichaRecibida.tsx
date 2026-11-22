@@ -79,7 +79,7 @@ import { cuentaDelProveedorEnElAsiento } from './proveedorEnAsiento'
 import { faltasParaValidar, laRepetida, textoNoSeValida, textoRepetida } from './validarSoloLoCompleto'
 import { avisoInmovilizado } from './contrapartida'
 import { proveedoresQueEncajan } from './buscarProveedor'
-import { OPERACIONES, cortoDeOperacion, esOperacion, origenOperacion, textoDeOperacion, trimestrePropuesto, trimestresParaElegir } from './cabecera'
+import { OPERACIONES, cortoDeOperacion, esOperacion, marcaCorta, origenOperacion, textoDeOperacion, trimestrePropuesto, trimestresParaElegir } from './cabecera'
 import { fechaDelPago, propuestaDelPago, queHaceElPago, textoAsientoDelPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
 import { apuntarPago, cuentasDePago, hayLiquidacion, pagoDelProveedor } from './pagoServicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
@@ -946,9 +946,11 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                   {/* K10b · La marca, de las de la cuenta; sin ninguna, no sale. Va a los apuntes del asiento, como el local. */}
                   {marcas.length > 0 && (
                     <select id="kf-marca" aria-label="Marca" value={cab?.marcaId ?? ''} disabled={!cabEscribible || guardandoCab}
+                      title={marcas.find((m) => m.id === cab?.marcaId)?.nombre ?? 'Sin marca'}
                       onChange={(e) => void ponerCabecera({ marca: e.target.value || null })}>
                       <option value="">Sin marca</option>
-                      {marcas.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                      {/* El nombre corto en la casilla (no cabe entero a 1456 ni a 1366), y el entero al pasar el ratón. */}
+                      {marcas.map((m) => <option key={m.id} value={m.id} title={m.nombre}>{marcaCorta(m.nombre)}</option>)}
                     </select>
                   )}
                 </div>

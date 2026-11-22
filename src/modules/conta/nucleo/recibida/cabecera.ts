@@ -133,3 +133,14 @@ export function presentadosDe(declaraciones: readonly { ejercicio: number; perio
   for (const [k, m] of meses) if (m.size === 3) s.add(k)
   return s
 }
+
+// ── La marca ──────────────────────────────────────────────────────────────────
+
+/**
+ * El nombre de la marca como cabe en su casilla (unos 190 px a 1456 y a 1366: e2e a mano #1731, «Marca de Prueba K10b
+ * Uno» se cortaba). Hasta 18 letras, entero; si es más largo, sus 17 primeras y «…». El entero, al pasar el ratón.
+ */
+export function marcaCorta(nombre: string, max = 18): string {
+  const n = nombre.trim()
+  return n.length <= max ? n : `${n.slice(0, max - 1).trimEnd()}…`
+}
