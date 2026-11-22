@@ -36,8 +36,10 @@ comment on column public.conta_user_pref.reparto_documento is
 -- 3 · El historial de cada cambio ---------------------------------------------------------------------------------------
 create table if not exists public.conta_asiento_modificado (
   id               uuid primary key default gen_random_uuid(),
-  account_id       uuid not null references public.accounts(id) on delete cascade,
-  company_id       uuid not null references public.company(id) on delete cascade,
+  -- Sin claves ajenas a propósito: crearla o quitarla no bloquea accounts ni company (en staging, con la e2e viva, la
+  -- prueba en una sola transacción se interbloqueó así: run 45011139706). La lee solo su cuenta (la política de abajo).
+  account_id       uuid not null,
+  company_id       uuid not null,
   entry_id         uuid not null,
   numero           integer,
   cabecera_antes   jsonb not null,
