@@ -46515,8 +46515,13 @@ CREATE FUNCTION public.conta_impuesto_303_cajas(v public.vat_book_entry) RETURNS
     AS $$
   select n.no_sabe, x.cajas
     from (select 1) uno
+    -- K11f2: otros datos de su recibida («No incluir en declaración de IVA» y «Rectificación de deducciones»).
+    cross join lateral (select coalesce(bool_or(si.exclude_from_vat_return), false) as fuera, coalesce(bool_or(si.deduction_rectification), false) as rectifica
+                          from public.supplier_invoice si
+                         where v.source_type = 'supplier_invoice' and si.id = v.source_id and si.account_id = v.account_id) f
     cross join lateral (select
       case
+        when f.fuera then null
         when coalesce(v.surcharge_amount, 0) <> 0 then 'recargo'
         -- R15b · el libro del día: la devolución de un día del TPV (R5) sí la declara Sumied, en la [14] y la [15].
         when v.book = 'issued' and v.invoice_type = 'R5' and v.source_type = 'sales_day' then null
@@ -46530,7 +46535,9 @@ CREATE FUNCTION public.conta_impuesto_303_cajas(v public.vat_book_entry) RETURNS
         else null end as no_sabe) n
     cross join lateral (select n.no_sabe,
       case
+        when f.fuera then '{}'::text[]
         when n.no_sabe is not null then '{}'::text[]
+        when f.rectifica and v.book in ('received', 'investment') then array['40', '41']
         -- D07 (0850): una recibida con IVA NO deducible (la factura no va a
         -- nombre de la empresa, un ticket sin NIF…) sale en el libro, con su
         -- cuota y deducible 0, pero no entra en el 303: ni su base en la [28]
@@ -77922,10 +77929,12 @@ begin
   returning id into v_nuevo;
   insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, concept,
                                    location_id, is_common, brand_id, party_id, document_ref, document_date,
-                                   tax_rate_id, tax_base, vat_book, vat_deductible, tax_documents, withholding_rate_id, withholding_base, withholding_model)
+                                   tax_rate_id, tax_base, vat_book, vat_deductible, tax_documents, withholding_rate_id, withholding_base, withholding_model,
+                                   channel_id)   -- K11f2: la plataforma
   select account_id, company_id, v_nuevo, position, company_account_id, credit, debit, concept,
          location_id, is_common, brand_id, party_id, document_ref, document_date,
-         tax_rate_id, tax_base, vat_book, vat_deductible, tax_documents, withholding_rate_id, withholding_base, withholding_model
+         tax_rate_id, tax_base, vat_book, vat_deductible, tax_documents, withholding_rate_id, withholding_base, withholding_model,
+         channel_id
     from public.journal_line where entry_id = v_e.id;
   v_r := public.journal_entry_validar(v_nuevo, v_quien);
 
@@ -123745,6 +123754,11 @@ CREATE TABLE public.customer_fiscal (
     sepa_mandate_date date,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    phone text,
+    email text,
+    notes text,
+    trade_name text,
+    usual_tax_rate_ids uuid[],
     CONSTRAINT customer_fiscal_country_code_check CHECK ((country_code ~ '^[A-Z]{2}$'::text)),
     CONSTRAINT customer_fiscal_entity_kind_check CHECK (((entity_kind IS NULL) OR (entity_kind = ANY (ARRAY['company'::text, 'self_employed'::text, 'person'::text])))),
     CONSTRAINT customer_fiscal_iban_check CHECK (((iban IS NULL) OR (iban ~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$'::text))),
@@ -123776,6 +123790,41 @@ COMMENT ON COLUMN public.customer_fiscal.payment_terms_days IS 'C03. Plazo de co
 --
 
 COMMENT ON COLUMN public.customer_fiscal.collection_treasury_id IS 'C03. La cuenta de la empresa donde cobra (572).';
+
+
+--
+-- Name: COLUMN customer_fiscal.phone; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.customer_fiscal.phone IS 'X27 · Teléfono de la ficha del cliente.';
+
+
+--
+-- Name: COLUMN customer_fiscal.email; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.customer_fiscal.email IS 'X27 · Correo electrónico de la ficha del cliente.';
+
+
+--
+-- Name: COLUMN customer_fiscal.notes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.customer_fiscal.notes IS 'X27 · Observaciones de la ficha del cliente.';
+
+
+--
+-- Name: COLUMN customer_fiscal.trade_name; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.customer_fiscal.trade_name IS 'X27 · Nombre comercial del cliente.';
+
+
+--
+-- Name: COLUMN customer_fiscal.usual_tax_rate_ids; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.customer_fiscal.usual_tax_rate_ids IS 'X27 · Tipos de IVA habituales del cliente (ids de tax_rate), como supplier.usual_tax_rate_ids.';
 
 
 --
@@ -132417,6 +132466,11 @@ CREATE TABLE public.supplier (
     justificante_al_pagar boolean,
     invoiced_by_supplier_id uuid,
     import_run_id uuid,
+    vat_deductible_pct numeric(5,2),
+    default_brand_id uuid,
+    default_channel_id uuid,
+    exclude_from_347 boolean,
+    pay_on_post boolean,
     CONSTRAINT supplier_country_code_check CHECK ((country_code ~ '^[A-Z]{2}$'::text)),
     CONSTRAINT supplier_created_from_check CHECK ((created_from = 'factura'::text)),
     CONSTRAINT supplier_currency_check CHECK ((currency ~ '^[A-Z]{3}$'::text)),
@@ -132432,6 +132486,7 @@ CREATE TABLE public.supplier (
     CONSTRAINT supplier_related_party_kind_check CHECK (((related_party_kind IS NULL) OR (related_party_kind = ANY (ARRAY['group'::text, 'joint'::text, 'associate'::text, 'other_related'::text])))),
     CONSTRAINT supplier_tax_id_check_status_check CHECK (((tax_id_check_status IS NULL) OR (tax_id_check_status = ANY (ARRAY['valid'::text, 'invalid'::text, 'pending'::text])))),
     CONSTRAINT supplier_tax_id_type_check CHECK (((tax_id_type IS NULL) OR (tax_id_type = ANY (ARRAY['nif_es'::text, 'vat_eu'::text, 'foreign'::text])))),
+    CONSTRAINT supplier_vat_deductible_pct_check CHECK (((vat_deductible_pct >= (0)::numeric) AND (vat_deductible_pct <= (100)::numeric))),
     CONSTRAINT supplier_vat_regime_check CHECK (((vat_regime IS NULL) OR (vat_regime = ANY (ARRAY['general'::text, 'recargo_equivalencia'::text, 'intracomunitario'::text, 'exento'::text, 'inversion_sujeto_pasivo'::text, 'extranjero'::text]))))
 );
 
@@ -132609,6 +132664,41 @@ COMMENT ON COLUMN public.supplier.invoiced_by_supplier_id IS 'S01p·20·2. «Me 
 --
 
 COMMENT ON COLUMN public.supplier.import_run_id IS 'N06a: la carga de otro programa que creó este proveedor (nulo si no lo creó una carga).';
+
+
+--
+-- Name: COLUMN supplier.vat_deductible_pct; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier.vat_deductible_pct IS 'X27 · «% I.V.A. deducible» de su ficha: la recibida nace con él (disparador x27_recibida_nace). Vacío = 100.';
+
+
+--
+-- Name: COLUMN supplier.default_brand_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier.default_brand_id IS 'X27 · «Marca» de su ficha: la recibida nace con ella (su brand_id, que va a los apuntes del asiento).';
+
+
+--
+-- Name: COLUMN supplier.default_channel_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier.default_channel_id IS 'X27 · «Plataforma» de su ficha: cada línea de gasto nace con ella (supplier_invoice_expense_dato.channel_id).';
+
+
+--
+-- Name: COLUMN supplier.exclude_from_347; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier.exclude_from_347 IS 'X27 · «No incluir en 347» de su ficha: la recibida nace con él (exclude_from_347). Vacío = no.';
+
+
+--
+-- Name: COLUMN supplier.pay_on_post; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier.pay_on_post IS 'X27 · «Pago directo al contabilizar la factura»: la ficha de la recibida propone el pago con la subcuenta de pago en la fecha de la factura. Vacío = no (la del vencimiento).';
 
 
 --
@@ -161902,6 +161992,22 @@ ALTER TABLE ONLY public.supplier_contact
 
 ALTER TABLE ONLY public.supplier_contact
     ADD CONSTRAINT supplier_contact_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(id) ON DELETE CASCADE;
+
+
+--
+-- Name: supplier supplier_default_brand_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier
+    ADD CONSTRAINT supplier_default_brand_id_fkey FOREIGN KEY (default_brand_id) REFERENCES public.brand(id) ON DELETE SET NULL;
+
+
+--
+-- Name: supplier supplier_default_channel_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier
+    ADD CONSTRAINT supplier_default_channel_id_fkey FOREIGN KEY (default_channel_id) REFERENCES public.sales_channel(id) ON DELETE SET NULL;
 
 
 --
