@@ -48,6 +48,8 @@ export interface DelProveedor {
   operacion: Operacion | null
   /** Su subcuenta (la 400/410 de su ficha), o null. */
   subcuenta: { id: string; codigo: string; nombre: string } | null
+  /** X27 · La «Subcuenta de gasto» de su ficha en esta empresa (papel «gasto»), o null: la propone la recibida a mano. */
+  gasto: string | null
 }
 
 /** K08 · Las subcuentas de proveedores y acreedores de la empresa (400/410) y sus cifras: para decir cuál le tocará a uno nuevo. */
@@ -61,10 +63,12 @@ export async function subcuentasDeProveedores(accountId: string, companyId: stri
 
 /** El régimen de IVA y la subcuenta del proveedor. */
 export async function delProveedor(accountId: string, companyId: string, supplierId: string): Promise<DelProveedor> {
-  const [{ data: p, error: ep }, { data: l, error: el }] = await Promise.all([
+  const [{ data: p, error: ep }, { data: l, error: el }, { data: g }] = await Promise.all([
     tabla('supplier').select('vat_regime, country_code, tax_id_type, tax_id, tax_id_check_status').eq('account_id', accountId).eq('id', supplierId).maybeSingle(),
     tabla('company_account_link').select('company_account:company_account_id(id, code, name)')
       .eq('account_id', accountId).eq('company_id', companyId).eq('entity', 'supplier').eq('entity_id', supplierId).eq('role', 'principal').maybeSingle(),
+    tabla('company_account_link').select('company_account:company_account_id(code)')
+      .eq('account_id', accountId).eq('company_id', companyId).eq('entity', 'supplier').eq('entity_id', supplierId).eq('role', 'gasto').limit(1),
   ])
   if (ep) throw new Error(`No se ha podido leer la ficha del proveedor: ${ep.message}`)
   if (el) throw new Error(`No se ha podido leer la subcuenta del proveedor: ${el.message}`)
@@ -75,6 +79,7 @@ export async function delProveedor(accountId: string, companyId: string, supplie
     operacion: p ? operacionDeLaClase(claseIva({ pais: s(pf.country_code), tipoNif: s(pf.tax_id_type) as FichaIva['tipoNif'], nif: s(pf.tax_id),
       vies: s(pf.tax_id_check_status) as FichaIva['vies'], regimen: s(pf.vat_regime) as FichaIva['regimen'] })) : null,
     subcuenta: c ? { id: String(c.id), codigo: String(c.code), nombre: String(c.name) } : null,
+    gasto: s(((g as Fila[] | null)?.[0]?.company_account as Fila | null | undefined)?.code) || null,
   }
 }
 

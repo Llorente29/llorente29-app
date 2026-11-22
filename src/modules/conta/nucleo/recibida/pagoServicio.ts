@@ -72,6 +72,8 @@ export interface PagoDelProveedor {
   ultimas: string[]
   /** K10 · La «Cuenta de pago» de su ficha en esta empresa (company_account_link, papel «pago»), o null. */
   deLaFicha: string | null
+  /** X27 · «Pago directo al contabilizar la factura» de su ficha: el pago se propone en la fecha de la factura. */
+  pagoDirecto: boolean
 }
 
 /** Del proveedor: si es una plataforma (con su 430) y las cuentas de sus últimos pagos en esta empresa. */
@@ -89,6 +91,9 @@ export async function pagoDelProveedor(accountId: string, companyId: string, sup
       .eq('entity', 'supplier').eq('entity_id', supplierId).eq('role', 'pago').limit(1), 'su cuenta de pago'),
   ])
   const deLaFicha = enlacePago[0] ? String((enlacePago[0].company_account as Fila | null)?.code ?? '') || null : null
+  // X27 · Sin la 1315 en la base (una rama antes de su tanda) no hay pay_on_post: como si no lo tuviera.
+  const directo = await tabla('supplier').select('pay_on_post').eq('account_id', accountId).eq('id', supplierId).maybeSingle()
+  const pagoDirecto = !directo.error && (directo.data as Fila | null)?.pay_on_post === true
   // ¿Es una plataforma? El mismo contacto con el papel «platform» (como cargarContexto), y su 430.
   let plataforma: PagoDelProveedor['plataforma'] = null
   const party = rolesProv[0] ? String(rolesProv[0].party_id) : null
@@ -135,7 +140,7 @@ export async function pagoDelProveedor(accountId: string, companyId: string, sup
     }
   }
   const ultimas = fechadas.sort((a, b) => b.fecha.localeCompare(a.fecha)).map((x) => x.cuenta)
-  return { plataforma, ultimas, deLaFicha }
+  return { plataforma, ultimas, deLaFicha, pagoDirecto }
 }
 
 /** ¿Tiene la factura liquidación de la que descontarla? Ligada, o la base ya sabe cuál («una»). */

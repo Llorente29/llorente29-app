@@ -95,9 +95,12 @@ export function queHaceElPago(o: DatosQueHace): QueHaceElPago {
   return teso ? { que: 'banco', tesoreriaId: teso, cuenta, fecha: o.fecha, importe: o.importe } : { que: 'otra', cuenta, fecha: o.fecha, importe: o.importe }
 }
 
-/** La fecha del pago que se propone: el vencimiento, si lo hay; si no, la de la factura. */
-export function fechaDelPago(fecha: string, vence: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(vence)) return vence
+/**
+ * La fecha del pago que se propone: el vencimiento, si lo hay; si no, la de la factura. X27 · Con «Pago directo al
+ * contabilizar la factura» en la ficha del proveedor, la de la factura (se paga al contabilizarla, como en ERP10).
+ */
+export function fechaDelPago(fecha: string, vence: string, pagoDirecto = false): string {
+  if (!pagoDirecto && /^\d{4}-\d{2}-\d{2}$/.test(vence)) return vence
   return /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? fecha : ''
 }
 

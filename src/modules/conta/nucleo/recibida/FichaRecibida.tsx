@@ -219,6 +219,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const provId = b.proveedorId || fac?.proveedor?.id || ''
   const prov = proveedores.find((p) => p.id === provId) ?? (fac?.proveedor && fac.proveedor.id === provId ? { id: provId, nombre: fac.proveedor.nombre, nif: fac.proveedor.nif } : null)
   const delProv = useLeer(accountId && empresa && provId ? () => delProveedor(accountId, empresa, provId) : null, `${accountId}:${empresa}:${provId}:del`).datos ?? null
+  // X27 · La «Subcuenta de gasto» de su ficha, puesta ya en la a mano (una vez por proveedor): ver ponerGasto.
+  const [gastoFichaPuesto, setGastoFichaPuesto] = useState<string | null>(null)
   const mayor = useUltimo(useLeer(accountId && empresa && delProv?.subcuenta ? () => mayorDelProveedor(accountId, empresa, delProv.subcuenta!.id, hoy) : null, `${accountId}:${empresa}:${delProv?.subcuenta?.id}:mayor:${vuelta}`).datos, `${id}:${provId}`)
   const aprendido = useUltimo(useLeer(empresa && provId && !aMano ? () => gastoAprendido(empresa, provId) : null, `${empresa}:${provId}:${invoiceId}:aprendido:${vuelta}`).datos, `${id}:${provId}`)
   const sinPropuesta = aMano || propuesta === null
@@ -266,7 +268,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const plataforma = pagoProv?.plataforma ? { ...pagoProv.plataforma, hayLiquidacion: conLiquidacion } : null
   const propuestaPago = pagoProv ? propuestaDelPago({ deLaFicha: pagoProv.deLaFicha, ultimas: pagoProv.ultimas }) : null
   const pagoCuenta = b.pagoCuenta ?? propuestaPago?.cuenta ?? ''
-  const pagoFecha = b.pagoFecha ?? fechaDelPago(b.fecha, b.vence)
+  const pagoFecha = b.pagoFecha ?? fechaDelPago(b.fecha, b.vence, !!pagoProv?.pagoDirecto)
   const origenPago = b.pagoCuenta === null ? propuestaPago?.origen ?? null : null
   const dudaPago = b.pagoCuenta === null && propuestaPago?.duda ? propuestaPago.duda : null
   const nombrePago = pagoCuenta ? cuentasPago?.nombres.get(pagoCuenta) ?? creadas.find((c) => c.codigo === pagoCuenta)?.nombre ?? 'Cuenta' : ''
@@ -689,6 +691,13 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     if (b.retencion) ed.poner('retencion', rehacerRetencion(b.retencion, base))
   }
   const ponerGasto = (i: number, c: Partial<BorradorFicha['gastos'][number]>) => ed.poner('gastos', b.gastos.map((g, j) => (j === i ? { ...g, ...c } : g)))
+  // X27 · A mano, al elegir el proveedor, la cuenta de gasto vacía toma la «Subcuenta de gasto» de su ficha (una vez
+  // por proveedor: si se cambia a mano, se queda lo escrito). Las que llegan de un documento ya la toman en su propuesta.
+  const claveGastoFicha = aMano && provId && delProv?.gasto ? `${provId}:${delProv.gasto}` : null
+  if (claveGastoFicha && gastoFichaPuesto !== claveGastoFicha) {
+    setGastoFichaPuesto(claveGastoFicha)
+    if (!b.gastos[0]?.cuenta?.trim() && delProv?.gasto) ponerGasto(0, { cuenta: delProv.gasto })
+  }
   const subcuenta = delProv?.subcuenta?.codigo ?? ''
   const conEstaFactura = mayor ? mayor.saldo + (validada ? 0 : totales.total) : null
   const cola = !aMano && pos >= 0 ? `${pos + 1} de ${ids.length} por revisar` : aMano ? 'Nueva' : ''
