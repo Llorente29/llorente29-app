@@ -326,7 +326,9 @@ export function AsientoGeneral({ entryId }: { entryId?: string }) {
     teclas.current = (e) => {
       if (!seVe() || e.defaultPrevented) return
       const enCasilla = (e.target as HTMLElement)?.closest?.('input, select, textarea, button, [role="dialog"], tr[tabindex]')
-      if (e.key === 'Escape' && !anulando && !otros) { e.preventDefault(); pedirSalir(() => { limpiar(); navegar(rutaLibroDiario()) }); return }
+      // Esc con «Otros datos» abierto lo cierra (aunque el foco esté fuera de la hoja); si no, deja el asiento.
+      if (e.key === 'Escape' && otros) { e.preventDefault(); setOtros(false); return }
+      if (e.key === 'Escape' && !anulando) { e.preventDefault(); pedirSalir(() => { limpiar(); navegar(rutaLibroDiario()) }); return }
       if (e.key === 'Enter' && !enCasilla && !e.altKey && !e.shiftKey && (modo === 'validar' || escribe)) { e.preventDefault(); void guardarYSiguiente() }
     }
   })

@@ -298,8 +298,9 @@ test('K12 · 5 · a 1366 × 768 cabe entera, cada pieza cabe, y con siete apunte
   const s = await entrarComo(page, NUCLEO.email)
   const e = await crearEmpresa(s, '5')
   await elegirEmpresa(page, NUCLEO.id, e.id)
-  await page.setViewportSize({ width: 1366, height: 768 })
+  // Se abre a 1456 y se pasa a 1366: por debajo de 800 de alto la cinta nace plegada y su botón no se ve (e2e 45014620166).
   await abrirNuevo(page)
+  await page.setViewportSize({ width: 1366, height: 768 })
   const plegar = page.getByRole('button', { name: /Plegar los botones/ })
   if (await plegar.isVisible()) await plegar.click()
   await page.waitForTimeout(300)
@@ -320,6 +321,7 @@ test('K12 · 5 · a 1366 × 768 cabe entera, cada pieza cabe, y con siete apunte
   await cadaPiezaCabe(page, '«Otros datos» abierto a 1366 × 768')
   await page.screenshot({ path: `${DIR}/asiento-otros-datos-1366.png` })
   await page.keyboard.press('Escape')
+  await expect(v.getByRole('dialog', { name: 'Otros datos' })).toHaveCount(0)
   await v.locator('#ag-ed-subcuenta').focus()
   await page.keyboard.press('F4')
   await expect(page.getByRole('dialog', { name: 'Localización de registros' })).toBeVisible()
