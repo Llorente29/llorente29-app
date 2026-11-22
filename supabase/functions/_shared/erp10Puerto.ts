@@ -23,11 +23,13 @@ export async function leerLaBase(db: Db, companyId: string, mes: string): Promis
     return (data ?? {}) as Record<string, unknown>
   }
   const { data: sal } = await db.from('conta_erp10_salida_empresa').select('carpeta_pdf, codigo_erp10').eq('company_id', companyId).maybeSingle()
-  const [porSalir, recibidas, emitidas, asientos, dias] = await Promise.all([
+  // R16 · Y el libro de IVA de cada día del TPV (conta_erp10_dias_tpv_libro, de la 20261122T0810): un día repartido no sale por
+  // la conexión como una sola factura (Julio, 22/11).
+  const [porSalir, recibidas, emitidas, asientos, dias, libroDias] = await Promise.all([
     leer('conta_erp10_por_salir'), leer('conta_erp10_recibidas_por_salir'), leer('conta_erp10_emitidas_por_salir'),
-    leer('conta_erp10_asientos_por_salir'), leer('conta_erp10_dias_tpv_por_salir'),
+    leer('conta_erp10_asientos_por_salir'), leer('conta_erp10_dias_tpv_por_salir'), leer('conta_erp10_dias_tpv_libro'),
   ])
-  return { porSalir, recibidas, emitidas, asientos, dias, carpeta: carpetaDe(sal?.carpeta_pdf ?? null, sal?.codigo_erp10 ?? null) }
+  return { porSalir, recibidas, emitidas, asientos, dias, libroDias, carpeta: carpetaDe(sal?.carpeta_pdf ?? null, sal?.codigo_erp10 ?? null) }
 }
 
 /**

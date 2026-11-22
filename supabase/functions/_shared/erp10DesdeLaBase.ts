@@ -25,6 +25,8 @@ export type BaseCruda = {
   emitidas: Record<string, unknown>
   asientos: Record<string, unknown>
   dias: Record<string, unknown>
+  /** R16 · conta_erp10_dias_tpv_libro: el libro de IVA de cada día (para saber si va repartido) y las 430 de sus clientes. */
+  libroDias?: Record<string, unknown>
   carpeta: string
 }
 
@@ -71,7 +73,7 @@ export async function loQueSaleDesdeLaBase(b: BaseCruda, pedidas: readonly strin
   noSalen: NoSale[]
   cuentasNuevas: { codigo: string; nombre: string; nif: string | null }[]
 }> {
-  const s = armarSalida(aPorSalir(b.porSalir), aRecibidas(b.recibidas), aEmitidas(b.emitidas), b.carpeta, aAsientos(b.asientos), aDias(b.dias))
+  const s = armarSalida(aPorSalir(b.porSalir), aRecibidas(b.recibidas), aEmitidas(b.emitidas), b.carpeta, aAsientos(b.asientos), aDias(b.dias, b.libroDias ?? null))
   const rec = new Map(s.ficheros.recibidas.map((f) => [f.entryId, f]))
   const emi = new Map(s.ficheros.expedidas.map((f) => [f.entryId, f]))
   const asi = new Map(s.ficheros.asientos.map((f) => [f.entryId, f]))
@@ -94,10 +96,12 @@ export async function loQueSaleDesdeLaBase(b: BaseCruda, pedidas: readonly strin
     if (e?.api) { salen.push({ clase: 'emitida', entryId: id, numero: e.api.numero, api: e.api, huella: await huellaFila(e.fila), pdf: e.pdf ?? null }); continue }
     const d = dias.get(id)
     if (d) {
+      // R16 · Un día repartido (varias facturas: por serie, con NIF, devoluciones) NUNCA sale por la conexión como una sola: lo rechaza.
+      if (d.porLaConexion) { noSalen.push({ entryId: id, porque: d.porLaConexion, parado: 'emitida' }); continue }
       if (!d.api || !d.cobro) { noSalen.push({ entryId: id, porque: 'Es un día del TPV y no se ha podido armar su factura o su cobro: sale con el Excel.', parado: 'emitida' }); continue }
       const aparte = d.cobro.entryId !== id
       // La huella, la misma que apunta el Excel: la fila del día y, en un día de un asiento, la de su cobro.
-      const huella = await huellaFila([...d.fila, ...(aparte ? [] : d.cobro.filas.flat())])
+      const huella = await huellaFila([...d.filas.flat(), ...(aparte ? [] : d.cobro.filas.flat())])
       salen.push({ clase: 'dia', entryId: id, numero: d.api.numero, api: d.api, huella, pdf: null,
         cobro: { entryId: d.cobro.entryId, api: d.cobro.api, aparte, huella: aparte ? await huellaFila(d.cobro.filas.flat()) : huella } })
       continue

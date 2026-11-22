@@ -6,7 +6,7 @@
 // lo usan el navegador (src/modules/conta/services/erp10Service.ts, que lo vuelve a exportar)
 // y el servidor (conta-erp10-escribir), para que los dos lean exactamente lo mismo.
 
-import type { AsientoParaErp10, CuentaContado, DiaParaErp10, EmitidaParaErp10, LineaRecibida, Operacion, OperacionEmitida } from './erp10Ficheros.ts'
+import type { AsientoParaErp10, CuentaContado, DiaParaErp10, FilaLibroErp10, EmitidaParaErp10, LineaRecibida, Operacion, OperacionEmitida } from './erp10Ficheros.ts'
 
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
 const n = (v: unknown): number => (v === null || v === undefined || v === '' ? 0 : Number(v))
@@ -142,12 +142,28 @@ export function aAsientos(r: Record<string, unknown>): AsientosPorSalir {
   }
 }
 
-export interface DiasPorSalir { dias: DiaParaErp10[]; contado: CuentaContado[]; cuentas: CuentaDeLaBase[]; yaSalidas: Map<string, string> }
+export interface DiasPorSalir {
+  dias: DiaParaErp10[]; contado: CuentaContado[]; cuentas: CuentaDeLaBase[]; yaSalidas: Map<string, string>
+  /** R16 · Los clientes con NIF que la salida acaba de dar de alta en Sumied (su 430), para decirlo. */
+  altas?: { nif: string; nombre: string; codigo: string }[]
+}
 export const SIN_DIAS: DiasPorSalir = { dias: [], contado: [], cuentas: [], yaSalidas: new Map() }
 
-export function aDias(r: Record<string, unknown>): DiasPorSalir {
+/**
+ * Los días del TPV por salir. R16: con `libro` (conta_erp10_dias_tpv_libro: las filas del libro de IVA de cada día, con la 430
+ * del cliente de cada factura con NIF, y esas 430 con su NIF), cada día lleva su libro y las cuentas, las de sus clientes.
+ */
+export function aDias(r: Record<string, unknown>, libro?: Record<string, unknown> | null): DiasPorSalir {
   const o = (x: unknown) => (x === 'revo' || x === 'folvy' ? x : null)
   const num = (x: unknown) => (x == null ? null : Number(x))
+  const delLibro = (libro?.dias ?? {}) as Record<string, Record<string, unknown>[]>
+  const filasLibro = (id: string): FilaLibroErp10[] | null => (delLibro[id] ? delLibro[id].map((f) => ({
+    tipo: String(f.tipo), serie: s(f.serie), numero: s(f.numero), hasta: s(f.hasta), documentos: n(f.documentos),
+    nif: s(f.nif), nombre: s(f.nombre), pct: n(f.pct), base: n(f.base), cuota: n(f.cuota), total: n(f.total), cliente: s(f.cliente),
+  })) : null)
+  const deClientes = ((libro?.cuentas ?? []) as Record<string, unknown>[]).map((c) => ({
+    codigo: String(c.codigo), plantilla: String(c.plantilla), nombre: String(c.nombre ?? ''), nif: s(c.nif), gastoHabitual: null,
+  }))
   return {
     dias: ((r.dias ?? []) as Record<string, unknown>[]).map((d) => ({
       entryId: String(d.entryId), serie: n(d.serie), numero: num(d.numero), fecha: String(d.fecha), concepto: String(d.concepto ?? ''),
@@ -157,11 +173,12 @@ export function aDias(r: Record<string, unknown>): DiasPorSalir {
         cuenta: String(l.cuenta), plantilla: String(l.plantilla), nombre: String(l.nombre ?? ''), debe: n(l.debe), haber: n(l.haber),
         tipoIva: num(l.tipoIva), baseIva: num(l.baseIva), libro: s(l.libro),
       })),
+      libro: filasLibro(String(d.entryId)),
     })),
     contado: ((r.contado ?? []) as Record<string, unknown>[]).map((c) => ({ codigo: String(c.codigo), plantilla: String(c.plantilla), nombre: String(c.nombre ?? '') })),
-    cuentas: ((r.cuentas ?? []) as Record<string, unknown>[]).map((c) => ({
+    cuentas: [...((r.cuentas ?? []) as Record<string, unknown>[]).map((c) => ({
       codigo: String(c.codigo), plantilla: String(c.plantilla), nombre: String(c.nombre ?? ''), nif: s(c.nif), gastoHabitual: null,
-    })),
+    })), ...deClientes],
     yaSalidas: new Map(Object.entries((r.yaSalidas ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)])),
   }
 }

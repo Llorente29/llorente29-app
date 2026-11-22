@@ -119,6 +119,11 @@ export type NoSale = { entryId: string; numero: string; porque: string }
 
 const c = (x: number) => Math.round(Number(x) * 100)
 const e = (x: number) => x / 100
+/** R16 · Céntimos en palabras, para los porqués: «1.099,00 €» (con los miles, también de cuatro cifras). */
+const euros = (cent: number) => {
+  const [ent, dec] = (Math.abs(cent) / 100).toFixed(2).split('.')
+  return `${cent < 0 ? '−' : ''}${ent.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${dec} €`
+}
 const fechaCelda = (aaaammdd: string) => `${aaaammdd}T12:00:00.000Z`
 const TIPO_OPERACION: Partial<Record<Operacion, string>> = { interior: 'OI', isp: 'ISP', intra_servicios: 'AIS' }
 const NO_VA_OPERACION: Record<Exclude<Operacion, 'interior' | 'isp' | 'intra_servicios'>, string> = {
@@ -769,8 +774,35 @@ export type DiaParaErp10 = {
   lineas: LineaDia[]
   /** R07 · El asiento del cobro del día, si el día va en dos (la factura del día y su cobro). */
   cobroId?: string | null
+  /**
+   * R16 · Las filas de su libro de IVA (R15b: por serie, cada factura con NIF y cada devolución), con la 430 del cliente de
+   * cada factura con NIF (conta_erp10_dias_tpv_libro). Con más de una factura, el día sale repartido como su libro.
+   */
+  libro?: FilaLibroErp10[] | null
 }
 export type CuentaContado = { codigo: string; plantilla: string; nombre: string }
+
+/** R16 · Una fila del libro de IVA de un día: su tipo (F4, F2, F1, R5), su serie y su número (o rango), su NIF y su cliente. */
+export type FilaLibroErp10 = {
+  tipo: string; serie: string | null; numero: string | null; hasta: string | null; documentos: number
+  nif: string | null; nombre: string | null; pct: number; base: number; cuota: number; total: number
+  /** La 430 del cliente de una factura con NIF (null si aún no la tiene). */
+  cliente: string | null
+}
+
+/**
+ * R16 · Una factura del día en ERP10: una serie (a Clientes de contado, con su primer y su último número), una factura con NIF
+ * (a su cliente, con su número) o una devolución (a Clientes de contado, en negativo, con su número: ERP10 no admite
+ * rectificativas al importar; Julio, 22/11). En céntimos.
+ */
+export type ParteDia = {
+  clase: 'serie' | 'nif' | 'devolucion'
+  numero: string; primero: string | null; ultimo: string | null; facturas: number
+  cliente: { codigo: string; nombre: string; nif: string | null }
+  ingresos: { cuenta: string; importe: number }[]
+  iva: { pct: number; base: number; cuota: number }[]
+  total: number
+}
 
 /** Lo que se ha leído de un día, en céntimos. */
 export type DiaLeido = {
@@ -784,6 +816,8 @@ export type DiaLeido = {
   total: number
   /** R07 · El cobro va en su propio asiento (el día en dos): no se arma con `cobroDia`. */
   cobroId: string | null
+  /** R16 · El día repartido como su libro de IVA (null: una sola factura, como siempre). */
+  partes: ParteDia[] | null
 }
 
 export const FRASE_SIN_RANGO = 'Falta el rango de facturas del día.'
@@ -797,7 +831,8 @@ export function leerDia(d: DiaParaErp10, contado: readonly CuentaContado[], xml 
   const no = (porque: string): NoSale => ({ entryId: d.entryId, numero: rangoDe(d) || `${d.serie}/${d.numero ?? ''}`, porque })
   const primero = String(d.primero ?? '').trim(), ultimo = String(d.ultimo ?? '').trim()
   if (!primero || !ultimo) return no(FRASE_SIN_RANGO)
-  if ((d.contadores ?? 1) > 1) return no(`Lleva facturas de ${d.contadores} contadores del TPV, con un rango cada uno, y la factura del día lleva uno: no se juntan. No sale.`)
+  const repartir = seReparte(d.libro)
+  if ((d.contadores ?? 1) > 1 && !repartir) return no(`Lleva facturas de ${d.contadores} contadores del TPV, con un rango cada uno, y la factura del día lleva uno: no se juntan. No sale.`)
   if (contado.length === 0) return no(FRASE_SIN_CONTADO)
   if (contado.length > 1) return no(`Hay ${contado.length} cuentas de Clientes de contado (${contado.map((x) => x.codigo).join(', ')}): deja una. No sale.`)
   const col = columnas(xml)
@@ -849,10 +884,86 @@ export function leerDia(d: DiaParaErp10, contado: readonly CuentaContado[], xml 
   const leido: DiaLeido = {
     entryId: d.entryId, serie: d.serie, numero: d.numero, fecha: d.fecha, local: d.local, primero, ultimo,
     facturas: Number(d.facturas ?? 0), contado: contado[0], ingresos: vivos.map(([cuenta, importe]) => ({ cuenta, importe })), iva: ivas, cobros: cobrado, total, cobroId,
+    partes: null,
   }
   if (!Number.isInteger(leido.facturas) || leido.facturas <= 0) return no('No dice cuántas facturas lleva el día. No sale.')
   const mal = cuadreEmitida(leido)
-  return mal ? no(`${mal} No sale.`) : leido
+  if (mal) return no(`${mal} No sale.`)
+  if (!repartir) return leido
+  // R16 · El día como su libro de IVA: las partes suman, al céntimo, lo que el día (regla 31), o no sale.
+  const partes = partesDelDia(d.libro!, leido)
+  if ('porque' in partes) return no(`${partes.porque} No sale.`)
+  return { ...leido, partes }
+}
+
+/** R16 · ¿El día va en más de una factura en su libro (una serie más, una factura con NIF o una devolución)? */
+export function seReparte(libro: readonly FilaLibroErp10[] | null | undefined): boolean {
+  if (!libro?.length) return false
+  return new Set(libro.map(claveFactura)).size > 1 || libro.some((f) => f.tipo === 'F1' || /^R/.test(f.tipo))
+}
+const claveFactura = (f: FilaLibroErp10) => `${f.tipo}|${f.serie ?? ''}|${f.numero ?? ''}|${f.hasta ?? ''}`
+
+/**
+ * R16 · Las facturas del día en ERP10, como su libro de IVA: cada serie, cada factura con NIF (a su cliente) y cada devolución
+ * (en negativo). La cuenta de ventas es la del día (una sola: si son varias, no se sabe cuál lleva cada factura). Lo que suman
+ * tiene que ser el total y el I.V.A. del día, al céntimo.
+ */
+export function partesDelDia(libro: readonly FilaLibroErp10[], x: Pick<DiaLeido, 'contado' | 'ingresos' | 'iva' | 'total'>): ParteDia[] | { porque: string } {
+  if (x.ingresos.length !== 1) return { porque: `Reparte las ventas en ${x.ingresos.length} cuentas y el día va en varias facturas: no se sabe qué cuenta lleva cada una.` }
+  const grupos = new Map<string, FilaLibroErp10[]>()
+  for (const f of libro) { const k = claveFactura(f); grupos.set(k, [...(grupos.get(k) ?? []), f]) }
+  const partes: ParteDia[] = []
+  for (const fs of grupos.values()) {
+    const f = fs[0]
+    const clase: ParteDia['clase'] = f.tipo === 'F1' ? 'nif' : /^R/.test(f.tipo) ? 'devolucion' : 'serie'
+    if (clase === 'nif' && !f.cliente) return { porque: `La factura ${f.numero ?? ''} (${f.nombre ?? 'sin nombre'}, ${f.nif ?? 'sin NIF'}) no tiene la cuenta de su cliente: abre otra vez la salida para darlo de alta.` }
+    const ivaPorPct = new Map<number, { base: number; cuota: number }>()
+    for (const y of fs) { const v = ivaPorPct.get(Number(y.pct)) ?? { base: 0, cuota: 0 }; v.base += c(y.base); v.cuota += c(y.cuota); ivaPorPct.set(Number(y.pct), v) }
+    const iva = [...ivaPorPct].sort(([a], [b]) => a - b).map(([pct, v]) => ({ pct, ...v }))
+    const base = iva.reduce((t, v) => t + v.base, 0)
+    const total = fs.reduce((t, y) => t + c(y.total), 0)
+    const numero = f.hasta && f.hasta !== f.numero ? `${f.numero}-${f.hasta}` : String(f.numero ?? '')
+    partes.push({
+      clase, numero, primero: clase === 'serie' ? f.numero : null, ultimo: clase === 'serie' ? (f.hasta ?? f.numero) : null,
+      facturas: clase === 'serie' ? Math.max(1, Number(f.documentos) || 1) : 1,
+      cliente: clase === 'nif' ? { codigo: f.cliente!, nombre: (f.nombre ?? '').trim() || f.cliente!, nif: f.nif } : { codigo: x.contado.codigo, nombre: x.contado.nombre, nif: null },
+      ingresos: [{ cuenta: x.ingresos[0].cuenta, importe: base }], iva, total,
+    })
+  }
+  // Regla 31: el total y el I.V.A. de cada tipo, los del día.
+  const suma = partes.reduce((t, p) => t + p.total, 0)
+  if (suma !== x.total) return { porque: `Sus facturas del libro suman ${euros(suma)} y el día ${euros(x.total)}.` }
+  for (const v of x.iva) {
+    const q = partes.reduce((t, p) => t + (p.iva.find((y) => y.pct === v.pct)?.cuota ?? 0), 0)
+    const b = partes.reduce((t, p) => t + (p.iva.find((y) => y.pct === v.pct)?.base ?? 0), 0)
+    if (q !== v.cuota || b !== v.base) return { porque: `Sus facturas del libro dan, al ${v.pct} %, ${euros(b)} de base y ${euros(q)} de I.V.A., y el día ${euros(v.base)} y ${euros(v.cuota)}.` }
+  }
+  const peso = { serie: 1, nif: 2, devolucion: 3 } as const
+  return partes.sort((a, b) => peso[a.clase] - peso[b.clase] || Number(a.primero ?? a.numero.split('-')[0]) - Number(b.primero ?? b.numero.split('-')[0]))
+}
+
+/** R16 · Lo que cada cliente con NIF del día debe en ERP10 (para repartir el cobro): su cuenta, su nombre y su total, en céntimos. */
+export function clientesDelDia(x: Pick<DiaLeido, 'partes'>): { cuenta: string; nombre: string; importe: number }[] {
+  const m = new Map<string, { nombre: string; importe: number }>()
+  for (const p of x.partes ?? []) if (p.clase === 'nif') { const y = m.get(p.cliente.codigo) ?? { nombre: p.cliente.nombre, importe: 0 }; y.importe += p.total; m.set(p.cliente.codigo, y) }
+  return [...m].map(([cuenta, y]) => ({ cuenta, ...y }))
+}
+
+/**
+ * R16 · El cobro del día, repartido para ERP10: «Clientes de contado» descarga lo que no es de un cliente con NIF y cada
+ * cliente con NIF, lo suyo (cobrado en el TPV). En ERP10 todo queda a cero; el diario de Sumied no cambia.
+ */
+export function repartirCobro(a: AsientoParaErp10, contado: string, clientes: readonly { cuenta: string; nombre: string; importe: number }[]): AsientoParaErp10 | { porque: string } {
+  if (!clientes.length) return a
+  const suyos = clientes.reduce((t, k) => t + k.importe, 0)
+  const i = a.lineas.findIndex((l) => l.cuenta === contado && c(l.haber) > 0)
+  if (i < 0) return { porque: `Su cobro no descarga Clientes de contado (${contado}): no se puede repartir entre sus clientes con NIF.` }
+  const l = a.lineas[i]
+  const resto = c(l.haber) - suyos
+  if (resto < 0) return { porque: `Sus facturas con NIF (${euros(suyos)}) pasan de lo que descarga su cobro en Clientes de contado (${euros(c(l.haber))}).` }
+  const lineas = [...a.lineas.slice(0, i), ...(resto ? [{ ...l, haber: e(resto) }] : []),
+    ...clientes.map((k) => ({ cuenta: k.cuenta, nombre: k.nombre, concepto: l.concepto, debe: 0, haber: e(k.importe) })), ...a.lineas.slice(i + 1)]
+  return { ...a, lineas }
 }
 
 /** La fila del día en el fichero de expedidas: como una emitida, con el resumen de facturas y sin número ni PDF. */
@@ -871,15 +982,40 @@ export function filaDia(x: DiaLeido, cuentas: ReadonlyMap<string, string>, xml =
   return colocar(v, columnas(xml)) as Fila
 }
 
-/** El asiento del cobro del día: lo cobrado a cada cuenta, contra «Clientes de contado». Va con los asientos. */
+/**
+ * R16 · Las filas del día en el fichero de expedidas: una (la de siempre) o, repartido, una por factura de su libro. Una serie,
+ * con el resumen de facturas (069 a 071); una factura con NIF o una devolución, con su número (006), sin resumen.
+ */
+export function filasDia(x: DiaLeido, cuentas: ReadonlyMap<string, string>, xml = XML_EXPEDIDAS): Fila[] {
+  if (!x.partes) return [filaDia(x, cuentas, xml)]
+  const cta = (k: string) => cuentas.get(k) ?? k
+  return x.partes.map((p) => {
+    const v: Record<string, Celda> = {
+      '002': fechaCelda(x.fecha), '001': fechaCelda(x.fecha), '118': fechaCelda(x.fecha),
+      '004': cta(p.cliente.codigo), '045': e(p.total),
+      ...(p.clase === 'serie' ? { '069': p.facturas, '070': p.primero ?? '', '071': p.ultimo ?? '' } : { '006': p.numero }),
+    }
+    p.ingresos.forEach((g, k) => { const [s, i] = CONTRAPARTIDAS[k]; v[s] = cta(g.cuenta); v[i] = e(g.importe) })
+    p.iva.forEach((i, k) => {
+      const b = 10 + k * 3
+      v[String(b).padStart(3, '0')] = e(i.base); v[String(b + 1).padStart(3, '0')] = i.pct; v[String(b + 2).padStart(3, '0')] = e(i.cuota)
+    })
+    return colocar(v, columnas(xml)) as Fila
+  })
+}
+
+/** El asiento del cobro del día: lo cobrado a cada cuenta, contra «Clientes de contado». Va con los asientos. R16: repartido entre sus clientes con NIF. */
 export function cobroDia(x: DiaLeido): AsientoParaErp10 {
   const dma = `${x.fecha.slice(8, 10)}/${x.fecha.slice(5, 7)}/${x.fecha.slice(0, 4)}`
   const concepto = `Cobro de las ventas del ${dma}${x.local ? ` · ${x.local}` : ''}`
+  const clientes = clientesDelDia(x)
+  const suyos = clientes.reduce((t, k) => t + k.importe, 0)
   return {
     entryId: x.entryId, serie: x.serie, numero: x.numero, fecha: x.fecha, concepto,
     lineas: [
       ...x.cobros.map((k) => ({ cuenta: k.cuenta, nombre: k.nombre, concepto, debe: k.importe > 0 ? e(k.importe) : 0, haber: k.importe < 0 ? e(-k.importe) : 0 })),
-      { cuenta: x.contado.codigo, nombre: x.contado.nombre, concepto, debe: 0, haber: e(x.total) },
+      ...(x.total - suyos ? [{ cuenta: x.contado.codigo, nombre: x.contado.nombre, concepto, debe: 0, haber: e(x.total - suyos) }] : []),
+      ...clientes.map((k) => ({ cuenta: k.cuenta, nombre: k.nombre, concepto, debe: 0, haber: e(k.importe) })),
     ],
   }
 }
@@ -904,9 +1040,22 @@ export type SalidaDias = {
    * En orden de fecha. Cada día, su fila de expedidas y su asiento de cobro: armado del asiento
    * del día (`cobro`), o, con el día en dos asientos (R07), el del cobro del día (`cobroId`).
    */
-  dias: { entryId: string; numero: string; fecha: string; local: string | null; facturas: number; total: number; fila: Fila; cobro: AsientoParaErp10 | null; cobroId: string | null; usa: string[]; api: DiaParaApi }[]
+  dias: {
+    entryId: string; numero: string; fecha: string; local: string | null; facturas: number; total: number
+    /** R16 · Sus filas en el fichero de expedidas: una, o una por factura de su libro. */
+    filas: Fila[]
+    /** R16 · Repartido: sus facturas (número, a quién y cuánto), para enseñarlas; los clientes con NIF, para repartir su cobro. */
+    partes: { clase: ParteDia['clase']; numero: string; cliente: string; nif: string | null; total: number }[] | null
+    contado: string; clientes: { cuenta: string; nombre: string; importe: number }[]
+    cobro: AsientoParaErp10 | null; cobroId: string | null; usa: string[]
+    /** Para la conexión con ERP10. R16: null en un día repartido, que sale por el fichero (`porLaConexion` dice por qué). */
+    api: DiaParaApi | null; porLaConexion: string | null
+  }[]
   noSalen: NoSale[]
 }
+
+/** R16 · Lo que dice la conexión de un día repartido: no sale nunca como una sola factura (Julio, 22/11; la conexión con varias, R16b). */
+export const FRASE_SALE_POR_EL_FICHERO = 'Sale por el fichero: el día va en varias facturas (por serie, con sus facturas con NIF y sus devoluciones), y la conexión con ERP10 aún saca una por día.'
 
 /**
  * Los días del TPV de una salida: los que van al fichero de expedidas (con su cobro, que
@@ -929,7 +1078,7 @@ export function prepararDiasTpv(lista: readonly DiaParaErp10[], contado: readonl
     const x = leerDia(d, contado, xml)
     if ('porque' in x) noSalen.push(x); else leidos.push(x)
   }
-  const usadasPor = (x: DiaLeido) => [...new Set([x.contado.codigo, ...x.ingresos.map((g) => g.cuenta), ...x.cobros.map((k) => k.cuenta)])]
+  const usadasPor = (x: DiaLeido) => [...new Set([x.contado.codigo, ...x.ingresos.map((g) => g.cuenta), ...x.cobros.map((k) => k.cuenta), ...(x.partes ?? []).map((p) => p.cliente.codigo)])]
   const conv = convertirCuentas(leidos.flatMap(usadasPor), o.plan, o.largo, o.yaSalidas)
   const dias: SalidaDias['dias'] = []
   for (const x of leidos) {
@@ -937,8 +1086,11 @@ export function prepararDiasTpv(lista: readonly DiaParaErp10[], contado: readonl
     const mala = usa.find((k) => conv.noCaben.has(k) || o.noCaben?.has(k))
     const numero = rangoDe(x)
     if (mala) { noSalen.push({ entryId: x.entryId, numero, porque: (conv.noCaben.get(mala) ?? o.noCaben!.get(mala))! }); continue }
-    dias.push({ entryId: x.entryId, numero, fecha: x.fecha, local: x.local, facturas: x.facturas, total: e(x.total), fila: filaDia(x, conv.erp, xml),
-      cobro: x.cobroId ? null : cobroDia(x), cobroId: x.cobroId, usa, api: diaParaApi(x, conv.erp) })
+    dias.push({ entryId: x.entryId, numero, fecha: x.fecha, local: x.local, facturas: x.facturas, total: e(x.total), filas: filasDia(x, conv.erp, xml),
+      partes: x.partes ? x.partes.map((p) => ({ clase: p.clase, numero: p.numero, cliente: p.cliente.nombre, nif: p.cliente.nif, total: e(p.total) })) : null,
+      contado: x.contado.codigo, clientes: clientesDelDia(x),
+      cobro: x.cobroId ? null : cobroDia(x), cobroId: x.cobroId, usa,
+      api: x.partes ? null : diaParaApi(x, conv.erp), porLaConexion: x.partes ? FRASE_SALE_POR_EL_FICHERO : null })
   }
   return { dias, noSalen }
 }

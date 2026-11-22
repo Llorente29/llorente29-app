@@ -22,7 +22,7 @@ import { columnas } from './diezExcel.ts'
 import { XML_EXPEDIDAS, XML_RECIBIDAS } from './erp10Configuracion.ts'
 import {
   columnasAsientos, convertirCuentas, filaSubcuenta,
-  prepararAsientos, prepararDiasTpv, prepararExpedidas, prepararRecibidas, type AsientoParaApi, type DiaParaApi, type EmitidaParaApi, type Fila, type RecibidaParaApi,
+  prepararAsientos, prepararDiasTpv, prepararExpedidas, prepararRecibidas, repartirCobro, type AsientoParaApi, type DiaParaApi, type EmitidaParaApi, type Fila, type NoSale, type RecibidaParaApi,
 } from './erp10Ficheros.ts'
 import { SIN_ASIENTOS, SIN_DIAS, type AsientosPorSalir, type DiasPorSalir, type CuentaDeLaBase, type Corregida, type EmitidasPorSalir, type PartidaPorSalir, type PorSalir, type RecibidasPorSalir } from './erp10Lectura.ts'
 
@@ -35,7 +35,13 @@ export interface FacturaQueSale { entryId: string; clase: Clase; fecha: string; 
 /** X08 · «dia»: un día de ventas del TPV (sale como emitida; en pantalla, en su fila). */
 export interface NoPuedeSalir { entryId: string; clase: Clase | 'dia'; fecha: string; quien: string; numero: string; porque: string }
 /** X08 · Un día del TPV que sale: su factura del día. */
-export interface DiaQueSale { entryId: string; fecha: string; local: string | null; rango: string; facturas: number; importe: number }
+export interface DiaQueSale {
+  entryId: string; fecha: string; local: string | null; rango: string; facturas: number; importe: number
+  /** R16 · Repartido como su libro de IVA: cada factura (serie, con NIF o devolución), a quién y cuánto. Null: una sola factura. */
+  partes: { clase: 'serie' | 'nif' | 'devolucion'; numero: string; cliente: string; nif: string | null; total: number }[] | null
+  /** R16 · Por qué no sale por la conexión con ERP10 (un día repartido sale por el fichero). */
+  porLaConexion: string | null
+}
 
 export interface Salida {
   filas: FilaQueSale[]
@@ -67,7 +73,7 @@ export interface Salida {
     /** X08 · Cada día del TPV, su fila de expedidas (el resumen del día). R07: con el asiento de su cobro, si va en dos.
      *  X10e · Con la factura del día para la conexión (`api`) y su cobro: el asiento armado (mismo asiento que el día)
      *  o el del cobro del día (`cobroId`), con su forma para la conexión y sus filas. */
-    dias: { entryId: string; fila: Fila; cobroId?: string; api?: DiaParaApi; cobro?: { entryId: string; api: AsientoParaApi; filas: Fila[] } }[]
+    dias: { entryId: string; filas: Fila[]; cobroId?: string; api?: DiaParaApi; porLaConexion?: string; cobro?: { entryId: string; api: AsientoParaApi; filas: Fila[] } }[]
     pdfs: { nombre: string; ruta: string; entryId: string }[]
   }
   /** Lo que suma lo que sale (para la confirmación). */
@@ -104,7 +110,21 @@ export function armarSalida(ps: PorSalir, rs: RecibidasPorSalir, em: EmitidasPor
   // 43, 44 y 473, y la conversión guarda la plantilla). Los asientos (X07) usan de todo: dos cuentas de Sumied que darían la
   // misma en ERP10, una de un asiento y otra de una factura, no salen ninguna de las dos.
   // X08 · Los días del TPV: su factura del día y su cobro, que va con los asientos.
-  const prepD = prepararDiasTpv(ds.dias, ds.contado, { plan, largo: ps.largo, yaSalidas })
+  const prepD0 = prepararDiasTpv(ds.dias, ds.contado, { plan, largo: ps.largo, yaSalidas })
+  // R16 · Un día repartido con facturas con NIF: su cobro del diario (R07) descarga a cada cliente lo suyo y a «Clientes de
+  // contado» el resto. Si no se puede repartir, el día no sale (y se dice).
+  const aRepartir = new Map(prepD0.dias.filter((d) => d.cobroId && d.clientes.length).map((d) => [d.cobroId!, d]))
+  const sinRepartir: NoSale[] = []
+  const asDelDiario = as.asientos.flatMap((a) => {
+    const d = aRepartir.get(a.entryId)
+    if (!d) return [a]
+    const r = repartirCobro(a, d.contado, d.clientes)
+    if ('porque' in r) { sinRepartir.push({ entryId: d.entryId, numero: d.numero, porque: `${r.porque} No sale.` }); return [a] }
+    // Cada línea con su plantilla (la de la cuenta del cliente, del plan de la salida).
+    return [{ ...a, lineas: r.lineas.map((l) => ({ ...l, plantilla: (l as { plantilla?: string }).plantilla ?? plan.get(l.cuenta) ?? '' })) }]
+  })
+  const prepD = { dias: prepD0.dias.filter((d) => !sinRepartir.some((x) => x.entryId === d.entryId)), noSalen: [...prepD0.noSalen, ...sinRepartir] }
+  as = { ...as, asientos: asDelDiario }
   // R07 · Un día en dos asientos: su cobro es un asiento del diario (origen «sales_day_payment»), que llega con los
   // asientos y sale solo con su factura del día. Como el cobro armado de antes, va con los días, no cuenta como asiento.
   const cobrosDelDiario = new Set(as.asientos.filter((a) => a.origen === 'sales_day_payment').map((a) => a.entryId))
@@ -211,7 +231,7 @@ export function armarSalida(ps: PorSalir, rs: RecibidasPorSalir, em: EmitidasPor
   const totalAsientos = sumaP(asientos)
   const npA = noPuedenSalir.filter((x) => x.clase === 'asiento').length
   // X08 · Los días del TPV que salen, y lo que suman.
-  const tpv: DiaQueSale[] = filasD.map((d) => ({ entryId: d.entryId, fecha: d.fecha, local: d.local, rango: d.numero, facturas: d.facturas, importe: d.total }))
+  const tpv: DiaQueSale[] = filasD.map((d) => ({ entryId: d.entryId, fecha: d.fecha, local: d.local, rango: d.numero, facturas: d.facturas, importe: d.total, partes: d.partes, porLaConexion: d.porLaConexion }))
   const totalDias = tpv.reduce((t, d) => t + c(d.importe), 0) / 100
   const facturasDias = tpv.reduce((t, d) => t + d.facturas, 0)
   const npD = noPuedenSalir.filter((x) => x.clase === 'dia').length
@@ -236,7 +256,7 @@ export function armarSalida(ps: PorSalir, rs: RecibidasPorSalir, em: EmitidasPor
       texto: npA ? `${npA} no ${npA === 1 ? 'puede' : 'pueden'} salir` : asientos.length ? 'Nóminas, pagos y cobros, bancos, traspasos' : 'Ninguno este mes' },
     { id: 'tpv', que: 'Días de ventas del TPV', cuantos: tpv.length, importe: totalDias, sale: true,
       estado: npD ? 'Mira esto' : tpv.length ? 'Listo' : 'Nada',
-      texto: [tpv.length ? `${facturasDias} ${facturasDias === 1 ? 'factura' : 'facturas'} del TPV, una factura por día` : '', npD ? `${npD} no ${npD === 1 ? 'puede' : 'pueden'} salir` : '']
+      texto: [tpv.length ? `${facturasDias} ${facturasDias === 1 ? 'factura' : 'facturas'} del TPV, ${tpv.some((d) => d.partes) ? 'cada día como su libro de IVA' : 'una factura por día'}` : '', npD ? `${npD} no ${npD === 1 ? 'puede' : 'pueden'} salir` : '']
         .filter(Boolean).join(' · ') || 'Ninguno este mes' },
     { id: 'pdf', que: 'Los PDF', cuantos: pdfs.length, importe: null, sale: true, estado: pdfs.length ? 'Listo' : 'Nada',
       texto: pdfs.length ? 'Con el nombre de su factura, para que ERP10 los pegue solo' : 'Ninguno' },
@@ -271,7 +291,7 @@ export function armarSalida(ps: PorSalir, rs: RecibidasPorSalir, em: EmitidasPor
       asientos: prepA.asientos.map((a) => ({ entryId: a.entryId, filas: a.filas, ...(esDia.has(a.entryId) ? {} : { api: a.api }) })),
       dias: filasD.map((d) => {
         const cobro = prepA.asientos.find((a) => a.entryId === (d.cobroId ?? d.entryId))
-        return { entryId: d.entryId, fila: d.fila, ...(d.cobroId ? { cobroId: d.cobroId } : {}), api: d.api,
+        return { entryId: d.entryId, filas: d.filas, ...(d.cobroId ? { cobroId: d.cobroId } : {}), ...(d.api ? { api: d.api } : {}), ...(d.porLaConexion ? { porLaConexion: d.porLaConexion } : {}),
           ...(cobro ? { cobro: { entryId: cobro.entryId, api: cobro.api, filas: cobro.filas } } : {}) }
       }),
       pdfs,

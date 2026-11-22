@@ -49,7 +49,7 @@ describe('Un día con un solo cliente (lo cobrado en una cuenta)', () => {
     const d = dia(1, { lineas: [L('43000001', 550, 0), L('47700000', 0, 50, [10, 500]), L('70000000', 0, 500)] })
     const r = prepararDiasTpv([d], CONTADO, OPC)
     expect(r.noSalen).toEqual([])
-    expect(celdas(r.dias[0].fila)).toEqual({ E: F('2026-10-05'), G: '43000099', J: 500, K: 10, L: 50, AA: '70000000', AB: 550, AC: 500, AJ: 48, AK: '5001', AL: '5048' })
+    expect(celdas(r.dias[0].filas[0])).toEqual({ E: F('2026-10-05'), G: '43000099', J: 500, K: 10, L: 50, AA: '70000000', AB: 550, AC: 500, AJ: 48, AK: '5001', AL: '5048' })
     expect(r.dias[0].numero).toBe('5001–5048')
   })
   it('su cobro, un asiento de dos apuntes: la 430 de la plataforma al debe, «Clientes de contado» al haber, el mismo día', () => {
@@ -71,7 +71,7 @@ describe('Un día con tres clientes y dos tipos de I.V.A.', () => {
   })
   const r = prepararDiasTpv([d], CONTADO, OPC)
   it('una sola factura del día: los dos tipos en J-L y M-O, dos cuentas de ventas en AA/AC y AD/AE, el total de los tres cobros', () => {
-    expect(celdas(r.dias[0].fila)).toEqual({
+    expect(celdas(r.dias[0].filas[0])).toEqual({
       E: F('2026-10-05'), G: '43000099', J: 300, K: 10, L: 30, M: 100, N: 21, O: 21, AA: '70000000', AB: 451, AC: 300, AD: '70000001', AE: 100, AJ: 48, AK: '5001', AL: '5048',
     })
   })
@@ -157,7 +157,7 @@ describe('En la salida del mes (armarSalida)', () => {
   it('la fila de los días: cuántos salen, cuántas facturas del TPV, su importe, y los que no pueden salir', () => {
     expect(s.filas.find((f) => f.id === 'tpv')).toEqual({ id: 'tpv', que: 'Días de ventas del TPV', cuantos: 1, importe: 550, sale: true, estado: 'Mira esto',
       texto: '48 facturas del TPV, una factura por día · 2 no pueden salir' })
-    expect(s.listas.tpv).toEqual([{ entryId: id(1), fecha: '2026-10-05', local: 'Revo', rango: '5001–5048', facturas: 48, importe: 550 }])
+    expect(s.listas.tpv).toEqual([{ entryId: id(1), fecha: '2026-10-05', local: 'Revo', rango: '5001–5048', facturas: 48, importe: 550, partes: null, porLaConexion: null }])
     expect(s.noPuedenSalir.filter((x) => x.clase === 'dia').map((x) => [x.fecha, x.quien, x.porque])).toEqual([
       ['2026-10-06', 'Local inventado', 'Falta el rango de facturas del día.'],
       ['2026-10-07', 'Día de ventas', 'Cae en un trimestre de IVA ya presentado: no sale.'],
@@ -230,8 +230,8 @@ describe('R07 · El día en dos asientos: la factura del día y su cobro', () =>
     const antes = prepararDiasTpv([dia(1)], CONTADO, OPC)
     const ahora = prepararDiasTpv([factura()], CONTADO, OPC)
     expect(ahora.noSalen).toEqual([])
-    expect(celdas(ahora.dias[0].fila)).toEqual(celdas(antes.dias[0].fila))
-    expect(celdas(ahora.dias[0].fila)).toMatchObject({ G: '43000099', AB: 550, AK: '5001', AL: '5048' })
+    expect(celdas(ahora.dias[0].filas[0])).toEqual(celdas(antes.dias[0].filas[0]))
+    expect(celdas(ahora.dias[0].filas[0])).toMatchObject({ G: '43000099', AB: 550, AK: '5001', AL: '5048' })
     expect([ahora.dias[0].cobro, ahora.dias[0].cobroId]).toEqual([null, COBRO])
   })
   it('lee el «cobroId» que da la base', () => {
@@ -242,7 +242,7 @@ describe('R07 · El día en dos asientos: la factura del día y su cobro', () =>
     const antes = salida([dia(1)], [])
     const ahora = salida([factura()], [cobro()])
     expect(ahora.noPuedenSalir).toEqual([])
-    expect(ahora.ficheros.dias).toMatchObject([{ entryId: id(1), fila: antes.ficheros.dias[0].fila, cobroId: COBRO }])
+    expect(ahora.ficheros.dias).toMatchObject([{ entryId: id(1), filas: antes.ficheros.dias[0].filas, cobroId: COBRO }])
     expect(ahora.ficheros.asientos.map((a) => a.entryId)).toEqual([COBRO])
     const apuntes = (x: typeof ahora) => x.ficheros.asientos[0].filas.map(celdas).map((f) => [f[letraA('005')] ?? null, f[letraA('008')] ?? null, f[letraA('010')] ?? null, f[letraA('013')] ?? null])
     expect(apuntes(ahora)).toEqual(apuntes(antes))

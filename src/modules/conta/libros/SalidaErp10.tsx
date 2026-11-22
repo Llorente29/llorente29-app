@@ -22,7 +22,7 @@
 //
 // Solo con la salida encendida en la empresa (Ajustes › Ejercicio).
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaAjustes, rutaAsiento, rutaCierres } from '@/config/navegacion'
 import { useLeer, useLeerConservando, useLibros } from '@/modules/conta/libros/contexto'
@@ -76,7 +76,7 @@ export function SalidaErp10() {
   const datos = useLeerConservando(encendida && mes ? async () => {
     const [ps, rs, es, as, ds, cambiadas, lotes] = await Promise.all([
       leerPorSalir(L.companyId, mes), leerRecibidasPorSalir(L.companyId, mes), leerEmitidasPorSalir(L.companyId, mes), leerAsientosPorSalir(L.companyId, mes),
-      leerDiasTpvPorSalir(L.companyId, mes), leerCambiadas(L.companyId), leerLotes(L.accountId, L.companyId),
+      leerDiasTpvPorSalir(L.companyId, mes, L.quien), leerCambiadas(L.companyId), leerLotes(L.accountId, L.companyId),
     ])
     return { ps, rs, es, as, ds, cambiadas, lotes }
   } : null, `${L.companyId}:${mes}:${vuelta}:${L.vuelta}`, `${L.companyId}:${mes}`)
@@ -274,7 +274,7 @@ export function SalidaErp10() {
     try {
       await volverASacar(L.companyId, entryId, L.quien)
       const [ps, rs, es, as, ds] = await Promise.all([leerPorSalir(L.companyId, mes), leerRecibidasPorSalir(L.companyId, mes), leerEmitidasPorSalir(L.companyId, mes),
-        leerAsientosPorSalir(L.companyId, mes), leerDiasTpvPorSalir(L.companyId, mes)])
+        leerAsientosPorSalir(L.companyId, mes), leerDiasTpvPorSalir(L.companyId, mes, L.quien)])
       const una = soloUna(armarSalida(ps, rs, es, carpeta, as, ds), entryId)
       if (!una) throw new Error('ha vuelto a lo que sale, pero su fila no se puede preparar: mírala en el paso 1.')
       const { libros, pdfs } = await sacar(una, mes)
@@ -477,6 +477,12 @@ export function SalidaErp10() {
               )}
             </div>
             {s.comprobaciones.length > 0 && <ul className="cxe-comprobaciones" aria-label="Comprobaciones">{s.comprobaciones.map((c) => <li key={c}>{c}</li>)}</ul>}
+            {/* R16 · Los clientes con NIF de los días del TPV que la salida acaba de dar de alta en Sumied: salen primero, en las fichas nuevas. */}
+            {(datos.datos?.ds.altas?.length ?? 0) > 0 && (
+              <p className="cxe-pie-gris" role="status" data-prueba="altas-clientes">
+                Dados de alta en Sumied, para sus facturas con NIF del TPV: {datos.datos!.ds.altas!.map((x) => `${x.nombre} (${x.nif}) con la ${x.codigo}`).join(', ')}. Salen primero, en las cuentas nuevas.
+              </p>
+            )}
           </div>
 
           <aside className="cxe-der" aria-labelledby="cxe-mirar">
@@ -644,8 +650,19 @@ function Lista({ s, fila }: { s: Salida; fila: FilaQueSale['id'] }) {
         <table className="cxe-tabla cxe-sub" aria-label={titulo}>
           <thead><tr><th>Día</th><th>Local</th><th>Facturas del TPV</th><th className="cxe-num">Importe</th></tr></thead>
           <tbody>{s.listas.tpv.map((d) => (
-            <tr key={d.entryId}><td>{fechaLarga(d.fecha)}</td><td>{d.local ?? '—'}</td>
-              <td><Link className="cx-enlace" to={rutaAsiento(d.entryId)}>{d.rango}</Link> · {d.facturas}</td><td className="cxe-num">{importe(d.importe)}</td></tr>
+            <Fragment key={d.entryId}>
+              <tr data-prueba="dia-erp10"><td>{fechaLarga(d.fecha)}</td><td>{d.local ?? '—'}</td>
+                <td><Link className="cx-enlace" to={rutaAsiento(d.entryId)}>{d.rango}</Link> · {d.facturas}{d.partes && <span className="cxe-pie-gris"> · {d.partes.length} facturas en ERP10, como su libro de IVA</span>}</td>
+                <td className="cxe-num">{importe(d.importe)}</td></tr>
+              {/* R16 · Un día repartido: cada factura que sale a ERP10 (la serie, cada factura con NIF a su cliente y cada devolución). */}
+              {d.partes?.map((p) => (
+                <tr key={`${d.entryId}:${p.clase}:${p.numero}`} className="cxe-parte" data-prueba="parte-erp10" data-clase={p.clase}>
+                  <td /><td className="cxe-pie-gris">{p.clase === 'serie' ? 'Tickets' : p.clase === 'nif' ? 'Factura con NIF' : 'Devolución'}</td>
+                  <td>{p.numero} · {p.cliente}{p.nif ? ` (${p.nif})` : ''}</td>
+                  <td className="cxe-num">{importe(p.total)}</td>
+                </tr>
+              ))}
+            </Fragment>
           ))}
           {s.listas.tpv.length === 0 && <tr><td colSpan={4}>Ningún día de ventas sale este mes.</td></tr>}</tbody>
         </table>
