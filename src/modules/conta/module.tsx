@@ -78,6 +78,7 @@ import FichaPage from '@/modules/conta/laboral/ficha/FichaPage'
 import PuertaPage from '@/modules/conta/puerta/PuertaPage'
 import QueEsperasPage from '@/modules/conta/puerta/QueEsperasPage'
 import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
+import { ClienteSegun, ProveedorSegun } from '@/modules/conta/nucleo/terceros/TerceroSegun'
 import { Portada } from '@/modules/conta/marco/Portada'
 import { MARCA, CON_MARCA } from '@/modules/conta/cuenta/marca'
 import PatronPage from '@/modules/conta/muestra/PatronPage'
@@ -114,8 +115,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.queEsperas, element: enMarco(<QueEsperasPage />, '¿Qué te tiene que llegar cada mes?') },
     // C06 · La ficha del proveedor dentro de contabilidad, sin las piezas de
     // Cocina (sin extensiones): la del producto vendido solo.
-    { path: CONTA.rutas.fichaProveedor, element: enMarco(<FichaProveedorPage />, '¿Cuánto le debo?') },
-    { path: CONTA.rutas.fichaProveedorApartado, element: enMarco(<FichaProveedorPage />, '¿Cuánto le debo?') },
+    { path: CONTA.rutas.fichaProveedor, element: enMarco(<ProveedorSegun hoy={<FichaProveedorPage />} />, '¿Cuánto le debo?') },
+    { path: CONTA.rutas.fichaProveedorApartado, element: enMarco(<ProveedorSegun hoy={<FichaProveedorPage />} />, '¿Cuánto le debo?') },
     // Ajustes como índice lateral (C02 §5a): cada entrada en ajustes/:entrada;
     // Plan contable y Tablas generales tienen su propia página dentro del marco.
     { path: CONTA.rutas.empresa, element: enMarco(<AjustesPage />, 'Añade a Pablo como apoderado') },
@@ -132,8 +133,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.terceros, element: enMarco(<TercerosPage />, '¿Quién me debe dinero?') },
     // El de la ficha lo pone ella según el papel (ejemploDeFicha); éste es el de mientras carga.
     { path: CONTA.rutas.comoTeFactura, element: enMarco(<ComoTeFacturaPage />, '¿Cuándo me manda la factura?') },
-    { path: CONTA.rutas.tercero, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
-    { path: CONTA.rutas.terceroApartado, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
+    { path: CONTA.rutas.tercero, element: enMarco(<ClienteSegun hoy={<FichaTerceroPage />} />, '¿Cuánto me debe?') },
+    { path: CONTA.rutas.terceroApartado, element: enMarco(<ClienteSegun hoy={<FichaTerceroPage />} />, '¿Cuánto me debe?') },
     // C04 · Libros › Libro diario (N11), un asiento (N12) y el asiento a mano.
     // C05 · Libros en tres niveles (N13c): el diario del C04 vive dentro, en su ruta de siempre.
     // C06b · respuesta 5, punto 3: sin la barra «Pregunta o pide algo» mientras

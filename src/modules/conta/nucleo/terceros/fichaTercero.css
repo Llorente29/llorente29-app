@@ -1,0 +1,52 @@
+/* src/modules/conta/nucleo/terceros/fichaTercero.css
+ *
+ * X27 · La ficha de proveedor y la de cliente, con las medidas de la maqueta nucleo_20 a 1366 (las de la maqueta,
+ * exportada a 2000 px, entre 1,464). Lo común (la ventana, la barra, las casillas, la rejilla) va en
+ * nucleo/piezas/piezas.css: aquí solo cómo se reparten las casillas de esta pantalla.
+ */
+
+.ft { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ft-cargando { padding: 12px; color: var(--kp-gris-tinta); }
+.ft-cuerpo { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 4px 14px 6px 14px; overflow: auto; }
+
+/* Subcuenta 136 · Nombre, el resto. */
+.ft-cabeza { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: 0 7px; margin-bottom: 4px; }
+
+/* Las dos columnas: 650 y 650 (de 1320 a 1366), con 22 entre ellas. */
+.ft-columnas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 22px; align-items: start; }
+.ft-derecha { min-width: 0; display: flex; flex-direction: column; }
+.ft-fila { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 6px; margin-bottom: 2px; }
+
+/* Datos proveedor: NIF 169 · tipo 168 · comercial 300; domicilio 335 · C.P. 100 · población 200;
+   provincia 285 · país 330; teléfonos 267 · correo 375. */
+.ft-f-nif { grid-template-columns: minmax(0, 169fr) minmax(0, 168fr) minmax(0, 300fr); }
+.ft-f-domicilio { grid-template-columns: minmax(0, 335fr) minmax(0, 100fr) minmax(0, 200fr); }
+.ft-f-provincia { grid-template-columns: minmax(0, 285fr) minmax(0, 350fr); }
+.ft-f-contacto { grid-template-columns: minmax(0, 267fr) minmax(0, 375fr); }
+
+/* Datos por defecto en facturas: tipos de IVA, dos (código 76 + nombre 220); retención 245 · deducible 94 · operación
+   253; subcuenta de gasto 190 + nombre 433; local, marca y plataforma, 192 cada una. */
+.ft-rotulo-solo { min-height: 15px; color: var(--kp-rotulo); font-size: 11.5px; line-height: 15px; }
+.ft-f-ivas { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.ft-f-ivas .kp-rotulo { display: none; }
+.ft-f-retencion { grid-template-columns: minmax(0, 245fr) minmax(0, 94fr) minmax(0, 253fr); }
+.ft-f-retencion-cliente { grid-template-columns: minmax(0, 340fr) minmax(0, 253fr); }
+.ft-f-analitica { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Datos de pago: forma 142 · días 117 · IBAN 377. */
+.ft-f-pago { grid-template-columns: minmax(0, 142fr) minmax(0, 117fr) minmax(0, 377fr); }
+
+/* La lupa con su nombre en gris al lado (código : nombre ≈ 1 : 2,6; en las subcuentas 190 : 433). */
+.ft-con-nombre .kp-casilla-dentro { display: grid; grid-template-columns: minmax(0, 76fr) minmax(0, 220fr); gap: 6px; }
+.ft-subcuenta .kp-casilla-dentro { grid-template-columns: minmax(0, 190fr) minmax(0, 433fr); }
+.ft-lupa { display: flex; min-width: 0; }
+.ft .ft-gris { background: var(--kp-gris-fondo); color: var(--kp-gris-tinta); }
+
+.ft-marcas { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 6px 0 2px; }
+.ft-marca { display: inline-flex; align-items: center; gap: 5px; color: var(--kp-rotulo); font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.kp-ventana .ft-marca input { width: 12px; height: 12px; margin: 0; }
+.ft-marca:has(input:disabled) { color: var(--kp-gris-tinta); cursor: default; }
+
+.ft-nada { padding: 12px 4px; color: var(--kp-gris-tinta); }
+.ft-suma { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+.ft-hoja-mayor { width: 10px; height: 13px; border-radius: 1px; background: #f2b632; display: inline-block; }
+.ft-barra-facturas { margin-left: 8px; }
