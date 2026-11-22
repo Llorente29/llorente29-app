@@ -52877,7 +52877,8 @@ begin
       motivo := 'No se valida: hay una 477 sin tipo y ninguna compra autoliquidada en el asiento. Un apunte de IVA lleva base, tipo y libro registro.'; return next;
     end if;
     if v_e.source_type = 'supplier_invoice' then
-      select s.name, s.country_code, public.conta_proveedor_iva_clase(s.country_code, s.tax_id_type, s.tax_id, s.tax_id_check_status, s.vat_regime) as clase
+      select s.name, s.country_code, si.vat_operation,   -- K10b: el tipo de operación de la factura, si lo tiene
+             coalesce(public.conta_operacion_clase(si.vat_operation), public.conta_proveedor_iva_clase(s.country_code, s.tax_id_type, s.tax_id, s.tax_id_check_status, s.vat_regime)) as clase
         into v_p
         from public.supplier_invoice si join public.supplier s on s.id = si.supplier_id and s.account_id = si.account_id
        where si.id = v_e.source_id and si.account_id = v_e.account_id;
@@ -52892,15 +52893,23 @@ begin
                  when 'isp_extranjero' then t.treatment = 'reverse_charge'
                  when 'isp_nacional' then t.treatment = 'reverse_charge'
                  when 'nacional' then t.treatment in ('taxed', 'exempt', 'not_subject')
+                 when 'exenta' then t.treatment in ('exempt', 'not_subject')
                  else false end;
         if v_contra is not null then
           orden := 11; codigo := 'tipo_contra_pais';
-          motivo := 'No se valida: ' || v_contra || '. ' || v_p.name || ' ' || case v_p.clase
+          motivo := 'No se valida: ' || v_contra || '. ' || case when v_p.vat_operation is not null
+            then format('En esta factura el tipo de operación es «%s»: ', public.conta_operacion_nombre(v_p.vat_operation)) || case v_p.clase
+              when 'intracomunitaria' then 'su compra va con «Compra en otro país de la UE» (el IVA lo declaras tú).'
+              when 'isp_extranjero' then 'su compra va con «Inversión del sujeto pasivo» (el IVA lo declaras tú).'
+              when 'isp_nacional' then 'su compra va con «Inversión del sujeto pasivo».'
+              when 'exenta' then 'sus apuntes de IVA van con un tipo exento o no sujeto.'
+              else 'su compra lleva el IVA de su factura.' end || ' Si no es esa, cambia el tipo de operación en la factura.'
+            else v_p.name || ' ' || case v_p.clase
             when 'intracomunitaria' then 'es de ' || public.conta_pais_nombre(v_p.country_code) || ' y tiene NIF-IVA europeo: su compra es intracomunitaria y va con «Compra en otro país de la UE» (el IVA lo declaras tú).'
             when 'isp_extranjero' then 'es de fuera de la UE (' || public.conta_pais_nombre(v_p.country_code) || '): su compra va con «Inversión del sujeto pasivo» (el IVA lo declaras tú).'
             when 'isp_nacional' then 'está marcado con inversión del sujeto pasivo en su ficha: su compra va con «Inversión del sujeto pasivo».'
             when 'nacional' then 'es de España: su compra lleva el IVA de su factura. Si es una inversión del sujeto pasivo (obras, chatarra…), márcalo en su ficha, en «Régimen de IVA».'
-            else 'es de ' || public.conta_pais_nombre(v_p.country_code) || ' y no tiene un NIF-IVA europeo válido: sin él su compra no es intracomunitaria. Pon su NIF-IVA en su ficha (se comprueba en VIES).' end;
+            else 'es de ' || public.conta_pais_nombre(v_p.country_code) || ' y no tiene un NIF-IVA europeo válido: sin él su compra no es intracomunitaria. Pon su NIF-IVA en su ficha (se comprueba en VIES).' end end;
           return next;
         end if;
       end if;
