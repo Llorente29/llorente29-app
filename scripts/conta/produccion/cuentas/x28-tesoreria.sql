@@ -4,6 +4,7 @@
 -- existen antes de la tanda. La 0800 solo añade; la 0801 cambia el casado (marca y plataforma, solo si el destino las
 -- trae) y el «a mano» (tres parámetros opcionales). Regla 31: los movimientos del banco YA CONCILIADOS, por cuenta
 -- (regla 9: Foodint, la primera), iguales antes y después: cuántos, y la huella de su casado, su asiento y sus líneas.
+-- Y lo que lee Tesorería al abrir el ejercicio (cuántos movimientos por banco en 2026).
 -- Corte fijo: lo casado antes del 23/11/2026 a las 00:00 de Madrid.
 select clave, valor from (
   select 1 o, 'cuenta ' || m.account_id || ' · movimientos conciliados (cuántos · asientos · huella)' clave,
@@ -24,4 +25,12 @@ select clave, valor from (
     from public.journal_entry e join public.journal_line l on l.entry_id = e.id
    where e.source_type = 'manual' and e.reason like 'Escrito a mano en Bancos%' and e.created_at < timestamptz '2026-11-23 00:00:00+01'
    group by e.account_id
+  union all
+  -- Lo que lee Tesorería al abrir (respuesta X28 · 3): el ejercicio entero de cada banco, de mil en mil. Cuántos
+  -- movimientos tiene cada banco en 2026, por cuenta, y en cuántas lecturas de mil se leen.
+  select 3, 'cuenta ' || m.account_id || ' · banco ' || m.treasury_account_id || ' · movimientos de 2026 (cuántos · lecturas de mil)',
+         count(*) || ' · ' || ceil(count(*) / 1000.0)::int
+    from public.bank_movement m
+   where m.op_date between date '2026-01-01' and date '2026-12-31' and m.created_at < timestamptz '2026-11-23 00:00:00+01'
+   group by m.account_id, m.treasury_account_id
 ) t order by o, clave;
