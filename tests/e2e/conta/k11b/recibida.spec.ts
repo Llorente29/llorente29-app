@@ -167,10 +167,8 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     // El pago, en blanco: pendiente de pagar. Intro por la subcuenta y la fecha del pago; en la última, guarda y valida.
     await page.keyboard.press('Enter')
     await expect(ficha(page).locator('#kf-pago')).toBeFocused()
-    // En blanco aunque la ficha proponga la del último pago de este proveedor (a 1920, la del punto 4 a 1366: e2e
-    // 45261036533, «pagada»): se borra con el teclado.
-    await page.keyboard.press('Control+a')
-    await page.keyboard.press('Backspace')
+    // En blanco: sin cuenta de pago en su ficha, la del último pago de este proveedor (a 1920, la del punto 4 a 1366) no
+    // se escribe (K11b, Julio, 23/11; e2e 45268936661 la apuntaba y la factura quedaba «pagada»).
     await expect(ficha(page).locator('#kf-pago')).toHaveValue('')
     await page.keyboard.press('Enter')
     await expect(ficha(page).locator('#kf-pago-fecha')).toBeFocused()
@@ -258,13 +256,19 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     expect(vista.marco, `a ${ancho}, el recuadro del asiento termina dentro de la pantalla`).toBeLessThanOrEqual(Math.min(vista.pantalla, vista.alto))
     await cargada(page, 'tres contrapartidas y el pago')
     await page.screenshot({ path: `${DIR}/tres-contrapartidas-${ancho}.png` })
+    // Vaciarla es un cambio de verdad (K11b, 23/11): la factura se valida pendiente de pagar, sin pago (abajo, en la base).
     await ficha(page).locator('#kf-pago').fill('')
     await ficha(page).locator('#kf-pago').press('Tab')
+    await expect(ficha(page).locator('#kf-pago')).toHaveValue('')
     await expect(ficha(page).locator('[data-asiento-pago="por-hacer"]')).toHaveCount(0, { timeout: 30_000 })
     await sinDocumento(page, 'Prueba e2e K11b: tres contrapartidas, sin documento')
     await introFuera(page)
     await expect(aviso(page)).toContainText(/Apuntada y (validada|en Diez)/, { timeout: 60_000 })
     await contar(page, `${ancho} · 2`)
+    const [f1] = await rest<{ status: string }[]>(s, `supplier_invoice?select=status&account_id=eq.${NUCLEO.id}&id=eq.${factura(t, 1)}`)
+    expect(f1.status, 'con la casilla del pago vaciada, validada y pendiente de pagar').toBe('aprobada')
+    const pagos1 = await rest<{ id: string }[]>(s, `supplier_invoice_payment?select=id&account_id=eq.${NUCLEO.id}&invoice_id=eq.${factura(t, 1)}`)
+    expect(pagos1, 'con la casilla del pago vaciada, ningún pago').toEqual([])
     const a2 = await lineasDe(s, factura(t, 1))
     const gastos = a2.lineas.filter((l) => /^6/.test(l.company_account.code))
     expect(gastos.map((l) => [l.company_account.code, Number(l.debit), l.location_id, l.brand_id, l.channel_id]), 'las tres líneas del asiento, cada una con lo suyo').toEqual([

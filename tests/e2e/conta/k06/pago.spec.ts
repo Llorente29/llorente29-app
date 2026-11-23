@@ -155,11 +155,19 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     const banco = await idDe(s, nBanco)
     expect(banco.status).toBe('aprobada')
 
-    // ── 2 · Vacía: la siguiente del mismo proveedor propone la 57200001 «de la última»; vaciada, pendiente de pagar. ──
+    // ── 2 · Vacía (K11b, Julio, 23/11): la siguiente del mismo proveedor NO trae la 57200001 escrita (una factura no queda
+    //    pagada por haber pagado otra antes): la casilla, vacía; la del último pago, la primera al abrir la lupa. Elegida y
+    //    vaciada otra vez, pendiente de pagar (vaciarla es un cambio de verdad: no vuelve a la propuesta). ──
     const nVacia = `K06V-${t}-${sello}`
     await escribirAMano(page, t, nVacia)
-    await expect(ficha(page).locator('#kf-pago')).toHaveValue('57200001', { timeout: 30_000 })
-    await expect(ficha(page).locator('[data-prueba="origen-pago"]')).toHaveText('La del último pago')
+    await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
+    await expect(ficha(page).locator('#kf-pago')).toHaveValue('')
+    await expect(ficha(page).locator('[data-prueba="origen-pago"]')).toHaveCount(0)
+    await ficha(page).getByRole('button', { name: 'Buscar la cuenta del pago' }).click()
+    const primera = page.locator('#kf-pago-lista [role="option"]').first()
+    await expect(primera).toContainText('57200001', { timeout: 30_000 })
+    await primera.click()
+    await expect(ficha(page).locator('#kf-pago')).toHaveValue('57200001')
     await ficha(page).locator('#kf-pago').fill('')
     // Vacía: pendiente de pagar (en ERP10, la fila del pago en blanco).
     await expect(ficha(page).locator('#kf-pago')).toHaveValue('')

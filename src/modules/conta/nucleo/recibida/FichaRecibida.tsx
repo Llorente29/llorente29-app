@@ -90,7 +90,7 @@ import { faltasParaValidar, laRepetida, textoNoSeValida, textoRepetida } from '.
 import { avisoInmovilizado } from './contrapartida'
 import { proveedoresQueEncajan } from './buscarProveedor'
 import { OPERACIONES, cortoDeOperacion, esOperacion, origenOperacion, textoDeOperacion, trimestrePropuesto, trimestresParaElegir } from './cabecera'
-import { fechaDelPago, propuestaDelPago, queHaceElPago, textoAsientoDelPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
+import { PAGO_VACIO, cuentaDeLaCasilla, fechaDelPago, primerasDeLaLupa, propuestaDelPago, queHaceElPago, textoAsientoDelPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
 import { apuntarPago, cuentasDePago, hayLiquidacion, pagoDelProveedor } from './pagoServicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import { AltaDesdeFactura } from '@/modules/conta/documentos/ProveedorDesdeFactura'
@@ -99,7 +99,7 @@ import { CrearDesdeBuscador } from '@/modules/conta/plan/CrearDesdeBuscador'
 
 /**
  * K06 · El borrador de esta ficha: el de la ficha de hoy y la cuenta del pago con su fecha. null = lo que
- * se propone (la 430 de su liquidación, la del último pago, o vacía); '' = pendiente de pagar.
+ * se propone (la de su ficha, o vacía; K11b: la del último pago solo en la lupa); '' = pendiente de pagar.
  */
 type BorradorNucleo = BorradorFicha & { pagoCuenta: string | null; pagoFecha: string | null }
 /** Los nombres de los cambios sin guardar, con los rótulos de esta ficha (K04b: «N.º de factura», como la casilla). */
@@ -222,7 +222,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const nombreLocal = useCallback((lid: string) => locales.find((l) => l.id === lid)?.nombre ?? null, [locales])
   const formato = useMemo(() => {
     const f = formatoCampo(nombreProveedor, nombreLocal)
-    return (campo: string, v: unknown): string => campo === 'pagoCuenta' ? (v ? String(v) : 'Pendiente de pagar')
+    return (campo: string, v: unknown): string => campo === 'pagoCuenta' ? (v && v !== PAGO_VACIO ? String(v) : 'Pendiente de pagar')
       : campo === 'pagoFecha' ? (v ? String(v).split('-').reverse().join('/') : '—') : f(campo, v)
   }, [nombreProveedor, nombreLocal])
   const ed = useCambiosSinGuardar<BorradorNucleo>(original, ETIQUETAS_NUCLEO, formato)
@@ -254,7 +254,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   // factura ya tiene su asiento propuesto guardado y no se pide) el asiento se forma igual con lo escrito.
   const aManoCuentas = useLeer(accountId && empresa ? () => cuentasAMano(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-a-mano`).datos ?? null
 
-  // ── K06 · Cómo se paga: la cuenta del pago, propuesta (la 430 de su liquidación, la del último pago) o vacía ──
+  // ── K06 · Cómo se paga: la cuenta del pago, propuesta (la de su ficha) o vacía; la del último pago, solo la primera de la lupa ──
   const cuentasPago = useUltimo(useLeer(accountId && empresa ? () => cuentasDePago(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-pago`).datos, empresa ?? '')
   const subProvCodigo = delProv?.subcuenta?.codigo ?? null
   const leePagoProv = !!(accountId && empresa && provId && delProv)
@@ -289,7 +289,10 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const [cambiandoDoc, setCambiandoDoc] = useState(false)
   const plataforma = pagoProv?.plataforma ? { ...pagoProv.plataforma, hayLiquidacion: conLiquidacion } : null
   const propuestaPago = pagoProv ? propuestaDelPago({ deLaFicha: pagoProv.deLaFicha, ultimas: pagoProv.ultimas }) : null
-  const pagoCuenta = b.pagoCuenta ?? propuestaPago?.cuenta ?? ''
+  // K11b · Lo que se ve es lo que se apunta: la de la casilla; vaciada (PAGO_VACIO), pendiente de pagar, aunque haya propuesta.
+  const pagoCuenta = cuentaDeLaCasilla(b.pagoCuenta, propuestaPago?.cuenta ?? '')
+  /** Las cuentas de sus últimos pagos: las primeras al abrir la lupa del pago (nunca escritas en la casilla). */
+  const ultimasDelPago = pagoProv ? primerasDeLaLupa({ ultimas: pagoProv.ultimas }) : []
   const pagoFecha = b.pagoFecha ?? fechaDelPago(b.fecha, b.vence, !!pagoProv?.pagoDirecto)
   const origenPago = b.pagoCuenta === null ? propuestaPago?.origen ?? null : null
   const dudaPago = b.pagoCuenta === null && propuestaPago?.duda ? propuestaPago.duda : null
@@ -539,6 +542,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     }
     if (guardandoCab) { setAviso({ tono: 'falta', texto: 'Aún estoy guardando la cabecera (el tipo, el trimestre, el concepto…): vuelve a pulsar en un momento. No he validado nada.' }); return }
     if (leyendoPago) { setAviso({ tono: 'falta', texto: 'Aún estoy leyendo cómo se paga (la cuenta del pago que propongo): vuelve a pulsar en un momento. No he guardado nada.' }); return }
+    if (textoPago !== null && textoPago.trim() !== '' && textoPago.trim() !== pagoCuenta) {
+      setAviso({ tono: 'falta', texto: `La cuenta del pago «${textoPago.trim()}» no está elegida: elígela de la lista o vacía la casilla (pendiente de pagar). No he guardado nada.` }); return
+    }
     if (leyendoPropuesta) { setAviso({ tono: 'falta', texto: 'Aún estoy leyendo la propuesta (la cuenta de gasto que propongo): vuelve a pulsar en un momento. No he guardado nada.' }); return }
     setGuardando(true); setAviso(null)
     try {
@@ -1190,7 +1196,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                           <input aria-label="Documento del pago" readOnly tabIndex={-1} value="" title="Lo pone el programa al apuntarlo" />
                           <span className="kr-celda" data-prueba="pago-cuenta" data-ambar={dudaPago ? 'si' : undefined} title={dudaPago ? textoDudaPago(dudaPago, (x) => cuentasPago?.nombres.get(x) ?? '').texto : [nombrePago, origenPago].filter(Boolean).join(' · ') || undefined}>
                             <Buscador id="kf-pago" lupa etiqueta="La cuenta del pago" cargando={!cuentasPago} valor={textoPago ?? pagoCuenta} cuenta={pagoCuenta || null} duda={!!dudaPago}
-                              ponerTexto={(t) => { setTextoPago(t); if (!t.trim()) ed.poner('pagoCuenta', '') }} lista={(t) => cuentasQueEncajan(t, [...(cuentasPago?.lista ?? []), ...creadas], 8)}
+                              ponerTexto={(t) => { setTextoPago(t); if (!t.trim()) ed.poner('pagoCuenta', PAGO_VACIO) }} lista={(t) => cuentasQueEncajan(t, [...(cuentasPago?.lista ?? []), ...creadas], 8)}
+                              inicial={() => ultimasDelPago.map((c) => [...(cuentasPago?.lista ?? []), ...creadas].find((x) => x.codigo === c) ?? { codigo: c, nombre: cuentasPago?.nombres.get(c) ?? 'La de su último pago' })}
                               texto={(x) => `${x.codigo} · ${x.nombre}`} elegir={(x) => { ed.poner('pagoCuenta', x.codigo); setTextoPago(null) }}
                               crear={crearCuenta((x) => { ed.poner('pagoCuenta', x.codigo); setTextoPago(null) })} />
                           </span>
