@@ -137,7 +137,9 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     // ── 1b · Sin propuesta (su proveedor no tiene NIF): la ficha lo dice. ──
     await page.goto(`/conta/documentos/recibidas/${factura(t, 3)}?ver=por-revisar`, { timeout: 30_000 })
     await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
-    await expect(ficha(page).locator('[data-prueba="cuadra"]')).toHaveText('Sin propuesta', { timeout: 30_000 })
+    // K11b · 4 · El asiento se forma con lo escrito también sin propuesta (con las cuentas de la empresa): la etiqueta dice
+    // lo que le falta, y el porqué de no haber propuesta va en su title y en su nota (regla 8).
+    await expect(ficha(page).locator('[data-prueba="cuadra"]')).toHaveAttribute('title', /le falta el NIF/, { timeout: 30_000 })
     await expect(ficha(page).locator('[data-prueba="sin-propuesta"]')).toContainText('le falta el NIF')
 
     // ── 2 · La de octubre sin IVA, de un proveedor con NIF: el tipo, el concepto, las observaciones y la marca. Con

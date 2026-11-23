@@ -167,6 +167,11 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     // El pago, en blanco: pendiente de pagar. Intro por la subcuenta y la fecha del pago; en la última, guarda y valida.
     await page.keyboard.press('Enter')
     await expect(ficha(page).locator('#kf-pago')).toBeFocused()
+    // En blanco aunque la ficha proponga la del último pago de este proveedor (a 1920, la del punto 4 a 1366: e2e
+    // 45261036533, «pagada»): se borra con el teclado.
+    await page.keyboard.press('Control+a')
+    await page.keyboard.press('Backspace')
+    await expect(ficha(page).locator('#kf-pago')).toHaveValue('')
     await page.keyboard.press('Enter')
     await expect(ficha(page).locator('#kf-pago-fecha')).toBeFocused()
     // El último Intro guarda; si la ficha aún lee cómo se paga, lo dice y no guarda: se espera y se vuelve a pulsar (como

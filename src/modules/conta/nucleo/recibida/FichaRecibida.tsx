@@ -198,6 +198,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   // ── El borrador: lo guardado, como en la ficha de hoy ──
   const vistaDatos = useUltimo(vista.datos, `${id}:${fac?.proveedor?.id ?? ''}`)
   const propuesta = fac?.asiento ? undefined : vistaDatos ? (vistaDatos.propuesta ?? null) : vista.error ? null : undefined
+  /** Con su asiento ya propuesto (o validado) la propuesta no se pide; sin él, `propuesta === undefined` es que viene de camino. */
+  const asientoGuardado = !!fac?.asiento
+  const leyendoPropuesta = !aMano && !!fac && !asientoGuardado && propuesta === undefined
   const nombresProp = vistaDatos?.propuesta ? vistaDatos.nombres : null
   const lineaGasto = propuesta?.lineas.find((l) => l.debe > 0 && /^6/.test(l.cuenta)) ?? null
   const gastoPropuesto = lineaGasto?.cuenta ?? fac?.proveedor?.gasto?.cuenta ?? null
@@ -332,8 +335,12 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
       const c = cuentasDeLaPropuesta(propuesta.lineas, (x) => nombresProp?.get(x) ?? 'Cuenta')
       return delProveedor ? { ...c, proveedor: delProveedor } : c
     }
-    return aManoCuentas ? { ...aManoCuentas.cuentas, proveedor: delProveedor } : null
-  }, [propuesta, nombresProp, aManoCuentas, subCodigo, subNombre, provNombreFicha, gastoDelAsiento, subcuentasProv])
+    // Las de reserva, solo cuando ya se sabe que no hay propuesta (o no se pide: a mano, o con su asiento ya propuesto). Mientras
+    // la propuesta viene de camino, no: el asiento diría «Falta la cuenta de gasto» antes de que llegue la propuesta (e2e
+    // 45261036533, K04: Intro no validaba).
+    const sinPropuestaYa = aMano || propuesta === null || !!asientoGuardado
+    return aManoCuentas && sinPropuestaYa ? { ...aManoCuentas.cuentas, proveedor: delProveedor } : null
+  }, [propuesta, nombresProp, aManoCuentas, subCodigo, subNombre, provNombreFicha, gastoDelAsiento, subcuentasProv, aMano, asientoGuardado])
   const previa = cuentasAsiento ? asientoVistaPrevia(b, cuentasAsiento, nombreGasto, nombreLocal) : null
   const totales = totalesDe(b)
 
@@ -532,6 +539,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     }
     if (guardandoCab) { setAviso({ tono: 'falta', texto: 'Aún estoy guardando la cabecera (el tipo, el trimestre, el concepto…): vuelve a pulsar en un momento. No he validado nada.' }); return }
     if (leyendoPago) { setAviso({ tono: 'falta', texto: 'Aún estoy leyendo cómo se paga (la cuenta del pago que propongo): vuelve a pulsar en un momento. No he guardado nada.' }); return }
+    if (leyendoPropuesta) { setAviso({ tono: 'falta', texto: 'Aún estoy leyendo la propuesta (la cuenta de gasto que propongo): vuelve a pulsar en un momento. No he guardado nada.' }); return }
     setGuardando(true); setAviso(null)
     try {
       if (aMano) { await guardarNueva(); return }
@@ -867,7 +875,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   }
 
   return (
-    <div className="kf-ficha kf-recibida kr" ref={raiz} onKeyDown={(e) => { marcarTocada(); alPulsar(e) }} onPointerDown={marcarTocada} data-prueba="ficha-recibida-nucleo" aria-busy={cargando || leyendoPago || undefined}>
+    <div className="kf-ficha kf-recibida kr" ref={raiz} onKeyDown={(e) => { marcarTocada(); alPulsar(e) }} onPointerDown={marcarTocada} data-prueba="ficha-recibida-nucleo" aria-busy={cargando || leyendoPago || leyendoPropuesta || undefined}>
       {salida.aviso}
       <div className="kf-cuerpo kr-cuerpo">
         <div className="kf-izquierda kr-izquierda">
