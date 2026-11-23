@@ -24,6 +24,8 @@ declare
   k_prov    constant uuid := 'c0f60000-0000-4000-8000-0000000000a1';
   cuando    constant timestamptz := '2026-11-23 00:00:00+00';
   v_n int;
+  v_t record;
+  v_c uuid;
 begin
   if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
     raise exception 'Semilla K11b ABORTADA: al otro lado hay cuentas de producción. ¿Es staging-conta?';
@@ -76,6 +78,20 @@ begin
          (k_cuenta, k_emp, 'pymes', '57000000', '570', 'Caja de prueba K11b', 'own', 'manual', cuando, cuando),
          (k_cuenta, k_emp, 'pymes', '57200001', '572', 'Banco de prueba K11b', 'own', 'manual', cuando, cuando)
   on conflict (company_id, code) do nothing;
+  -- El IVA soportado al 4, 10 y 21 %, cada uno enlazado a su tipo (como la semilla K04): sin el enlace, el asiento de
+  -- la recibida no se valida («Falta la base con su tipo de IVA», e2e a mano 45186722793).
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source, created_at, updated_at)
+  values (k_cuenta, k_emp, 'pymes', '47200004', '472', 'IVA soportado 4 %', 'own', 'serie', cuando, cuando),
+         (k_cuenta, k_emp, 'pymes', '47200010', '472', 'IVA soportado 10 %', 'own', 'serie', cuando, cuando),
+         (k_cuenta, k_emp, 'pymes', '47200021', '472', 'IVA soportado 21 %', 'own', 'serie', cuando, cuando)
+  on conflict (company_id, code) do nothing;
+  for v_t in select t.id, t.rate from public.tax_rate t
+              where t.tax_system = 'iva' and t.is_system and t.valid_to is null and t.treatment = 'taxed' and t.rate in (4, 10, 21) loop
+    select id into v_c from public.company_account where company_id = k_emp and code = '472000' || lpad(v_t.rate::int::text, 2, '0');
+    insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+    values (k_cuenta, k_emp, v_c, 'tax_rate', v_t.id::text, 'soportado', 'serie')
+    on conflict (company_id, entity, entity_id, role) do nothing;
+  end loop;
 
   -- 4 · El proveedor, con su subcuenta, y sus facturas por revisar (dos por cada tamaño de la e2e).
   insert into public.supplier (id, account_id, name, legal_name, tax_id, country_code, vat_regime, created_by_name, created_at)
@@ -116,6 +132,9 @@ begin
   if v_n <> 4 then raise exception 'Semilla K11b: hay % facturas y tenían que ser 4.', v_n; end if;
   if (select count(*) from public.locations where account_id = k_cuenta and name like 'Local de Prueba K11b %') <> 3 then
     raise exception 'Semilla K11b: los tres locales no están.';
+  end if;
+  if (select count(*) from public.company_account_link where company_id = k_emp and entity = 'tax_rate' and role = 'soportado') < 3 then
+    raise exception 'Semilla K11b: el IVA soportado al 4, 10 y 21 %% no está enlazado a su tipo.';
   end if;
   raise notice 'Semilla K11b OK: «Restaurante de Ejemplo Núcleo, S.L.» (hostelería) con el 303 del 3T presentado, tres locales, dos marcas, dos plataformas, el proveedor 40000101 y cuatro facturas por revisar.';
 end $$;

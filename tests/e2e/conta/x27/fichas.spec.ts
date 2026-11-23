@@ -101,10 +101,7 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     // K11b · La nueva entra por la primera casilla de la pantalla (la fecha de la factura, la de hoy); Intro pasa al proveedor.
     await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
     await page.keyboard.press('Enter')
-    // K11b · La nueva entra por la primera casilla de la pantalla (la fecha de la factura, la de hoy); Intro pasa al proveedor.
-  await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
-  await page.keyboard.press('Enter')
-  await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
+    await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
     await page.keyboard.type(`Proveedor Inventado X27 ${ancho}-${n}`)
     await page.keyboard.press('Enter')
     await expect(recibida(page).locator('#kf-cuenta-0'), 'la recibida nueva propone su subcuenta de gasto').toHaveValue(gasto.code, { timeout: 30_000 })
@@ -118,10 +115,7 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     // K11b · La nueva entra por la primera casilla de la pantalla (la fecha de la factura, la de hoy); Intro pasa al proveedor.
     await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
     await page.keyboard.press('Enter')
-    // K11b · La nueva entra por la primera casilla de la pantalla (la fecha de la factura, la de hoy); Intro pasa al proveedor.
-  await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
-  await page.keyboard.press('Enter')
-  await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
+    await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
     await page.keyboard.type('Ficha Uno')
     await page.keyboard.press('Enter')
     await recibida(page).locator('#kf-numero').fill(numero)
