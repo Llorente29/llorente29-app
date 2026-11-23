@@ -85,12 +85,13 @@ export default function PantallaTesoreria() {
 
   // Lo de la cuenta y la empresa: los bancos, el plan, los locales, las marcas, las plataformas y si es de hostelería.
   const datos = useUltimo(useLeer(accountId && companyId ? () => leerDatosBancos(accountId, companyId) : null, `${accountId}:${companyId}:${vuelta}:datos`).datos, `${accountId}:${companyId}`)
-  const base = useLeer(accountId && companyId ? async () => {
+  // Mientras vuelve a leer (después de contabilizar), lo último leído: la lista y la línea no se desmontan ni pierden el foco.
+  const base = useUltimo(useLeer(accountId && companyId ? async () => {
     const [cuentas, locales, marcas, plataformas, hosteleria] = await Promise.all([
       cuentasDeApunte(accountId, companyId), localesDeLaCuenta(accountId), marcasDeLaCuenta(accountId), plataformasDeLaCuenta(accountId), esDeHosteleria(companyId)])
     const locs: Opcion[] = [...locales.map((l, i) => ({ id: l.id, codigo: String(i + 1), descripcion: l.nombre })), { id: 'comun', codigo: 'C', descripcion: 'Común a todos los locales' }]
     return { cuentas, locales: locs, marcas, plataformas, hosteleria }
-  } : null, `${accountId}:${companyId}:${vuelta}:base`).datos
+  } : null, `${accountId}:${companyId}:${vuelta}:base`).datos, `${accountId}:${companyId}`)
   const bancos = useMemo(() => datos?.bancos ?? [], [datos])
   const banco: BancoVista | null = bancos.find((b) => b.id === query.get('banco')) ?? bancoInicial(bancos, datos?.dudas ?? {})
   const meses = useMemo(() => (datos ? mesesElegibles(datos.primerMovimiento, hoy) : []), [datos, hoy])
