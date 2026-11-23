@@ -2098,6 +2098,29 @@ end $$;
 
 
 --
+-- Name: _bank_movimiento_no_borrado(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._bank_movimiento_no_borrado() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if exists (select 1 from public.bank_movimiento_borrado d where d.treasury_account_id = new.treasury_account_id and d.fingerprint = new.fingerprint) then
+    return null;   -- borrada a mano: no vuelve (bank_movimiento_borrado_quitar la deja volver)
+  end if;
+  return new;
+end $$;
+
+
+--
+-- Name: FUNCTION _bank_movimiento_no_borrado(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._bank_movimiento_no_borrado() IS 'X29 · Una línea del extracto borrada a mano no vuelve a entrar en bank_movement.';
+
+
+--
 -- Name: _bank_movimiento_sin_tarjetas(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -27878,7 +27901,7 @@ CREATE FUNCTION public.bank_importar(p_treasury uuid, p_fuente text, p_formato t
     AS $$
 declare
   v_t public.treasury_account; v_cuenta uuid; v_aj public.bank_settings; v_ext uuid; v_suma numeric := 0; v_m jsonb;
-  v_nuevos int := 0; v_rep int := 0; v_pos int := 0; v_prev public.bank_statement; v_cont text; v_hueco numeric;
+  v_nuevos int := 0; v_rep int := 0; v_borr int := 0; v_pos int := 0; v_prev public.bank_statement; v_cont text; v_hueco numeric;
   v_id uuid; v_estado text; v_n int := coalesce(jsonb_array_length(p_movs), 0);
 begin
   select * into v_t from public.treasury_account where id = p_treasury;
@@ -27928,6 +27951,11 @@ begin
 
   for v_m in select * from jsonb_array_elements(coalesce(p_movs, '[]'::jsonb)) loop
     v_pos := v_pos + 1;
+    -- X29 · Borrada a mano: no vuelve, y se cuenta aparte de las repetidas.
+    if exists (select 1 from public.bank_movimiento_borrado d where d.treasury_account_id = p_treasury and d.fingerprint = v_m->>'huella') then
+      v_borr := v_borr + 1;
+      continue;
+    end if;
     -- Respuesta 4: el mismo movimiento por el agregador y por Norma 43 es EL MISMO.
     -- Las dos fuentes no traen las mismas referencias (la huella entera difiere),
     -- pero sí el día, el importe y el orden en el día (la huella suave): entre
@@ -27970,9 +27998,11 @@ begin
   end if;
 
   perform public._bank_log(v_cuenta, v_t.company_id, null, null, v_ext, 'importado', 'persona',
-    format('%s: %s movimientos nuevos y %s que ya estaban, del %s al %s', v_t.name, v_nuevos, v_rep, to_char(p_desde, 'DD/MM'), to_char(p_hasta, 'DD/MM')),
+    format('%s: %s movimientos nuevos y %s que ya estaban%s, del %s al %s', v_t.name, v_nuevos, v_rep,
+           case when v_borr > 0 then format(' · %s borrada%s antes', v_borr, case when v_borr = 1 then '' else 's' end) else '' end,
+           to_char(p_desde, 'DD/MM'), to_char(p_hasta, 'DD/MM')),
     jsonb_build_object('continuidad', v_cont, 'hueco', v_hueco));
-  return jsonb_build_object('repetido', false, 'extracto', v_ext, 'nuevos', v_nuevos, 'repetidos', v_rep,
+  return jsonb_build_object('repetido', false, 'extracto', v_ext, 'nuevos', v_nuevos, 'repetidos', v_rep, 'borradas', v_borr,
     'posibles_repetidos', (select possible_repeated_count from public.bank_statement where id = v_ext),
     'continuidad', v_cont, 'hueco', v_hueco);
 end $$;
@@ -28073,6 +28103,82 @@ end $$;
 
 
 --
+-- Name: bank_movimiento_borrado_quitar(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_movimiento_borrado_quitar(p_banco uuid, p_huella text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_t public.treasury_account; v_n int;
+begin
+  select * into v_t from public.treasury_account where id = p_banco;
+  if v_t.id is null then raise exception 'Ese banco no existe.' using errcode = 'P0002'; end if;
+  perform public._bank_cuenta_de_empresa(v_t.company_id);
+  delete from public.bank_movimiento_borrado where treasury_account_id = p_banco and fingerprint = p_huella;
+  get diagnostics v_n = row_count;
+  return jsonb_build_object('quitada', v_n > 0,
+    'texto', case when v_n > 0 then 'Quitada: la línea vuelve en la siguiente lectura del banco o al subir el extracto.' else 'Esa línea no estaba borrada.' end);
+end $$;
+
+
+--
+-- Name: FUNCTION bank_movimiento_borrado_quitar(p_banco uuid, p_huella text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.bank_movimiento_borrado_quitar(p_banco uuid, p_huella text) IS 'X29 · Quita la huella de una línea borrada: vuelve en la siguiente lectura.';
+
+
+--
+-- Name: bank_movimientos_borrar(uuid[], text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_movimientos_borrar(p_movimientos uuid[], p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_m public.bank_movement; v_n int := 0; v_no text[] := '{}'; v_por_que text;
+  v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+begin
+  if coalesce(array_length(p_movimientos, 1), 0) = 0 then raise exception 'No hay ninguna línea marcada.' using errcode = '22023'; end if;
+  for v_m in select * from public.bank_movement where id = any(p_movimientos) order by op_date, id for update loop
+    perform public._bank_cuenta_de_empresa(v_m.company_id);
+    v_por_que := case
+      when v_m.status = 'casado' or exists (select 1 from public.bank_match b where b.movement_id = v_m.id and b.status = 'vivo')
+        then 'está contabilizada: deshazla antes'
+      when exists (select 1 from public.bank_match_item i join public.bank_match b on b.id = i.match_id where i.other_movement_id = v_m.id and b.status = 'vivo')
+        then 'es el otro lado de un traspaso contabilizado'
+      when v_m.receipt_path is not null then 'tiene su justificante: guárdalo antes'
+    end;
+    if v_por_que is not null then
+      v_no := array_append(v_no, format('%s, %s: %s', to_char(v_m.op_date, 'DD/MM'), public.conta_euros_exactos(v_m.amount), v_por_que));
+      continue;
+    end if;
+    insert into public.bank_movimiento_borrado (account_id, treasury_account_id, fingerprint, borrado_por)
+    values (v_m.account_id, v_m.treasury_account_id, v_m.fingerprint, v_quien)
+    on conflict (treasury_account_id, fingerprint) do nothing;
+    -- Lo que la línea arrastraba sin estar contabilizada (casados ya deshechos), fuera con ella.
+    delete from public.bank_match_item i using public.bank_match b where b.id = i.match_id and b.movement_id = v_m.id;
+    delete from public.bank_match where movement_id = v_m.id;
+    delete from public.bank_movement where id = v_m.id;
+    v_n := v_n + 1;
+  end loop;
+  return jsonb_build_object('borradas', v_n, 'no', to_jsonb(v_no),
+    'texto', concat_ws(' ',
+      case when v_n = 0 then 'No se ha borrado ninguna.' else format('Borradas: %s. No volverán al leer el banco ni al subir el extracto.', case when v_n = 1 then '1 línea' else v_n || ' líneas' end) end,
+      case when array_length(v_no, 1) > 0 then format('%s no: %s.', case when array_length(v_no, 1) = 1 then 'Una' else array_length(v_no, 1)::text end, array_to_string(v_no, ' · ')) end));
+end $$;
+
+
+--
+-- Name: FUNCTION bank_movimientos_borrar(p_movimientos uuid[], p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.bank_movimientos_borrar(p_movimientos uuid[], p_quien_nombre text) IS 'X29 · Borra las líneas del extracto marcadas que no están contabilizadas, y guarda su huella para que no vuelvan. Dice cuántas ha borrado y por qué no las demás.';
+
+
+--
 -- Name: bank_proponer(uuid, text, text, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -28100,6 +28206,34 @@ begin
     perform public._bank_log(v_m.account_id, v_m.company_id, p_movement, null, null, p_estado, 'folvy', p_porque, coalesce(p_propuesta, '{}'::jsonb));
   end if;
 end $$;
+
+
+--
+-- Name: bank_quitar_validacion(uuid[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_quitar_validacion(p_movimientos uuid[]) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_m public.bank_movement; v_n int := 0;
+begin
+  if coalesce(array_length(p_movimientos, 1), 0) = 0 then raise exception 'No hay ningún movimiento marcado.' using errcode = '22023'; end if;
+  for v_m in select * from public.bank_movement where id = any(p_movimientos) and validated_at is not null order by op_date, id for update loop
+    perform public._bank_cuenta_de_empresa(v_m.company_id);
+    update public.bank_movement set validated_at = null, validated_by_name = null, updated_at = now() where id = v_m.id;
+    v_n := v_n + 1;
+  end loop;
+  return jsonb_build_object('quitadas', v_n,
+    'texto', case when v_n = 0 then 'Ninguno de los marcados estaba validado.' else format('Quitada la validación de %s.', case when v_n = 1 then '1 movimiento' else v_n || ' movimientos' end) end);
+end $$;
+
+
+--
+-- Name: FUNCTION bank_quitar_validacion(p_movimientos uuid[]); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.bank_quitar_validacion(p_movimientos uuid[]) IS 'X29 · Quita la validación (revisado) de las líneas marcadas.';
 
 
 --
@@ -28399,6 +28533,36 @@ begin
   update public.bank_movement set receipt_path = p_ruta, receipt_at = now(), updated_at = now() where id = p_movement;
   perform public._bank_log(v_m.account_id, v_m.company_id, p_movement, null, null, 'propuesto', 'persona', 'Ticket subido', jsonb_build_object('ticket', p_ruta));
 end $$;
+
+
+--
+-- Name: bank_validar(uuid[], text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_validar(p_movimientos uuid[], p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_m public.bank_movement; v_n int := 0; v_ya int := 0; v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+begin
+  if coalesce(array_length(p_movimientos, 1), 0) = 0 then raise exception 'No hay ningún movimiento marcado.' using errcode = '22023'; end if;
+  for v_m in select * from public.bank_movement where id = any(p_movimientos) order by op_date, id for update loop
+    perform public._bank_cuenta_de_empresa(v_m.company_id);
+    if v_m.validated_at is not null then v_ya := v_ya + 1; continue; end if;
+    update public.bank_movement set validated_at = now(), validated_by_name = v_quien, updated_at = now() where id = v_m.id;
+    v_n := v_n + 1;
+  end loop;
+  return jsonb_build_object('validados', v_n, 'ya', v_ya,
+    'texto', format('Validados: %s%s.', case when v_n = 1 then '1 movimiento' else v_n || ' movimientos' end,
+                    case when v_ya > 0 then format(' (%s ya lo estaba%s)', v_ya, case when v_ya = 1 then '' else 'n' end) else '' end));
+end $$;
+
+
+--
+-- Name: FUNCTION bank_validar(p_movimientos uuid[], p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.bank_validar(p_movimientos uuid[], p_quien_nombre text) IS 'X29 · Valida (revisado) las líneas del extracto marcadas. No toca sus asientos.';
 
 
 --
@@ -115799,6 +115963,8 @@ CREATE TABLE public.bank_movement (
     movement_type text,
     not_cancelled_at timestamp with time zone,
     not_cancelled_by uuid,
+    validated_at timestamp with time zone,
+    validated_by_name text,
     CONSTRAINT bank_movement_common_code_check CHECK (((common_code IS NULL) OR (common_code ~ '^\d{2}$'::text))),
     CONSTRAINT bank_movement_confidence_check CHECK (((confidence IS NULL) OR (confidence = ANY (ARRAY['seguro'::text, 'probable'::text, 'duda'::text])))),
     CONSTRAINT bank_movement_ignorado_con_porque CHECK (((status = 'ignorado'::text) = (ignored_reason IS NOT NULL))),
@@ -115840,6 +116006,41 @@ COMMENT ON COLUMN public.bank_movement.movement_type IS 'B02. El tipo de movimie
 --
 
 COMMENT ON COLUMN public.bank_movement.not_cancelled_at IS 'B01·20 · «No, es bueno»: quien lo dijo cuándo; el aviso de cargo anulado por el banco no vuelve para este cargo.';
+
+
+--
+-- Name: COLUMN bank_movement.validated_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_movement.validated_at IS 'X29 · «Validado» como en ERP10: la línea del extracto, revisada por una persona (cuándo). No es el asiento: ese se valida al conciliar (R08).';
+
+
+--
+-- Name: COLUMN bank_movement.validated_by_name; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_movement.validated_by_name IS 'X29 · Quién la validó.';
+
+
+--
+-- Name: bank_movimiento_borrado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.bank_movimiento_borrado (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    treasury_account_id uuid NOT NULL,
+    fingerprint text NOT NULL,
+    borrado_at timestamp with time zone DEFAULT now() NOT NULL,
+    borrado_por text NOT NULL
+);
+
+
+--
+-- Name: TABLE bank_movimiento_borrado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.bank_movimiento_borrado IS 'X29 · La huella de cada línea del extracto borrada a mano (solo el banco, la huella, cuándo y quién): la siguiente lectura del banco o un extracto que la traiga no la vuelve a meter (1713). Quitar la huella (bank_movimiento_borrado_quitar) la deja volver.';
 
 
 --
@@ -123977,6 +124178,7 @@ CREATE TABLE public.conta_user_pref (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     reparto_documento numeric,
+    casar_plegado boolean,
     CONSTRAINT conta_user_pref_densidad_check CHECK ((densidad = ANY (ARRAY['compacta'::text, 'comoda'::text]))),
     CONSTRAINT conta_user_pref_favoritos_check CHECK ((jsonb_typeof(favoritos) = 'array'::text)),
     CONSTRAINT conta_user_pref_nivel_check CHECK ((nivel = ANY (ARRAY['sin_experiencia'::text, 'medio'::text, 'experto'::text]))),
@@ -124010,6 +124212,13 @@ COMMENT ON COLUMN public.conta_user_pref.favoritos IS 'Lista de ids del catálog
 --
 
 COMMENT ON COLUMN public.conta_user_pref.reparto_documento IS 'K12 · La parte de la pantalla del documento (0–1) que dejó esta persona al mover el separador; 1 = el formulario plegado con «‹». Vacío: el de siempre.';
+
+
+--
+-- Name: COLUMN conta_user_pref.casar_plegado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_user_pref.casar_plegado IS 'X29 · Si el panel «Casar con facturas» de Gestión de extractos está plegado (true) o desplegado (false); sin valor, desplegado.';
 
 
 --
@@ -137429,6 +137638,14 @@ ALTER TABLE ONLY public.bank_movement
 
 
 --
+-- Name: bank_movimiento_borrado bank_movimiento_borrado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_movimiento_borrado
+    ADD CONSTRAINT bank_movimiento_borrado_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: bank_rule_log bank_rule_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -144329,6 +144546,13 @@ CREATE INDEX bank_movement_suave ON public.bank_movement USING btree (treasury_a
 
 
 --
+-- Name: bank_movimiento_borrado_huella; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX bank_movimiento_borrado_huella ON public.bank_movimiento_borrado USING btree (treasury_account_id, fingerprint);
+
+
+--
 -- Name: bank_rule_empresa; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -150629,6 +150853,13 @@ CREATE TRIGGER trg_auto_print_on_insert AFTER INSERT ON public.sale FOR EACH ROW
 
 
 --
+-- Name: bank_movement trg_bank_movimiento_no_borrado; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_bank_movimiento_no_borrado BEFORE INSERT ON public.bank_movement FOR EACH ROW EXECUTE FUNCTION public._bank_movimiento_no_borrado();
+
+
+--
 -- Name: brand_partner_contribution trg_bpc_misma_cuenta; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -153327,6 +153558,22 @@ ALTER TABLE ONLY public.bank_movement
 
 ALTER TABLE ONLY public.bank_movement
     ADD CONSTRAINT bank_movement_treasury_account_id_fkey FOREIGN KEY (treasury_account_id) REFERENCES public.treasury_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: bank_movimiento_borrado bank_movimiento_borrado_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_movimiento_borrado
+    ADD CONSTRAINT bank_movimiento_borrado_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: bank_movimiento_borrado bank_movimiento_borrado_treasury_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_movimiento_borrado
+    ADD CONSTRAINT bank_movimiento_borrado_treasury_account_id_fkey FOREIGN KEY (treasury_account_id) REFERENCES public.treasury_account(id) ON DELETE CASCADE;
 
 
 --
@@ -166094,6 +166341,19 @@ CREATE POLICY bank_movement_select ON public.bank_movement FOR SELECT USING (( S
 
 
 --
+-- Name: bank_movimiento_borrado; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.bank_movimiento_borrado ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: bank_movimiento_borrado bank_movimiento_borrado_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY bank_movimiento_borrado_leer ON public.bank_movimiento_borrado FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: bank_rule; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -176196,6 +176456,14 @@ GRANT ALL ON FUNCTION public._bank_mes_estado(p_treasury uuid, p_mes date) TO se
 
 
 --
+-- Name: FUNCTION _bank_movimiento_no_borrado(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._bank_movimiento_no_borrado() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._bank_movimiento_no_borrado() TO service_role;
+
+
+--
 -- Name: FUNCTION _bank_movimiento_sin_tarjetas(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -181404,12 +181672,39 @@ GRANT ALL ON FUNCTION public.bank_meses_estado(p_company uuid, p_mes date) TO se
 
 
 --
+-- Name: FUNCTION bank_movimiento_borrado_quitar(p_banco uuid, p_huella text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_movimiento_borrado_quitar(p_banco uuid, p_huella text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_movimiento_borrado_quitar(p_banco uuid, p_huella text) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_movimiento_borrado_quitar(p_banco uuid, p_huella text) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_movimientos_borrar(p_movimientos uuid[], p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_movimientos_borrar(p_movimientos uuid[], p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_movimientos_borrar(p_movimientos uuid[], p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_movimientos_borrar(p_movimientos uuid[], p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION bank_proponer(p_movement uuid, p_estado text, p_confianza text, p_porque text, p_propuesta jsonb); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public.bank_proponer(p_movement uuid, p_estado text, p_confianza text, p_porque text, p_propuesta jsonb) TO anon;
 GRANT ALL ON FUNCTION public.bank_proponer(p_movement uuid, p_estado text, p_confianza text, p_porque text, p_propuesta jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.bank_proponer(p_movement uuid, p_estado text, p_confianza text, p_porque text, p_propuesta jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_quitar_validacion(p_movimientos uuid[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_quitar_validacion(p_movimientos uuid[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_quitar_validacion(p_movimientos uuid[]) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_quitar_validacion(p_movimientos uuid[]) TO service_role;
 
 
 --
@@ -181518,6 +181813,15 @@ GRANT ALL ON FUNCTION public.bank_tarjeta_guardar(p_treasury uuid, p_id uuid, p_
 GRANT ALL ON FUNCTION public.bank_ticket_guardar(p_movement uuid, p_ruta text) TO anon;
 GRANT ALL ON FUNCTION public.bank_ticket_guardar(p_movement uuid, p_ruta text) TO authenticated;
 GRANT ALL ON FUNCTION public.bank_ticket_guardar(p_movement uuid, p_ruta text) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_validar(p_movimientos uuid[], p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_validar(p_movimientos uuid[], p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_validar(p_movimientos uuid[], p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_validar(p_movimientos uuid[], p_quien_nombre text) TO service_role;
 
 
 --
@@ -196890,6 +197194,14 @@ GRANT ALL ON TABLE public.bank_month_close TO service_role;
 GRANT ALL ON TABLE public.bank_movement TO anon;
 GRANT ALL ON TABLE public.bank_movement TO authenticated;
 GRANT ALL ON TABLE public.bank_movement TO service_role;
+
+
+--
+-- Name: TABLE bank_movimiento_borrado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.bank_movimiento_borrado TO service_role;
+GRANT SELECT ON TABLE public.bank_movimiento_borrado TO authenticated;
 
 
 --
