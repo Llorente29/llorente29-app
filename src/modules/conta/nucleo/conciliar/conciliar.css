@@ -139,3 +139,6 @@
 .cn-dlg-acciones { white-space: nowrap; }
 .cn-dlg-acciones .cn-enlace + .cn-enlace { margin-left: 10px; }
 .cn-etiqueta { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 9px; background: #eef0f3; color: #444; font-size: 11px; }
+
+/* X30 · Con la lista estrecha (a 1366), la pastilla de «Por qué» entera: una palabra, con poco relleno. */
+.cn-porque[data-corta='si'] { padding: 0 3px; overflow: visible; text-overflow: clip; }

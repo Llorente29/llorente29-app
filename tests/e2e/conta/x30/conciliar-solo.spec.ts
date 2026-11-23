@@ -80,6 +80,20 @@ async function abrir(page: Page) {
   await expect(pantalla(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
 }
 
+/** Ni la subcuenta ni la pastilla de «Por qué» salen cortadas en ninguna fila de la lista. */
+async function noCortado(page: Page, cuando: string) {
+  const cortados = await pantalla(page).evaluate((z) => {
+    const out: string[] = []
+    for (const e of z.querySelectorAll<HTMLElement>('.cn-porque')) if (e.scrollWidth > e.clientWidth + 1) out.push(`pastilla «${e.textContent}»`)
+    for (const e of z.querySelectorAll<HTMLElement>('tr[data-movimiento] span[data-cuenta]')) {
+      const td = e.closest('td') as HTMLElement
+      if (td.scrollWidth > td.clientWidth + 1) out.push(`subcuenta ${e.textContent}`)
+    }
+    return out
+  })
+  expect(cortados, `ni la subcuenta ni la pastilla salen cortadas (${cuando})`).toEqual([])
+}
+
 const medidas: Record<number, Record<string, number | null>> = {}
 
 for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
@@ -129,9 +143,9 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     expect(m.sobra, 'la página no rueda de lado').toBeLessThanOrEqual(1)
     expect(m.rueda, 'la página no rueda hacia abajo').toBeLessThanOrEqual(1)
     expect((m.zona ?? 0) - (m.ventana ?? 0), 'la ventana ocupa el ancho de su zona').toBeLessThanOrEqual(40)
-    // Los dos conceptos se leen, también a 1366: al menos 150 px cada uno (ceden la subcuenta, el nombre, el «Por qué» y el documento).
-    expect(m.concepto!, 'el concepto bancario, al menos 150 px').toBeGreaterThanOrEqual(150)
-    expect(m.asiento!, 'el concepto del asiento, al menos 150 px').toBeGreaterThanOrEqual(150)
+    // Los dos conceptos se leen, también a 1366: al menos 180 px cada uno (a 1366 no hay Nombre ni Doc.).
+    expect(m.concepto!, 'el concepto bancario, al menos 180 px').toBeGreaterThanOrEqual(180)
+    expect(m.asiento!, 'el concepto del asiento, al menos 180 px').toBeGreaterThanOrEqual(180)
     await page.screenshot({ path: `${DIR}/conciliar-${ancho}.png` })
 
     // «＋ Crear regla con este», desde el primero de los tres.
@@ -172,6 +186,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
       await expect(fila(id).locator('.cn-porque'), 'y al pasar el ratón, cuál').toHaveAttribute('title', new RegExp(`Regla «${f.palabra}»`))
     }
     await fila(tres[0]).scrollIntoViewIfNeeded()
+    if (ancho === 1366) await noCortado(page, 'con la regla aplicada')
     await page.screenshot({ path: `${DIR}/conciliar-regla-${ancho}.png` })
     const cuarto = await rest<{ status: string }[]>(s, 'GET', `bank_movement?select=status&id=eq.${solo}`)
     expect(cuarto.datos[0]?.status, 'el cuarto (otro texto), sin conciliar').not.toBe('casado')
@@ -184,7 +199,11 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await abrir(page)
     try {
       await expect(pantalla(page).locator('[data-prueba="hecho-hoy"]'), 'la franja verde de hoy').toContainText('Hoy Sumied ha conciliado solo', { timeout: 30_000 })
-      await expect(fila(solo).locator('.cn-porque'), 'quién lo hizo y cuándo').toContainText('Sumied · ')
+      // Quién lo hizo y cuándo: «Sumied · 23/11 22:22» (a 1366, la pastilla dice «Sumied» y la hora va en su title).
+      const pq = fila(solo).locator('.cn-porque')
+      await expect(pq, 'lo hizo Sumied').toContainText('Sumied')
+      await expect.poll(async () => `${await pq.textContent()} ${await pq.getAttribute('title')}`, { message: 'quién lo hizo y cuándo', timeout: 10_000 }).toContain('Sumied · ')
+      if (ancho === 1366) await noCortado(page, 'con lo conciliado por Sumied')
       await pantalla(page).locator('[data-prueba="hecho-hoy"]').getByRole('button', { name: 'Deshacer alguno' }).click()
       await expect(fila(solo), 'con «Deshacer alguno», lo de hoy a la vista').toBeVisible()
       await fila(solo).click()

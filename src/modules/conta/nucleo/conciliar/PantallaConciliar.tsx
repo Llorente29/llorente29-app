@@ -80,6 +80,19 @@ function Fecha({ id, iso, hoy, poner, etiqueta }: { id: string; iso: string; hoy
     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); fijar() } }} />
 }
 
+/** X30 · La pastilla de «Por qué» con la lista estrecha: una palabra que cabe entera. */
+const pastilla = (p: { texto: string; tono: string }): string => {
+  switch (p.tono) {
+    case 'regla': return 'Regla'
+    case 'factura': return 'Factura'
+    case 'memoria': return 'Como'
+    case 'falta': return 'Falta'
+    case 'otro': return 'Propone'
+    case 'solo': return 'Sumied'
+    default: return p.texto === 'Liquidación' ? 'Liquid.' : p.texto.split(' · ')[0]
+  }
+}
+
 /** Un texto que puede no caber: se corta con «…» y el title lo dice entero. */
 const Corto = ({ t, className }: { t: string; className?: string }) => <span className={`cn-corto${className ? ` ${className}` : ''}`} title={t}>{t}</span>
 
@@ -295,18 +308,19 @@ export default function PantallaConciliar() {
   if (leida.error && !lectura) return <div className="kp-ventana"><p className="kp-aviso" data-tono="ambar" role="alert">No se han podido leer los movimientos: {enPalabras(leida.error)}</p></div>
   const cargando = !lectura || !base
 
+  // Estrecha (a 1366): sin Nombre ni Doc. (el nombre, al pasar el ratón por la subcuenta; el documento, por la pastilla de
+  // «Por qué»); la subcuenta y la pastilla, enteras; lo que sobra, a los dos conceptos. A 1920, como estaban.
   const columnas: Columna[] = [
-    { clave: 'marca', titulo: <span className="cn-sr">Marcar</span>, ancho: '24px' },
+    { clave: 'marca', titulo: <span className="cn-sr">Marcar</span>, ancho: estrecha ? '22px' : '24px' },
     { clave: 'fecha', titulo: 'Fecha', ancho: '86px' },
     { clave: 'banco', titulo: 'Concepto bancario' },
     { clave: 'asiento', titulo: 'Concepto del asiento' },
     { clave: 'importe', titulo: 'Importe', cifra: true, ancho: '78px' },
-    { clave: 'saldo', titulo: 'Saldo', cifra: true, ancho: '90px' },
-    // Estrecha: ceden la subcuenta, el nombre, el «Por qué» (solo la pastilla) y el documento; enteros, al pasar el ratón.
-    { clave: 'subcuenta', titulo: <span title="Subcuenta">{estrecha ? 'Subc.' : 'Subcuenta'}</span>, ancho: estrecha ? '68px' : '76px' },
-    { clave: 'nombre', titulo: <span title="Nombre">Nombre</span>, ancho: estrecha ? '34px' : '12%' },
-    { clave: 'porque', titulo: <span title="Por qué">Por qué</span>, ancho: estrecha ? '48px' : '144px' },
-    { clave: 'doc', titulo: <span title="Documento">Doc.</span>, ancho: estrecha ? '36px' : '7%' },
+    { clave: 'saldo', titulo: 'Saldo', cifra: true, ancho: estrecha ? '86px' : '90px' },
+    { clave: 'subcuenta', titulo: 'Subcuenta', ancho: '76px' },
+    ...(estrecha ? [] : [{ clave: 'nombre', titulo: 'Nombre', ancho: '12%' }]),
+    { clave: 'porque', titulo: 'Por qué', ancho: estrecha ? '66px' : '144px' },
+    ...(estrecha ? [] : [{ clave: 'doc', titulo: 'Doc.', ancho: '7%' }]),
     { clave: 'validado', titulo: <span title="Validado">✓</span>, ancho: '22px' },
   ]
   const celda = (x: Linea, c: string): ReactNode => {
@@ -323,8 +337,12 @@ export default function PantallaConciliar() {
       case 'nombre': return <Corto t={nombreDe(x.subcuenta).toUpperCase()} />
       case 'porque': {
         const p = porQueDe(x, nombreRegla)
-        // Estrecha: solo la pastilla, con su primera palabra; lo que dice entero y su porqué, en el title.
-        return p ? <span className="cn-porque" data-tono={p.tono} title={estrecha && !p.title.startsWith(p.texto.split(' · ')[0]) ? [p.texto, p.title].filter(Boolean).join(' · ') : p.title}>{estrecha ? p.texto.split(' · ')[0] : p.texto}</span> : null
+        if (!p) return null
+        if (!estrecha) return <span className="cn-porque" data-tono={p.tono} title={p.title}>{p.texto}</span>
+        // Estrecha: la pastilla entera, con una palabra; lo que dice entero, su porqué y el documento, en el title.
+        const doc = a?.numero ? `Asiento ${a.serie ?? serie}/${a.numero}` : null
+        const titulo = [p.title.startsWith(pastilla(p)) ? null : p.texto, p.title, doc].filter(Boolean).join(' · ')
+        return <span className="cn-porque" data-tono={p.tono} data-corta="si" title={titulo}>{pastilla(p)}</span>
       }
       case 'doc': return a?.numero ? <span title={`Asiento ${a.serie ?? serie}/${a.numero}`}>{`${a.serie ?? serie}/${a.numero}`}</span> : ''
       case 'validado': return x.validado ? <span title={`Validado${x.m.validado?.quien ? ` por ${x.m.validado.quien}` : ''}`}>✓</span> : ''
