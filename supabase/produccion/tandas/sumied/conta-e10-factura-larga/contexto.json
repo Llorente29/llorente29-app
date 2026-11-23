@@ -1,0 +1,23 @@
+{
+ "_que": "E10 · la factura larga se lee entera · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: esta sesión no lee producción. 0907 solo añade (una función nueva). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-23T08:08Z",
+ "tanda": {
+  "supabase/migrations/20261123T0907_e10_lineas_por_partes.sql": "00278c4712f90706c66f377673548058"
+ },
+ "contexto": {
+  "tablas": [
+   "public.goods_receipt_ai_session",
+   "public.supplier_invoice",
+   "public.supplier_invoice_line"
+  ],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
