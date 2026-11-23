@@ -3,8 +3,8 @@
 //
 // K10 · La «Cuenta de pago» en la ficha del proveedor, como en ERP10, contra staging, con la cuenta del
 // núcleo (semilla K02) en su gestoría y la semilla K10, a 1456 × 816 y a 1366 × 768:
-//   1. en la ficha del proveedor de prueba se pone la 43000002 como cuenta de pago (debajo de la forma
-//      de pago, con su código y su nombre), y lo dice;
+//   1. en la ficha del proveedor de prueba (la nueva del X27c, «Datos de pago» · «Subcuenta de pago»: K10c) se
+//      pone la 43000002, se guarda (lo dice la barra; la base la tiene) y al volver a abrirla sigue ahí;
 //   2. su factura por revisar la trae en «Cómo se paga», «De su ficha»;
 //   3. la contrapartida, con una del 21x: el aviso «Va a inmovilizado…»;
 //   4. el proveedor, por su código: escribir su 400000xx lo encuentra;
@@ -93,20 +93,31 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     if (t === 1) await cargada(page, 'la barra')
     await page.screenshot({ path: `${DIR}/barra-${ancho}.png`, clip: { x: 0, y: 0, width: ancho, height: Math.ceil(barra.abajo) + 4 } })
 
-    // ── 1 · En la ficha del proveedor, «Cuenta de pago»: la 43000002. ──
-    await page.goto(`/conta/clientes-y-proveedores/proveedor/${PROVEEDOR(t)}/pago`, { timeout: 30_000 })
-    const casilla = page.locator('[data-prueba="cuenta-de-pago"]')
-    await expect(casilla).toBeVisible({ timeout: 30_000 })
-    await expect(casilla.locator('#cuenta-de-pago')).toBeEnabled({ timeout: 30_000 })
-    await expect(casilla.locator('#cuenta-de-pago')).toHaveValue('', { timeout: 30_000 })
-    await casilla.locator('#cuenta-de-pago').fill('43000002')
-    await page.getByRole('option', { name: /^43000002 · / }).click()
-    await expect(page.locator('[data-prueba="cuenta-de-pago-dicho"]')).toContainText('Guardada: la 43000002', { timeout: 30_000 })
-    await expect(casilla.locator('#cuenta-de-pago')).toHaveValue('43000002', { timeout: 30_000 })
-    await expect(casilla.getByRole('textbox', { name: 'Nombre de la cuenta de pago' })).not.toHaveValue('')
-    const enlaces = await rest<{ entity_id: string }[]>(s, `company_account_link?select=entity_id&company_id=eq.${EMPRESA()}&entity=eq.supplier&entity_id=eq.${PROVEEDOR(t)}&role=eq.pago`)
+    // ── 1 · En la ficha del proveedor (la del X27c: «Datos de pago», «Subcuenta de pago»), la 43000002, y se guarda. ──
+    await page.goto(`/conta/clientes-y-proveedores/proveedor/${PROVEEDOR(t)}`, { timeout: 30_000 })
+    const fichaProv = page.locator('[data-prueba="ficha-proveedor-nucleo"]')
+    await expect(fichaProv).toBeVisible({ timeout: 30_000 })
+    await expect(fichaProv.locator('label[for="ft-pago"]')).toHaveText('Subcuenta de pago')
+    const casilla = fichaProv.locator('#ft-pago')
+    const suNombre = fichaProv.getByRole('textbox', { name: 'Subcuenta de pago: su nombre' })
+    await expect(casilla).toBeEnabled({ timeout: 30_000 })
+    await expect(casilla).toHaveValue('', { timeout: 30_000 })
+    await casilla.click()
+    await page.keyboard.type('43000002')
+    await page.keyboard.press('Enter')
+    await expect(casilla).toHaveValue(/^43000002/, { timeout: 30_000 })
+    await expect(suNombre).not.toHaveValue('')
+    await fichaProv.locator('[data-boton="guardar"]').click()
+    await expect(fichaProv.locator('.kp-barra-aviso')).toContainText(`Guardado: ${NOMBRE(t)}`, { timeout: 30_000 })
+    const enlaces = await rest<{ entity_id: string; company_account: { code: string } }[]>(s, `company_account_link?select=entity_id,company_account(code)&company_id=eq.${EMPRESA()}&entity=eq.supplier&entity_id=eq.${PROVEEDOR(t)}&role=eq.pago`)
     expect(enlaces.length, 'la base guarda la cuenta de pago de su ficha').toBe(1)
-    expect(await loQueSeCorta(page, '[data-prueba="cuenta-de-pago"]'), `lo que se corta, la cuenta de pago, a ${ancho}`).toEqual([])
+    expect(enlaces[0].company_account.code, 'y es la 43000002').toBe('43000002')
+    // Vuelta a abrirla: la ficha la lee de la base, no de lo escrito.
+    await page.reload()
+    await expect(fichaProv).toBeVisible({ timeout: 30_000 })
+    await expect(casilla).toHaveValue(/^43000002/, { timeout: 30_000 })
+    await expect(suNombre).not.toHaveValue('')
+    expect(await loQueSeCorta(page, '.ft-con-nombre:has(#ft-pago)'), `lo que se corta, la cuenta de pago, a ${ancho}`).toEqual([])
     await page.waitForTimeout(400)
     await page.screenshot({ path: `${DIR}/ficha-proveedor-${ancho}.png` })
 

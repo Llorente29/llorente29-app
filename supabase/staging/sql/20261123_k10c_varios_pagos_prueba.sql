@@ -15,6 +15,9 @@
 --   3. Cambiar el segundo (otra cuenta y otro concepto): el mismo número; su huella cambia y la cadena sigue íntegra.
 --   4. Borrar el primero: la factura vuelve a pagada en parte (faltan 60,00), su asiento se borra y la serie se
 --      renumera sin huecos; y volver a apuntarlo la deja pagada.
+--   4b. Lo que ya está en ERP10 (Respuesta K10c · 1): un pago cuyo asiento ya salió no se cambia ni se borra («Este
+--      pago ya está en ERP10…»); uno sin enviar, sí; y uno sin enviar cuyo borrado renumeraría un asiento ya enviado,
+--      tampoco.
 --   5. Conciliar uno con el banco: otra factura casada en Bancos con su movimiento; ese pago no se cambia ni se borra
 --      aquí («se deshace en Bancos»).
 --   6. La vuelta atrás quita las funciones; los pagos y asientos se quedan como quedaron, con la cadena íntegra.
@@ -128,6 +131,62 @@ begin
   r1 := public.conta_recibida_pago_apuntar(emp, f1, '55100099', date '2026-11-13', 60, 'Primer pago K10c, otra vez', 'Prueba K10c');
   if (select status from public.supplier_invoice where id = f1) <> 'pagada' then raise exception 'PRUEBA K10c · 4: vuelto a apuntar, no queda pagada'; end if;
   raise notice 'PRUEBA K10c · 4: vuelto a apuntar: %', r1->>'frase';
+end $$;
+reset role;
+
+-- 4b · Lo que ya está en ERP10.
+create or replace function pg_temp.k10c_en_erp10(p_pago uuid, p_si boolean) returns void language plpgsql as $$
+declare e uuid := (select entry_id from public.supplier_invoice_payment where id = p_pago);
+begin
+  if p_si then
+    insert into public.conta_erp10_envio (account_id, company_id, entry_id, clase, estado, erp10_ejercicio, erp10_serie, erp10_documento, intentos, quien_nombre)
+    values ('c0e20000-0000-4000-8000-0000000000e0', 'c0e20000-0000-4000-8000-0000000000e3', e, 'asiento', 'en_erp10', 2026, 4, 9999, 1, 'Prueba K10c');
+  else
+    delete from public.conta_erp10_envio where entry_id = e;
+  end if;
+end $$;
+grant execute on function pg_temp.k10c_en_erp10(uuid, boolean) to authenticated;
+do $$ begin
+  insert into _k10c select 'pA', id::text from public.supplier_invoice_payment
+   where invoice_id = 'c0f40000-0000-4000-8000-0000000000f1' and id = (select valor::uuid from _k10c where clave = 'p2');
+  insert into _k10c select 'pB', id::text from public.supplier_invoice_payment
+   where invoice_id = 'c0f40000-0000-4000-8000-0000000000f1' and id <> (select valor::uuid from _k10c where clave = 'p2');
+  perform pg_temp.k10c_en_erp10((select valor::uuid from _k10c where clave = 'pA'), true);
+end $$;
+select set_config('request.jwt.claims', '{"sub":"c0e20000-0000-4000-8000-0000000000e1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare v_msg text; r jsonb; emp constant uuid := 'c0e20000-0000-4000-8000-0000000000e3'; f1 constant uuid := 'c0f40000-0000-4000-8000-0000000000f1';
+  pa uuid := (select valor::uuid from _k10c where clave = 'pA'); pb uuid := (select valor::uuid from _k10c where clave = 'pB');
+begin
+  -- El que está en ERP10 (el 4 / 1) no se cambia ni se borra.
+  begin perform public.conta_recibida_pago_cambiar(pa, '55500099', date '2026-11-12', 61, null, 'Prueba K10c'); exception when others then v_msg := sqlerrm; end;
+  if v_msg is distinct from 'Este pago ya está en ERP10. Para quitarlo, anúlalo allí y aquí con un contraasiento.' then raise exception 'PRUEBA K10c · 4b: cambiar uno en ERP10 (%)', v_msg; end if;
+  v_msg := null;
+  begin perform public.conta_recibida_pago_borrar(pa, 'prueba', 'Prueba K10c'); exception when others then v_msg := sqlerrm; end;
+  if v_msg is distinct from 'Este pago ya está en ERP10. Para quitarlo, anúlalo allí y aquí con un contraasiento.' then raise exception 'PRUEBA K10c · 4b: borrar uno en ERP10 (%)', v_msg; end if;
+  raise notice 'PRUEBA K10c · 4b: el pago que ya está en ERP10 no se cambia ni se borra: «%»', v_msg;
+  -- Uno sin enviar (el último de la serie), sí.
+  r := public.conta_recibida_pago_borrar(pb, 'Prueba K10c: sin enviar a ERP10', 'Prueba K10c');
+  raise notice 'PRUEBA K10c · 4b: uno sin enviar, sí: «%»', r->>'frase';
+  -- Vuelto a apuntar (4 / 2) y enviado; el 4 / 1 sin enviar ya no se borra: renumeraría el 4 / 2.
+  r := public.conta_recibida_pago_apuntar(emp, f1, '55100099', date '2026-11-13', 60, 'Primer pago K10c, tercera vez', 'Prueba K10c');
+  insert into _k10c values ('pC', r->>'pago');
+end $$;
+reset role;
+do $$ begin
+  perform pg_temp.k10c_en_erp10((select valor::uuid from _k10c where clave = 'pA'), false);
+  perform pg_temp.k10c_en_erp10((select valor::uuid from _k10c where clave = 'pC'), true);
+end $$;
+select set_config('request.jwt.claims', '{"sub":"c0e20000-0000-4000-8000-0000000000e1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare v_msg text; pa uuid := (select valor::uuid from _k10c where clave = 'pA');
+begin
+  begin perform public.conta_recibida_pago_borrar(pa, 'prueba', 'Prueba K10c'); exception when others then v_msg := sqlerrm; end;
+  if v_msg is null or v_msg !~ '^Este pago ya está en ERP10: borrarlo renumeraría' then raise exception 'PRUEBA K10c · 4b: borrar uno que renumeraría otro en ERP10 (%)', v_msg; end if;
+  if not exists (select 1 from public.supplier_invoice_payment where id = pa) then raise exception 'PRUEBA K10c · 4b: se ha borrado igual'; end if;
+  raise notice 'PRUEBA K10c · 4b: uno sin enviar que renumeraría otro ya enviado, tampoco: «%»', v_msg;
 end $$;
 reset role;
 

@@ -1,8 +1,8 @@
 {
- "_que": "K10c · varios pagos de una recibida · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. 0920 añade cinco funciones. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
- "medido": "2026-11-23T08:00Z",
+ "_que": "K10c · varios pagos de una recibida · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. 0920 añade seis funciones. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-23T10:40Z",
  "tanda": {
-  "supabase/migrations/20261123T0920_k10c_varios_pagos.sql": "565f3f20db22b075a4d2787df2ddb8a0"
+  "supabase/migrations/20261123T0920_k10c_varios_pagos.sql": "fc3e48846a52972752cf147398d1bf40"
  },
  "contexto": {
   "tablas": [],

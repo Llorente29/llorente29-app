@@ -21,6 +21,11 @@
 --      (_conta_asientos_borrar: respaldo, la serie renumerada sin huecos y la cadena comprobada) (Julio, 23/11).
 -- Al cambiar o borrar, la factura vuelve a «pagada en parte» o «por pagar» si ya no está cubierta, y queda en su
 -- historial (supplier_invoice_change).
+-- Lo que ya salió a ERP10 (Respuesta K10c · 1, 23/11): un pago cuyo asiento ya está en ERP10 (conta_erp10_envio en
+-- «en_erp10» o «enviando», o su salida por el Excel, conta_erp10_salida_partida «salida») no se cambia ni se borra; y no
+-- se borra un pago si al renumerar su serie movería un asiento que ya está en ERP10: Sumied y ERP10 dejarían de tener
+-- los mismos números sin que nadie se enterase. Para con su frase: «Este pago ya está en ERP10. Para quitarlo, anúlalo
+-- allí y aquí con un contraasiento».
 --
 -- Nada en el camino del pedido. El real lo lanza Julio. Vuelta atrás: quita las cuatro funciones.
 
@@ -113,6 +118,14 @@ begin
 end $function$;
 revoke all on function public._conta_k10c_estado(uuid, text) from public, anon, authenticated;
 
+-- ¿Ya salió a ERP10 este asiento? (por la conexión, o enviándose, o por el Excel)
+create or replace function public._conta_k10c_en_erp10(p_entry uuid)
+returns boolean language sql stable security definer set search_path = public as $function$
+  select exists (select 1 from public.conta_erp10_envio v where v.entry_id = p_entry and v.estado in ('en_erp10', 'enviando'))
+      or exists (select 1 from public.conta_erp10_salida_partida x where x.entry_id = p_entry and x.estado = 'salida')
+$function$;
+revoke all on function public._conta_k10c_en_erp10(uuid) from public, anon, authenticated;
+
 -- 2 · ¿Se puede cambiar o borrar? --------------------------------------------------------------------------------------
 create or replace function public.conta_recibida_pago_se_puede_cambiar(p_pago uuid)
 returns jsonb language plpgsql stable security definer set search_path = public as $function$
@@ -127,7 +140,10 @@ begin
   if e.id is null or e.source_type <> 'supplier_payment' or e.source_id is distinct from p.id then
     return jsonb_build_object('puede', false, 'porque', 'Este pago viene de una remesa, una liquidación o un abono: se deshace allí.');
   end if;
-  if not public.current_user_is_admin_or_manager_of(p.account_id) then v_no := 'Solo un administrador o un encargado de la cuenta cambia un pago.'; end if;
+  if public._conta_k10c_en_erp10(e.id) then
+    v_no := 'Este pago ya está en ERP10. Para quitarlo, anúlalo allí y aquí con un contraasiento.';
+  end if;
+  if v_no is null and not public.current_user_is_admin_or_manager_of(p.account_id) then v_no := 'Solo un administrador o un encargado de la cuenta cambia un pago.'; end if;
   if v_no is null then
     v_p := public.conta_iva_presentado(e.company_id, e.entry_date);
     if v_p is not null then
@@ -150,7 +166,7 @@ begin
   return jsonb_build_object('puede', v_no is null, 'porque', v_no, 'asiento', e.id, 'serie', e.series, 'numero', e.number);
 end $function$;
 comment on function public.conta_recibida_pago_se_puede_cambiar(uuid) is
-  'K10c · Si un pago de una recibida se puede cambiar o borrar y, si no, por qué (conciliado en el banco, de una remesa o una liquidación, IVA presentado, ejercicio o mes cerrado, ya en Diez o ERP10, cadena rota, sin permiso).';
+  'K10c · Si un pago de una recibida se puede cambiar o borrar y, si no, por qué (conciliado en el banco, de una remesa o una liquidación, ya en ERP10, IVA presentado, ejercicio o mes cerrado, ya en Diez, cadena rota, sin permiso). Borrar, además, para si renumeraría un asiento que ya está en ERP10.';
 revoke all on function public.conta_recibida_pago_se_puede_cambiar(uuid) from public, anon;
 grant execute on function public.conta_recibida_pago_se_puede_cambiar(uuid) to authenticated, service_role;
 
@@ -246,6 +262,13 @@ begin
   if coalesce(btrim(p_motivo), '') = '' then raise exception 'Falta por qué se borra el pago.' using errcode = '22023'; end if;
   v_quien := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
   select * into e from public.journal_entry where id = p.entry_id;
+  -- Borrar renumera su serie: si eso movería un asiento que ya está en ERP10, no se borra.
+  if exists (select 1 from public.journal_entry o
+              where o.company_id = e.company_id and o.fiscal_year_id = e.fiscal_year_id and o.series = e.series
+                and o.number > e.number and public._conta_k10c_en_erp10(o.id)) then
+    raise exception 'Este pago ya está en ERP10: borrarlo renumeraría asientos de la serie % que ya están allí. Para quitarlo, anúlalo allí y aquí con un contraasiento.', e.series
+      using errcode = '23514';
+  end if;
   delete from public.supplier_invoice_payment where id = p.id;
   v_r := public._conta_asientos_borrar(e.company_id, array[e.id], format('K10c · pago de %s borrado: %s', public.conta_euros_exactos(p.amount), btrim(p_motivo)), v_quien);
   perform public._conta_k10c_estado(p.invoice_id, v_quien);

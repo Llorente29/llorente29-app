@@ -7,3 +7,4 @@ drop function if exists public.conta_recibida_pago_cambiar(uuid, text, date, num
 drop function if exists public.conta_recibida_pago_se_puede_cambiar(uuid);
 drop function if exists public.conta_recibida_pago_apuntar(uuid, uuid, text, date, numeric, text, text);
 drop function if exists public._conta_k10c_estado(uuid, text);
+drop function if exists public._conta_k10c_en_erp10(uuid);
