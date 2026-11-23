@@ -152,7 +152,7 @@ export async function leerMovimientosEntre(accountId: string, bancoId: string, d
   const filas: Fila[] = []
   for (let i = 0; ; i += PAGINA) {
     let q = tabla('bank_movement')
-      .select((conValidado ? 'id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, before_cutover, validated_at, validated_by_name, position, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, created_at, confidence_pct, journal_entry_id, journal_entry(concept, status))'
+      .select((conValidado ? 'id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, before_cutover, validated_at, validated_by_name, position, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, created_at, confidence_pct, rule_id, journal_entry_id, journal_entry(concept, status))'
         : 'id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept, status))'))
       .eq('account_id', accountId).eq('treasury_account_id', bancoId).gte('op_date', desde).lte('op_date', hasta)
       .order('op_date', { ascending: subiendo })
@@ -178,7 +178,7 @@ export async function leerMovimientosEntre(accountId: string, bancoId: string, d
         asientoId: s(vivo.journal_entry_id), asientoConcepto: s((vivo.journal_entry as Fila | null)?.concept),
         asientoEstado: (s((vivo.journal_entry as Fila | null)?.status) as NonNullable<MovimientoBanco['casado']>['asientoEstado']) ?? null,
         // X30 · Cuándo y con qué porcentaje (Conciliar).
-        ...(conValidado ? { cuando: s(vivo.created_at), seguridad: vivo.confidence_pct === null || vivo.confidence_pct === undefined ? null : Number(vivo.confidence_pct) } : {}),
+        ...(conValidado ? { cuando: s(vivo.created_at), seguridad: vivo.confidence_pct === null || vivo.confidence_pct === undefined ? null : Number(vivo.confidence_pct), reglaId: s(vivo.rule_id) } : {}),
       } : null,
       tarjeta: tarjeta ? { ultimos4: String(tarjeta.last4), titular: String(tarjeta.holder_name) } : null,
       ticket: s(m.receipt_path), motivoIgnorado: s(m.ignored_reason),

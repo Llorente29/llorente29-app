@@ -73,19 +73,23 @@ export function cuandoCorto(iso: string): string {
   return `${v('day')}/${v('month')} ${v('hour')}:${v('minute')}`
 }
 
-export function porQueDe(l: Linea): PorQue | null {
+/** `reglas`: el nombre de cada regla por su id (lo conciliado con una regla dice «Regla» y, en el title, cuál). */
+export function porQueDe(l: Linea, reglas?: ReadonlyMap<string, string>): PorQue | null {
   const m = l.m
   if (m.estado === 'casado' && m.casado) {
     const k = m.casado.tipo
     const c = m.casado
+    const regla = c.reglaId ? reglas?.get(c.reglaId) ?? null : null
     const que = k === 'factura_recibida' || k === 'factura_emitida' ? 'Factura' : k === 'liquidacion' ? 'Liquidación' : k === 'traspaso' ? 'Traspaso'
-      : k === 'contrato' ? 'Contrato' : k === 'asiento' ? 'Asiento' : c.porQuien === 'folvy' ? 'Regla' : 'A mano'
+      : k === 'contrato' ? 'Contrato' : k === 'asiento' ? 'Asiento' : c.reglaId || c.porQuien === 'folvy' ? 'Regla' : 'A mano'
+    const deRegla = c.reglaId ? `Regla «${regla ?? 'sin nombre'}»` : null
     // X30 · Lo que concilió Sumied solo se ve: «Sumied · 23/11 08:12»; el porqué, su porcentaje y qué era, en el title.
     if (c.porQuien === 'folvy') {
       return { texto: `Sumied${c.cuando ? ` · ${cuandoCorto(c.cuando)}` : ''}`, tono: 'solo',
-        title: [`Lo concilió Sumied solo${c.cuando ? ` el ${cuandoCorto(c.cuando)}` : ''}${typeof c.seguridad === 'number' ? ` con un ${c.seguridad} %` : ''}`, que, c.porque].filter(Boolean).join(' · ') }
+        title: [`Lo concilió Sumied solo${c.cuando ? ` el ${cuandoCorto(c.cuando)}` : ''}${typeof c.seguridad === 'number' ? ` con un ${c.seguridad} %` : ''}`, deRegla ?? que, c.porque].filter(Boolean).join(' · ') }
     }
-    return { texto: que, tono: 'hecho', title: [c.porque, c.cuando ? `el ${cuandoCorto(c.cuando)}` : null].filter(Boolean).join(' · ') }
+    // Lo conciliado al aplicar una regla (hacia atrás o al confirmar lo que proponía): «Regla», y cuál en el title.
+    return { texto: que, tono: 'hecho', title: [deRegla, c.porque, c.cuando ? `el ${cuandoCorto(c.cuando)}` : null].filter(Boolean).join(' · ') }
   }
   if (l.antes || m.estado === 'ignorado') return null
   const p = m.propuesta

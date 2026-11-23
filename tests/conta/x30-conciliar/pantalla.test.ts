@@ -117,3 +117,13 @@ describe('los días del aviso y el «hoy» de Madrid', () => {
     expect(inicioDelDiaEnMadrid('2026-10-25')).toBe('2026-10-24T22:00:00.000Z')
   })
 })
+
+describe('lo conciliado al aplicar una regla', () => {
+  it('dice «Regla», no «A mano»; al pasar el ratón, el nombre de la regla', () => {
+    const l = linea(mov('z', 'RECIBO IBERDROLA', -42.35, { estado: 'casado', casado: { id: 'c', tipo: 'cuenta', porque: 'Regla: IBERDROLA (aplicada hacia atrás).', porQuien: 'persona',
+      asientoId: 'a', asientoConcepto: null, cuando: '2026-11-23T20:00:00Z', reglaId: 'r1' } }))
+    expect(porQueDe(l, new Map([['r1', 'IBERDROLA']]))).toEqual({ texto: 'Regla', tono: 'hecho', title: 'Regla «IBERDROLA» · Regla: IBERDROLA (aplicada hacia atrás). · el 23/11 21:00' })
+    const aMano = linea(mov('w', 'X', -1, { estado: 'casado', casado: { id: 'c', tipo: 'cuenta', porque: 'Lo dijiste tú.', porQuien: 'persona', asientoId: 'a', asientoConcepto: null } }))
+    expect(porQueDe(aMano)?.texto).toBe('A mano')
+  })
+})

@@ -68,7 +68,9 @@ export interface MovimientoBanco {
     /** S02 · PR 2: el estado de su asiento (propuesto: espera en «Por validar»; validado; anulado). */
     asientoEstado?: 'propuesto' | 'borrador' | 'validado' | 'anulado' | null
     /** X30 · Cuándo se concilió y con qué porcentaje (Conciliar). */
-    cuando?: string | null; seguridad?: number | null } | null
+    cuando?: string | null; seguridad?: number | null
+    /** X30 · La regla con la que se concilió (bank_match.rule_id). */
+    reglaId?: string | null } | null
   tarjeta: { ultimos4: string; titular: string } | null
   ticket: string | null
   motivoIgnorado: string | null

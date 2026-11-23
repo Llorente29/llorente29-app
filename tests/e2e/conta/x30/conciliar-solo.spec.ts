@@ -121,7 +121,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
       const r = (q: string) => { const e = z.querySelector(q) ?? document.querySelector(q); return e ? Math.round(e.getBoundingClientRect().width) : null }
       const th = [...z.querySelectorAll('.kp-lineas thead th')] as HTMLElement[]
       const col = (t: string) => { const e = th.find((x) => x.textContent?.trim() === t); return e ? Math.round(e.getBoundingClientRect().width) : null }
-      return { ventana: r('.kp-ventana'), zona: r('.k-zona[data-activa="si"]'), bancos: r('.cn-bancos'), panel: r('.cn-panel'), concepto: col('Concepto bancario'), fecha: col('Fecha'),
+      return { ventana: r('.kp-ventana'), zona: r('.k-zona[data-activa="si"]'), bancos: r('.cn-bancos'), panel: r('.cn-panel'), concepto: col('Concepto bancario'), asiento: col('Concepto del asiento'), fecha: col('Fecha'),
         sobra: document.documentElement.scrollWidth - window.innerWidth, rueda: document.documentElement.scrollHeight - window.innerHeight }
     })
     console.log(`[X30] ${ancho} · ${JSON.stringify(m)}`)
@@ -129,6 +129,9 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     expect(m.sobra, 'la página no rueda de lado').toBeLessThanOrEqual(1)
     expect(m.rueda, 'la página no rueda hacia abajo').toBeLessThanOrEqual(1)
     expect((m.zona ?? 0) - (m.ventana ?? 0), 'la ventana ocupa el ancho de su zona').toBeLessThanOrEqual(40)
+    // Los dos conceptos se leen, también a 1366: al menos 150 px cada uno (ceden la subcuenta, el nombre, el «Por qué» y el documento).
+    expect(m.concepto!, 'el concepto bancario, al menos 150 px').toBeGreaterThanOrEqual(150)
+    expect(m.asiento!, 'el concepto del asiento, al menos 150 px').toBeGreaterThanOrEqual(150)
     await page.screenshot({ path: `${DIR}/conciliar-${ancho}.png` })
 
     // «＋ Crear regla con este», desde el primero de los tres.
@@ -162,6 +165,14 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
         cuentas: vivo?.journal_entry?.journal_line.map((l) => l.company_account.code).sort() }, `el movimiento ${id}, conciliado por la regla`)
         .toEqual({ movimiento: 'casado', regla: regla.datos[0].id, por: 'persona', serie: 3, estado: 'validado', cuentas: ['57200001', GASTO] })
     }
+    // En «Por qué», lo aplicado con la regla dice «Regla», y al pasar el ratón, cuál.
+    await abrir(page)
+    for (const id of tres) {
+      await expect(fila(id).locator('.cn-porque'), 'lo conciliado con la regla dice «Regla»').toHaveText(/^Regla/, { timeout: 30_000 })
+      await expect(fila(id).locator('.cn-porque'), 'y al pasar el ratón, cuál').toHaveAttribute('title', new RegExp(`Regla «${f.palabra}»`))
+    }
+    await fila(tres[0]).scrollIntoViewIfNeeded()
+    await page.screenshot({ path: `${DIR}/conciliar-regla-${ancho}.png` })
     const cuarto = await rest<{ status: string }[]>(s, 'GET', `bank_movement?select=status&id=eq.${solo}`)
     expect(cuarto.datos[0]?.status, 'el cuarto (otro texto), sin conciliar').not.toBe('casado')
 

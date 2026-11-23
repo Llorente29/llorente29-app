@@ -55,6 +55,8 @@ import {
 } from './conciliar'
 import './conciliar.css'
 
+/** Por debajo de este ancho de la lista (a 1366, unos 790 px), las columnas estrechas: los conceptos, al menos 150 px. */
+const ANCHO_ESTRECHA = 1100
 const cifra = (cent: number | null | undefined) => (cent === null || cent === undefined ? '' : formatoImporte(cent / 100))
 type Aviso = { texto: string; tono: 'bien' | 'ambar' | 'gris' }
 const lineaVacia = (): LineaEd => ({ cuenta: null, concepto: '', local: null, marca: null, plataforma: null })
@@ -129,6 +131,18 @@ export default function PantallaConciliar() {
   const ajustes = useUltimo(useLeer(accountId && companyId ? () => leerAjustes(accountId, companyId) : null, `${companyId}:${vuelta}:ajustes`).datos, companyId)
   const reglas = useUltimo(useLeer(accountId && companyId ? () => leerReglas(accountId, companyId) : null, `${companyId}:${vuelta}:reglas`).datos, companyId)
   const [ventana, setVentana] = useState<null | { que: 'lista' } | { que: 'regla'; regla: ReglaEd; volver: boolean }>(null)
+  // X30 · El ancho de la lista: estrecha (a 1366), los dos conceptos se leen y ceden Subcuenta, Nombre, Por qué y Doc.
+  const caja = useRef<HTMLDivElement>(null)
+  const [anchoLista, setAnchoLista] = useState(0)
+  useEffect(() => {
+    const e = caja.current
+    if (!e) return
+    const o = new ResizeObserver(([x]) => setAnchoLista(Math.round(x.contentRect.width)))
+    o.observe(e)
+    return () => o.disconnect()
+  })
+  const estrecha = anchoLista > 0 && anchoLista < ANCHO_ESTRECHA
+  const nombreRegla = useMemo(() => new Map((reglas ?? []).map((x) => [x.id!, x.contiene])), [reglas])
   const pendientesTodos = useLeer(ventana?.que === 'regla' ? () => pendientesDeLaEmpresa(accountId, companyId) : null, `${companyId}:${vuelta}:${ventana?.que}:pendientes`).datos
   const filas = useMemo(() => { const v = filtrar(todas, f); return verHoy && hecho ? v.filter((l) => hecho.movimientos.includes(l.m.id)) : v }, [todas, f, verHoy, hecho])
   const r = recuento(todas, lectura?.antesFuera ?? 0)
@@ -288,10 +302,11 @@ export default function PantallaConciliar() {
     { clave: 'asiento', titulo: 'Concepto del asiento' },
     { clave: 'importe', titulo: 'Importe', cifra: true, ancho: '78px' },
     { clave: 'saldo', titulo: 'Saldo', cifra: true, ancho: '90px' },
-    { clave: 'subcuenta', titulo: 'Subcuenta', ancho: '76px' },
-    { clave: 'nombre', titulo: 'Nombre', ancho: '12%' },
-    { clave: 'porque', titulo: 'Por qué', ancho: '144px' },
-    { clave: 'doc', titulo: 'Doc.', ancho: '7%' },
+    // Estrecha: ceden la subcuenta, el nombre, el «Por qué» (solo la pastilla) y el documento; enteros, al pasar el ratón.
+    { clave: 'subcuenta', titulo: <span title="Subcuenta">{estrecha ? 'Subc.' : 'Subcuenta'}</span>, ancho: estrecha ? '68px' : '76px' },
+    { clave: 'nombre', titulo: <span title="Nombre">Nombre</span>, ancho: estrecha ? '34px' : '12%' },
+    { clave: 'porque', titulo: <span title="Por qué">Por qué</span>, ancho: estrecha ? '48px' : '144px' },
+    { clave: 'doc', titulo: <span title="Documento">Doc.</span>, ancho: estrecha ? '36px' : '7%' },
     { clave: 'validado', titulo: <span title="Validado">✓</span>, ancho: '22px' },
   ]
   const celda = (x: Linea, c: string): ReactNode => {
@@ -304,9 +319,13 @@ export default function PantallaConciliar() {
       case 'asiento': return <Corto t={a?.concepto || (x.m.propuesta?.destino as { concepto?: string } | undefined)?.concepto || x.m.conceptoLimpio} />
       case 'importe': return <span data-signo={x.m.importeCent < 0 ? 'menos' : undefined}>{x.m.estado === 'ignorado' ? <s>{cifra(x.m.importeCent)}</s> : cifra(x.m.importeCent)}</span>
       case 'saldo': return cifra(saldoDe.get(x.m.id))
-      case 'subcuenta': return <span data-cuenta={x.subcuenta ?? undefined}>{x.subcuenta ?? ''}</span>
+      case 'subcuenta': return <span data-cuenta={x.subcuenta ?? undefined} title={x.subcuenta ? `${x.subcuenta} · ${nombreDe(x.subcuenta)}` : undefined}>{x.subcuenta ?? ''}</span>
       case 'nombre': return <Corto t={nombreDe(x.subcuenta).toUpperCase()} />
-      case 'porque': { const p = porQueDe(x); return p ? <span className="cn-porque" data-tono={p.tono} title={p.title}>{p.texto}</span> : null }
+      case 'porque': {
+        const p = porQueDe(x, nombreRegla)
+        // Estrecha: solo la pastilla, con su primera palabra; lo que dice entero y su porqué, en el title.
+        return p ? <span className="cn-porque" data-tono={p.tono} title={estrecha && !p.title.startsWith(p.texto.split(' · ')[0]) ? [p.texto, p.title].filter(Boolean).join(' · ') : p.title}>{estrecha ? p.texto.split(' · ')[0] : p.texto}</span> : null
+      }
       case 'doc': return a?.numero ? <span title={`Asiento ${a.serie ?? serie}/${a.numero}`}>{`${a.serie ?? serie}/${a.numero}`}</span> : ''
       case 'validado': return x.validado ? <span title={`Validado${x.m.validado?.quien ? ` por ${x.m.validado.quien}` : ''}`}>✓</span> : ''
       default: return null
@@ -415,7 +434,7 @@ export default function PantallaConciliar() {
               </Casilla>
               <Casilla rotulo="Serie de tesorería" htmlFor="cn-serie" gris><input id="cn-serie" readOnly tabIndex={-1} value={`${serie} · TESORERÍA`} /></Casilla>
             </div>
-            <div className="cn-lista" onKeyDown={enLista}>
+            <div className="cn-lista" ref={caja} onKeyDown={enLista} data-estrecha={estrecha ? 'si' : undefined}>
               {cargando ? <p className="cn-cargando" aria-busy="true">Leyendo los movimientos…</p> : (
                 <Lineas etiqueta="Movimientos del extracto" columnas={columnas} filas={filas} celda={celda} elegida={sel >= 0 ? sel : null}
                   alElegir={(i) => setSelId(filas[i]?.m.id ?? null)} alIntro={(i) => { setSelId(filas[i]?.m.id ?? null); contabilizarMarcados(filas[i] ?? null) }}
