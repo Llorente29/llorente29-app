@@ -20,7 +20,7 @@ do $$
 declare
   k_cuenta  constant uuid := 'c0e20000-0000-4000-8000-0000000000e0';
   k_emp2    constant uuid := 'c0e20000-0000-4000-8000-0000000000e3';
-  cuando    constant timestamptz := '2026-11-23 06:00:00+00';
+  v_cuando  constant timestamptz := '2026-11-23 06:00:00+00';
   v_nif text;
   v_n int;
 begin
@@ -49,7 +49,7 @@ begin
              'destinatario', jsonb_build_object('nombre', 'Gestoría de Ejemplo Núcleo, S.L.', 'nif', v_nif),
              'numero', x.numero, 'fecha', x.fecha::text, 'vencimiento', (x.fecha + 30)::text,
              'base', x.base, 'cuota', round(x.base * 0.21, 2), 'total', round(x.base * 1.21, 2), 'desgloseDe', 'papel')),
-         cuando, cuando
+         v_cuando, v_cuando
     from (values
       ('c0f80000-0000-4000-8000-000000000d11', 'K11B-E-1-1', date '2026-10-07', 'B00000133', 'Emisor Desconocido de Prueba 1, S.L.', 211.10),
       ('c0f80000-0000-4000-8000-000000000d12', 'K11B-E-1-2', date '2026-10-11', 'B00000141', 'Emisor con Otro Nombre Desconocido 1, S.L.', 223.30),
@@ -63,7 +63,7 @@ begin
   -- Como las deja «Deshacer» de la R14: su fila de conta_proveedor_solo, deshecha y sin proveedor. Va en la misma
   -- transacción que la factura: el disparador de la R14 es diferido y, al confirmar, la encuentra y no la toca.
   insert into public.conta_proveedor_solo (invoice_id, account_id, company_id, que, supplier_id, nif, cuando, created_at, deshecho_at, deshecho_por)
-  select i.id, k_cuenta, k_emp2, 'alta', null, i.reading -> 'factura' -> 'proveedor' ->> 'nif', 'al_leer', cuando, cuando, 'Semilla K11b'
+  select i.id, k_cuenta, k_emp2, 'alta', null, i.reading -> 'factura' -> 'proveedor' ->> 'nif', 'al_leer', v_cuando, v_cuando, 'Semilla K11b'
     from public.supplier_invoice i
    where i.company_id = k_emp2 and i.created_by_name = 'Semilla K11b emisor'
   on conflict (invoice_id) do nothing;
