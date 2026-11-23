@@ -1,0 +1,22 @@
+{
+ "_que": "X28 · Tesorería como ERP10 · contexto medido en la BASE LOCAL con la estructura de staging (main af2069f), en SOLO LECTURA: no en producción (esta sesión no lee producción). 0800 solo añade (una tabla y tres funciones); 0801 cambia _bank_casar_nucleo (un trozo, la misma firma) y conta_banco_a_mano (la misma firma, sin lógica propia: llama a la nueva), con su prueba de staging. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-23T08:54Z",
+ "tanda": {
+  "supabase/migrations/20261123T0800_x28_tesoreria_modificar.sql": "04b8b87ce20e3235de1a45e56edc6659",
+  "supabase/migrations/20261123T0801_x28_banco_con_marca.sql": "a9da6c854cf3b609a2b18a8ff5d7a92e"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_banco_a_mano(uuid,date,text,text,numeric,text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
