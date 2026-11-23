@@ -137,7 +137,10 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await fichaLista(page)
     // No se valida, y lo dice.
     await ficha(page).locator('[data-guardar-y-siguiente]').click()
-    await expect(aviso(page)).toContainText('no conozco al que la emite', { timeout: 30_000 })
+    // K09 · De una vez, todo lo que falta (Julio, respuesta K11b · 2): «Sin validar: Falta el proveedor · …». La franja de
+    // arriba ya dice «No conozco al que la emite».
+    await expect(aviso(page)).toContainText('Sin validar: Falta el proveedor', { timeout: 30_000 })
+    await expect(franja(page)).toContainText('No conozco al que la emite')
     await expect(aviso(page)).toContainText('No paso a la siguiente')
     // «Darlo de alta»: el alta de hoy, con lo leído.
     await duda.getByRole('button', { name: 'Darlo de alta' }).click()

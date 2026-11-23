@@ -66,7 +66,13 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     // Una a mano, a la 62800000, validada.
     await page.goto('/conta/documentos/nueva', { timeout: 30_000 })
     await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
+    // K11b · La nueva entra por la primera casilla de la pantalla (la fecha de la factura, la de hoy); Intro pasa al proveedor.
+    await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
+    await page.keyboard.press('Enter')
+    // K11b · La nueva entra por la primera casilla de la pantalla (la fecha de la factura, la de hoy); Intro pasa al proveedor.
+  await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
+  await page.keyboard.press('Enter')
+  await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
     await page.keyboard.type('Ficha Uno')
     await page.keyboard.press('Enter')
     await ficha(page).locator('#kf-numero').fill(numero)

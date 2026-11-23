@@ -604,7 +604,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     ed.reiniciar(vacioAMano(hoy))
     setAviso({ tono: 'ok', texto: `${dicho.join(' ')} ${v.texto} ${pago} Escribe la siguiente.` })
     focoPuesto.current = ''; tocada.current = ''
-    setTimeout(() => document.getElementById('kf-proveedor')?.focus(), 0)
+    setTimeout(() => casillasDe(raiz.current)[0]?.focus(), 0)
   }
 
   /** K04b · Elige el proveedor y lo guarda ya en la factura (solo ese campo), como «elegirYGuardar» de la ficha de hoy. */
@@ -736,7 +736,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   })
 
   // El foco, donde hay que mirar (dondeVaElFoco): en la duda si la hay (Intro la contesta, otro Intro guarda); en la
-  // nueva, el proveedor. Se vuelve a mirar cada vez que la ficha termina de pintarse o aparece la duda (la duda puede
+  // nueva, la primera casilla de la pantalla (K11b: la fecha de la factura). Se vuelve a mirar cada vez que la ficha termina de pintarse o aparece la duda (la duda puede
   // llegar antes que la ficha), una vez por factura, y nunca encima de lo que alguien ya ha empezado a escribir en ella.
   const claveFicha = aMano ? 'nueva' : invoiceId
   const pintada = aMano ? proveedoresL !== null : (!!fac && !!ficha)
@@ -748,7 +748,10 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     if (!seVe()) return
     const donde = dondeVaElFoco({ pintada, yaPuesto: focoPuesto.current === claveFicha, tocada: tocada.current === claveFicha, aMano, hayDuda: !!duda || !!emisor })
     if (!donde) return
-    const x = raiz.current?.querySelector<HTMLElement>(donde === 'proveedor' ? '#kf-proveedor' : '.kf-duda .kf-boton-ambar')
+    // K11b · En la nueva, el foco entra por la primera casilla de la pantalla, de izquierda a derecha y de arriba abajo,
+    // como ERP10 (Julio, respuesta K11b · 2): hoy, la fecha de la factura. dondeVaElFoco dice «proveedor» porque la
+    // emitida (que va después, con las mismas piezas) aún entra por su cliente.
+    const x = donde === 'proveedor' ? casillasDe(raiz.current)[0] : raiz.current?.querySelector<HTMLElement>('.kf-duda .kf-boton-ambar')
     if (!x) return
     x.focus()
     focoPuesto.current = claveFicha

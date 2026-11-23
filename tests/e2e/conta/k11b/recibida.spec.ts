@@ -120,13 +120,17 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
     await expect(ficha(page).getByRole('heading', { name: 'Introducción de facturas recibidas · nueva' })).toBeVisible()
     const proveedor = ficha(page).locator('#kf-proveedor')
-    await expect(proveedor).toBeFocused({ timeout: 30_000 })
+    // Entra por la primera casilla de la pantalla, como ERP10: la fecha de la factura (la de hoy, que se deja).
+    await expect(ficha(page).locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
     // Sin documento (con el teclado: el foco, la barra espaciadora y su porqué), y de vuelta al proveedor.
     await ficha(page).getByRole('checkbox', { name: 'Guardarla sin documento' }).focus()
     await page.keyboard.press('Space')
     await ficha(page).getByRole('textbox', { name: 'Por qué no tiene documento' }).focus()
     await page.keyboard.type('Prueba e2e K11b: escrita a mano con el teclado, sin documento')
-    await proveedor.focus()
+    // De vuelta a la primera casilla (la fecha) e Intro: el proveedor.
+    await ficha(page).locator('#kf-fecha').focus()
+    await page.keyboard.press('Enter')
+    await expect(proveedor).toBeFocused()
     await page.keyboard.type('40000101')
     await expect(page.getByRole('option', { name: /^Proveedor de Prueba K11b, S\.L\./ })).toBeVisible({ timeout: 30_000 })
     await page.keyboard.press('Enter')
@@ -162,7 +166,16 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     await expect(ficha(page).locator('#kf-pago')).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(ficha(page).locator('#kf-pago-fecha')).toBeFocused()
-    await page.keyboard.press('Enter')
+    // El último Intro guarda; si la ficha aún lee cómo se paga, lo dice y no guarda: se espera y se vuelve a pulsar (como
+    // introFuera; e2e 45177524259: «Aún estoy leyendo cómo se paga… vuelve a pulsar en un momento»).
+    for (let i = 0; i < 10; i++) {
+      await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
+      await page.keyboard.press('Enter')
+      await page.waitForTimeout(800)
+      if (!/Aún estoy (leyendo|guardando)/.test((await aviso(page).textContent().catch(() => '')) ?? '')) break
+      await page.waitForTimeout(1500)
+      await ficha(page).locator('#kf-pago-fecha').focus()
+    }
     await expect(aviso(page)).toContainText(`Guardada la ${numero}`, { timeout: 60_000 })
     await expect(aviso(page)).toContainText(/Apuntada y (validada|en Diez)/, { timeout: 60_000 })
     await contar(page, `${ancho} · 1`)

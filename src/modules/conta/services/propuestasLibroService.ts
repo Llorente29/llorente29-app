@@ -446,7 +446,8 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     // D01 · Sin «Sus facturas se apuntan en»: lo aprendido de sus facturas anteriores
     // (Diez o Folvy), con su porqué. Probable si fueron a varias cuentas.
     let deLoAprendido: Fila | null = null
-    if (!gasto && cuentaProv) {
+    // K11b · Sin proveedor (el emisor que no se conoce) no se pregunta: sup sería «null» y la base contesta 400.
+    if (!gasto && cuentaProv && f.supplier_id) {
       if (!aprendido.has(sup)) aprendido.set(sup, await rpc<Fila>('conta_gasto_aprendido', { p_company: companyId, p_supplier: sup }).catch(() => null))
       deLoAprendido = aprendido.get(sup) ?? null
       if (deLoAprendido?.cuenta) gasto = String(deLoAprendido.cuenta)
@@ -454,7 +455,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     // R14 · Sin historia en esta empresa: la cuenta propuesta desde la primera factura (la de la
     // plataforma, la de sus facturas en otra sociedad o la de lo que vende), en ámbar con su porqué.
     let propuestoR14: Fila | null = null
-    if (!gasto && cuentaProv && (soloFactura || ver)) {
+    if (!gasto && cuentaProv && f.supplier_id && (soloFactura || ver)) {
       propuestoR14 = await rpc<Fila>('conta_gasto_propuesto', { p_company: companyId, p_supplier: sup, p_invoice: String(f.id) }).catch(() => null)
       if (propuestoR14?.cuenta) gasto = String(propuestoR14.cuenta)
     }

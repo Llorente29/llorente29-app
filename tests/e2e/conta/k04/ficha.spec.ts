@@ -186,12 +186,10 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await page.goto('/conta/documentos/nueva', { timeout: 30_000 })
     await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
     await expect(ficha(page).locator('.kf-estado')).toContainText('La escribes tú.')
-    await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
+    // K11b · La nueva entra por la primera casilla de la pantalla, como ERP10: la fecha de la factura, arriba. Intro sigue
+    // el orden de la pantalla: de la fecha al proveedor, al número y a las bases.
+    await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
     if (grande) { await cargada(page, 'a mano, vacía'); await page.screenshot({ path: `${DIR}/a-mano-vacia-${ancho}.png` }) }
-    // K11b · Intro sigue el orden de la pantalla, como ERP10: la fecha de la factura está arriba, antes que el proveedor.
-    // Mayús+Tab sube a ella, e Intro baja al proveedor, al número y a las bases.
-    await page.keyboard.press('Shift+Tab')
-    await expect(page.locator('#kf-fecha')).toBeFocused()
     await page.keyboard.type('15/10/2026'); await page.keyboard.press('Enter')
     await expect(page.locator('#kf-proveedor')).toBeFocused()
     await page.keyboard.type(t === 1 ? 'Ficha Uno' : 'Ficha Dos')
