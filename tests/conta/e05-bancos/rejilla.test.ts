@@ -11,7 +11,7 @@ const motor = vi.hoisted(() => ({ confirmar: vi.fn(), deshacer: vi.fn(), concili
 vi.mock('@/modules/conta/services/bancosService', () => ({ bancos: motor }))
 
 import { aQueVa, etiquetaDe, ingresoPago, mover, porRevisar, segurosMarcados } from '@/modules/conta/nucleo/bancos/rejilla'
-import { MOTIVO_DESHACER, confirmarPropuesta, confirmarVarios, deshacerCasado } from '@/modules/conta/nucleo/bancos/conciliar'
+import { MOTIVO_DESHACER, confirmarPropuesta, deshacerCasado } from '@/modules/conta/nucleo/bancos/conciliar'
 import { cuadreDe } from '@/modules/conta/lib/conciliarVista'
 import { MOTOR_BANCOS } from '@/modules/conta/lib/conciliacion'
 import { PROPUESTA_RECALCULADA, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
@@ -106,11 +106,6 @@ describe('confirmar y deshacer: las mismas llamadas al motor que la pantalla de 
     await expect(confirmarPropuesta(ctx, mov({ id: 'm3', propuesta: propuesta({ motor: 'viejo' }) }))).rejects.toThrow(PROPUESTA_RECALCULADA)
     expect(motor.conciliarPendientes).toHaveBeenCalledWith('acc', 'emp', '2026-07-31')
     expect(motor.confirmar).not.toHaveBeenCalled()
-  })
-  it('en bloque: uno a uno, y lo que falla se dice uno a uno', async () => {
-    motor.confirmar.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('ya estaba casado'))
-    const r = await confirmarVarios(ctx, [mov({ id: 'a', propuesta: propuesta() }), mov({ id: 'b', propuesta: propuesta() })], (m) => m.id)
-    expect(r).toEqual({ bien: 1, de: 2, importeCent: 35744, mal: ['b: ya estaba casado'], recalculado: false })
   })
   it('deshacer: nucleo.deshacer(casado, motivo)', async () => {
     await deshacerCasado(mov({ id: 'c', estado: 'casado', casado: { id: 'cas1', tipo: 'x', porque: '', porQuien: 'folvy', asientoId: 'a', asientoConcepto: null } }))

@@ -1,0 +1,38 @@
+/* src/modules/conta/nucleo/tesoreria/tesoreria.css
+ *
+ * X28 · Tesorería, con las medidas de la maqueta nucleo_21 a 1366. Lo común (la ventana, la barra, las casillas, las
+ * líneas y el documento) va en nucleo/piezas/piezas.css: aquí solo cómo se reparten las casillas de esta pantalla.
+ * Ninguna casilla corta se estira a 1920 (X27c): las que tienen medida la llevan fija; crece el concepto y el nombre.
+ */
+
+.ts { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ts-pantalla { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ts-cuerpo { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 10px 6px 10px; }
+.ts-cargando { padding: 12px; color: var(--kp-gris-tinta); }
+
+/* Banco: periodo · subcuenta con lupa · nombre · saldo a la fecha · el lector del extracto con su carpeta. */
+.ts-fila-banco { display: grid; grid-template-columns: 112px 120px minmax(0, 280px) 110px minmax(0, 1fr); gap: 0 6px; align-items: end; }
+.ts-fila-banco select { width: 100%; }
+.ts-lector .kp-casilla-dentro { display: flex; align-items: center; gap: 4px; }
+.ts-lector input { flex: 1; min-width: 0; }
+.ts-carpeta { flex-shrink: 0; width: 24px; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; }
+.ts-carpeta:disabled { cursor: default; opacity: .5; }
+
+/* Movimientos: la subcuenta que propone Sumied, en ámbar (subcuenta y nombre), como la maqueta. */
+.ts-movimientos { margin-top: 2px; }
+.ts .kp-lineas tbody tr[data-ambar='si'] td:nth-child(3), .ts .kp-lineas tbody tr[data-ambar='si'] td:nth-child(4) { background: var(--kp-ambar-fondo); }
+.ts .kp-lineas tbody tr[data-ambar='si'][aria-selected='true'] td:nth-child(3), .ts .kp-lineas tbody tr[data-ambar='si'][aria-selected='true'] td:nth-child(4) { background: var(--kp-elegida); }
+
+/* La línea que se edita: doc 48 · fecha 92 · subcuenta 120 · nombre · saldo 96 · concepto · ingreso 96 · pago 96. */
+.ts-edicion-uno { display: grid; grid-template-columns: 48px 92px 120px minmax(0, 1fr) 96px minmax(0, 1.15fr) 96px 96px; gap: 0 5px; }
+/* Local, marca y plataforma (en hostelería): tres a partes iguales; sin hostelería, el local solo, con su medida. */
+.ts-edicion-dos { display: grid; grid-template-columns: minmax(0, 280px); gap: 0 5px; margin-top: 2px; }
+.ts-edicion-dos[data-hosteleria='si'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* Totales: ingresos, pagos y saldo final (112 px cada uno). */
+.ts-totales { display: grid; grid-template-columns: repeat(3, 112px); gap: 0 6px; }
+
+/* El documento: la factura que se paga o se cobra. */
+.ts-factura { text-align: left; line-height: 1.5; padding: 18px 22px; color: var(--kp-tinta, #1f2a37); }
+.ts-factura p { margin: 0; }
+.ts-factura-titulo { margin-bottom: 14px !important; color: var(--kp-rotulo); }

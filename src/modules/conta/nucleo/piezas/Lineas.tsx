@@ -11,13 +11,17 @@ import { cuantasLineas, seDesplaza } from './logica'
 
 export interface Columna { clave: string; titulo: ReactNode; ancho?: string; cifra?: boolean; className?: string }
 
-export function Lineas<T>({ etiqueta, columnas, filas, celda, elegida, alElegir, edicion, otra, suma, vacia }: {
+export function Lineas<T>({ etiqueta, columnas, filas, celda, elegida, alElegir, edicion, otra, otraTexto, suma, vacia, claseFila }: {
   etiqueta: string; columnas: readonly Columna[]; filas: readonly T[]
   celda: (f: T, clave: string, i: number) => ReactNode
   elegida: number | null; alElegir?: (i: number) => void
   edicion?: ReactNode
   /** «⊕ otra línea»: qué hace (sin él, no sale el botón, pero sí el número de líneas). */
   otra?: () => void
+  /** X28 · Lo que dice el ⊕ y su nombre («otro movimiento · 7 movimientos · 3 sin contabilizar»). Sin él, «otra línea · N líneas». */
+  otraTexto?: { texto: string; etiqueta: string }
+  /** X28 · Atributos de cada fila (data-…), para pintarla o encontrarla. */
+  claseFila?: (f: T, i: number) => Record<string, string | undefined>
   suma?: ReactNode
   vacia?: ReactNode
 }) {
@@ -30,7 +34,7 @@ export function Lineas<T>({ etiqueta, columnas, filas, celda, elegida, alElegir,
             <thead><tr>{columnas.map((c) => <th key={c.clave} className={`${c.cifra ? 'kp-num ' : ''}${c.className ?? ''}`.trim() || undefined}>{c.titulo}</th>)}</tr></thead>
             <tbody>
               {filas.map((f, i) => (
-                <tr key={i} aria-selected={elegida === i} tabIndex={alElegir ? 0 : undefined}
+                <tr key={i} aria-selected={elegida === i} tabIndex={alElegir ? 0 : undefined} {...claseFila?.(f, i)}
                   onClick={alElegir ? () => alElegir(i) : undefined}
                   onKeyDown={alElegir ? (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) { e.preventDefault(); alElegir(i) } } : undefined}>
                   {columnas.map((c) => <td key={c.clave} className={`${c.cifra ? 'kp-num ' : ''}${c.className ?? ''}`.trim() || undefined}>{celda(f, c.clave, i)}</td>)}
@@ -44,7 +48,7 @@ export function Lineas<T>({ etiqueta, columnas, filas, celda, elegida, alElegir,
       </div>
       <div className="kp-lineas-pie">
         <span className="kp-lineas-otra">
-          {otra ? <BotonMas etiqueta="Otra línea" hacer={otra} texto={`otra línea · ${cuantasLineas(filas.length)}`} />
+          {otra ? <BotonMas etiqueta={otraTexto?.etiqueta ?? 'Otra línea'} hacer={otra} texto={otraTexto?.texto ?? `otra línea · ${cuantasLineas(filas.length)}`} />
             : <span className="kp-lineas-cuantas">{cuantasLineas(filas.length)}</span>}
         </span>
         {suma}
