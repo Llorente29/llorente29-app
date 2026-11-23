@@ -8,9 +8,9 @@
 //      al escribir» en silencio (regla 8; e2e 44960214725);
 //   2. una de octubre sin IVA, de un proveedor con NIF (como llega una intracomunitaria de servicios): el tipo de operación «De su ficha»
 //      se cambia a «Intracom. servicios» («Cambiado», y «Cambiado en esta factura» al pasar el ratón); el concepto
-//      se escribe, las observaciones y la marca se ponen, y la base lo guarda;
+//      se escribe, las observaciones se ponen (la marca, desde el K11b, solo en hostelería: no sale), y la base lo guarda;
 //   3. al pulsar Intro, su asiento sale con la inversión (el 472 con «Compra en otro país de la UE» y la 477),
-//      con el concepto escrito y la marca en sus apuntes. Desde la rama, staging tiene la regla 11 de antes (la
+//      con el concepto escrito. Desde la rama, staging tiene la regla 11 de antes (la
 //      2151 solo pasa en ROLLBACK), así que se queda propuesto: lo que mira la prueba es el asiento que sale. Que
 //      la regla 11 lea el tipo de la factura lo prueba staging en ROLLBACK (20261121_k10b_cabecera_recibida_prueba).
 
@@ -23,7 +23,6 @@ test.use({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
 
 const DIR = 'docs/conta/capturas/k10b'
 const factura = (t: number, n: number) => enCarril(`c0eb0000-0000-4000-8000-000000000d${t}${n}`)
-const MARCA = 'Marca de Prueba K10b Uno'
 const FICHA = '[data-prueba="ficha-recibida-nucleo"]'
 const ficha = (page: Page) => page.locator(`.k-zona[data-activa="si"] ${FICHA}`)
 const aviso = (page: Page) => page.locator('.k-zona[data-activa="si"] [data-prueba="aviso-ficha"]')
@@ -124,7 +123,8 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await page.goto(`/conta/documentos/recibidas/${factura(t, 2)}?ver=por-revisar`, { timeout: 30_000 })
     await fichaLista(page)
     await expect(ficha(page).locator('#kf-deduce')).toHaveValue('2026-10-01', { timeout: 30_000 })
-    await expect(ficha(page).locator('.kf-comprobaciones')).toContainText('El 3T ya está presentado: va al 4T')
+    // K11b · Sin frases: la casilla del periodo, en ámbar, con el motivo al pasar el ratón.
+    await expect(ficha(page).locator('[data-comprobacion="periodo"]')).toHaveAttribute('title', /El 3T ya está presentado: va al 4T/)
     await expect(ficha(page).locator('#kf-deduce option[value="2026-07-01"]')).toBeDisabled()
 
     // ── 1b · Sin propuesta (su proveedor no tiene NIF): la ficha lo dice. ──
@@ -153,26 +153,21 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(aviso(page)).toContainText(`Concepto: «${concepto}»`, { timeout: 30_000 })
     await expect(ficha(page).locator('#kf-concepto')).toHaveValue(concepto, { timeout: 30_000 })
 
-    await ficha(page).locator('[data-prueba="observaciones-boton"]').click()
+    // K11b · Las observaciones, en su bloque como ERP10 (una casilla siempre a la vista, sin botón que la abra).
     await ficha(page).locator('#kf-observaciones').fill(`Observación de prueba K10b ${t}`)
     await ficha(page).locator('#kf-observaciones').press('Tab')
     await expect(aviso(page)).toContainText('Observaciones', { timeout: 30_000 })
-    await expect(ficha(page).locator('[data-prueba="observaciones-boton"]')).toHaveText('Observaciones ✓', { timeout: 30_000 })
+    await expect(ficha(page).locator('#kf-observaciones')).toHaveValue(`Observación de prueba K10b ${t}`, { timeout: 30_000 })
 
-    // La casilla enseña el nombre corto («Marca de Prueba K…»: el entero no cabe, e2e a mano #1731) y el entero al pasar el ratón.
-    const [marca] = await rest<{ id: string }[]>(s, `brand?select=id&account_id=eq.${NUCLEO.id}&name=eq.${encodeURIComponent(MARCA)}`)
-    expect(marca, 'la marca de la semilla K10b').toBeTruthy()
-    await expect(ficha(page).locator(`#kf-marca option[value="${marca.id}"]`)).toHaveText('Marca de Prueba K…')
-    await ficha(page).locator('#kf-marca').selectOption(marca.id)
-    await expect(aviso(page)).toContainText(`Marca: ${MARCA}`, { timeout: 30_000 })
-    await expect(ficha(page).locator('#kf-marca')).toHaveAttribute('title', MARCA, { timeout: 30_000 })
+    // K11b · La marca y la plataforma, por línea y solo en una empresa de hostelería (la gestoría del núcleo no lo es):
+    // aquí no salen. La marca por línea, con su asiento, la prueba k11b/recibida.spec.ts en una de hostelería.
+    await expect(ficha(page).locator('#kf-marca')).toHaveCount(0)
 
     const [f] = await rest<{ vat_operation: string | null; entry_concept: string | null; notes: string | null; brand_id: string | null }[]>(s,
       `supplier_invoice?select=vat_operation,entry_concept,notes,brand_id&account_id=eq.${NUCLEO.id}&id=eq.${factura(t, 4)}`)
     expect(f.vat_operation).toBe('intra_servicios')
     expect(f.entry_concept).toBe(concepto)
     expect(f.notes).toBe(`Observación de prueba K10b ${t}`)
-    expect(f.brand_id, 'la marca, guardada').not.toBeNull()
     expect(await loQueSeCorta(page, FICHA), `lo que se corta, la cabecera, a ${ancho}`).toEqual([])
     await cargada(page, 'la cabecera')
     await page.screenshot({ path: `${DIR}/cabecera-${ancho}.png` })

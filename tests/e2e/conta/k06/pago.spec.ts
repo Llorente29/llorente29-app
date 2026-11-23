@@ -37,7 +37,8 @@ const PROVEEDOR = (t: number) => (t === 1 ? 'Proveedor de Prueba Ficha Uno, S.L.
 const FICHA = '[data-prueba="ficha-recibida-nucleo"]'
 const ficha = (page: Page) => page.locator(`.k-zona[data-activa="si"] ${FICHA}`)
 const aviso = (page: Page) => page.locator('[data-prueba="aviso-ficha"]')
-const nombrePago = (page: Page) => ficha(page).getByRole('textbox', { name: 'Nombre de la cuenta del pago' })
+// K11b · El nombre de la cuenta del pago, sin casilla propia (como ERP10): en el `title` de la subcuenta del pago.
+const nombrePago = (page: Page) => ficha(page).locator('[data-prueba="pago-cuenta"]')
 
 async function rest<T>(s: Sesion, ruta: string, cuerpo?: unknown): Promise<T> {
   const r = await fetch(`${STAGING_URL}/rest/v1/${ruta}`, {
@@ -138,7 +139,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await ficha(page).locator('#kf-pago').fill('5720')
     await page.getByRole('option', { name: /^57200001 · / }).click()
     await expect(ficha(page).locator('#kf-pago')).toHaveValue('57200001')
-    await expect(nombrePago(page)).toHaveValue('Bancos · Cuenta principal')
+    await expect(nombrePago(page)).toHaveAttribute('title', /^Bancos · Cuenta principal/)
     await expect(ficha(page).locator('#kf-pago-fecha')).toHaveValue('20/10/2026')
     await expect(ficha(page).getByRole('textbox', { name: 'Importe del pago' })).toHaveValue('121,00')
     await cargada(page, 'a mano, por banco')
@@ -156,8 +157,8 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(ficha(page).locator('#kf-pago')).toHaveValue('57200001', { timeout: 30_000 })
     await expect(ficha(page).locator('[data-prueba="origen-pago"]')).toHaveText('La del último pago')
     await ficha(page).locator('#kf-pago').fill('')
-    await expect(nombrePago(page)).toHaveValue('')
-    await expect(nombrePago(page)).toHaveAttribute('placeholder', 'Pendiente de pagar')
+    // Vacía: pendiente de pagar (en ERP10, la fila del pago en blanco).
+    await expect(ficha(page).locator('#kf-pago')).toHaveValue('')
     expect(await loQueSeCorta(page, FICHA), 'lo que se corta, vacía').toEqual([])
     if (grande) await page.screenshot({ path: `${DIR}/vacia-${ancho}.png` })
     await ficha(page).locator('[data-guardar-y-siguiente]').click()
@@ -184,7 +185,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
     await expect(ficha(page).locator('#kf-pago')).toHaveValue('43000091', { timeout: 30_000 })
     await expect(ficha(page).locator('[data-prueba="origen-pago"]')).toHaveText('De su ficha')
-    await expect(nombrePago(page)).toHaveValue('Plataforma de Prueba K06')
+    await expect(nombrePago(page)).toHaveAttribute('title', /^Plataforma de Prueba K06/)
     await expect(ficha(page)).not.toContainText('Compensación con la liquidación')
     await cargada(page, 'la de plataforma')
     expect(await loQueSeCorta(page, FICHA), 'lo que se corta, por la 430').toEqual([])

@@ -1,0 +1,134 @@
+/* src/modules/conta/nucleo/recibida/fichaErp10.css
+ *
+ * K11b · La ficha de la recibida como ERP10, con las medidas de la maqueta nucleo_17a a 1366 (las de la maqueta entre
+ * 1,464) y la 18b para las contrapartidas. Lo común (la ventana, la barra, las casillas, la lupa, el ⊕, «Otros datos»)
+ * va en nucleo/piezas/piezas.css: aquí solo cómo se reparten las casillas de esta pantalla. A 1920 no se estira: la
+ * pantalla tiene su ancho máximo (pieza 11, como el X27c).
+ */
+
+.kr .kr-izquierda { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.kr .kr-izquierda > .kp-ventana { flex: 1; min-height: 0; }
+.kr-pantalla { flex: 1; min-height: 0; overflow: auto; position: relative; padding: 0 10px 6px; }
+.kr-pantalla > * { max-width: 760px; }
+.kr-campos { border: 0; margin: 0; padding: 0; min-width: 0; }
+.kr .kp-barra-aviso .kf-estado { flex-shrink: 0; }
+.kr .kp-barra-aviso .kf-cola { color: var(--kp-gris-tinta); white-space: nowrap; font-size: 12px; }
+.kr .kp-barra .kf-mas { position: relative; }
+.kr .kp-barra .kf-boton-hueco { height: 24px; padding: 0 8px; border: 1px solid var(--kp-raya); border-radius: 3px; background: var(--kp-blanco); color: var(--kp-tinta); cursor: pointer; font-size: 12px; }
+
+/* Datos factura: tipo 238 · periodo 348 · documento 90 · introducción 146 · factura 135. */
+.kr-fila { display: grid; gap: 0 6px; align-items: end; margin-top: 1px; }
+.kr-fila-1 { grid-template-columns: minmax(0, 238fr) minmax(0, 348fr) minmax(0, 90fr) minmax(0, 146fr) minmax(0, 135fr); }
+.kr-periodo .kp-casilla-dentro { display: grid; grid-template-columns: minmax(0, 103fr) minmax(0, 209fr); gap: 6px; }
+/* Proveedor 172 · saldo 155 · N.I.F. 173 · nombre 465. */
+.kr-fila-2 { grid-template-columns: minmax(0, 172fr) minmax(0, 155fr) minmax(0, 173fr) minmax(0, 465fr); }
+/* Nº factura 228 · concepto 478 · tipo de operación 233 y el ⊕. */
+.kr-fila-3 { grid-template-columns: minmax(0, 228fr) minmax(0, 478fr) minmax(0, 270fr); }
+.kr-fila-3 > .kp-casilla:last-child .kp-casilla-dentro select,
+.kr-fila-3 > .kp-casilla:last-child .kp-casilla-dentro input { flex: 1; }
+.kr .kf-buscador, .kr .kf-buscador input { width: 100%; }
+.kr-nuevo-proveedor { margin-top: 3px; font-size: 12px; }
+
+/* I.V.A.: dos filas de dos tipos (base 93 · % 43 · cuota 79); retención 85 · 83 · 42 · 75; total 102. */
+.kr-iva-rejilla { display: grid; grid-template-columns: minmax(0, 480fr) minmax(0, 340fr) minmax(0, 102fr); gap: 0 12px; align-items: start; }
+.kr-iva-tipos { display: flex; flex-direction: column; gap: 4px; }
+.kr-iva-fila { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.kr-iva-tipo { display: grid; grid-template-columns: minmax(0, 93fr) minmax(0, 43fr) minmax(0, 79fr); gap: 0 6px; align-items: end; }
+.kr-iva-tipo .kp-rotulo:empty { display: none; }
+.kr-iva-tipo .kp-casilla-dentro { position: relative; }
+.kr-iva-vacio { min-height: 20px; align-self: end; }
+.kr-iva-otro { display: grid; grid-template-columns: minmax(0, 93fr) minmax(0, 43fr) minmax(0, 79fr); gap: 0 6px; width: 100%; height: 20px; padding: 0; border: 0; background: none; cursor: copy; }
+.kr-iva-otro > span { border: 1px solid var(--kp-casilla-borde); background: var(--kp-blanco); }
+.kr-retencion { display: grid; grid-template-columns: minmax(0, 85fr) minmax(0, 83fr) minmax(0, 42fr) minmax(0, 75fr); gap: 0 6px; align-items: end; }
+.kr-total .kr-total-cifra { font-weight: 700; }
+.kr-quitar { position: absolute; right: -11px; width: 11px; height: 14px; padding: 0; border: 0; background: none; color: var(--kp-gris-tinta); cursor: pointer; line-height: 1; visibility: hidden; }
+.kr-iva-tipo:hover .kr-quitar, .kr-contra-fila:hover .kr-quitar { visibility: visible; }
+
+/* Contrapartida/s, una fila por línea (18b): subcuenta 100 · nombre 198 · concepto 185 · local 97 · marca 60 ·
+   plataforma 85 · importe 111. Sin hostelería, sin marca ni plataforma: el concepto crece. */
+.kr-contra-rejilla { display: flex; flex-direction: column; gap: 3px; }
+.kr-contra-cabeza, .kr-contra-fila { display: grid; gap: 0 6px; align-items: center;
+  grid-template-columns: minmax(0, 118fr) minmax(0, 198fr) minmax(0, 310fr) minmax(0, 115fr) minmax(0, 111fr) 12px; }
+.kr-contra-rejilla[data-hosteleria='si'] .kr-contra-cabeza, .kr-contra-rejilla[data-hosteleria='si'] .kr-contra-fila {
+  grid-template-columns: minmax(0, 118fr) minmax(0, 150fr) minmax(0, 170fr) minmax(0, 100fr) minmax(0, 80fr) minmax(0, 90fr) minmax(0, 105fr) 12px; }
+.kr-contra-cabeza > span, .kr-pago-cabeza > span { color: var(--kp-rotulo); font-size: 11.5px; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kr-contra-cabeza > .kp-num, .kr-pago-cabeza > .kp-num { text-align: right; }
+.kr-celda { min-width: 0; display: flex; align-items: center; position: relative; }
+.kr-celda > * { flex: 1; min-width: 0; }
+.kr-celda[data-ambar='si'] input { background: var(--kp-ambar-fondo); border-color: var(--kp-ambar-borde); }
+.kr-pie { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 22px; }
+.kr-suma { color: var(--kp-rotulo); font-size: 12.5px; white-space: nowrap; }
+.kr-suma[data-ambar='si'] { color: #6b4300; background: var(--kp-ambar-fondo); padding: 0 6px; border: 1px solid var(--kp-ambar-borde); }
+.kr-contra .kf-aviso-linea { margin: 2px 0 0; font-size: 12px; color: #6b4300; }
+
+/* Pago factura: periodo 112 · docum. 94 · subcuenta 120 · fecha 128 · concepto 303 · importe 127 · los botones. */
+.kr-pago-rejilla { display: flex; flex-direction: column; gap: 3px; }
+.kr-pago-cabeza, .kr-pago-fila { display: grid; gap: 0 6px; align-items: center;
+  grid-template-columns: minmax(0, 72fr) minmax(0, 60fr) minmax(0, 128fr) minmax(0, 110fr) minmax(0, 300fr) minmax(0, 110fr) 46px; }
+.kr-pago-fila > * { min-width: 0; }
+.kr-pago-fila[data-propuesta='si'] .kf-origen { font-size: 11px; color: var(--kp-gris-tinta); }
+.kr-pago-botones { display: flex; gap: 2px; }
+.kr-boton { width: 21px; height: 20px; padding: 0; border: 1px solid var(--kp-raya); border-radius: 2px; background: var(--kp-blanco); color: var(--kp-rotulo); cursor: pointer; font-size: 12px; line-height: 1; }
+.kr-boton:disabled { color: #b7c0ca; cursor: default; }
+.kr-boton[data-armado='si'] { background: var(--kp-ambar-fondo); border-color: var(--kp-ambar-borde); color: #6b4300; }
+
+.kr-obs input { width: 100%; }
+.kr-otros-titulo { margin: 4px 0 0; padding: 2px 6px; background: var(--kp-cabeza-fondo); color: var(--kp-rotulo); font-size: 12.5px; font-weight: 400; }
+.kr-marca { display: flex; align-items: center; gap: 5px; color: var(--kp-rotulo); font-size: 12.5px; white-space: nowrap; }
+.kr-marca input { width: auto; height: auto; }
+.kr .kp-otros { top: 120px; right: auto; left: 40%; width: 460px; }
+
+.kr-dudas:empty { display: none; }
+.kr-dudas { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+
+/* Visualización del asiento (pieza 7): el debe a la izquierda y el haber a la derecha; el de la factura y, debajo,
+   el de cada pago, con su número. En su recuadro rojo, como ERP10. */
+.kr-visual-marco { border: 1px solid #d14b4b; min-height: 120px; }
+.kr-visual-marco table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12.5px; }
+.kr-visual-marco th { padding: 1px 8px; background: var(--kp-cabeza-fondo); font-weight: 400; text-align: left; white-space: nowrap; }
+.kr-visual-marco th.kp-num { text-align: right; }
+.kr-visual-marco td { padding: 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
+.kr-visual-marco td.kr-visual-haber-nombre { border-left: 1px solid #d14b4b; }
+.kr-visual-haber { text-align: right; }
+.kr-visual-nota { color: #6b4300; white-space: normal !important; }
+.kr-visual-marco .kf-etiqueta { font-size: 11.5px; padding: 0 6px; }
+
+/* Las casillas como las piezas del K12 (20 px, sin redondeo), por encima de las de la ficha de antes (ficha.css). */
+.kr .kp-ventana input:not([type='checkbox']):not([type='file']), .kr .kp-ventana select, .kr .kp-ventana textarea.kf-nombre-cuenta {
+  box-sizing: border-box; height: 21px; min-height: 0; padding: 0 5px; border: 1px solid var(--kp-casilla-borde); border-radius: 0;
+  background: var(--kp-blanco); color: var(--kp-tinta); font-size: 12.5px; line-height: 19px; }
+.kr .kp-ventana select { padding: 0 1px 0 3px; }
+.kr .kp-ventana input[readonly], .kr .kp-casilla[data-gris='si'] input, .kr .kp-ventana textarea.kf-nombre-cuenta { background: var(--kp-gris-fondo); color: var(--kp-gris-tinta); }
+.kr .kp-ventana input[data-ambar='si'], .kr .kp-casilla[data-ambar='si'] input, .kr .kp-casilla[data-ambar='si'] select,
+.kr .kr-celda[data-ambar='si'] input, .kr .kp-ventana textarea.kf-nombre-cuenta[data-duda='si'], .kr .kp-ventana input[data-duda='si'] {
+  background: var(--kp-ambar-fondo); border: 1px solid var(--kp-ambar-borde); color: var(--kp-tinta); }
+.kr .kp-ventana textarea.kf-nombre-cuenta { resize: none; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; width: 100%; padding-top: 0; }
+.kr .kp-ventana input:focus, .kr .kp-ventana select:focus { outline: 2px solid var(--kp-rotulo); outline-offset: -1px; }
+.kr .kp-barra-texto { white-space: nowrap; }
+.kr .kp-barra-aviso .kf-estado { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 2px 8px; font-size: 12px; }
+.kr .kp-bloque-titulo { margin: 2px 0 1px; }
+.kr .kr-iva-vacio { display: block; }
+.kr-pie:empty { display: none; }
+/* Lo que aún se decide con un botón, en una línea: el texto entero al pasar el ratón (sin frases que empujen la ficha). */
+.kr .kr-dudas .kf-duda { display: flex; align-items: center; gap: 8px; margin: 0; padding: 2px 6px; border-radius: 0; min-height: 0; }
+.kr .kr-dudas .kf-duda p { flex: 1; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.kr .kr-dudas .kf-duda button { height: 21px; padding: 0 8px; font-size: 12px; border-radius: 2px; }
+.kr .kr-dudas .kf-duda > div { display: flex; gap: 4px; flex-shrink: 0; }
+.kr .kr-dudas .kf-aviso { margin: 0; padding: 2px 6px; font-size: 12px; }
+/* La visualización llena lo que queda de la ventana y se desplaza ella (como en ERP10); la pantalla, solo si no cabe ni así. */
+.kr-pantalla { display: flex; flex-direction: column; }
+.kr-pantalla > .kr-visual { flex: 1 1 auto; min-height: 92px; display: flex; flex-direction: column; }
+.kr-visual > .kr-visual-marco { flex: 1; min-height: 70px; overflow: auto; }
+/* A 1920 no se estira: el tope, en cada bloque (un fieldset no respeta el max-width de su caja). */
+.kr-pantalla .kp-bloque, .kr-pantalla .kr-dudas { max-width: 760px; box-sizing: border-box; }
+.kr .kr-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* El × de quitar un tipo o una línea, siempre a mano (no solo al pasar el ratón), pero discreto. */
+.kr-quitar { visibility: visible; color: #b7c0ca; }
+.kr-quitar:hover { color: var(--kp-tinta); }
+/* El % del IVA mide su dato (dos cifras y la flecha): 46 px, como «cifra»; la retención, con su rótulo entero. */
+.kr-iva-tipo, .kr-iva-otro { grid-template-columns: minmax(0, 93fr) 46px minmax(0, 79fr); }
+.kr-retencion { grid-template-columns: minmax(84px, 95fr) minmax(0, 83fr) 40px minmax(0, 75fr); }
+.kr-iva-rejilla { grid-template-columns: minmax(0, 480fr) minmax(0, 360fr) minmax(0, 102fr); gap: 0 10px; }
+/* En su mínimo (680 px, la raya del K06), los rótulos de la primera fila enteros. */
+.kr-fila-1 { grid-template-columns: minmax(0, 238fr) minmax(0, 348fr) minmax(64px, 90fr) minmax(106px, 146fr) minmax(0, 135fr); }
+.kr-pago-cabeza, .kr-pago-fila { grid-template-columns: minmax(0, 62fr) minmax(0, 54fr) minmax(0, 128fr) minmax(92px, 110fr) minmax(0, 300fr) minmax(0, 110fr) 46px; }

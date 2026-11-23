@@ -32,6 +32,14 @@ export async function loQueSeCorta(page: Page, ficha: string): Promise<string[]>
         ctx.font = `${cs.fontSize} ${cs.fontFamily}`
         corta = ctx.measureText(el.placeholder).width > el.clientWidth - 12
       }
+      // K11b · En la recibida como ERP10 (.kr), lo cortado vale si su `title` lo dice entero (al pasar el ratón): la
+      // maqueta aprobada corta los nombres largos («VENTAS DE MERCADE», nucleo_18b), como ERP10. Fuera de ella, como siempre.
+      if (corta && el.closest('.kr')) {
+        const visto = el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement
+          ? (el instanceof HTMLSelectElement ? el.selectedOptions[0]?.text ?? '' : el.value || (el as HTMLInputElement).placeholder) : el.textContent ?? ''
+        const titulo = el.getAttribute('title') ?? el.closest('[title]')?.getAttribute('title') ?? ''
+        if (visto.trim() && titulo.includes(visto.trim())) corta = false
+      }
       if (corta) {
         const texto = el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement ? (el.value || (el as HTMLInputElement).placeholder) : el.textContent
         l.push(`${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${el.getAttribute('aria-label') ? ` (${el.getAttribute('aria-label')})` : ''}: «${String(texto).trim().slice(0, 70)}», ${el.scrollWidth} en ${el.clientWidth}`)

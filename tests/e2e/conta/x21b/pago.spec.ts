@@ -106,7 +106,8 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(ficha(page).getByRole('button', { name: /^No está/ })).toHaveCount(0)
     await opcion.click()
     await expect(ficha(page).locator('#kf-pago')).toHaveValue(cliente.code)
-    await expect(ficha(page).getByRole('textbox', { name: 'Nombre de la cuenta del pago' })).toHaveValue(cliente.name)
+    // K11b · El nombre de la cuenta del pago, en el `title` de su subcuenta (sin casilla propia, como ERP10).
+    await expect(ficha(page).locator('[data-prueba="pago-cuenta"]')).toHaveAttribute('title', new RegExp(`^${cliente.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
     await expect(ficha(page).locator('#kf-pago-fecha')).toHaveValue('20/10/2026')
     const linea = ficha(page).locator('[data-prueba="pago-asiento"]')
     await expect(linea).toHaveText(new RegExp(`^No es un banco ni la caja: al validar, un asiento del pago con (la \\d{8} del proveedor|la del proveedor) al debe y la ${cliente.code} · ${cliente.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} al haber, por 121,00 €, y la factura queda pagada\\.$`))

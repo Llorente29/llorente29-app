@@ -78,7 +78,7 @@ async function entrarEnLaGestoria(page: Page): Promise<Sesion> {
 /** Lo que había en la ficha, escrito en el registro (Q03): la franja, las comprobaciones y el aviso. */
 async function contar(page: Page, donde: string) {
   const x = await ficha(page).evaluate((el) => ({
-    franja: el.querySelector('.kf-estado')?.textContent, comprobaciones: [...el.querySelectorAll('[data-comprobacion]')].map((c) => c.textContent),
+    franja: el.querySelector('.kf-estado')?.textContent, comprobaciones: [...el.querySelectorAll('[data-comprobacion]')].map((c) => c.getAttribute('title')),
     aviso: el.querySelector('[data-prueba="aviso-ficha"]')?.textContent ?? null,
   })).catch((e) => String(e))
   console.log(`[K04b ${donde}] ${JSON.stringify(x)}`)
@@ -107,9 +107,10 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(franja(page)).not.toContainText(/Rellenada|bien/)
     await expect(ficha(page).locator('#kf-nif')).toHaveValue(NIF_NUEVO(t))
     await expect(ficha(page).locator('#kf-nombre')).toHaveValue(`Emisor Nuevo de Prueba ${t}, S.L.`)
-    await expect(ficha(page).locator('.kf-casilla', { has: page.locator('#kf-nif') }).locator('[data-prueba="origen"]')).toHaveText('PDF')
-    await expect(ficha(page).locator('[data-comprobacion="nif"]')).toHaveText(/NIF correcto/)
-    await expect(ficha(page).locator('[data-comprobacion="nif"]')).not.toContainText('su ficha')
+    // K11b · Sin frases: de dónde sale el NIF, al pasar el ratón por su casilla; y el NIF correcto no pone la casilla en
+    // ámbar (antes, «NIF correcto» escrito debajo). Si fuera el de otra ficha, la casilla saldría en ámbar con el motivo.
+    await expect(ficha(page).locator('.kp-casilla', { has: page.locator('#kf-nif') })).toHaveAttribute('title', 'PDF')
+    await expect(ficha(page).locator('[data-comprobacion="nif"]')).toHaveCount(0)
     await expect(page.getByRole('tab', { name: new RegExp(`^Factura recibida · Emisor Nuevo de Prueba ${t}`) })).toBeVisible()
     const duda = ficha(page).locator('.kf-duda')
     await expect(duda).toContainText('No conozco al que la emite')

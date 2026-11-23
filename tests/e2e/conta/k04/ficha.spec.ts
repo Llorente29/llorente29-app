@@ -107,7 +107,8 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     // ── 1a · Su primera factura: a 1456, con la ficha nueva (Intro); a 1366, con la de hoy (regla 31). ──
     await abrirFicha(page, factura(t, 1))
     await expect(page.getByRole('tab', { name: new RegExp(`^Factura recibida · ${PROVEEDOR(t).replace(/\./g, '\\.')}`) })).toBeVisible()
-    await expect(ficha(page).locator('[data-prueba="origen"]', { hasText: 'por NIF' })).toBeVisible()
+    // K11b · De dónde sale el proveedor, sin frase: al pasar el ratón por su casilla.
+    await expect(ficha(page).locator('.kp-casilla', { has: page.locator('#kf-proveedor') })).toHaveAttribute('title', /por NIF/)
     if (grande) {
       await page.locator('body').press('Enter')
     } else {

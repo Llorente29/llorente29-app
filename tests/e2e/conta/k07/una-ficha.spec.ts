@@ -157,7 +157,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await fichaLista(page)
 
     // ── 2 · ‹ vuelve a la validada, en la ficha nueva. ──
-    await ficha(page).getByRole('button', { name: 'La anterior' }).click()
+    await ficha(page).getByRole('button', { name: 'El anterior' }).click()
     await expect(page).toHaveURL(new RegExp(factura(t, 1)), { timeout: 30_000 })
     await laValidada(page, `la validada a ${ancho}`)
     await expect(ficha(page).locator('#kf-numero')).toHaveValue(`K07-${t}-1-B`)
