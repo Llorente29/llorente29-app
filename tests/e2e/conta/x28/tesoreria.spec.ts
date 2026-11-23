@@ -114,12 +114,18 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     expect(m.rueda, 'la página no rueda hacia abajo').toBeLessThanOrEqual(1)
     await page.screenshot({ path: `${DIR}/tesoreria-${ancho}.png` })
 
-    // Los tres, solo con el teclado: la subcuenta y después Intro hasta que contabiliza y baja al siguiente.
+    // Los tres, solo con el teclado. La pantalla abre en el primer movimiento sin contabilizar del EJERCICIO (puede ser
+    // uno de la semilla, de octubre: respuesta X28 · 3); la prueba elige el primero de los suyos con el teclado (el foco
+    // en su fila e Intro), y después comprueba que la pantalla baja sola al segundo y al tercero.
+    const orden = await pantalla(page).locator('tr[data-movimiento]').evaluateAll(
+      (trs, mios) => trs.map((t) => t.getAttribute('data-movimiento') ?? '').filter((x) => (mios as string[]).includes(x)), ids)
+    expect(orden, 'los tres, en la lista').toHaveLength(3)
+    await pantalla(page).locator(`tr[data-movimiento="${orden[0]}"]`).focus()
+    await page.keyboard.press('Enter')
     const sub = pantalla(page).locator('#ts-ed-subcuenta')
-    for (let i = 0; i < 3; i++) {
+    try { for (let i = 0; i < 3; i++) {
       const elegida = pantalla(page).locator('tr[aria-selected="true"]')
-      await expect(elegida, `el ${i + 1}.º sin contabilizar, elegido`).toHaveAttribute('data-movimiento', new RegExp(ids.join('|')), { timeout: 30_000 })
-      if (!ids.includes((await elegida.getAttribute('data-movimiento')) ?? '')) await contarPantalla(page, `fila ${i + 1}`)
+      await expect(elegida, i === 0 ? 'el primero de los suyos, elegido con el teclado' : `la pantalla ha bajado sola al ${i + 1}.º`).toHaveAttribute('data-movimiento', orden[i], { timeout: 30_000 })
       await expect(sub).toBeFocused({ timeout: 10_000 })
       await sub.fill(GASTO)
       await page.keyboard.press('Enter')   // la subcuenta → el concepto
@@ -128,7 +134,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
       await page.keyboard.press('Enter')   // el local (el último, sin hostelería) → contabiliza
       await expect(aviso, `el ${i + 1}.º, contabilizado y dicho`).toContainText(`a la ${GASTO}`, { timeout: 30_000 })
       await expect(pantalla(page).locator(ids.map((id) => `tr[data-movimiento="${id}"][data-contabilizado="si"]`).join(', ')), 'contabilizados en la lista').toHaveCount(i + 1, { timeout: 30_000 })
-    }
+    } } catch (e) { await contarPantalla(page, 'contabilizar con el teclado'); throw e }
 
     // En la base: cada uno conciliado, con su asiento validado de la serie 3 (la 62800000 contra el banco).
     for (const id of ids) {
