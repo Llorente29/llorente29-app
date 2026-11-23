@@ -28,6 +28,7 @@ import { fotoAPdf } from '@/modules/conta/lib/fotoAPdf'
 import type { DatosDocumentos, PlazoFicha } from '@/modules/conta/documentos/documentos'
 import { leerFactura as comprobarLectura, type Lectura, type LecturaModelo } from '../../../../supabase/functions/_shared/lecturaFactura.ts'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
+import type { EstadoLineas } from '../../../../supabase/functions/_shared/lecturaPorPartes'
 import { textoParaPantalla } from '@/modules/conta/lib/errorBase'
 import { MAX_BYTES_EXPEDIDA, claseDeFichero, motivoExpedida, nombreExpedida, rutaExpedida, tamano } from '@/modules/conta/lib/expedidaPdf'
 import { papelDeLaLectura } from '@/modules/conta/documentos/fichaRecibida'
@@ -602,6 +603,35 @@ function documentoAnterior(cambios: unknown): { anterior?: string | null; pdfSus
   const d = (cambios as Fila[]).find((k) => k.campo === 'documento')
   if (!d) return {}
   return { anterior: texto(d.antes), pdfSustituye: d.motivo === 'pdf_sustituye_foto' }
+}
+
+/**
+ * E10 · Cómo están las líneas de una factura que se leyó por partes (la larga): lo que guarda su
+ * lectura en validation.lineas, y el id de esa lectura para «Leer las que faltan». Null en las
+ * que se leyeron enteras de una vez (casi todas) o sin lectura.
+ */
+export async function lineasDeLaLectura(accountId: string, invoiceId: string): Promise<{ sesion: string; estado: EstadoLineas } | null> {
+  const { data } = await tabla('supplier_invoice').select('ai_session_id').eq('account_id', accountId).eq('id', invoiceId).maybeSingle()
+  const sesion = texto((data as Fila | null)?.ai_session_id)
+  if (!sesion) return null
+  const { data: a, error } = await tabla('goods_receipt_ai_session').select('lineas:validation->lineas').eq('account_id', accountId).eq('id', sesion).maybeSingle()
+  if (error) throw new Error(mensaje('No se ha podido leer cómo están sus líneas', error))
+  const e = (a as Fila | null)?.lineas
+  return e && typeof e === 'object' ? { sesion, estado: e as EstadoLineas } : null
+}
+
+/** E10 · «Leer las que faltan»: lee otra vez las páginas cuyas líneas faltan (ocr-albaran) y dice cómo han quedado. */
+export async function leerLasLineasQueFaltan(accountId: string, sesion: string): Promise<EstadoLineas | null> {
+  hayBase()
+  const { data, error } = await supabase!.functions.invoke('ocr-albaran', { body: { account_id: accountId, modo: 'factura', releer_lineas: sesion } })
+  if (error) {
+    const ctx = (error as { context?: unknown }).context
+    const cuerpo = typeof Response !== 'undefined' && ctx instanceof Response ? await ctx.clone().json().catch(() => null) as Fila | null : null
+    if (cuerpo && typeof cuerpo.error === 'string' && /se están leyendo/.test(cuerpo.error)) throw new Error(cuerpo.error)
+    throw new Error(fraseDe((await falloDeInvocar(error)).clase))
+  }
+  const e = (data as Fila | null)?.lineas
+  return e && typeof e === 'object' ? e as EstadoLineas : null
 }
 
 /** El papel que guardó la lectura de una factura, si no tiene otro. */
