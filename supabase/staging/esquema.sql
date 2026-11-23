@@ -1426,6 +1426,10 @@ CREATE TABLE public.bank_settings (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_by uuid,
     updated_by_name text,
+    auto_threshold smallint,
+    aviso_dias smallint,
+    CONSTRAINT bank_settings_auto_threshold_rango CHECK (((auto_threshold IS NULL) OR ((auto_threshold >= 80) AND (auto_threshold <= 100)))),
+    CONSTRAINT bank_settings_aviso_dias_rango CHECK (((aviso_dias IS NULL) OR ((aviso_dias >= 1) AND (aviso_dias <= 90)))),
     CONSTRAINT bank_settings_treasury_series_check CHECK ((treasury_series = ANY (ARRAY[3, 4])))
 );
 
@@ -1435,6 +1439,20 @@ CREATE TABLE public.bank_settings (
 --
 
 COMMENT ON TABLE public.bank_settings IS 'B01. Por empresa: serie de tesorería de los asientos del banco (3 como el C04; Foodint 4, como Diez desde 04/2025), «validar solo lo seguro» (apagado por defecto) y la fecha de corte: antes de ella un extracto solo enlaza con lo que ya está en el libro y no crea asientos.';
+
+
+--
+-- Name: COLUMN bank_settings.auto_threshold; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_settings.auto_threshold IS 'X30 · «Solo desde 95 %»: desde este porcentaje de seguridad Sumied concilia solo lo que propone por una regla o por lo de antes; por debajo, propone en ámbar. Sin valor, 95. Lo «seguro» de siempre cuenta como 99 %.';
+
+
+--
+-- Name: COLUMN bank_settings.aviso_dias; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_settings.aviso_dias IS 'X30 · Los días sin conciliar a partir de los que avisa la pantalla Conciliar. Sin valor, 10.';
 
 
 --
@@ -2243,6 +2261,60 @@ begin
       jsonb_build_object('regla', p_rule, 'correcciones', v_n));
   end if;
 end $$;
+
+
+--
+-- Name: _bank_reglas_de_partida(uuid, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._bank_reglas_de_partida(p_company uuid, p_desde timestamp with time zone) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_cuenta uuid; v_hosteleria boolean; v_n int := 0; r record; v_codigo text; v_id uuid;
+begin
+  select c.account_id, c.sector = 'hosteleria' into v_cuenta, v_hosteleria from public.company c where c.id = p_company;
+  if v_cuenta is null then return 0; end if;
+  for r in
+    select * from (values
+      ('Comisiones del banco', 'COMISION', -1, '626', null::text),
+      ('Comisiones del banco', 'COMISIONES', -1, '626', null),
+      ('Luz', 'IBERDROLA', -1, '628', null), ('Luz', 'ENDESA', -1, '628', null), ('Luz', 'NATURGY', -1, '628', null),
+      ('Luz', 'HOLALUZ', -1, '628', null), ('Luz', 'TOTALENERGIES', -1, '628', null),
+      ('Agua', 'CANAL DE ISABEL II', -1, '628', null), ('Agua', 'AGUAS DE', -1, '628', null),
+      ('Teléfono', 'MOVISTAR', -1, '629', null), ('Teléfono', 'TELEFONICA', -1, '629', null), ('Teléfono', 'VODAFONE', -1, '629', null),
+      ('Teléfono', 'ORANGE', -1, '629', null), ('Teléfono', 'DIGI', -1, '629', null), ('Teléfono', 'MASMOVIL', -1, '629', null),
+      ('Seguros', 'MAPFRE', -1, '625', null), ('Seguros', 'ALLIANZ', -1, '625', null), ('Seguros', 'AXA SEGUROS', -1, '625', null),
+      ('Seguros', 'GENERALI', -1, '625', null), ('Seguros', 'ZURICH', -1, '625', null), ('Seguros', 'LINEA DIRECTA', -1, '625', null),
+      ('Glovo', 'GLOVO', 1, '430', 'glovo'), ('Uber Eats', 'UBER', 1, '430', 'uber'), ('Just Eat', 'JUST EAT', 1, '430', 'just eat')
+    ) as t(que, contiene, signo, grupo, plataforma)
+  loop
+    if r.plataforma is not null and not coalesce(v_hosteleria, false) then continue; end if;
+    -- La cuenta: la de la plataforma (su 430 con su nombre) o la primera hoja del grupo en el plan de la empresa.
+    select a.code into v_codigo from public.company_account a
+     where a.company_id = p_company and a.code like r.grupo || '%' and length(a.code) >= 8
+       and (r.plataforma is null or lower(coalesce(a.plain_name, a.name)) like '%' || r.plataforma || '%')
+     order by a.code limit 1;
+    if v_codigo is null then continue; end if;
+    if exists (select 1 from public.bank_rule b where b.company_id = p_company and upper(b.condition->>'contiene') = r.contiene) then continue; end if;
+    insert into public.bank_rule (account_id, company_id, words, condition, target, origin, status, applies_from, seed, created_by_name)
+    values (v_cuenta, p_company, r.contiene, jsonb_build_object('contiene', r.contiene, 'signo', r.signo),
+            jsonb_build_object('cuenta', v_codigo, 'que', r.que), 'folvy', 'activa', p_desde, 'partida', 'Sumied')
+    returning id into v_id;
+    insert into public.bank_rule_log (account_id, rule_id, action, after, created_by_name)
+    values (v_cuenta, v_id, 'creada', jsonb_build_object('palabras', r.contiene, 'que', r.que, 'cuenta', v_codigo, 'partida', true, 'desde', p_desde), 'Sumied');
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end $$;
+
+
+--
+-- Name: FUNCTION _bank_reglas_de_partida(p_company uuid, p_desde timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._bank_reglas_de_partida(p_company uuid, p_desde timestamp with time zone) IS 'X30 · Las reglas de partida de una empresa (las que tienen su cuenta en el plan y cuyo texto aún no usa), activas, sin confirmar y desde p_desde.';
 
 
 --
@@ -16236,8 +16308,10 @@ CREATE TABLE public.bank_match (
     undo_reason text,
     contract_id uuid,
     contract_due_date date,
+    confidence_pct smallint,
     CONSTRAINT bank_match_by_who_check CHECK ((by_who = ANY (ARRAY['folvy'::text, 'persona'::text]))),
     CONSTRAINT bank_match_confidence_check CHECK ((confidence = ANY (ARRAY['seguro'::text, 'probable'::text, 'duda'::text]))),
+    CONSTRAINT bank_match_confidence_pct_rango CHECK (((confidence_pct IS NULL) OR ((confidence_pct >= 0) AND (confidence_pct <= 100)))),
     CONSTRAINT bank_match_deshecho_completo CHECK (((status = 'deshecho'::text) = ((undone_at IS NOT NULL) AND (undo_reason IS NOT NULL)))),
     CONSTRAINT bank_match_kind_check CHECK ((kind = ANY (ARRAY['asiento'::text, 'factura_recibida'::text, 'factura_emitida'::text, 'liquidacion'::text, 'traspaso'::text, 'anticipo'::text, 'contrato'::text, 'cuenta'::text]))),
     CONSTRAINT bank_match_reason_check CHECK ((length(TRIM(BOTH FROM reason)) > 0)),
@@ -16264,6 +16338,13 @@ COMMENT ON COLUMN public.bank_match.contract_id IS 'S01e. El contrato (préstamo
 --
 
 COMMENT ON COLUMN public.bank_match.contract_due_date IS 'S01e. La fecha de la fila del cuadro que paga este cargo (con contract_id).';
+
+
+--
+-- Name: COLUMN bank_match.confidence_pct; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_match.confidence_pct IS 'X30 · El porcentaje de seguridad con el que se concilió: 99 lo «seguro»; si no, el de la propuesta (bank_movement.proposal->seguridad). Sin valor lo de antes del X30.';
 
 
 --
@@ -27096,6 +27177,38 @@ end $$;
 
 
 --
+-- Name: bank_ajustes_conciliar(uuid, smallint, smallint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_ajustes_conciliar(p_company uuid, p_umbral smallint, p_dias smallint) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._bank_cuenta_de_empresa(p_company);
+begin
+  if p_umbral is not null and p_umbral not between 80 and 100 then
+    raise exception 'El umbral va del 80 al 100 %%.' using errcode = '22023';
+  end if;
+  if p_dias is not null and p_dias not between 1 and 90 then
+    raise exception 'Los días del aviso van de 1 a 90.' using errcode = '22023';
+  end if;
+  insert into public.bank_settings (company_id, account_id, auto_threshold, aviso_dias, updated_at, updated_by, updated_by_name)
+  values (p_company, v_cuenta, p_umbral, p_dias, now(), auth.uid(), public.conta_nombre_actor())
+  on conflict (company_id) do update set auto_threshold = excluded.auto_threshold, aviso_dias = excluded.aviso_dias,
+         updated_at = now(), updated_by = auth.uid(), updated_by_name = public.conta_nombre_actor();
+  return jsonb_build_object('umbral', coalesce(p_umbral, 95), 'dias', coalesce(p_dias, 10),
+    'texto', format('Sumied concilia solo desde el %s %% · aviso a los %s días sin conciliar.', coalesce(p_umbral, 95), coalesce(p_dias, 10)));
+end $$;
+
+
+--
+-- Name: FUNCTION bank_ajustes_conciliar(p_company uuid, p_umbral smallint, p_dias smallint); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.bank_ajustes_conciliar(p_company uuid, p_umbral smallint, p_dias smallint) IS 'X30 · El umbral desde el que Sumied concilia solo y los días del aviso, de una empresa.';
+
+
+--
 -- Name: bank_ajustes_guardar(uuid, smallint, boolean, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -28278,6 +28391,33 @@ begin
           auth.uid(), public.conta_nombre_actor());
   return v.confirmations + 1;
 end $$;
+
+
+--
+-- Name: bank_regla_desde(uuid, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_regla_desde(p_id uuid, p_desde timestamp with time zone) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.bank_rule;
+begin
+  select * into v from public.bank_rule where id = p_id for update;
+  if v.id is null then raise exception 'Esa regla no existe.' using errcode = 'P0002'; end if;
+  perform public._bank_cuenta_de_empresa(v.company_id);
+  if v.applies_from is not distinct from p_desde then return; end if;
+  update public.bank_rule set applies_from = p_desde, updated_at = now() where id = p_id;
+  insert into public.bank_rule_log (account_id, rule_id, action, before, after, created_by, created_by_name)
+  values (v.account_id, p_id, 'cambiada', jsonb_build_object('desde', v.applies_from), jsonb_build_object('desde', p_desde), auth.uid(), public.conta_nombre_actor());
+end $$;
+
+
+--
+-- Name: FUNCTION bank_regla_desde(p_id uuid, p_desde timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.bank_regla_desde(p_id uuid, p_desde timestamp with time zone) IS 'X30 · Desde cuándo mira una regla (sin fecha: también lo que ya estaba, «aplicarla hacia atrás»). Queda en su registro.';
 
 
 --
@@ -60387,7 +60527,11 @@ begin
       if length(v_l ->> 'concepto') > 200 then raise exception 'El concepto de una línea, como mucho 200 letras.' using errcode = '22023'; end if;
       select jsonb_build_object('concepto', d.concept, 'marca', d.brand_id, 'plataforma', d.channel_id) into v_antes
         from public.supplier_invoice_expense_dato d where d.supplier_invoice_id = v_f.id and d.position = v_pos;
-      v_ahora := jsonb_build_object('concepto', nullif(trim(v_l ->> 'concepto'), ''), 'marca', nullif(v_l ->> 'marca', '')::uuid, 'plataforma', nullif(v_l ->> 'plataforma', '')::uuid);
+      -- K11b: solo lo que viene. Una clave que no viene se queda como está; una que viene con null (o vacía), se borra.
+      v_ahora := jsonb_build_object(
+        'concepto', case when v_l ? 'concepto' then nullif(trim(v_l ->> 'concepto'), '') else v_antes ->> 'concepto' end,
+        'marca', case when v_l ? 'marca' then nullif(v_l ->> 'marca', '')::uuid else (v_antes ->> 'marca')::uuid end,
+        'plataforma', case when v_l ? 'plataforma' then nullif(v_l ->> 'plataforma', '')::uuid else (v_antes ->> 'plataforma')::uuid end);
       if v_ahora is distinct from coalesce(v_antes, jsonb_build_object('concepto', null, 'marca', null, 'plataforma', null)) then
         insert into public.supplier_invoice_expense_dato (account_id, supplier_invoice_id, position, concept, brand_id, channel_id, updated_at)
         values (v_f.account_id, v_f.id, v_pos, v_ahora ->> 'concepto', (v_ahora ->> 'marca')::uuid, (v_ahora ->> 'plataforma')::uuid, now())
@@ -60429,7 +60573,7 @@ end $$;
 -- Name: FUNCTION conta_recibida_otros_datos(p_invoice uuid, p_cambios jsonb, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_recibida_otros_datos(p_invoice uuid, p_cambios jsonb, p_quien_nombre text) IS 'K11a · Guarda «Otros datos» de una recibida sin contabilizar (tipo de factura, clave de régimen, no incluir en IVA, rectificación de deducciones, no incluir en 347, % de IVA deducible) y el concepto, la marca y la plataforma de sus líneas de gasto. Deja su rastro en supplier_invoice_change.';
+COMMENT ON FUNCTION public.conta_recibida_otros_datos(p_invoice uuid, p_cambios jsonb, p_quien_nombre text) IS 'K11a · Guarda «Otros datos» de una recibida sin contabilizar (tipo de factura, clave de régimen, no incluir en IVA, rectificación de deducciones, no incluir en 347, % de IVA deducible, K11f1: fecha contable y fiscal) y el concepto, la marca y la plataforma de sus líneas de gasto (K11b: en cada línea, solo las claves que vienen; null borra). Deja su rastro en supplier_invoice_change.';
 
 
 --
@@ -115965,6 +116109,7 @@ CREATE TABLE public.bank_movement (
     not_cancelled_by uuid,
     validated_at timestamp with time zone,
     validated_by_name text,
+    "position" integer,
     CONSTRAINT bank_movement_common_code_check CHECK (((common_code IS NULL) OR (common_code ~ '^\d{2}$'::text))),
     CONSTRAINT bank_movement_confidence_check CHECK (((confidence IS NULL) OR (confidence = ANY (ARRAY['seguro'::text, 'probable'::text, 'duda'::text])))),
     CONSTRAINT bank_movement_ignorado_con_porque CHECK (((status = 'ignorado'::text) = (ignored_reason IS NOT NULL))),
@@ -116023,6 +116168,13 @@ COMMENT ON COLUMN public.bank_movement.validated_by_name IS 'X29 · Quién la va
 
 
 --
+-- Name: COLUMN bank_movement."position"; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_movement."position" IS 'X30 · El orden de la línea en su extracto, de la más antigua a la más nueva (lo escribe bank_importar). Ordena el saldo línea a línea dentro del mismo día. Sin valor lo importado antes del X30.';
+
+
+--
 -- Name: bank_movimiento_borrado; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -116063,10 +116215,13 @@ CREATE TABLE public.bank_rule (
     created_by_name text,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     corrections integer,
+    applies_from timestamp with time zone,
+    seed text,
     CONSTRAINT bank_rule_condicion CHECK (((jsonb_typeof(condition) = 'object'::text) AND (condition ? 'contiene'::text))),
     CONSTRAINT bank_rule_confirmations_check CHECK ((confirmations >= 0)),
     CONSTRAINT bank_rule_destino CHECK (((jsonb_typeof(target) = 'object'::text) AND (target ? 'cuenta'::text))),
     CONSTRAINT bank_rule_origin_check CHECK ((origin = ANY (ARRAY['persona'::text, 'folvy'::text]))),
+    CONSTRAINT bank_rule_seed_valores CHECK (((seed IS NULL) OR (seed = 'partida'::text))),
     CONSTRAINT bank_rule_status_check CHECK ((status = ANY (ARRAY['propuesta'::text, 'activa'::text, 'apagada'::text, 'rechazada'::text]))),
     CONSTRAINT bank_rule_words_check CHECK ((length(TRIM(BOTH FROM words)) > 0))
 );
@@ -116084,6 +116239,20 @@ COMMENT ON TABLE public.bank_rule IS 'B01. Una regla en palabras («Cuando el co
 --
 
 COMMENT ON COLUMN public.bank_rule.corrections IS 'B01 (respuesta 4). Veces que la persona casó con otra cosa lo que proponía esta regla. A la segunda, la regla se apaga sola.';
+
+
+--
+-- Name: COLUMN bank_rule.applies_from; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_rule.applies_from IS 'X30 · La regla solo mira los movimientos que entraron en el banco (bank_movement.created_at) desde entonces. Sin valor: todos («aplicarla hacia atrás»).';
+
+
+--
+-- Name: COLUMN bank_rule.seed; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_rule.seed IS 'X30 · «partida»: una de las que pone Sumied en toda empresa (comisiones, luz, agua, teléfono, seguros; plataformas en hostelería). Propone en ámbar hasta que la empresa la confirme; se puede apagar.';
 
 
 --
@@ -176513,6 +176682,14 @@ GRANT ALL ON FUNCTION public._bank_regla_corregida(p_rule uuid, p_movement uuid)
 
 
 --
+-- Name: FUNCTION _bank_reglas_de_partida(p_company uuid, p_desde timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._bank_reglas_de_partida(p_company uuid, p_desde timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._bank_reglas_de_partida(p_company uuid, p_desde timestamp with time zone) TO service_role;
+
+
+--
 -- Name: FUNCTION _batch_yield_in_base(p_item_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -181429,6 +181606,15 @@ GRANT ALL ON FUNCTION public.bank_agregador_quitar(p_treasury uuid) TO service_r
 
 
 --
+-- Name: FUNCTION bank_ajustes_conciliar(p_company uuid, p_umbral smallint, p_dias smallint); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_ajustes_conciliar(p_company uuid, p_umbral smallint, p_dias smallint) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_ajustes_conciliar(p_company uuid, p_umbral smallint, p_dias smallint) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_ajustes_conciliar(p_company uuid, p_umbral smallint, p_dias smallint) TO service_role;
+
+
+--
 -- Name: FUNCTION bank_ajustes_guardar(p_company uuid, p_serie smallint, p_validar_seguro boolean, p_corte date); Type: ACL; Schema: public; Owner: -
 --
 
@@ -181723,6 +181909,15 @@ GRANT ALL ON FUNCTION public.bank_regla_borrar(p_id uuid) TO service_role;
 GRANT ALL ON FUNCTION public.bank_regla_confirmada(p_id uuid) TO anon;
 GRANT ALL ON FUNCTION public.bank_regla_confirmada(p_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.bank_regla_confirmada(p_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_regla_desde(p_id uuid, p_desde timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_regla_desde(p_id uuid, p_desde timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_regla_desde(p_id uuid, p_desde timestamp with time zone) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_regla_desde(p_id uuid, p_desde timestamp with time zone) TO service_role;
 
 
 --
