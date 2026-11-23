@@ -1,0 +1,56 @@
+name: E10 · Lectura con el modelo (factura larga y regla 31)
+
+# QUÉ HACE (E10, 23/11)
+# Sirve ocr-albaran en local, el de main y el de la rama, con supabase-js de mentira (nada se
+# escribe en ninguna base), y con el modelo de verdad (scripts/conta/e10/medir.mts):
+#   · Regla 31: las facturas inventadas de una página del D01, leídas UNA vez y grabadas; el de
+#     main y el de la rama, con esas mismas respuestas, tienen que devolver el mismo cuerpo y
+#     guardar la misma sesión (en modo factura y sin modo, el de Folvy).
+#   · Las largas inventadas (5 páginas y 34 líneas; 10 páginas y 68): antes (main) y después
+#     (la rama), con sus líneas, sus lotes, la suma contra las bases, las llamadas y los tokens.
+#
+#   · Solo a mano: workflow_dispatch (cuando esté en main) o, mientras viva solo en la rama del
+#     E10, un commit cuyo mensaje EMPIECE por «[leer-con-modelo-e10]» (GitHub no deja lanzar a
+#     mano un workflow que aún no está en la rama por defecto). Cualquier otro push se salta.
+#   · La clave es el secreto ANTHROPIC_API_KEY, el mismo de la lectura del D01; nunca pasa por el
+#     chat ni por el repositorio. Unos 30 llamadas: del orden de 1,5 $ por pasada.
+#   · Todo lo que se lee es inventado (T11). No lee producción ni staging.
+
+on:
+  push:
+    branches: ['conta/e10-factura-larga']
+  workflow_dispatch:
+    inputs:
+      modelo:
+        description: 'Otro modelo que el de ocr-albaran (vacío: el mismo, MODELO_VISION).'
+        required: false
+        default: ''
+
+concurrency:
+  group: leer-con-modelo-e10
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  leer:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[leer-con-modelo-e10]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: El ocr-albaran de main, al lado del de la rama
+        run: git show origin/main:supabase/functions/ocr-albaran/index.ts > supabase/functions/ocr-albaran/index.main.ts
+      - name: Leer y comparar
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VISION_MODEL: ${{ inputs.modelo }}
+        run: |
+          set -euo pipefail
+          deno run -A --no-config scripts/conta/e10/medir.mts supabase/functions/ocr-albaran/index.main.ts supabase/functions/ocr-albaran/index.ts
