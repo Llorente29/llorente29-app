@@ -185,3 +185,13 @@ describe('E10 · cuándo se lee por partes', () => {
     expect(promptLineas({ desde: 2, hasta: 2 }, 5).startsWith(buildPrompt())).toBe(true)
   })
 })
+
+describe('E10 · lo que pasó con la de 10 páginas (run 45141043904: 66 de 68)', () => {
+  it('una página que empieza a mitad de albarán, con su primera línea entera marcada «continues_previous», no pierde esa línea', () => {
+    const p = paginas()
+    p[1] = [{ ...p[1][0], continues_previous: true }, ...p[1].slice(1)]
+    const r = juntarTrozos(p.map((l, i) => ({ desde: i + 1, hasta: i + 1, lineas: l })))
+    expect(r.lineas).toHaveLength(34)
+    expect(cuadreLineas(r.lineas, F.base)?.cuadra).toBe(true)
+  })
+})

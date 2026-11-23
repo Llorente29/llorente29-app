@@ -131,6 +131,7 @@ di('## E10 · Las largas inventadas, con el modelo de verdad')
 di()
 di('| Factura | Lado | Respuesta | Cabecera | Líneas | Lotes | Suma contra bases | Llamadas (entera · cabecera · páginas) | Tokens entrada / salida | Tiempo |')
 di('|---|---|---|---|---|---|---|---|---|---|')
+const faltanDe: string[] = []
 for (const [albaranes, numero] of [[20, 'AV-2026-0000011'], [40, 'AV-2026-0000012']] as const) {
   const pdf = PDF[albaranes]
   const esperada = facturaLarga({ albaranes, numero }) as { lineas: { lot_code: string; line_amount: number }[]; base: number; total: number; tipos: { base: number }[] }
@@ -147,14 +148,22 @@ for (const [albaranes, numero] of [[20, 'AV-2026-0000011'], [40, 'AV-2026-000001
     const cortadas = usos.filter((u) => u.stop === 'max_tokens').map((u) => u.paso)
     const c = r.cuerpo as { factura?: { factura?: { numero?: string; total?: number; base?: number } }; clase?: string; causa?: string } | null
     const cab = c?.factura?.factura
-    const guardadas = (escritoDe(escrito).filter((e) => e.que === 'rpc').pop()?.args?.p_lineas ?? []) as { lot_code?: string; line_amount?: number }[]
+    // Las líneas: las que guarda el paso 2 (por partes) o, si se leyó de una vez, las de la respuesta.
+    const porPartes = escritoDe(escrito).filter((e) => e.que === 'rpc').pop()?.args?.p_lineas as { lot_code?: string; line_amount?: number }[] | undefined
+    const deUnaVez = ((r.cuerpo as { parsed?: { lines?: unknown[] } } | null)?.parsed?.lines ?? []) as { lot_code?: string; line_amount?: number }[]
+    const guardadas = porPartes ?? deUnaVez
     const lotes = new Set(guardadas.map((l) => l.lot_code))
     const lotesBien = esperada.lineas.filter((l) => lotes.has(l.lot_code)).length
+    // Los lotes que faltan (inventados): para saber qué líneas se pierden y dónde.
+    const faltan = esperada.lineas.filter((l) => !lotes.has(l.lot_code)).map((l) => l.lot_code)
+    if (faltan.length) faltanDe.push(`${pdf.paginas} págs (${lado}): faltan los lotes ${faltan.join(', ')}`)
     const suma = Math.round(guardadas.reduce((a, l) => a + Math.round((l.line_amount ?? 0) * 100), 0)) / 100
     const cabTexto = cab ? `${cab.numero === numero ? 'número ✓' : 'número ✗'} · base ${cab.base === esperada.base ? '✓' : `✗ ${cab.base}`} · total ${cab.total === esperada.total ? '✓' : `✗ ${cab.total}`}` : '—'
-    di(`| ${pdf.paginas} págs, ${esperada.lineas.length} líneas (${pdf.partidas} partidas) | ${lado} | ${r.status}${c?.causa ? ` ${c.clase}/${c.causa}` : ''} | ${cabTexto} | ${lado === 'rama' ? `${guardadas.length} de ${esperada.lineas.length}` : '—'} | ${lado === 'rama' ? `${lotesBien} de ${esperada.lineas.length}` : '—'} | ${lado === 'rama' ? `${suma.toFixed(2)} contra ${esperada.base.toFixed(2)}${Math.round(suma * 100) === Math.round(esperada.base * 100) ? ' ✓' : ' ✗'}` : '—'} | ${n('entera')} · ${n('cabecera')} · ${n('lineas')}${cortadas.length ? ` (cortadas: ${cortadas.join(', ')})` : ''} | ${tok} | ${s} s |`)
+    di(`| ${pdf.paginas} págs, ${esperada.lineas.length} líneas (${pdf.partidas} partidas) | ${lado} | ${r.status}${c?.causa ? ` ${c.clase}/${c.causa}` : ''} | ${cabTexto} | ${r.status === 200 ? `${guardadas.length} de ${esperada.lineas.length}${porPartes ? ' (por partes)' : ' (de una vez)'}` : '—'} | ${r.status === 200 ? `${lotesBien} de ${esperada.lineas.length}` : '—'} | ${r.status === 200 ? `${suma.toFixed(2)} contra ${esperada.base.toFixed(2)}${Math.round(suma * 100) === Math.round(esperada.base * 100) ? ' ✓' : ' ✗'}` : '—'} | ${n('entera')} · ${n('cabecera')} · ${n('lineas')}${cortadas.length ? ` (cortadas: ${cortadas.join(', ')})` : ''} | ${tok} | ${s} s |`)
   }
 }
+di()
+for (const f of faltanDe) di(`- ${f}`)
 di()
 const resumen = Deno.env.get('GITHUB_STEP_SUMMARY')
 if (resumen) Deno.writeTextFileSync(resumen, out.join('\n') + '\n', { append: true })

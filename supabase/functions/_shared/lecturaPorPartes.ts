@@ -56,8 +56,9 @@ export function promptLineas(t: Trozo, paginas: number | null): string {
     `cada una con la forma EXACTA de "lines" de arriba. No escribas "document" ni "confidence".\n` +
     `- Las líneas de TODOS los albaranes que haya en el trozo, una por cada artículo; las cabeceras de albarán, los\n` +
     `  subtotales y el cuadro de impuestos NO son líneas.\n` +
-    `- Si la PRIMERA línea del trozo es la continuación de una línea que empezó en la página anterior (por ejemplo,\n` +
-    `  solo su lote o su caducidad), devuélvela con lo que veas y "continues_previous": true. En las demás, no pongas esa clave.\n` +
+    `- Si arriba del trozo hay un RESTO de una línea que empezó en la página anterior (solo su lote o su caducidad,\n` +
+    `  sin artículo ni importe), devuélvelo como primera línea con lo que veas y "continues_previous": true.\n` +
+    `  Que un ALBARÁN siga de la página anterior NO es eso: sus líneas enteras van normales, sin esa clave.\n` +
     `- Si el trozo no trae ninguna línea de artículo, devuelve {"lines": []}.`
   )
 }
@@ -93,11 +94,15 @@ export function juntarTrozos(trozos: readonly TrozoLeido[]): { lineas: LineaLeid
     if (!t.lineas) { fallidos.push({ desde: t.desde, hasta: t.hasta }); anteriorLeido = false; continue }
     t.lineas.forEach((l, i) => {
       const ultima = lineas[lineas.length - 1]
-      if (i === 0 && anteriorLeido && ultima && l.continues_previous === true) {
+      // Solo un TROZO de línea (sin su importe o sin su texto) se junta con la anterior. Una línea entera
+      // marcada «continues_previous» (el modelo lo pone cuando sigue el ALBARÁN de la página anterior) es
+      // su propia línea: juntarla la perdería.
+      const trozo = l.continues_previous === true && (vacio(l.line_amount) || vacio(l.raw_text))
+      if (i === 0 && anteriorLeido && ultima && trozo) {
         lineas[lineas.length - 1] = unir(ultima, l)
         return
       }
-      if (i === 0 && l.continues_previous === true && vacio(l.raw_text) && vacio(l.line_amount)) return // un resto sin su línea (la anterior no se leyó)
+      if (i === 0 && trozo && vacio(l.raw_text) && vacio(l.line_amount)) return // un resto sin su línea (la anterior no se leyó)
       const limpia = { ...l }
       delete limpia.continues_previous
       lineas.push(limpia)
