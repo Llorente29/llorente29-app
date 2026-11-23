@@ -135,9 +135,7 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     await expect(ficha(page).locator('#kf-numero')).toBeFocused()
     await page.keyboard.type(numero)
     await page.keyboard.press('Enter')
-    // La fecha de la factura (decisión 11: después del número), la de hoy; Intro la deja y sigue a la base.
-    await expect(ficha(page).locator('#kf-fecha')).toBeFocused()
-    await page.keyboard.press('Enter')
+    // Intro sigue el orden de la pantalla: la fecha de la factura está arriba (la de hoy, que se deja); del número, a la base.
     await expect(ficha(page).getByRole('textbox', { name: 'Base 1' })).toBeFocused()
     await page.keyboard.type('100')
     await page.keyboard.press('Enter')
@@ -228,6 +226,13 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     // ── 3 · «Otros datos»: el IVA deducible al 50 % lleva la mitad de la cuota al gasto; y el 3T, presentado, no se guarda. ──
     await abrir(page, factura(t, 2))
     await sinDudaDeGasto(page)
+    // La repetida (una duda que se decide con un botón, en una línea): con el número de la del punto 2, ya validada, del
+    // mismo proveedor. Se ve, y al volver a su número se va (no se guarda nada).
+    await ficha(page).locator('#kf-numero').fill(`K11B-${t}-TRES`)
+    await expect(ficha(page).locator('[data-prueba="repetida"]')).toBeVisible({ timeout: 30_000 })
+    if (ancho === 1366) { await cargada(page, 'la repetida'); await page.screenshot({ path: `${DIR}/duda-repetida-1366.png` }) }
+    await ficha(page).locator('#kf-numero').fill(`K11B-${t}-MITAD`)
+    await expect(ficha(page).locator('[data-prueba="repetida"]')).toHaveCount(0, { timeout: 30_000 })
     await ficha(page).getByRole('button', { name: 'Otros datos' }).click()
     const otros = ficha(page).getByRole('dialog', { name: 'Otros datos' })
     await expect(otros).toBeVisible()

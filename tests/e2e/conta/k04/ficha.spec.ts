@@ -188,13 +188,18 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(ficha(page).locator('.kf-estado')).toContainText('La escribes tú.')
     await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
     if (grande) { await cargada(page, 'a mano, vacía'); await page.screenshot({ path: `${DIR}/a-mano-vacia-${ancho}.png` }) }
+    // K11b · Intro sigue el orden de la pantalla, como ERP10: la fecha de la factura está arriba, antes que el proveedor.
+    // Mayús+Tab sube a ella, e Intro baja al proveedor, al número y a las bases.
+    await page.keyboard.press('Shift+Tab')
+    await expect(page.locator('#kf-fecha')).toBeFocused()
+    await page.keyboard.type('15/10/2026'); await page.keyboard.press('Enter')
+    await expect(page.locator('#kf-proveedor')).toBeFocused()
     await page.keyboard.type(t === 1 ? 'Ficha Uno' : 'Ficha Dos')
     await page.keyboard.press('Enter')
     await expect(page.locator('#kf-nombre')).toHaveValue(PROVEEDOR(t))
     await expect(page.getByRole('tab', { name: new RegExp(`^Factura recibida · ${PROVEEDOR(t).replace(/\./g, '\\.')}`) })).toBeVisible()
     await page.keyboard.press('Enter')
     await page.keyboard.type(`K04-M-${t}`); await page.keyboard.press('Enter')
-    await page.keyboard.type('15/10/2026'); await page.keyboard.press('Enter')
     await page.keyboard.type('100'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter')
     await page.keyboard.type('50'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter')
     await page.keyboard.press('Enter') // el total: sale de las bases

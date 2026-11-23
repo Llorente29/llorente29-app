@@ -235,11 +235,18 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     expect([plat.status, plat.paid_method]).toEqual(['pagada', 'compensation'])
 
     // ── 5 · El asiento: lo suyo, sin documento. ──
+    // K11b · Desde el K12 el asiento es el general como ERP10, con el documento a la derecha (la pieza 8, DocumentoDerecha,
+    // que sustituyó al «.kf-soltar»): el nuevo deja adjuntar el justificante; el de la factura, sin documento, no lleva
+    // ninguno y no deja adjuntarlo aquí (viene de su ficha: se cambia allí).
+    const documento = page.locator('.k-zona[data-activa="si"] [data-pieza="documento"]')
     await page.goto('/conta/libros/diario/nuevo', { timeout: 30_000 })
-    await expect(page.locator('.k-zona[data-activa="si"] .kf-soltar')).toContainText('Arrastra aquí el justificante', { timeout: 30_000 })
+    await expect(documento.getByRole('button', { name: 'Adjuntar el documento' })).toBeVisible({ timeout: 30_000 })
     const [e] = await rest<{ id: string }[]>(s, `journal_entry?select=id&account_id=eq.${NUCLEO.id}&source_type=eq.supplier_invoice&source_id=eq.${banco.id}&status=eq.validado`)
     await page.goto(`/conta/libros/diario/${e.id}`, { timeout: 30_000 })
-    await expect(page.locator('.k-zona[data-activa="si"] .kf-panel')).toContainText('Este asiento no tiene justificante.', { timeout: 30_000 })
+    await expect(page.locator('.k-zona[data-activa="si"] .kp-barra-aviso')).toContainText('Viene de su ficha: se cambia allí.', { timeout: 30_000 })
+    await expect(documento).toBeVisible()
+    await expect(documento.locator('.kp-hoja'), 'el asiento de la factura, sin justificante').toHaveCount(0)
+    await expect(documento.getByRole('button', { name: 'Adjuntar el documento' })).toHaveCount(0)
     if (grande) { await cargada(page, 'el asiento guardado'); await page.screenshot({ path: `${DIR}/asiento-sin-justificante-${ancho}.png` }) }
 
     expect(errores, 'errores de la página').toEqual([])

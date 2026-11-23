@@ -27,7 +27,11 @@ const GESTORIA_ID = () => enCarril('c0e20000-0000-4000-8000-0000000000e3')
 const factura = (t: number, n: number) => enCarril(`c0e40000-0000-4000-8000-000000000d${t}${n}`)
 const deLaOtra = (t: number) => enCarril(`c0e40000-0000-4000-8000-000000000e${t}1`)
 const PROVEEDOR = (t: number) => (t === 1 ? 'Proveedor de Prueba Ficha Uno, S.L.' : 'Proveedor de Prueba Ficha Dos, S.L.')
-const NIF_NUEVO = (t: number) => (t === 1 ? 'B00000018' : 'B00000026')
+// K11b · Las del emisor que no se conoce, de la semilla K11b (emisor): las de la K04b ya llevan el proveedor que les puso
+// el alta sola de la R14 (21/11). Estas llegan sin proveedor de verdad, como las deja su «Deshacer».
+const sinProveedor = (t: number, n: 1 | 2) => enCarril(`c0f80000-0000-4000-8000-000000000d${t}${n}`)
+const NIF_NUEVO = (t: number) => (t === 1 ? 'B00000133' : 'B00000158')
+const EMISOR = (t: number) => `Emisor Desconocido de Prueba ${t}, S.L.`
 // La de la pestaña que se ve: con las pestañas de su empresa, la de la otra sigue montada y escondida (K05 · 0b).
 const ficha = (page: Page) => page.locator('.k-zona[data-activa="si"] [data-prueba="ficha-recibida-nucleo"]')
 const franja = (page: Page) => ficha(page).locator('.kf-estado')
@@ -92,29 +96,31 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     page.on('pageerror', (e) => errores.push(`${page.url()}: ${e.message}`))
     await page.setViewportSize({ width: ancho, height: alto })
     const s = await entrarEnLaGestoria(page)
-    for (const n of [1, 2]) await sinDocumento(s, factura(t, n))
+    for (const n of [1, 2] as const) await sinDocumento(s, sinProveedor(t, n))
     if (alto < 800) {
       const plegar = page.getByRole('button', { name: /Plegar los botones/ })
       if (await plegar.isVisible()) await plegar.click()
     }
 
     // ── 1 · El emisor que no se reconoce: la franja, el NIF y el nombre leídos. ──
-    await page.goto(`/conta/documentos/recibidas/${factura(t, 1)}?ver=por-revisar`, { timeout: 30_000 })
+    await page.goto(`/conta/documentos/recibidas/${sinProveedor(t, 1)}?ver=por-revisar`, { timeout: 30_000 })
     await fichaLista(page)
     await contar(page, `${ancho} al abrir`)
     await expect(franja(page)).toContainText('Mira esto ·', { timeout: 30_000 })
     await expect(franja(page)).toContainText('No conozco al que la emite')
     await expect(franja(page)).not.toContainText(/Rellenada|bien/)
     await expect(ficha(page).locator('#kf-nif')).toHaveValue(NIF_NUEVO(t))
-    await expect(ficha(page).locator('#kf-nombre')).toHaveValue(`Emisor Nuevo de Prueba ${t}, S.L.`)
+    await expect(ficha(page).locator('#kf-nombre')).toHaveValue(EMISOR(t))
     // K11b · Sin frases: de dónde sale el NIF, al pasar el ratón por su casilla; y el NIF correcto no pone la casilla en
     // ámbar (antes, «NIF correcto» escrito debajo). Si fuera el de otra ficha, la casilla saldría en ámbar con el motivo.
     await expect(ficha(page).locator('.kp-casilla', { has: page.locator('#kf-nif') })).toHaveAttribute('title', 'PDF')
     await expect(ficha(page).locator('[data-comprobacion="nif"]')).toHaveCount(0)
-    await expect(page.getByRole('tab', { name: new RegExp(`^Factura recibida · Emisor Nuevo de Prueba ${t}`) })).toBeVisible()
+    await expect(page.getByRole('tab', { name: new RegExp(`^Factura recibida · Emisor Desconocido de Prueba ${t}`) })).toBeVisible()
     const duda = ficha(page).locator('.kf-duda')
     await expect(duda).toContainText('No conozco al que la emite')
     await expect(duda.getByRole('button', { name: 'Darlo de alta' })).toBeFocused({ timeout: 15_000 })
+    // K11b · La duda del emisor en la ficha como ERP10, a 1366 (para el parte: lo que se decide con un botón, en una línea).
+    if (ancho === 1366) { await cargada(page, 'la duda del emisor'); await page.screenshot({ path: 'docs/conta/capturas/k11b/duda-emisor-1366.png' }) }
     if (alto >= 800) {
       await cargada(page, 'el emisor que no se reconoce')
       await page.screenshot({ path: `${DIR}/emisor-desconocido-${ancho}.png` })
@@ -137,7 +143,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await duda.getByRole('button', { name: 'Darlo de alta' }).click()
     const form = page.locator('[data-prueba="formulario-alta-factura"]')
     await expect(form).toBeVisible()
-    await expect(form.getByLabel('Nombre con el que lo conocéis')).toHaveValue(`Emisor Nuevo de Prueba ${t}, S.L.`)
+    await expect(form.getByLabel('Nombre con el que lo conocéis')).toHaveValue(EMISOR(t))
     await expect(form.getByLabel(/^NIF/)).toHaveValue(NIF_NUEVO(t))
     await form.getByRole('button', { name: 'Darlo de alta y elegirlo' }).click()
     await expect(aviso(page)).toContainText('dado de alta y elegido', { timeout: 30_000 })
@@ -149,7 +155,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(page.getByText(/Apuntada y validada/).first()).toBeVisible({ timeout: 60_000 })
 
     // ── 2 · «Es uno que ya tengo»: el foco al proveedor, con su lista; se elige y se valida. ──
-    await page.goto(`/conta/documentos/recibidas/${factura(t, 2)}?ver=por-revisar`, { timeout: 30_000 })
+    await page.goto(`/conta/documentos/recibidas/${sinProveedor(t, 2)}?ver=por-revisar`, { timeout: 30_000 })
     await fichaLista(page)
     await expect(franja(page)).toContainText('No conozco al que la emite', { timeout: 30_000 })
     await ficha(page).locator('.kf-duda').getByRole('button', { name: 'Es uno que ya tengo' }).click()

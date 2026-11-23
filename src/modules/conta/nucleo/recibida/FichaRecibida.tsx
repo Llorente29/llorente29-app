@@ -114,18 +114,11 @@ const num = (x: string): number | null => { const n = Number(x.replace(/\./g, ''
 type Aviso = { tono: 'ok' | 'falta' | 'mal'; texto: string }
 
 /**
- * Las casillas que cuentan para Intro, en el orden de la página (data-casilla). K11b · En la ficha como ERP10 la fecha de
- * la factura está arriba, en la fila del periodo; Intro la sigue pidiendo donde siempre (decisión 11): proveedor, número
- * y fecha, y después lo demás.
+ * Las casillas que cuentan para Intro, en el orden de la página (data-casilla): K11b, como ERP10 (concepto ERP10, K11
+ * 2.1.10), de izquierda a derecha y de arriba abajo. La fecha de la factura está arriba: va antes que el proveedor.
  */
 function casillasDe(raiz: HTMLElement | null): HTMLElement[] {
-  const l = raiz ? Array.from(raiz.querySelectorAll<HTMLElement>('[data-casilla]')).filter((x) => !x.hasAttribute('disabled') && x.offsetParent !== null) : []
-  const fecha = l.findIndex((x) => x.id === 'kf-fecha')
-  if (fecha < 0) return l
-  const [f] = l.splice(fecha, 1)
-  const numero = l.findIndex((x) => x.id === 'kf-numero')
-  l.splice(numero >= 0 ? numero + 1 : fecha, 0, f)
-  return l
+  return raiz ? Array.from(raiz.querySelectorAll<HTMLElement>('[data-casilla]')).filter((x) => !x.hasAttribute('disabled') && x.offsetParent !== null) : []
 }
 
 export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
