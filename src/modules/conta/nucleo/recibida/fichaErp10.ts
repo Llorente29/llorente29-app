@@ -115,3 +115,17 @@ export function conIvaDeducible<T extends { codigo: string; debe: number | null;
   })
   return r
 }
+
+/**
+ * El cambio de una línea para conta_recibida_otros_datos: su posición y SOLO las claves que cambian (20261123T1750: la
+ * base deja como está lo que no viene, y una clave con null la borra). Nunca rellena lo que no cambia con lo leído: una
+ * lectura que aún no ha vuelto borraría la marca al elegir la plataforma (e2e 45225555049).
+ */
+export function cambioDeLinea(posicion: number, c: { concepto?: string | null; marca?: string | null; plataforma?: string | null }):
+  { posicion: number; concepto?: string | null; marca?: string | null; plataforma?: string | null } {
+  const r: { posicion: number; concepto?: string | null; marca?: string | null; plataforma?: string | null } = { posicion }
+  if (c.concepto !== undefined) r.concepto = c.concepto
+  if (c.marca !== undefined) r.marca = c.marca
+  if (c.plataforma !== undefined) r.plataforma = c.plataforma
+  return r
+}

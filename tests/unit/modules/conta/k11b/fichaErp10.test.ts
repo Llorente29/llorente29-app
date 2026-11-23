@@ -5,7 +5,7 @@
 // prueba de staging del K10c (121 en 60 + 61).
 
 import { describe, expect, it } from 'vitest'
-import { aVisual, conIvaDeducible, cuadriculaIva, filasDePago, otraLinea, otroPago, rotuloDeLaSuma, sumaDeContrapartidas } from '@/modules/conta/nucleo/recibida/fichaErp10'
+import { aVisual, cambioDeLinea, conIvaDeducible, cuadriculaIva, filasDePago, otraLinea, otroPago, rotuloDeLaSuma, sumaDeContrapartidas } from '@/modules/conta/nucleo/recibida/fichaErp10'
 
 const cifra = (n: number) => n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -89,5 +89,32 @@ describe('K11b · el IVA deducible en la visualización', () => {
   it('al 100 %, tal cual', () => {
     const x = [l('62800001', 100), l('47200021', 21), l('40000101', null, 121)]
     expect(conIvaDeducible(x, 100)).toEqual(x)
+  })
+})
+
+describe('K11b · el cambio de una línea lleva solo lo que cambia (20261123T1750)', () => {
+  // La base (conta_recibida_otros_datos desde la 1750): por línea, la clave que no viene se queda; con null, se borra.
+  type Linea = { concepto: string | null; marca: string | null; plataforma: string | null }
+  const enLaBase = (antes: Linea, c: ReturnType<typeof cambioDeLinea>): Linea => ({
+    concepto: 'concepto' in c ? c.concepto ?? null : antes.concepto,
+    marca: 'marca' in c ? c.marca ?? null : antes.marca,
+    plataforma: 'plataforma' in c ? c.plataforma ?? null : antes.plataforma,
+  })
+
+  it('solo la clave tocada, y null cuando se quita', () => {
+    expect(cambioDeLinea(2, { marca: 'b1' })).toEqual({ posicion: 2, marca: 'b1' })
+    expect(cambioDeLinea(0, { plataforma: null })).toEqual({ posicion: 0, plataforma: null })
+    expect(JSON.stringify(cambioDeLinea(1, { concepto: 'Comida' }))).toBe('{"posicion":1,"concepto":"Comida"}')
+  })
+
+  it('con la lectura retrasada (e2e 45225555049): la marca y después la plataforma, sin que la segunda borre la primera', () => {
+    // La ficha aún enseña la lectura de antes (vacía) cuando se elige la plataforma: ya no la usa para el cambio.
+    const leida: Linea = { concepto: null, marca: null, plataforma: null }
+    const c1 = cambioDeLinea(0, { marca: 'b1' })
+    const c2 = cambioDeLinea(0, { plataforma: 'd1' })
+    expect(c2).not.toHaveProperty('marca')
+    expect(enLaBase(enLaBase(leida, c1), c2)).toEqual({ concepto: null, marca: 'b1', plataforma: 'd1' })
+    // Y al revés: la plataforma primero, la marca después.
+    expect(enLaBase(enLaBase(leida, c2), c1)).toEqual({ concepto: null, marca: 'b1', plataforma: 'd1' })
   })
 })

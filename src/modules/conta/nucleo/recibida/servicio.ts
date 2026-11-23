@@ -351,11 +351,12 @@ export async function otrosDatosDeLaFactura(accountId: string, invoiceId: string
   }
 }
 
-/** Guarda «Otros datos» y los datos de las líneas (conta_recibida_otros_datos, 0839). */
+/** Guarda «Otros datos» y los datos de las líneas (conta_recibida_otros_datos, 0839; por clave desde la 20261123T1750). */
 export async function guardarOtrosDatos(invoiceId: string, cambios: {
   tipo_factura?: string | null; clave_regimen?: string | null; no_iva?: boolean; rectificacion?: boolean; no_347?: boolean; iva_deducible?: number | null
   fecha_contable?: string | null; fecha_fiscal?: string | null
-  lineas?: { posicion: number; concepto: string | null; marca: string | null; plataforma: string | null }[]
+  /** Por línea, solo las claves que cambian: la que no viene se queda; con null, se borra (20261123T1750). */
+  lineas?: { posicion: number; concepto?: string | null; marca?: string | null; plataforma?: string | null }[]
 }, quien: string | null): Promise<{ texto: string; asientoQuitado: boolean }> {
   const r = await rpc<Fila>('conta_recibida_otros_datos', { p_invoice: invoiceId, p_cambios: cambios, p_quien_nombre: quien })
   return { texto: String(r.texto ?? 'Guardado.'), asientoQuitado: r.asiento_quitado === true }

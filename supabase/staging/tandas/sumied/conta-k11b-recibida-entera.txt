@@ -1,4 +1,5 @@
-# K11b · La recibida entera, como ERP10. Sin tanda de producción: la base ya tiene dónde guardar todo (K11a, K11f1, K10c).
+# K11b · La recibida entera, como ERP10. La base ya tiene dónde guardar todo (K11a, K11f1, K10c); su tanda de producción solo
+# cambia cómo guarda los datos de cada línea (1750, abajo).
 # Lo que necesita la e2e (tests/e2e/conta/k11b): una empresa de hostelería en la cuenta del núcleo, con tres locales, dos
 # marcas, dos plataformas, el 303 del 3T presentado y cuatro facturas por revisar. Solo añade, con ids fijos: se puede
 # aplicar dos veces igual (W07), y va de verdad desde la rama (W05).
@@ -10,3 +11,7 @@ supabase/staging/sql/20261123_k11b_erp10_excel_prueba.sql
 # sus semillas se quedaron con el proveedor que les puso el alta sola. Van otras, nuevas, como las deja su «Deshacer»
 # (su fila de conta_proveedor_solo deshecha). Solo añade (W07), de verdad desde la rama (W05).
 supabase/seeds/conta/seed_k11b_emisor_sin_proveedor_staging.sql
+# 1750 · conta_recibida_otros_datos guarda en cada línea solo las claves que vienen (cambia en caliente: desde la rama, en
+# ROLLBACK). Su prueba: solo la plataforma no toca la marca, y al revés; con null, se borra.
+supabase/migrations/20261123T1750_k11b_lineas_solo_lo_que_cambia.sql
+supabase/staging/sql/20261123_k11b_lineas_solo_lo_que_cambia_prueba.sql

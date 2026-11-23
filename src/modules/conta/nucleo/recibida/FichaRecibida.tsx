@@ -66,7 +66,7 @@ import { Barra, Bloque, BotonMas, Casilla as KCasilla, OtrosDatos, Ventana } fro
 import { CasillaLupa } from '../piezas/Lupa'
 import { CasillaImporte } from '../piezas/Importe'
 import { MOTIVO_IMPORTE_DUDOSO, importeDudoso, leerImporte } from '../piezas/logica'
-import { aVisual, conIvaDeducible, cuadriculaIva, filasDePago, otraLinea, otroPago, rotuloDeLaSuma, sumaDeContrapartidas } from './fichaErp10'
+import { aVisual, cambioDeLinea, conIvaDeducible, cuadriculaIva, filasDePago, otraLinea, otroPago, rotuloDeLaSuma, sumaDeContrapartidas } from './fichaErp10'
 import { apuntarUnPago, borrarPago, cambiarPago, leerPagos, sePuedeCambiarPago } from './pagosServicio'
 import { plataformasDeLaCuenta } from '@/modules/conta/services/asientoGeneralService'
 import './fichaErp10.css'
@@ -643,40 +643,22 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
 
   // ── K11b · «Otros datos» y los datos de cada línea: se guardan al momento, como la cabecera (conta_recibida_otros_datos) ──
   const msg = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/\.$/, '')
-  async function ponerOtros(c: Parameters<typeof guardarOtrosDatos>[1]): Promise<boolean> {
-    if (!fac || guardandoOtros) return false
+  async function ponerOtros(c: Parameters<typeof guardarOtrosDatos>[1]) {
+    if (!fac || guardandoOtros) return
     setGuardandoOtros(true)
-    try { const r = await guardarOtrosDatos(fac.id, c, userName ?? null); setAviso({ tono: 'ok', texto: r.texto }); setVuelta((v) => v + 1); return true }
-    catch (e) { setAviso({ tono: 'mal', texto: `No se ha guardado: ${msg(e)}.` }); return false }
+    try { const r = await guardarOtrosDatos(fac.id, c, userName ?? null); setAviso({ tono: 'ok', texto: r.texto }); setVuelta((v) => v + 1) }
+    catch (e) { setAviso({ tono: 'mal', texto: `No se ha guardado: ${msg(e)}.` }) }
     finally { setGuardandoOtros(false) }
   }
-  // Lo que se acaba de poner en cada línea, hasta que la lectura nueva lo trae: sin esto, elegir la plataforma antes de que
-  // vuelva la lectura de la marca guardaba la línea con la marca de antes (vacía) y la perdía.
-  // Vale solo mientras la ficha enseña la MISMA lectura que había al ponerlo: en cuanto llega una nueva, manda la base.
-  type DatoPuesto = { concepto: string | null; marca: string | null; plataforma: string | null }
-  const [puestos, setPuestos] = useState<{ de: unknown; lineas: Record<number, DatoPuesto> }>({ de: null, lineas: {} })
-  const puestosDeEsta = otrosL && puestos.de === otrosL ? puestos.lineas : {}
-  const datoDe = (i: number) => {
-    const r = otrosL?.lineas.find((l) => l.posicion === i) ?? null
-    const p = puestosDeEsta[i]
-    return p ? { ...(r ?? { posicion: i }), posicion: i, concepto: p.concepto, marcaId: p.marca, canalId: p.plataforma } : r
-  }
+  const datoDe = (i: number) => otrosL?.lineas.find((l) => l.posicion === i) ?? null
   /** La marca de la línea: la suya (K11a); en la primera, si no tiene, la de la factura (K10b, la que lleva su asiento). */
   const marcaDe = (i: number) => datoDe(i)?.marcaId ?? (i === 0 ? cab?.marcaId ?? null : null)
   function ponerDatoLinea(i: number, c: { concepto?: string | null; marca?: string | null; plataforma?: string | null }) {
     // Con una sola línea, la marca es la de la factura (K10b, la que lleva todo su asiento); con varias, la de cada línea (K11a).
     if (i === 0 && b.gastos.length === 1 && c.marca !== undefined && !datoDe(0)?.marcaId && c.concepto === undefined && c.plataforma === undefined) { void ponerCabecera({ marca: c.marca }); return }
-    const d = datoDe(i)
-    const linea = {
-      posicion: i, concepto: c.concepto !== undefined ? c.concepto : d?.concepto ?? null,
-      marca: c.marca !== undefined ? c.marca : d?.marcaId ?? null, plataforma: c.plataforma !== undefined ? c.plataforma : d?.canalId ?? null,
-    }
-    const de = otrosL
-    setPuestos((p) => ({ de, lineas: { ...(p.de === de ? p.lineas : {}), [i]: { concepto: linea.concepto, marca: linea.marca, plataforma: linea.plataforma } } }))
-    void ponerOtros({ lineas: [linea] }).then((ok) => {
-      // Si no se ha guardado, la línea vuelve a enseñar lo que hay en la base.
-      if (!ok) setPuestos((p) => { if (!(i in p.lineas)) return p; const l = { ...p.lineas }; delete l[i]; return { de: p.de, lineas: l } })
-    })
+    // Solo lo que cambia (20261123T1750): la base deja como está lo que no viene, así que una lectura que aún no ha
+    // vuelto no puede borrar la marca al elegir la plataforma, ni al revés.
+    void ponerOtros({ lineas: [cambioDeLinea(i, c)] })
   }
 
   // ── K11b · Un pago más, cambiar uno o borrarlo (K10c). El de un banco, una tarjeta o la caja espera el cargo en Bancos. ──
