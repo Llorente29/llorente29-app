@@ -132,6 +132,13 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     expect(c.title, 'el title, el concepto entero').toContain('CON UN CONCEPTO MUY LARGO')
     expect(c.cortado, 'el concepto no cabe y se corta').toBe(true)
     expect(c.puntos, 'se corta con «…»').toBe('ellipsis')
+    // Lo corto cabe entero: la fecha, el importe y el saldo de la fila, y las fechas del filtro.
+    const cabe = await fila(ids[0]).evaluate((tr) => {
+      const td = (i: number) => tr.querySelectorAll('td')[i] as HTMLElement
+      const no = (e: HTMLElement | null) => !!e && e.scrollWidth > e.clientWidth + 1
+      return { fecha: no(td(1)), importe: no(td(4)), saldo: no(td(5)), desde: no(document.querySelector('#cn-desde')), hasta: no(document.querySelector('#cn-hasta')) }
+    })
+    expect(cabe, 'la fecha, el importe, el saldo y las fechas del filtro caben enteros').toEqual({ fecha: false, importe: false, saldo: false, desde: false, hasta: false })
 
     // Medir: la ventana, la columna de bancos y el panel.
     const m = await pantalla(page).evaluate((z) => {

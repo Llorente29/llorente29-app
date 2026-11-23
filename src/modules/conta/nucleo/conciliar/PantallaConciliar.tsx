@@ -268,15 +268,15 @@ export default function PantallaConciliar() {
 
   const columnas: Columna[] = [
     { clave: 'marca', titulo: <span className="cn-sr">Marcar</span>, ancho: '24px' },
-    { clave: 'fecha', titulo: 'Fecha', ancho: '78px' },
+    { clave: 'fecha', titulo: 'Fecha', ancho: '86px' },
     { clave: 'banco', titulo: 'Concepto bancario' },
     { clave: 'asiento', titulo: 'Concepto del asiento' },
-    { clave: 'importe', titulo: 'Importe', cifra: true, ancho: '74px' },
-    { clave: 'saldo', titulo: 'Saldo', cifra: true, ancho: '76px' },
-    { clave: 'subcuenta', titulo: 'Subcuenta', ancho: '82px' },
-    { clave: 'nombre', titulo: 'Nombre', ancho: '13%' },
-    { clave: 'porque', titulo: 'Por qué', ancho: '112px' },
-    { clave: 'doc', titulo: 'Doc.', ancho: '60px' },
+    { clave: 'importe', titulo: 'Importe', cifra: true, ancho: '78px' },
+    { clave: 'saldo', titulo: 'Saldo', cifra: true, ancho: '90px' },
+    { clave: 'subcuenta', titulo: 'Subcuenta', ancho: '76px' },
+    { clave: 'nombre', titulo: 'Nombre', ancho: '10%' },
+    { clave: 'porque', titulo: 'Por qué', ancho: '128px' },
+    { clave: 'doc', titulo: 'Doc.', ancho: '52px' },
     { clave: 'validado', titulo: <span title="Validado">✓</span>, ancho: '22px' },
   ]
   const celda = (x: Linea, c: string): ReactNode => {

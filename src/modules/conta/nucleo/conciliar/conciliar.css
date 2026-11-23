@@ -44,7 +44,7 @@
 .cn-barrita > span { display: block; height: 100%; background: #2f9e55; }
 
 .cn-centro { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
-.cn-filtros { display: grid; grid-template-columns: 170px 136px 136px 136px minmax(0, 1fr) 112px; gap: 0 6px; align-items: end; }
+.cn-filtros { display: grid; grid-template-columns: 188px 124px 124px 124px minmax(0, 1fr) 112px; gap: 0 6px; align-items: end; }
 .cn-fechas .kp-casilla-dentro { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .cn-tres { display: inline-flex; border: 1px solid var(--kp-raya); border-radius: 3px; overflow: hidden; height: 22px; }
 .cn-tres button { border: 0; background: #fff; padding: 0 8px; font-size: 12px; cursor: pointer; }
@@ -78,7 +78,7 @@
 /* Datos del movimiento. */
 .cn-datos { flex-shrink: 0; border-top: 1px solid var(--kp-raya); padding-top: 2px; }
 .cn-datos .kp-bloque-titulo { margin: 0 0 2px; }
-.cn-datos-uno { display: grid; grid-template-columns: 84px minmax(0, 1fr) minmax(0, 1fr) 84px 108px minmax(0, 0.8fr); gap: 0 5px; }
+.cn-datos-uno { display: grid; grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) 84px 108px minmax(0, 0.8fr); gap: 0 5px; }
 /* La segunda fila: local (marca y plataforma en hostelería) · validar · los dos saldos y si cuadran. */
 .cn-datos-dos { display: grid; grid-template-columns: minmax(0, 220px) 1fr 56px 104px 104px 56px; gap: 0 6px; margin-top: 2px; }
 .cn-datos-dos[data-hosteleria='si'] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 56px 104px 104px 56px; }
