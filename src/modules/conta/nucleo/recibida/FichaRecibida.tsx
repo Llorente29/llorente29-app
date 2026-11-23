@@ -67,7 +67,6 @@ import { cambiarDocumentoContabilizada, leerHistorial, salioAErp10 } from './doc
 import { PanelDocumento } from '../ficha/PanelDocumento'
 import { cifra } from '../ficha/textos'
 import { useUltimo } from '../ficha/useUltimo'
-import { LineasDeLaFactura } from './LineasDeLaFactura'
 import { modificarRecibida, sePuedeModificar } from './modificarServicio'
 import { ModificarAsiento } from './ModificarAsiento'
 import { Buscador } from '../ficha/Buscador'
@@ -968,9 +967,6 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 </label>
               </div>
             </div>
-
-            {/* E10 · Las líneas de la factura: la fila siempre en su sitio; si faltan, en ámbar con «Leer las que faltan». */}
-            {!aMano && <LineasDeLaFactura accountId={accountId} invoiceId={invoiceId} lineas={fac?.lineas ?? []} recargar={setVuelta} />}
 
             <div className="kf-dos">
               <div className="kf-bloque">

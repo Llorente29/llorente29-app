@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  baseDeLaCabecera, cuadreLineas, esCortada, estadoLineas, estadoVisto, juntarTrozos, leerCabecera, leerLasLineas,
+  baseDeLaCabecera, cuadreLineas, esCortada, estadoLineas, estadoVisto, juntarTrozos, leerCabecera, leerLasLineas, lineasSinLeer, seLeenLasLineas,
   promptCabecera, promptLineas, type LineaLeida, type Llamar, type TrozoLeido,
 } from '../../../supabase/functions/_shared/lecturaPorPartes'
 import { buildPrompt } from '../../../supabase/functions/_shared/ocrAlbaranNucleo'
@@ -193,5 +193,20 @@ describe('E10 · lo que pasó con la de 10 páginas (run 45141043904: 66 de 68)'
     const r = juntarTrozos(p.map((l, i) => ({ desde: i + 1, hasta: i + 1, lineas: l })))
     expect(r.lineas).toHaveLength(34)
     expect(cuadreLineas(r.lineas, F.base)?.cuadra).toBe(true)
+  })
+})
+
+describe('E10b · el segundo paso, solo con Folvy', () => {
+  it('se leen las líneas solo si la empresa recibe la mercancía con Folvy', () => {
+    expect(seLeenLasLineas(true)).toBe(true)
+    expect(seLeenLasLineas(false)).toBe(false)
+    expect(seLeenLasLineas(null), 'sin empresa o sin ajuste, como conta_recibe_mercancia: no').toBe(false)
+    expect(seLeenLasLineas(undefined)).toBe(false)
+  })
+  it('sin Folvy, la factura entra con la cabecera y sus líneas quedan sin leer; «Leer las que faltan» las lee todas', () => {
+    const e = lineasSinLeer({ esperadas: 34, paginas: 5, desde: '2026-11-23T08:00:00.000Z' })
+    expect(e).toMatchObject({ estado: 'faltan', leidas: 0, esperadas: 34, sin_leer: [], por_pagina: [], sin_folvy: true })
+    // Sin páginas apuntadas, «Leer las que faltan» lee todas: no se queda «leyendo» ni se da por parada.
+    expect(estadoVisto(e, Date.parse('2026-11-24T08:00:00.000Z'))?.estado).toBe('faltan')
   })
 })

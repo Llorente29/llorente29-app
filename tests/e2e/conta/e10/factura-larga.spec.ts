@@ -1,32 +1,30 @@
 /// <reference lib="dom" />
 // tests/e2e/conta/e10/factura-larga.spec.ts
 //
-// E10 · La factura larga se lee entera. Contra staging, en la cuenta del núcleo, a 1366 × 768 y a
-// 1920 × 1080. Cada prueba crea una empresa nueva («Prueba E10 …»). La factura es la inventada de
-// 5 páginas y 34 líneas (scripts/conta/e10, T11), con su número de esta pasada.
+// E10 · La factura larga se lee entera. E10b (23/11): en SUMIED se ve igual que cualquier otra, SIN
+// líneas de artículo (son de Folvy: Julio, «la versión larga no la veo útil en Sumied»). Contra staging,
+// en la cuenta del núcleo, a 1366 × 768 y a 1920 × 1080. Cada prueba crea una empresa nueva
+// («Prueba E10 …»). La factura es la inventada de 5 páginas y 34 líneas (scripts/conta/e10, T11), con su
+// número de esta pasada.
 //
 // Llega por el camino de verdad de la base: el PDF se sube al almacén, se registra
 // (conta_subida_registrar), su lectura se guarda como la guarda ocr-albaran y la factura sale de
 // ella (conta_factura_desde_lectura). Lo único que no corre aquí es el modelo (staging no lee con
-// él; la lectura de verdad la mide scripts/conta/e10/medir.ts): su lectura se escribe con
-// leerFactura, como ocr-albaran, y las líneas llegan con conta_lectura_lineas_guardar, la función
-// del E10, como las guarda ocr-albaran al terminar.
-//   1. La larga entra con su cabecera mientras se leen sus líneas: «Leyendo las líneas…»; al
-//      llegar, «34 líneas» en el mismo sitio (no salta); «Ver las líneas»: las 34. Al lado, una
-//      corta de 4 líneas, como siempre. Capturas de las dos.
-//   2. Si faltan (la página 3 no se ha podido leer): ámbar, «Leídas 27 de 34 líneas. Falta la página
-//      3.» y «Leer las que faltan»; al pulsarlo (ocr-albaran simulado: guarda las que faltaban con la
-//      función de verdad) dice «Leídas todas: 34 líneas.» y quedan 34.
+// él; la lectura de verdad la mide scripts/conta/e10/medir.mts).
+//   1. La larga entra con su cabecera; sus 34 líneas llegan después (conta_lectura_lineas_guardar, como
+//      las guarda ocr-albaran en una empresa con Folvy). La ficha de Sumied dice su total y no enseña
+//      ninguna línea de artículo, ni «Leyendo…», ni «Leer las que faltan»: ni antes ni después.
+//   2. La de una empresa sin Folvy (sus líneas sin leer, E10b) tampoco enseña nada de líneas.
 // Escribe (empresas, facturas, lecturas): solo en un carril; sin carril se salta y lo dice.
 
 import { createHash } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
-import { test, expect, type Page, type Route } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { CARRIL, STAGING_URL, anonKey, entrarComo, type Sesion } from '../sesion'
 import { cifInventado, rest } from '../api'
 import { NUCLEO } from '../k02/comun'
 import { leerFactura, type LecturaModelo } from '../../../../supabase/functions/_shared/lecturaFactura'
-import { estadoLineas, type EstadoLineas, type LineaLeida, type TrozoLeido } from '../../../../supabase/functions/_shared/lecturaPorPartes'
+import { estadoLineas, lineasSinLeer, type EstadoLineas, type LineaLeida, type TrozoLeido } from '../../../../supabase/functions/_shared/lecturaPorPartes'
 // @ts-expect-error módulo .mjs sin tipos
 import { pdfFacturaLarga } from '../../../../scripts/conta/e10/generar-facturas-largas.mjs'
 
@@ -35,7 +33,6 @@ test.skip(CARRIL === null, 'Crea una empresa en la cuenta del núcleo: necesita 
 
 const DIR = 'docs/conta/capturas/e10'
 const ficha = (page: Page) => page.locator('[data-prueba="ficha-recibida-nucleo"]')
-const fila = (page: Page) => page.locator('[data-prueba="lineas-factura"]')
 const TECNICO = /\b(IA|tokens?|cortad[ao]|max_tokens|trozos?|dos pasos)\b/i
 
 type Factura = { lineas: LineaLeida[]; tipos: { vat_pct: number; base: number; vat_amount: number }[]; base: number; cuota: number; total: number; proveedor: { nombre: string }; cliente: { nombre: string }; vence: string; formaPago: string }
@@ -141,7 +138,6 @@ async function abrirFicha(page: Page, id: string) {
 }
 
 async function capturar(page: Page, nombre: string) {
-  await fila(page).scrollIntoViewIfNeeded()
   await page.evaluate(() => document.fonts.ready)
   await page.waitForTimeout(300)
   mkdirSync(DIR, { recursive: true })
@@ -150,8 +146,16 @@ async function capturar(page: Page, nombre: string) {
 
 const leyendo = (paginas: number, esperadas: number): EstadoLineas => ({ estado: 'leyendo', leidas: 0, esperadas, paginas, sin_leer: [], por_pagina: [], cuadre: null, desde: new Date().toISOString() })
 
+/** Nada de líneas de artículo en la ficha de Sumied: ni la fila, ni su tabla, ni sus frases. */
+async function sinLineas(page: Page) {
+  await expect(page.locator('[data-prueba="lineas-factura"], [data-prueba="lineas-leidas"]')).toHaveCount(0)
+  const texto = await ficha(page).innerText()
+  expect(texto, 'la ficha de Sumied no habla de líneas de artículo').not.toMatch(/Leyendo las líneas|Leer las que faltan|Ver las líneas|\d+ líneas|Leídas \d+/)
+  expect(texto).not.toMatch(TECNICO)
+}
+
 for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
-  test(`a ${ancho} × ${alto}: la larga entra con su cabecera, sus 34 líneas llegan en su sitio; la corta, como siempre`, async ({ page }, info) => {
+  test(`a ${ancho} × ${alto}: en Sumied, la larga se ve como cualquier otra, sin líneas de artículo`, async ({ page }, info) => {
     test.skip(info.project.name === 'movil', 'El marco del núcleo es de ordenador')
     test.setTimeout(300_000)
     const errores: string[] = []
@@ -161,36 +165,29 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     const empresa = await crearEmpresa(s, String(ancho))
     await page.addInitScript(([clave, valor]) => { window.localStorage.setItem(clave, valor) }, [`folvy.conta.empresa.${NUCLEO.id}`, empresa.id] as const)
     try {
-      // 1 · La larga, con su cabecera y sus líneas aún leyéndose.
+      // 1 · Con Folvy: entra con su cabecera mientras se leen sus líneas; la ficha de Sumied no las nombra.
       const larga = await llega(s, empresa, { albaranes: 20, lineas: 'ninguna', estado: leyendo(5, 34) })
       expect(larga.pdf.paginas).toBe(5)
       expect(larga.pdf.factura.lineas).toHaveLength(34)
       await abrirFicha(page, larga.factura)
       await expect(page.locator('[data-prueba="total"]')).toContainText('1.367,75')
-      await expect(fila(page)).toHaveAttribute('data-tono', 'leyendo')
-      await expect(fila(page)).toContainText('Leyendo las líneas de la factura…')
-      const antes = await fila(page).boundingBox()
-      // 2 · Llegan las 34: la fila dice «34 líneas» en el mismo sitio.
+      await sinLineas(page)
+      // Llegan las 34 (a la factura y a su lectura): la ficha de Sumied sigue igual.
       await lleganLasLineas(s, larga, larga.pdf)
-      await expect(page.locator('[data-prueba="lineas-texto"]')).toHaveText('34 líneas', { timeout: 30_000 })
-      await expect(fila(page)).toHaveAttribute('data-tono', 'bien')
-      const despues = await fila(page).boundingBox()
-      expect(Math.abs((despues?.y ?? 0) - (antes?.y ?? 0)), 'la fila de las líneas no salta de sitio').toBeLessThan(2)
+      const n = await rest<{ id: string }[]>(s, 'GET', `supplier_invoice_line?supplier_invoice_id=eq.${larga.factura}&select=id`)
+      expect(n.datos, 'la factura tiene sus 34 líneas (para Folvy)').toHaveLength(34)
+      await page.reload()
+      await abrirFicha(page, larga.factura)
       await expect(page.locator('[data-prueba="total"]')).toContainText('1.367,75')
-      await fila(page).getByRole('button', { name: 'Ver las líneas' }).click()
-      await expect(fila(page).locator('tbody tr')).toHaveCount(34)
-      await expect(fila(page).locator('tbody tr').first()).toContainText('Pollo entero limpio')
-      expect(await fila(page).innerText()).not.toMatch(TECNICO)
+      await sinLineas(page)
       if (ancho === 1366) expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), 'sin scroll horizontal').toBe(false)
-      await capturar(page, `larga-${ancho}`)
+      await capturar(page, `larga-sumied-${ancho}`)
 
-      // 3 · La corta (2 albaranes, 4 líneas), leída de una vez: como siempre, sin estado de lectura por partes.
-      const corta = await llega(s, empresa, { albaranes: 2, lineas: 'todas', estado: null })
-      await abrirFicha(page, corta.factura)
-      await expect(page.locator('[data-prueba="lineas-texto"]')).toHaveText('4 líneas')
-      await fila(page).getByRole('button', { name: 'Ver las líneas' }).click()
-      await expect(fila(page).locator('tbody tr')).toHaveCount(4)
-      await capturar(page, `corta-${ancho}`)
+      // 2 · Sin Folvy (E10b): sus líneas quedan sin leer; la ficha de Sumied, igual.
+      const sinFolvy = await llega(s, empresa, { albaranes: 20, lineas: 'ninguna', estado: lineasSinLeer({ esperadas: 34, paginas: 5, desde: new Date().toISOString() }) })
+      await abrirFicha(page, sinFolvy.factura)
+      await expect(page.locator('[data-prueba="total"]')).toContainText('1.367,75')
+      await sinLineas(page)
     } catch (e) {
       await contarPantalla(page, `a ${ancho}`)
       throw e
@@ -198,42 +195,3 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     expect(errores).toEqual([])
   })
 }
-
-test('a 1366 × 768: si faltan líneas, ámbar con cuántas de cuántas, y «Leer las que faltan» las completa', async ({ page }, info) => {
-  test.skip(info.project.name === 'movil', 'El marco del núcleo es de ordenador')
-  test.setTimeout(300_000)
-  const errores: string[] = []
-  page.on('pageerror', (e) => { errores.push(`${page.url()}: ${e.message}`); console.log(`[error de la página] ${e.message}`) })
-  await page.setViewportSize({ width: 1366, height: 768 })
-  const s = await entrarComo(page, NUCLEO.email)
-  const empresa = await crearEmpresa(s, 'faltan')
-  await page.addInitScript(([clave, valor]) => { window.localStorage.setItem(clave, valor) }, [`folvy.conta.empresa.${NUCLEO.id}`, empresa.id] as const)
-  try {
-    const larga = await llega(s, empresa, { albaranes: 20, lineas: 'ninguna', estado: leyendo(5, 34) })
-    const primera = await lleganLasLineas(s, larga, larga.pdf, [3])
-    expect(primera.estado).toMatchObject({ estado: 'faltan', leidas: 27, sin_leer: [3] })
-    // «Leer las que faltan»: ocr-albaran lee la página 3 y guarda las 34 (aquí, con la función de verdad).
-    let pedido: Record<string, unknown> | null = null
-    await page.route('**/functions/v1/ocr-albaran', async (r: Route) => {
-      pedido = r.request().postDataJSON() as Record<string, unknown>
-      const todas = await lleganLasLineas(s, larga, larga.pdf)
-      await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ lineas: todas.estado }) })
-    })
-    await abrirFicha(page, larga.factura)
-    await expect(fila(page)).toHaveAttribute('data-tono', 'ambar')
-    await expect(page.locator('[data-prueba="lineas-texto"]')).toHaveText('Leídas 27 de 34 líneas. Falta la página 3.')
-    expect(await fila(page).innerText()).not.toMatch(TECNICO)
-    await capturar(page, 'faltan-1366')
-    await fila(page).getByRole('button', { name: 'Leer las que faltan' }).click()
-    await expect(fila(page).getByRole('status')).toHaveText('Leídas todas: 34 líneas.', { timeout: 30_000 })
-    expect(pedido).toMatchObject({ account_id: NUCLEO.id, modo: 'factura', releer_lineas: larga.sesion })
-    await expect(page.locator('[data-prueba="lineas-texto"]')).toHaveText('34 líneas', { timeout: 30_000 })
-    await expect(fila(page)).toHaveAttribute('data-tono', 'bien')
-    const n = await rest<{ id: string }[]>(s, 'GET', `supplier_invoice_line?supplier_invoice_id=eq.${larga.factura}&select=id`)
-    expect(n.datos, 'la factura tiene sus 34 líneas, ninguna repetida').toHaveLength(34)
-  } catch (e) {
-    await contarPantalla(page, 'faltan')
-    throw e
-  }
-  expect(errores).toEqual([])
-})

@@ -22,6 +22,15 @@ function tabla(nombre: string) {
     eq() { return q },
     in() { return q },
     is() { return q },
+    not() { return q },
+    limit() { return q },
+    // E10b · Lo que lee ocr-albaran para saber si la empresa recibe la mercancía con Folvy: su llegada y su
+    // ajuste de compras. E10_FOLVY=0: una empresa solo de Sumied; si no, con Folvy.
+    then(ok: (r: { data: unknown; error: null }) => unknown) {
+      const datos = nombre === 'document_inbox' ? [{ company_id: 'empresa-falsa' }]
+        : nombre === 'company_purchase_setting' ? [{ receives_goods: Deno.env.get('E10_FOLVY') !== '0' }] : []
+      return Promise.resolve({ data: datos, error: null }).then(ok)
+    },
     async single() {
       n++
       const id = `sesion-${n}`

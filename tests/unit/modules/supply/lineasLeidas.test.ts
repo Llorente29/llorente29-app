@@ -1,11 +1,11 @@
-// tests/conta/e10/filaLineas.test.ts
+// tests/unit/modules/supply/lineasLeidas.test.ts
 //
-// E10 · Lo que dice la fila de las líneas en la ficha de una recibida (src/modules/conta/nucleo/recibida/lineas.ts).
+// E10 / E10b · Lo que dice la fila de las líneas de una factura larga en FOLVY (src/modules/supply/lineas/lineasLeidas.ts).
 // Sin frases técnicas: ni «IA», ni «tokens», ni «cortada».
 
 import { describe, expect, it } from 'vitest'
-import { filaDeLineas, textoAlLeerFaltan } from '@/modules/conta/nucleo/recibida/lineas'
-import type { EstadoLineas } from '../../../supabase/functions/_shared/lecturaPorPartes'
+import { filaDeLineas, textoAlLeerFaltan } from '@/modules/supply/lineas/lineasLeidas'
+import type { EstadoLineas } from '../../../../supabase/functions/_shared/lecturaPorPartes'
 
 const desde = '2026-11-23T08:00:00.000Z'
 const ahora = Date.parse(desde) + 60_000
@@ -47,5 +47,14 @@ describe('E10 · la fila de las líneas', () => {
   it('«Leer las que faltan» dice cómo ha quedado', () => {
     expect(textoAlLeerFaltan(e({}))).toBe('Leídas todas: 34 líneas.')
     expect(textoAlLeerFaltan(e({ estado: 'faltan', leidas: 30 }))).toBe('Siguen faltando: leídas 30 de 34. Escríbelas mirando el PDF, o vuelve a probar.')
+  })
+})
+
+describe('E10b · la de una empresa que aún no usaba Folvy', () => {
+  it('sus líneas no se leyeron: ámbar, cuántas trae, y «Leer las que faltan»', () => {
+    expect(filaDeLineas(0, e({ estado: 'faltan', leidas: 0, sin_folvy: true, cuadre: null }), ahora))
+      .toEqual({ tono: 'ambar', texto: 'Sus 34 líneas aún no se han leído.', ver: false, leerFaltan: true })
+    expect(filaDeLineas(0, e({ estado: 'faltan', leidas: 0, esperadas: null, sin_folvy: true, cuadre: null }), ahora))
+      .toMatchObject({ texto: 'Sus líneas aún no se han leído.' })
   })
 })

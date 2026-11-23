@@ -48,6 +48,9 @@
 // página a página, que se guardan en la misma sesión y en la factura
 // (conta_lectura_lineas_guardar). Con { releer_lineas: sesión } se leen las páginas que
 // faltan («Leer las que faltan»). Lo que hoy no llega cortado no cambia en nada.
+// E10b (23/11) · Las líneas son de Folvy, no de Sumied: el paso 2 solo se hace si la empresa recibe la
+// mercancía con Folvy (company_purchase_setting.receives_goods). Si no, la factura entra con la cabecera
+// y sus líneas quedan sin leer («Leer las que faltan», en Folvy, si un día empieza a usarlo).
 //
 // Auth: usuario autenticado (JWT, respeta RLS) o llamada interna (x-internal-key).
 // Patrón calcado de extract-recipe. Deploy NORMAL (no es webhook externo).
@@ -58,7 +61,7 @@ import { MODELO_VISION, buildPrompt, extractJson, validate, type ParsedDoc } fro
 import { PROMPT_CUADRO, comprobarCuadro } from '../_shared/lecturaCuadro.ts';
 import { leerFactura, PROMPT_FACTURA, type LecturaModelo } from '../_shared/lecturaFactura.ts';
 import { falloDeContenido, falloDeExcepcion, falloDeRespuesta, paraGuardar, type FalloLectura } from '../_shared/lecturaFallo.ts';
-import { baseDeLaCabecera, esCortada, estadoVisto, leerCabecera, leerLasLineas, type EstadoLineas, type Fichero, type LineaLeida } from '../_shared/lecturaPorPartes.ts';
+import { baseDeLaCabecera, esCortada, estadoVisto, leerCabecera, leerLasLineas, lineasSinLeer, seLeenLasLineas, type EstadoLineas, type Fichero, type LineaLeida } from '../_shared/lecturaPorPartes.ts';
 import { PDFDocument } from 'npm:pdf-lib@1.17.1';
 
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
@@ -205,6 +208,21 @@ async function guardarLineas(sb: Sb, sesion: string, lineas: LineaLeida[], valid
   return null;
 }
 
+/**
+ * E10b · ¿Recibe la mercancía con Folvy la empresa de esta factura? Su empresa, por su llegada
+ * (document_inbox con ese fichero: «Subir factura» y el correo la registran antes de leerla), y su
+ * ajuste de compras (company_purchase_setting.receives_goods: lo mismo que dice conta_recibe_mercancia,
+ * que solo puede llamar una sesión). Sin llegada, sin empresa o sin ajuste: null (no se leen).
+ */
+async function recibeMercancia(sb: Sb, accountId: string, rutas: string[]): Promise<boolean | null> {
+  const { data: l, error } = await sb.from('document_inbox').select('company_id').eq('account_id', accountId).in('file_path', rutas).not('company_id', 'is', null).limit(1);
+  const empresa = !error ? (l as { company_id: string }[] | null)?.[0]?.company_id : null;
+  if (!empresa) return null;
+  const { data: a, error: e2 } = await sb.from('company_purchase_setting').select('receives_goods').eq('account_id', accountId).eq('company_id', empresa).limit(1);
+  if (e2) { console.error('[ocr-albaran] el ajuste de compras:', e2.message); return null; }
+  return (a as { receives_goods: boolean }[] | null)?.[0]?.receives_goods ?? null;
+}
+
 type Base = { sb: Sb; anthropicKey: string; model: string; accountId: string };
 const llamarCon = (x: Base) => (bloques: unknown[], prompt: string) => leerConIa(x.anthropicKey, x.model, bloques, prompt);
 
@@ -258,7 +276,12 @@ async function facturaLarga(x: Base & { esFactura: boolean; inputFiles: { path: 
   const validation = validate(parsed);
   // Solo en modo factura (la guarda del E2b: Cocina, sin modo, nunca pasa por la lectura de facturas).
   const factura = x.esFactura ? leerFactura(parsed as unknown as LecturaModelo, { hoy: new Date().toISOString().slice(0, 10) }) : null;
-  const lineas: EstadoLineas = { estado: 'leyendo', leidas: 0, esperadas: cab.esperadas, paginas: cab.paginas, sin_leer: [], por_pagina: [], cuadre: null, desde: new Date().toISOString() };
+  // E10b · Las líneas solo se leen si la empresa recibe la mercancía con Folvy: son de Folvy, no de Sumied.
+  const conFolvy = seLeenLasLineas(await recibeMercancia(x.sb, x.accountId, x.inputFiles.map((f) => f.path)));
+  const desde = new Date().toISOString();
+  const lineas: EstadoLineas = conFolvy
+    ? { estado: 'leyendo', leidas: 0, esperadas: cab.esperadas, paginas: cab.paginas, sin_leer: [], por_pagina: [], cuadre: null, desde }
+    : lineasSinLeer({ esperadas: cab.esperadas, paginas: cab.paginas, desde });
   const p1 = x.primera as { stop_reason?: unknown; usage?: unknown } | null;
   const kind = x.inputFiles.some(f => f.path.toLowerCase().endsWith('.pdf')) ? 'pdf' : 'photo';
   const { data: session, error: sessErr } = await x.sb.from('goods_receipt_ai_session').insert({
@@ -277,8 +300,10 @@ async function facturaLarga(x: Base & { esFactura: boolean; inputFiles: { path: 
     console.error('[ocr-albaran] insert sesión:', sessErr.message);
     return jsonResponse(500, { error: 'No se pudo guardar la sesión', detail: sessErr.message });
   }
-  const espera = enSegundoPlano(completarLineas({ ...x, sesion: session.id, parsed, factura, esperadas: cab.esperadas, paginas: cab.paginas, esperarFactura: true }));
-  if (espera) await espera;
+  if (conFolvy) {
+    const espera = enSegundoPlano(completarLineas({ ...x, sesion: session.id, parsed, factura, esperadas: cab.esperadas, paginas: cab.paginas, esperarFactura: true }));
+    if (espera) await espera;
+  }
   return jsonResponse(200, {
     session_id: session.id, status: 'pending_review', parsed, validation, lines_extracted: 0, ai_model: x.model, ai_latency_ms: latencyMs, factura, lineas,
   });
