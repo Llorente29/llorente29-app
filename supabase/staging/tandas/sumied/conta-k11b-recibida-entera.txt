@@ -1,0 +1,8 @@
+# K11b · La recibida entera, como ERP10. Sin tanda de producción: la base ya tiene dónde guardar todo (K11a, K11f1, K10c).
+# Lo que necesita la e2e (tests/e2e/conta/k11b): una empresa de hostelería en la cuenta del núcleo, con tres locales, dos
+# marcas, dos plataformas, el 303 del 3T presentado y cuatro facturas por revisar. Solo añade, con ids fijos: se puede
+# aplicar dos veces igual (W07), y va de verdad desde la rama (W05).
+supabase/seeds/conta/seed_k11b_recibida_hosteleria_staging.sql
+# El candado de ERP10 de los pagos por el camino del Excel (conta_erp10_salida_partida), que el K10c no probó: en
+# ROLLBACK, staging no cambia.
+supabase/staging/sql/20261123_k11b_erp10_excel_prueba.sql
