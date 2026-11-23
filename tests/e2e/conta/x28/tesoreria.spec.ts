@@ -2,7 +2,8 @@
 // tests/e2e/conta/x28/tesoreria.spec.ts — X28 · Tesorería como ERP10 («Introducción de asientos por tesorería»,
 // maqueta nucleo_21), contra staging, a 1366 × 768 y a 1920 × 1080, en la gestoría de ejemplo del núcleo (semillas
 // K02, K04 y K05), con su «Banco principal» (57200001):
-//   · «Leer fichero de extracto bancario» lee un Norma 43 de prueba (tres movimientos inventados, de hoy) y lo dice;
+//   · «Leer fichero de extracto bancario» lee un Norma 43 de prueba (tres movimientos inventados, de hoy, con una
+//     palabra nueva en cada pasada) y lo dice; antes de empezar se comprueba que los tres siguen sin contabilizar;
 //   · los tres se contabilizan SOLO CON EL TECLADO: en la línea, la subcuenta y después Intro hasta el final, que
 //     contabiliza y baja al siguiente sin contabilizar;
 //   · en la base, cada uno conciliado con su asiento VALIDADO de la serie 3, la 62800000 contra la 57200001;
@@ -52,9 +53,12 @@ async function extracto(s: Sesion, ancho: number) {
   const iban = (b.datos?.[0]?.iban ?? 'ES0099990000000000000000').replace(/\s/g, '')
   const hoy = hoyMadrid()
   const base = 1000 + (Date.now() % 50000)
-  const conceptos = ['PRUEBA X28 COMISION UNO', 'PRUEBA X28 COMISION DOS', 'PRUEBA X28 COMISION TRES']
+  // Una palabra inventada en cada pasada: ninguna regla, ninguna factura ni el historial de las pasadas de antes la
+  // casan, así que el agente de conciliación no la contabiliza solo (solo lo hace con lo «seguro»).
+  const palabra = Array.from({ length: 8 }, (_, i) => 'BCDFGHJKLMNPRSTVZ'[Math.floor(Date.now() / 17 ** i) % 17]).join('')
+  const conceptos = ['UNO', 'DOS', 'TRES'].map((n) => `PRUEBA X28 ${palabra} ${n}`)
   const texto = escribirNorma43([{
-    entidad: iban.slice(4, 8), oficina: iban.slice(8, 12), cuenta: iban.slice(12, 24), nombre: 'GESTORIA DE EJEMPLO', desde: hoy, hasta: hoy, saldoInicialCent: 10_000_000,
+    entidad: iban.slice(4, 8), oficina: iban.slice(8, 12), cuenta: iban.slice(14, 24), nombre: 'GESTORIA DE EJEMPLO', desde: hoy, hasta: hoy, saldoInicialCent: 10_000_000,
     movimientos: conceptos.map((c, i) => ({ fecha: hoy, importeCent: -(base + i * 7), comun: '17', concepto: c })),
   }])
   return { nombre: `x28-${ancho}-${Date.now()}.n43`, texto, conceptos }
@@ -93,6 +97,9 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     const ids = (movs.datos ?? []).map((m) => m.id)
     expect(ids, 'los tres movimientos del extracto').toHaveLength(3)
     for (const id of ids) await expect(pantalla(page).locator(`tr[data-movimiento="${id}"]`), 'cada movimiento, una fila').toBeVisible({ timeout: 30_000 })
+    // Antes de empezar: los tres siguen sin contabilizar (no depende de la suerte: si el agente los hubiera casado, aquí se dice).
+    const antes = await rest<{ id: string; status: string }[]>(s, 'GET', `bank_movement?select=id,status&statement_id=eq.${ext.datos[0]?.id}`)
+    expect((antes.datos ?? []).filter((x) => x.status === 'casado'), 'los tres, sin contabilizar al empezar').toEqual([])
 
     // Medir antes de contabilizar: la ventana y las casillas cortas.
     const m = await pantalla(page).evaluate((z) => {

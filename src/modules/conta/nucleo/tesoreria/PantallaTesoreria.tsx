@@ -41,12 +41,11 @@ import { ConDocumento, DocumentoDerecha } from '../piezas/Documento'
 import { Lineas, type Columna } from '../piezas/Lineas'
 import { CasillaImporte } from '../piezas/Importe'
 import { formatoImporte, leerImporte } from '../piezas/logica'
-import { apartarNoCobrados, leerBancos, saldoALaFecha, textoApartados, urlDelJustificante } from '../bancos/servicio'
+import { apartarNoCobrados, saldoALaFecha, textoApartados, urlDelJustificante } from '../bancos/servicio'
 import { deshacerCasado, textoDeshecho } from '../bancos/conciliar'
-import { mesDeAlLado, textoMes } from '../bancos/mes'
 import { enPalabras } from '../bancos/seleccion'
 import {
-  asientosDeTesoreria, contabilizar, esDeHosteleria, facturaDelMovimiento, leerFicheroDelExtracto, modificar, otroMovimiento, sePuedeModificar,
+  contabilizar, ejerciciosDe, esDeHosteleria, leerEjercicio, facturaDelMovimiento, leerFicheroDelExtracto, modificar, otroMovimiento, sePuedeModificar,
   type AsientoDeTesoreria, type FacturaDelMovimiento,
 } from './servicio'
 import { facturaDeLaPropuesta, ingresoYPago, queHaceIntro, siguienteSinContabilizar, subcuentaDeFila, totalesDe, textoDelPie, type LineaEd } from './tesoreria'
@@ -95,16 +94,15 @@ export default function PantallaTesoreria() {
   const bancos = useMemo(() => datos?.bancos ?? [], [datos])
   const banco: BancoVista | null = bancos.find((b) => b.id === query.get('banco')) ?? bancoInicial(bancos, datos?.dudas ?? {})
   const meses = useMemo(() => (datos ? mesesElegibles(datos.primerMovimiento, hoy) : []), [datos, hoy])
-  const pedido = query.get('mes')
-  const mes = datos && banco ? (pedido && meses.includes(pedido) ? pedido : mesInicial(meses, banco, hoy)) : null
+  // El periodo es el EJERCICIO, como la maqueta 21 y ERP10 (respuesta X28 · 2): el de la dirección (?ejercicio=), o el
+  // del último extracto del banco.
+  const ejercicios = useMemo(() => ejerciciosDe(meses), [meses])
+  const pedido = query.get('ejercicio')
+  const anio = datos && banco ? (pedido && ejercicios.includes(pedido) ? pedido : (meses.length ? mesInicial(meses, banco, hoy) : hoy).slice(0, 4)) : null
   const cuenta572 = banco?.cuenta ?? null
 
-  const leida = useLeer(datos && banco && mes ? async () => {
-    const l = await leerBancos(accountId, companyId, datos, banco, mes, hoy)
-    const asientos = await asientosDeTesoreria(companyId, l.movs.map((m) => m.casado?.asientoId).filter((x): x is string => !!x), banco.cuenta)
-    return { ...l, asientos }
-  } : null, `${companyId}:${banco?.id}:${mes}:${vuelta}`)
-  const lectura = useUltimo(leida.datos, `${companyId}:${banco?.id}:${mes}`)
+  const leida = useLeer(datos && banco && anio ? () => leerEjercicio(accountId, companyId, datos, banco, anio, hoy) : null, `${companyId}:${banco?.id}:${anio}:${vuelta}`)
+  const lectura = useUltimo(leida.datos, `${companyId}:${banco?.id}:${anio}`)
   const movs = useMemo(() => lectura?.movs ?? [], [lectura])
   const asientos: Record<string, AsientoDeTesoreria> = lectura?.asientos ?? {}
   const m: MovimientoBanco | null = nuevo ? null : movs[sel] ?? null
@@ -142,7 +140,7 @@ export default function PantallaTesoreria() {
   const enAmbar = !nuevo && !!m && !asientoSel && ed.cuenta !== null && ed.cuenta === original.cuenta && subcuentaDeFila(m, cuenta572, null).propuesta
 
   // El saldo del banco a la fecha (el del diario al final del periodo) y el de la subcuenta de la línea a su fecha.
-  const saldoBanco = lectura?.cuadre?.libroCent ?? null
+  const saldoBanco = lectura?.saldoCent ?? null
   const fechaLinea = nuevo ? nuevoFecha : m?.fecha ?? null
   const saldoLinea = useLeer(ed.cuenta && fechaLinea ? () => saldoALaFecha(companyId, ed.cuenta!, fechaLinea) : null, `${companyId}:${ed.cuenta}:${fechaLinea}:${vuelta}:saldo`).datos
 
@@ -154,13 +152,13 @@ export default function PantallaTesoreria() {
   // Al abrir el banco y el periodo, el primero sin contabilizar.
   const abierto = useRef('')
   useEffect(() => {
-    const k = `${banco?.id}:${mes}`
+    const k = `${banco?.id}:${anio}`
     if (!lectura || abierto.current === k) return
     abierto.current = k
     const i = siguienteSinContabilizar(movs, -1)
     setSel(i >= 0 ? i : movs.length ? 0 : -1)
     enfocar('#ts-ed-subcuenta')
-  }, [lectura, movs, banco?.id, mes])
+  }, [lectura, movs, banco?.id, anio])
 
   const recargar = () => { setVuelta((v) => v + 1); refrescarCuentasMenu() }
   const hacer = async (que: () => Promise<string>, despues?: () => void) => {
@@ -218,14 +216,18 @@ export default function PantallaTesoreria() {
     }
   }
 
-  const elegirBanco = (id: string) => { const p = new URLSearchParams(query); p.set('banco', id); p.delete('mes'); setQuery(p, { replace: true }); abierto.current = ''; setAviso(null); setNuevo(false) }
-  const elegirMes = (x: string) => { const p = new URLSearchParams(query); p.set('mes', x); if (banco) p.set('banco', banco.id); setQuery(p, { replace: true }); abierto.current = ''; setAviso(null); setNuevo(false) }
+  const elegirBanco = (id: string) => { const p = new URLSearchParams(query); p.set('banco', id); p.delete('ejercicio'); setQuery(p, { replace: true }); abierto.current = ''; setAviso(null); setNuevo(false) }
+  const elegirEjercicio = (x: string) => { const p = new URLSearchParams(query); p.set('ejercicio', x); if (banco) p.set('banco', banco.id); setQuery(p, { replace: true }); abierto.current = ''; setAviso(null); setNuevo(false) }
   useEffect(() => {
     const f = (e: globalThis.KeyboardEvent) => {
       if (!seVe() || e.defaultPrevented) return
       const en = (e.target as HTMLElement | null)?.closest('input, textarea, select')
-      if ((e.key === 'PageUp' || e.key === 'PageDown') && !e.ctrlKey && !e.altKey && !e.metaKey && mes && !en) {
-        e.preventDefault(); const otro = mesDeAlLado(meses, mes, e.key); if (otro !== mes) elegirMes(otro); return
+      // Re Pág y Av Pág: el ejercicio de antes y el de después (fuera de una casilla).
+      if ((e.key === 'PageUp' || e.key === 'PageDown') && !e.ctrlKey && !e.altKey && !e.metaKey && anio && !en) {
+        e.preventDefault()
+        const i = ejercicios.indexOf(anio) + (e.key === 'PageUp' ? 1 : -1)
+        if (i >= 0 && i < ejercicios.length) elegirEjercicio(ejercicios[i])
+        return
       }
       if (e.key !== 'Escape') return
       if ((e.target as HTMLElement | null)?.closest('[role="dialog"]')) return
@@ -348,8 +350,8 @@ export default function PantallaTesoreria() {
         <Bloque titulo="Banco" className="ts-banco">
           <div className="ts-fila-banco">
             <Casilla rotulo="Periodo" htmlFor="ts-periodo">
-              <select id="ts-periodo" value={mes ?? ''} onChange={(e) => elegirMes(e.target.value)} data-prueba="periodo">
-                {meses.map((x) => <option key={x} value={x} title={textoMes(x)}>{`${x.slice(5, 7)}/${x.slice(0, 4)}`}</option>)}
+              <select id="ts-periodo" value={anio ?? ''} onChange={(e) => elegirEjercicio(e.target.value)} data-prueba="periodo" title="Re Pág y Av Pág cambian de ejercicio">
+                {(anio && !ejercicios.includes(anio) ? [anio, ...ejercicios] : ejercicios).map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
             </Casilla>
             <Casilla rotulo="Subcuenta" htmlFor="ts-banco" mide="subcuenta">
@@ -372,7 +374,7 @@ export default function PantallaTesoreria() {
           {cargando ? <p className="ts-cargando" aria-busy="true">Leyendo los movimientos…</p> : (
             <Lineas etiqueta="Movimientos" columnas={columnas} filas={movs} celda={celda} elegida={nuevo ? null : sel} alElegir={elegir}
               claseFila={(x) => ({ 'data-movimiento': x.id, 'data-ambar': subcuentaDeFila(x, cuenta572, null).propuesta && x.estado !== 'casado' ? 'si' : undefined, 'data-contabilizado': x.estado === 'casado' ? 'si' : undefined })}
-              vacia={lectura?.cuadre?.frase ?? 'No hay movimientos en este periodo.'}
+              vacia={`No hay movimientos del ${anio ?? 'ejercicio'}: lee el extracto con la carpeta de arriba.`}
               edicion={edicion}
               otra={() => { setNuevo(true); setEd(lineaVacia()); setNuevoFecha(hoy); enfocar('#ts-ed-fecha') }}
               otraTexto={{ etiqueta: 'Otro movimiento', texto: `otro movimiento · ${textoDelPie(t)}` }}

@@ -140,10 +140,24 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
 /** Los movimientos de un banco en un mes, con su casado vivo o su propuesta. */
 export async function leerMovimientos(accountId: string, bancoId: string, mes: string): Promise<MovimientoBanco[]> {
   const { desde, hasta } = limitesMes(mes)
-  const filas = await leer(tabla('bank_movement')
-    .select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept, status))')
-    .eq('account_id', accountId).eq('treasury_account_id', bancoId).gte('op_date', desde).lte('op_date', hasta)
-    .order('op_date', { ascending: false }).order('created_at', { ascending: false }), 'los movimientos')
+  return leerMovimientosEntre(accountId, bancoId, desde, hasta)
+}
+
+/**
+ * X28 · Los movimientos de un banco entre dos fechas (Tesorería lee el ejercicio entero, como ERP10), de mil en mil
+ * para no quedarse en el tope de una sola lectura. `subiendo`: del más antiguo al más nuevo, como la rejilla de ERP10.
+ */
+export async function leerMovimientosEntre(accountId: string, bancoId: string, desde: string, hasta: string, subiendo = false): Promise<MovimientoBanco[]> {
+  const PAGINA = 1000
+  const filas: Fila[] = []
+  for (let i = 0; ; i += PAGINA) {
+    const pagina = await leer(tabla('bank_movement')
+      .select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept, status))')
+      .eq('account_id', accountId).eq('treasury_account_id', bancoId).gte('op_date', desde).lte('op_date', hasta)
+      .order('op_date', { ascending: subiendo }).order('created_at', { ascending: subiendo }).order('id').range(i, i + PAGINA - 1), 'los movimientos')
+    filas.push(...pagina)
+    if (pagina.length < PAGINA) break
+  }
   return filas.map((m) => {
     const vivo = ((m.bank_match as Fila[] | null) ?? []).find((x) => x.status === 'vivo') ?? null
     const tarjeta = m.bank_card as Fila | null

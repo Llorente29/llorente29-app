@@ -2,6 +2,8 @@
 //
 // X28 · Lo que lee y escribe la pantalla de Tesorería. Lo de los movimientos, el cuadre y conciliar es lo de Bancos
 // del núcleo (nucleo/bancos: leerBancos, confirmar, deshacer), sin un cambio. Lo nuevo:
+//   · el EJERCICIO entero, como la maqueta 21 y ERP10 (respuesta X28 · 2): los movimientos del año, del más antiguo
+//     al más nuevo, y el saldo del banco en el diario a la fecha (el último día del año, o hoy si es el de hoy);
 //   · la empresa es de hostelería (company.sector): solo entonces salen marca y plataforma;
 //   · de lo contabilizado, su asiento: número, concepto, subcuenta y analítica (journal_entry y journal_line, de esa
 //     empresa: regla 9);
@@ -14,7 +16,9 @@
 
 import { tabla, mensaje, rpc } from '@/modules/conta/services/bd'
 import { abrirExtracto, bancos as nucleo, emparejar, leerYCuadrar } from '@/modules/conta/services/bancosService'
-import { pasarAgente, type BancoVista } from '@/modules/conta/services/bancosPantallas'
+import { leerMovimientosEntre, pasarAgente, type BancoVista, type DatosBancos } from '@/modules/conta/services/bancosPantallas'
+import type { MovimientoBanco } from '@/modules/conta/lib/bancosVista'
+import { saldosDelCuadre } from '../bancos/servicio'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { pendienteAntes } from './tesoreria'
@@ -40,13 +44,20 @@ export interface AsientoDeTesoreria {
 export async function asientosDeTesoreria(companyId: string, ids: readonly string[], cuenta572: string | null): Promise<Record<string, AsientoDeTesoreria>> {
   const unicos = [...new Set(ids)]
   if (unicos.length === 0) return {}
-  const [e, l] = await Promise.all([
-    tabla('journal_entry').select('id, number, series, concept').eq('company_id', companyId).in('id', unicos),
+  // De 150 en 150: un ejercicio entero son miles, y la lista va en la dirección de la lectura.
+  const trozos: string[][] = []
+  for (let i = 0; i < unicos.length; i += 150) trozos.push(unicos.slice(i, i + 150))
+  const leidos = await Promise.all(trozos.map((t) => Promise.all([
+    tabla('journal_entry').select('id, number, series, concept').eq('company_id', companyId).in('id', t),
     tabla('journal_line').select('entry_id, position, concept, location_id, is_common, brand_id, channel_id, company_account:company_account_id(code)')
-      .eq('company_id', companyId).in('entry_id', unicos).order('position'),
-  ])
-  if (e.error) throw new Error(mensaje('No se han podido leer los asientos', e.error))
-  if (l.error) throw new Error(mensaje('No se han podido leer los asientos', l.error))
+      .eq('company_id', companyId).in('entry_id', t).order('position'),
+  ])))
+  const e = { data: [] as unknown[] }, l = { data: [] as unknown[] }
+  for (const [a, b] of leidos) {
+    if (a.error) throw new Error(mensaje('No se han podido leer los asientos', a.error))
+    if (b.error) throw new Error(mensaje('No se han podido leer los asientos', b.error))
+    e.data.push(...(a.data ?? [])); l.data.push(...(b.data ?? []))
+  }
   const out: Record<string, AsientoDeTesoreria> = {}
   for (const x of (e.data ?? []) as Fila[]) {
     out[String(x.id)] = { id: String(x.id), numero: x.number === null ? null : Number(x.number), serie: x.series === null ? null : Number(x.series),
@@ -62,6 +73,22 @@ export async function asientosDeTesoreria(companyId: string, ids: readonly strin
   }
   return out
 }
+
+export interface LecturaEjercicio { movs: MovimientoBanco[]; asientos: Record<string, AsientoDeTesoreria>; saldoCent: number | null; saldoA: string }
+
+/** El ejercicio de un banco: sus movimientos (del más antiguo al más nuevo), sus asientos y el saldo del banco en el diario. */
+export async function leerEjercicio(accountId: string, companyId: string, datos: DatosBancos, banco: BancoVista, anio: string, hoy: string): Promise<LecturaEjercicio> {
+  const mesCorte = anio < hoy.slice(0, 4) ? `${anio}-12` : anio > hoy.slice(0, 4) ? `${anio}-01` : hoy.slice(0, 7)
+  const [movs, saldos] = await Promise.all([
+    leerMovimientosEntre(accountId, banco.id, `${anio}-01-01`, `${anio}-12-31`, true),
+    saldosDelCuadre(companyId, datos, banco, mesCorte, hoy),
+  ])
+  const asientos = await asientosDeTesoreria(companyId, movs.map((m) => m.casado?.asientoId).filter((x): x is string => !!x), banco.cuenta)
+  return { movs, asientos, saldoCent: saldos.libroCent, saldoA: anio < hoy.slice(0, 4) ? `${anio}-12-31` : hoy }
+}
+
+/** Los ejercicios que se pueden elegir: los años de los meses con movimientos, el más nuevo primero. */
+export const ejerciciosDe = (meses: readonly string[]): string[] => [...new Set(meses.map((m) => m.slice(0, 4)))].sort().reverse()
 
 /** Si un movimiento contabilizado se puede cambiar (y, si no, por qué); y si se puede cambiar su subcuenta. */
 export async function sePuedeModificar(asientoId: string): Promise<{ puede: boolean; porque: string | null; subcuenta: boolean; subcuentaPorque: string | null }> {

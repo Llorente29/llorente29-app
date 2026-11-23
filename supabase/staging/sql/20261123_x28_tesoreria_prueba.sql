@@ -2,9 +2,10 @@
 --
 -- SOLO STAGING. Prueba del X28 (20261123T0800_x28_tesoreria_modificar y 20261123T0801_x28_banco_con_marca), que el
 -- ensayo de staging pone delante en la misma sesión. Todo en una transacción con ROLLBACK: staging no cambia.
--- Lo que cambia: public._bank_casar_nucleo (un trozo: marca y plataforma en las líneas). Lo que añade:
+-- Lo que cambia: public._bank_casar_nucleo (un trozo: marca y plataforma en las líneas) y public.conta_banco_a_mano (la
+-- misma firma, sin lógica propia: llama a la nueva). Lo que añade:
 -- conta_tesoreria_a_mano (el «a mano» con local, marca y plataforma), conta_tesoreria_se_puede_modificar,
--- conta_tesoreria_modificar y conta_tesoreria_modificada. conta_banco_a_mano no cambia.
+-- conta_tesoreria_modificar y conta_tesoreria_modificada.
 --
 -- En la gestoría de ejemplo del núcleo (semillas K02, K04 y K05), con su «Banco principal» (57200001), como el usuario
 -- del núcleo (rol authenticated). La empresa se pone de hostelería solo dentro de esta transacción. Datos inventados.
@@ -18,7 +19,7 @@
 --   5. Lo que no deja: marca en una empresa que no es de hostelería; con el 4T presentado, modificar (con su frase).
 --   6. Deshacer el del punto 3: el movimiento vuelve a estar sin contabilizar.
 --   7. Regla 31: los movimientos que ya estaban conciliados en toda la base, iguales antes y después (la misma vara).
---   8. La vuelta atrás: el casado como antes, conta_banco_a_mano intacta y lo nuevo, quitado.
+--   8. La vuelta atrás: el casado y conta_banco_a_mano como antes, y lo nuevo, quitado.
 
 begin;
 do $$ begin
@@ -101,7 +102,8 @@ begin
   r := public.conta_tesoreria_a_mano('c0e20000-0000-4000-8000-0000000000b0', date '2026-11-05', '62900000', 'Pago a mano X28', -10, 'Prueba X28',
                                  null, 'c0eb0000-0000-4000-8000-0000000000c2', null);
   insert into _x28 values ('e_mano', r->>'asiento_id');
-  r := public.conta_tesoreria_a_mano('c0e20000-0000-4000-8000-0000000000b0', date '2026-11-05', '62900000', 'Pago a mano X28 sin marca', -11, 'Prueba X28');
+  -- El «a mano» de siempre (emitidas y bancos): sin lógica propia, pasa por la nueva.
+  r := public.conta_banco_a_mano('c0e20000-0000-4000-8000-0000000000b0', date '2026-11-05', '62900000', 'Pago a mano X28 sin marca', -11, 'Prueba X28');
   insert into _x28 values ('e_mano2', r->>'asiento_id');
 end $$;
 reset role;
@@ -131,7 +133,11 @@ begin
      or (select count(*) from public.journal_line where entry_id = pg_temp.p('e_mano2')::uuid and brand_id is null and channel_id is null and is_common) <> 2 then
     raise exception 'PRUEBA X28 · 3: el escrito a mano no lleva su marca (o el de sin marca, sí).';
   end if;
-  raise notice 'PRUEBA X28 · 3: el gasto, %; el escrito a mano con la marca Dos en sus dos líneas, y el de sin marca, como hoy.', l;
+  if strpos(pg_get_functiondef('public.conta_banco_a_mano(uuid,date,text,text,numeric,text)'::regprocedure), 'conta_tesoreria_a_mano') = 0
+     or strpos(pg_get_functiondef('public.conta_banco_a_mano(uuid,date,text,text,numeric,text)'::regprocedure), '_journal_entry_proponer') > 0 then
+    raise exception 'PRUEBA X28 · 3: conta_banco_a_mano tiene lógica propia: debería llamar a conta_tesoreria_a_mano y nada más.';
+  end if;
+  raise notice 'PRUEBA X28 · 3: el gasto, %; el escrito a mano con la marca Dos en sus dos líneas, y el de siempre (conta_banco_a_mano, que llama a la nueva), sin marca, como hoy.', l;
 end $$;
 
 -- 4 · Modificar: el mismo número --------------------------------------------------------------------------------------
@@ -249,11 +255,12 @@ do $$ begin
   if to_regprocedure('public.conta_tesoreria_modificar(uuid,jsonb,text)') is not null or to_regclass('public.conta_tesoreria_modificada') is not null
      or to_regprocedure('public.conta_tesoreria_a_mano(uuid,date,text,text,numeric,text,uuid,uuid,uuid)') is not null
      or to_regprocedure('public.conta_banco_a_mano(uuid,date,text,text,numeric,text)') is null
+     or strpos(pg_get_functiondef('public.conta_banco_a_mano(uuid,date,text,text,numeric,text)'::regprocedure), 'conta_tesoreria_a_mano') > 0
      or strpos(pg_get_functiondef('public._bank_casar_nucleo(uuid,jsonb,text,text,jsonb,text,uuid)'::regprocedure), 'X28 ·') > 0 then
     raise exception 'PRUEBA X28 · 8: la vuelta atrás no deja las dos funciones como antes.';
   end if;
   if public._conta_cadena_rota('c0e20000-0000-4000-8000-0000000000e3') <> 0 then raise exception 'PRUEBA X28 · 8: la cadena no cuadra después.'; end if;
-  raise notice 'PRUEBA X28 · 8: la vuelta atrás deja el casado como antes, el «a mano» de siempre intacto, y quita lo nuevo; la cadena, íntegra.';
+  raise notice 'PRUEBA X28 · 8: la vuelta atrás deja el casado y el «a mano» de siempre como antes, y quita lo nuevo; la cadena, íntegra.';
   raise notice 'PRUEBA X28: 8 de 8 bien.';
 end $$;
 

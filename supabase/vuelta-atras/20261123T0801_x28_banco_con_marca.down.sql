@@ -1,6 +1,7 @@
 -- supabase/vuelta-atras/20261123T0801_x28_banco_con_marca.down.sql
 --
--- X28 · Vuelta atrás de la 0801: _bank_casar_nucleo sin el trozo de la marca y la plataforma (el trozo al revés).
+-- X28 · Vuelta atrás de la 0801: _bank_casar_nucleo sin el trozo de la marca y la plataforma (el trozo al revés), y
+-- conta_banco_a_mano restaurada de su respaldo (la misma firma; va antes de la vuelta atrás de la 0800, que quita la nueva).
 -- Los asientos ya escritos con marca o plataforma se quedan como están.
 
 do $do$
@@ -27,3 +28,8 @@ begin
   end if;
 end $do$;
 revoke all on function public._bank_casar_nucleo(uuid, jsonb, text, text, jsonb, text, uuid) from public, anon, authenticated, service_role;
+
+-- conta_banco_a_mano, la de antes: del respaldo que guardó la 0801 (_restaurar_funcion comprueba la huella).
+select public._restaurar_funcion('public.conta_banco_a_mano(uuid,date,text,text,numeric,text)', '20261123T0801_x28_banco_con_marca');
+comment on function public.conta_banco_a_mano(uuid, date, text, text, numeric, text) is
+  'E05: «Escribir uno a mano» en Bancos: el asiento de tesorería (serie 3, la 572 del banco contra la cuenta) de un movimiento que no ha venido en el extracto, validado al momento. Cuando llega, el motor lo enlaza (asiento sin movimiento).';
