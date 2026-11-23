@@ -33,7 +33,7 @@
 // y «Es uno que ya tengo» (el foco al proveedor, con su lista abierta). Hasta
 // que tenga proveedor no se valida, y si se intenta, lo dice.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as KE } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as KE } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaDocumentos, rutaFichaProveedor, rutaMayor, rutaRecibidaAMano, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -65,8 +65,8 @@ import { CasillaFecha, Duda, EstadoFicha, NombreDeCuenta } from '../ficha/piezas
 import { Barra, Bloque, BotonMas, Casilla as KCasilla, OtrosDatos, Ventana } from '../piezas/Ventana'
 import { CasillaLupa } from '../piezas/Lupa'
 import { CasillaImporte } from '../piezas/Importe'
-import { MOTIVO_IMPORTE_DUDOSO, importeDudoso, leerImporte } from '../piezas/logica'
-import { aVisual, cambioDeLinea, conIvaDeducible, cuadriculaIva, filasDePago, otraLinea, otroPago, rotuloDeLaSuma, sumaDeContrapartidas } from './fichaErp10'
+import { MOTIVO_IMPORTE_DUDOSO, importeDudoso, leerImporte, seDesplaza } from '../piezas/logica'
+import { aVisual, cambioDeLinea, conIvaDeducible, cuadriculaIva, filasDePago, letrasDeLaColumna, otraLinea, otroPago, pagoPorHacer, rotuloDeLaSuma, sumaDeContrapartidas, vistaAnalitica } from './fichaErp10'
 import { apuntarUnPago, borrarPago, cambiarPago, leerPagos, sePuedeCambiarPago } from './pagosServicio'
 import { plataformasDeLaCuenta } from '@/modules/conta/services/asientoGeneralService'
 import './fichaErp10.css'
@@ -241,14 +241,15 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const [gastoFichaPuesto, setGastoFichaPuesto] = useState<string | null>(null)
   const mayor = useUltimo(useLeer(accountId && empresa && delProv?.subcuenta ? () => mayorDelProveedor(accountId, empresa, delProv.subcuenta!.id, hoy) : null, `${accountId}:${empresa}:${delProv?.subcuenta?.id}:mayor:${vuelta}`).datos, `${id}:${provId}`)
   const aprendido = useUltimo(useLeer(empresa && provId && !aMano ? () => gastoAprendido(empresa, provId) : null, `${empresa}:${provId}:${invoiceId}:aprendido:${vuelta}`).datos, `${id}:${provId}`)
-  const sinPropuesta = aMano || propuesta === null
   // R14 · Lo que hizo Sumied con el proveedor al leerla, y la cuenta propuesta sin historial (en ámbar, con su porqué).
   // La clave cambia cuando llega lo aprendido: useLeer solo vuelve a leer si cambia la clave, y al pintarse la
   // primera vez lo aprendido aún no está (sin esto, la propuesta no se pedía nunca: e2e 1670).
   const solo = useLeer(id && !aMano ? () => proveedorSolo(id) : null, `${id}:solo:${vuelta}`).datos ?? null
   const propuestoGasto = useLeer(empresa && provId && !aMano && aprendido && !aprendido.cuenta ? () => leerGastoPropuesto(empresa, provId, id ?? null) : null, `${empresa}:${provId}:${invoiceId}:propuesto:${aprendido ? aprendido.cuenta ?? 'sin-historia' : 'esperando'}:${vuelta}`).datos ?? null
   // Una vez por empresa: la subcuenta del proveedor sale de delProveedor (ya leído), no de volver a leer el contexto entero.
-  const aManoCuentas = useLeer(accountId && empresa && sinPropuesta ? () => cuentasAMano(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-a-mano`).datos ?? null
+  // K11b · 4 · Las cuentas de reserva (IVA y retención de la empresa), siempre: sin la propuesta (aún no ha llegado, o la
+  // factura ya tiene su asiento propuesto guardado y no se pide) el asiento se forma igual con lo escrito.
+  const aManoCuentas = useLeer(accountId && empresa ? () => cuentasAMano(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-a-mano`).datos ?? null
 
   // ── K06 · Cómo se paga: la cuenta del pago, propuesta (la 430 de su liquidación, la del último pago) o vacía ──
   const cuentasPago = useUltimo(useLeer(accountId && empresa ? () => cuentasDePago(accountId, empresa) : null, `${accountId}:${empresa}:cuentas-pago`).datos, empresa ?? '')
@@ -695,6 +696,12 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
 
   // ── El teclado: Intro (decisiones 11 y 12), las flechas de la cola y Esc ──
   const raiz = useRef<HTMLDivElement>(null)
+  // K11b · 4 · Intro en una lupa elige y pasa a la casilla siguiente (como ERP10), en el orden de la pantalla.
+  const pasarDe = (id: string) => () => {
+    const lista = casillasDe(raiz.current)
+    const s = lista[lista.findIndex((x) => x.id === id) + 1]
+    if (s) { s.focus(); if (s instanceof HTMLInputElement) s.select() }
+  }
   const alPulsar = (e: KE<HTMLDivElement>) => {
     if (e.defaultPrevented || e.nativeEvent.isComposing) return
     const t = e.target as HTMLElement
@@ -823,11 +830,27 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const rotuloSuma = rotuloDeLaSuma(suma, cifra)
   const pagoProp = modo === 'contabilizada' ? null : { cuenta: pagoCuenta, fecha: pagoFecha, concepto: `PAGO ${b.numero || 'FACTURA'} ${prov?.nombre ?? ''}`.trim() }
   const pagos = filasDePago({ total: importePago, pagos: pagosHechos, propuesta: pagoProp, cifra })
+  // K11b · 4 · El pago que se apunta al validar, en la visualización (como la maqueta 17a): al debe el proveedor, al haber su cuenta.
+  const pagoSinHacer = !pagosHechos.length && modo !== 'contabilizada' ? pagos.filas.find((x) => x.id === null) ?? null : null
+  const visualPago = pagoSinHacer ? pagoPorHacer({ proveedor: cuentasAsiento?.proveedor ?? null, cuenta: pagoSinHacer.cuenta,
+    nombreCuenta: cuentasPago?.nombres.get(pagoSinHacer.cuenta.trim()) ?? '', importe: pagoSinHacer.importe }) : []
   const enEdicion = pagoEdit?.de === invoiceId ? pagoEdit : null
   const registrosPago = (cuentasPago?.lista ?? []).map((c) => ({ id: c.codigo, codigo: c.codigo, descripcion: c.nombre }))
-  const marcasLupa = marcas.map((m) => ({ id: m.id, descripcion: m.nombre }))
+  const marcasLupa = marcas.map((m) => ({ id: m.id, codigo: m.codigo, descripcion: m.nombre }))
   const plataformasLupa = plataformas ?? []
   const localesLupa = locales.map((l) => ({ id: l.id, codigo: l.nombre, descripcion: l.nombre }))
+  // K11b · 4 · El local de cada línea, con su lupa: «Común» (o «Sin locales», en gris) y los locales de la cuenta.
+  const comunLocal = { id: aMano && ejeLocal ? LOCAL_COMUN : '', codigo: ejeLocal ? 'Común' : 'Sin locales', descripcion: ejeLocal ? 'Común a todos los locales' : 'Sin locales' }
+  const registrosLocal = [comunLocal, ...localesLupa]
+  const tituloLocal = (v: string | null | undefined) => {
+    const r = localesLupa.find((l) => l.id === v)
+    if (r) return r.id === localPropuesto ? `${r.descripcion} (su ficha)` : r.descripcion
+    return !ejeLocal ? 'Sin locales' : v === LOCAL_COMUN || (!aMano && !v) ? 'Común a todos los locales' : 'Elige el local (F4 abre la lista)'
+  }
+  // Cada columna de la analítica mide lo que pide su nombre más largo (en letras, con su tope; si no cabe, su código).
+  const anchos = {
+    '--kr-local': letrasDeLaColumna(registrosLocal), '--kr-marca': letrasDeLaColumna(marcasLupa), '--kr-plat': letrasDeLaColumna(plataformasLupa),
+  } as CSSProperties
   const ejercicio = (b.fecha || hoy).slice(0, 4)
   const comprobacion = (id: string) => comprobaciones.find((c) => c.id === id && c.tono !== 'bien') ?? null
   /** El ámbar de una comprobación: su motivo en el `title` (sin frases) y `data-comprobacion`; si no, de dónde sale el dato. */
@@ -1010,9 +1033,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 <Bloque titulo="I.V.A. · Retención · Total factura" className="kr-iva">
                   <div className="kr-iva-rejilla">
                     <div className="kr-iva-tipos">
-                      {cuadriculaIva(b.iva.map((l, i) => ({ l, i }))).map((fila, f) => (
+                      {cuadriculaIva(b.iva.map((l, i) => ({ l, i })), !soloLectura).map((fila, f) => (
                         <div className="kr-iva-fila" key={f}>
-                          {fila.map((x, k) => x ? (
+                          {fila.map((x, k) => x && x !== 'mas' ? (
                             <div className="kr-iva-tipo" key={k}>
                               <KCasilla rotulo={f === 0 ? 'Base' : ''} htmlFor={`kr-base-${x.i}`}>
                                 <input id={`kr-base-${x.i}`} className="kp-num" data-casilla aria-label={`Base ${x.i + 1}`} value={x.l.base} onChange={(e) => ponerIva(x.i, { base: e.target.value })}
@@ -1029,16 +1052,14 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                                 {b.iva.length > 1 && <button type="button" className="kr-quitar" aria-label={`Quitar el tipo ${x.l.tipo} %`} tabIndex={-1} onClick={() => ed.poner('iva', b.iva.filter((_, j) => j !== x.i))}>×</button>}
                               </KCasilla>
                             </div>
-                          ) : (
+                          ) : x === 'mas' ? (
                             <div className="kr-iva-tipo kr-iva-vacio" key={k}>
-                              {k === 0 || fila[0] ? (
-                                <button type="button" className="kr-iva-otro" tabIndex={-1} title="Otro tipo de IVA"
-                                  onClick={() => ed.poner('iva', [...b.iva, { base: '', tipo: String(tiposIva.find((t) => !b.iva.some((l) => l.tipo === String(t))) ?? 21), cuota: '' }])}>
-                                  <span /><span /><span />
-                                </button>
-                              ) : <span />}
+                              <button type="button" className="kr-iva-otro" tabIndex={-1} title="Otro tipo de IVA" aria-label="Otro tipo de IVA"
+                                onClick={() => ed.poner('iva', [...b.iva, { base: '', tipo: String(tiposIva.find((t) => !b.iva.some((l) => l.tipo === String(t))) ?? 21), cuota: '' }])}>
+                                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M10 5.5v9M5.5 10h9" stroke="currentColor" strokeWidth="1.6" /></svg>
+                              </button>
                             </div>
-                          ))}
+                          ) : <div className="kr-iva-tipo kr-iva-vacio" key={k} />)}
                         </div>
                       ))}
                     </div>
@@ -1072,13 +1093,15 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
 
                 {/* ── Contrapartida/s: una fila por línea (pieza 12) ── */}
                 <Bloque titulo="Contrapartida/s" className="kr-contra" >
-                  <div className="kr-contra-rejilla" data-hosteleria={hosteleria ? 'si' : undefined} role="table" aria-label="Las contrapartidas">
+                  <div className="kr-contra-rejilla" data-hosteleria={hosteleria ? 'si' : undefined} data-desplaza={seDesplaza(b.gastos.length) ? 'si' : undefined}
+                    role="table" aria-label="Las contrapartidas" style={anchos}>
                     <div className="kr-contra-cabeza" role="row">
-                      <span role="columnheader">Subcuenta gasto</span><span role="columnheader" />
-                      <span role="columnheader">Concepto de gastos</span><span role="columnheader">Local</span>
-                      {hosteleria && <><span role="columnheader">Marca</span><span role="columnheader">Plataforma</span></>}
+                      <span role="columnheader" title="Subcuenta gasto">Subcuenta gasto</span><span role="columnheader" />
+                      <span role="columnheader" title="Concepto de gastos">Concepto de gastos</span><span role="columnheader" title="Local">Local</span>
+                      {hosteleria && <><span role="columnheader" title="Marca">Marca</span><span role="columnheader" title="Plataforma">Plataforma</span></>}
                       <span role="columnheader" className="kp-num">Importe</span><span role="columnheader" />
                     </div>
+                    <div className="kr-contra-lineas" role="rowgroup">
                     {b.gastos.map((g, i) => {
                       const d = datoDe(i)
                       return (
@@ -1097,27 +1120,21 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                               onBlur={(e) => { const v = e.currentTarget.value.trim() || null; if (v !== (d?.concepto ?? null)) ponerDatoLinea(i, { concepto: v }) }} />
                           </span>
                           <span className="kr-celda">
-                            <select aria-label={i === 0 ? 'Local' : `Local ${i + 1}`} data-casilla={ejeLocal ? '' : undefined} disabled={!ejeLocal} value={g.local ?? ''} onChange={(e) => ponerGasto(i, { local: e.target.value })}
-                              title={localesLupa.find((l) => l.id === g.local)?.descripcion ?? (g.local === LOCAL_COMUN || !g.local ? 'Común a todos los locales' : undefined)}>
-                              {aMano && ejeLocal && <option value="">Elige</option>}
-                              <option value={aMano && ejeLocal ? LOCAL_COMUN : ''}>{ejeLocal ? 'Común' : 'Sin locales'}</option>
-                              {localesLupa.map((l) => <option key={l.id} value={l.id}>{l.descripcion}{l.id === localPropuesto ? ' (su ficha)' : ''}</option>)}
-                            </select>
+                            {/* K11b · 4 · Local, marca y plataforma con su lupa (pieza 5), con el nombre que cabe y entero en el `title`. */}
+                            <CasillaLupa id={`kr-local-${i}`} etiqueta={i === 0 ? 'Local' : `Local ${i + 1}`} registros={registrosLocal} valor={ejeLocal ? g.local ?? '' : ''}
+                              gris={!ejeLocal} vista={vistaAnalitica} datos={ejeLocal ? { 'data-casilla': '' } : undefined}
+                              titulo={tituloLocal(g.local)} poner={(r) => ponerGasto(i, { local: r ? r.id : '' })} alIntro={pasarDe(`kr-local-${i}`)} />
                           </span>
                           {hosteleria && <>
                             <span className="kr-celda">
-                              <select id={i === 0 ? 'kf-marca' : undefined} aria-label={i === 0 ? 'Marca' : `Marca ${i + 1}`} value={marcaDe(i) ?? ''} disabled={!cabEscribible || guardandoCab || guardandoOtros}
-                                title={marcasLupa.find((m) => m.id === marcaDe(i))?.descripcion ?? 'Sin marca'} onChange={(e) => ponerDatoLinea(i, { marca: e.target.value || null })}>
-                                <option value="">—</option>
-                                {marcasLupa.map((m) => <option key={m.id} value={m.id} title={m.descripcion}>{m.descripcion}</option>)}
-                              </select>
+                              <CasillaLupa id={i === 0 ? 'kf-marca' : `kr-marca-${i}`} etiqueta={i === 0 ? 'Marca' : `Marca ${i + 1}`} registros={marcasLupa} valor={marcaDe(i) ?? null}
+                                gris={!cabEscribible || guardandoCab || guardandoOtros} vista={vistaAnalitica}
+                                titulo={marcasLupa.find((m) => m.id === marcaDe(i))?.descripcion ?? 'Sin marca'} poner={(r) => ponerDatoLinea(i, { marca: r?.id ?? null })} />
                             </span>
                             <span className="kr-celda">
-                              <select aria-label={i === 0 ? 'Plataforma' : `Plataforma ${i + 1}`} value={d?.canalId ?? ''} disabled={!cabEscribible || guardandoOtros}
-                                title={plataformasLupa.find((p) => p.id === d?.canalId)?.descripcion ?? 'Sin plataforma'} onChange={(e) => ponerDatoLinea(i, { plataforma: e.target.value || null })}>
-                                <option value="">—</option>
-                                {plataformasLupa.map((p) => <option key={p.id} value={p.id} title={p.descripcion}>{p.descripcion}</option>)}
-                              </select>
+                              <CasillaLupa id={`kr-plataforma-${i}`} etiqueta={i === 0 ? 'Plataforma' : `Plataforma ${i + 1}`} registros={plataformasLupa} valor={d?.canalId ?? null}
+                                gris={!cabEscribible || guardandoOtros} vista={vistaAnalitica}
+                                titulo={plataformasLupa.find((x) => x.id === d?.canalId)?.descripcion ?? 'Sin plataforma'} poner={(r) => ponerDatoLinea(i, { plataforma: r?.id ?? null })} />
                             </span>
                           </>}
                           <span className="kr-celda">
@@ -1129,6 +1146,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                         </div>
                       )
                     })}
+                    </div>
                   </div>
                   <div className="kr-pie">
                     {!soloLectura && <BotonMas etiqueta="Otra línea" texto={otraLinea(b.gastos.length)} hacer={() => ed.poner('gastos', [...b.gastos, { cuenta: b.gastos[0]?.cuenta ?? '', local: '', importe: '' }])} />}
@@ -1316,6 +1334,19 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                           </tr>
                         ))}
                       </tbody>
+                      {pagoSinHacer && visualPago.length > 0 && (
+                        <tbody data-asiento-pago="por-hacer">
+                          <tr className="kr-visual-cabeza"><th colSpan={2} title="Se apunta al validar la factura">Pago</th><th colSpan={2} className="kp-num">{fechaCorta(pagoSinHacer.fecha)}</th></tr>
+                          {filasVisual(visualPago).map((r, i) => (
+                            <tr key={i}>
+                              <td className="kr-visual-debe">{r.d && <><span className="kp-num">{cifra(r.d.importe)}</span> <span className="kp-visual-cuenta">({r.d.cuenta})</span></>}</td>
+                              <td className="kr-visual-nombre" title={r.d?.nombre}>{r.d?.nombre}</td>
+                              <td className="kr-visual-nombre kr-visual-haber-nombre" title={r.h?.nombre}>{r.h?.nombre}</td>
+                              <td className="kr-visual-haber">{r.h && <><span className="kp-visual-cuenta">({r.h.cuenta})</span> <span className="kp-num">{cifra(r.h.importe)}</span></>}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      )}
                       {pagosHechos.map((p) => (
                         <tbody key={p.id} data-asiento-pago={p.id}>
                           <tr className="kr-visual-cabeza"><th colSpan={2}>Pago{p.numero !== null ? ` · asiento ${p.serie ?? 4} / ${p.numero}` : ''}</th><th colSpan={2} className="kp-num">{fechaCorta(p.fecha)}</th></tr>

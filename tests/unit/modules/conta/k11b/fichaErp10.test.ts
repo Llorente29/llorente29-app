@@ -5,7 +5,7 @@
 // prueba de staging del K10c (121 en 60 + 61).
 
 import { describe, expect, it } from 'vitest'
-import { aVisual, cambioDeLinea, conIvaDeducible, cuadriculaIva, filasDePago, otraLinea, otroPago, rotuloDeLaSuma, sumaDeContrapartidas } from '@/modules/conta/nucleo/recibida/fichaErp10'
+import { aVisual, cambioDeLinea, conIvaDeducible, cuadriculaIva, filasDePago, letrasDeLaColumna, otraLinea, otroPago, pagoPorHacer, rotuloDeLaSuma, sumaDeContrapartidas, vistaAnalitica } from '@/modules/conta/nucleo/recibida/fichaErp10'
 
 const cifra = (n: number) => n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -69,10 +69,12 @@ describe('K11b · la visualización del asiento y la cuadrícula del IVA', () =>
       { importe: 63.6, cuenta: '41000013', nombre: 'Proveedor de Prueba', lado: 'haber' },
     ])
   })
-  it('el IVA en dos filas de dos tipos, como ERP10; con cinco tipos, tres filas', () => {
-    expect(cuadriculaIva(['21'])).toEqual([['21', null], [null, null]])
-    expect(cuadriculaIva(['21', '10', '4'])).toEqual([['21', '10'], ['4', null]])
-    expect(cuadriculaIva(['a', 'b', 'c', 'd', 'e'])).toEqual([['a', 'b'], ['c', 'd'], ['e', null]])
+  it('el IVA, dos tipos por fila y el ⊕ detrás: la segunda fila solo al usar el segundo tipo (Respuesta K11b · 4)', () => {
+    expect(cuadriculaIva(['21'])).toEqual([['21', 'mas']])
+    expect(cuadriculaIva(['21', '10'])).toEqual([['21', '10'], ['mas', null]])
+    expect(cuadriculaIva(['21', '10', '4'])).toEqual([['21', '10'], ['4', 'mas']])
+    expect(cuadriculaIva(['21'], false)).toEqual([['21', null]])
+    expect(cuadriculaIva([], false)).toEqual([[null, null]])
   })
 })
 
@@ -116,5 +118,30 @@ describe('K11b · el cambio de una línea lleva solo lo que cambia (20261123T175
     expect(enLaBase(enLaBase(leida, c1), c2)).toEqual({ concepto: null, marca: 'b1', plataforma: 'd1' })
     // Y al revés: la plataforma primero, la marca después.
     expect(enLaBase(enLaBase(leida, c2), c1)).toEqual({ concepto: null, marca: 'b1', plataforma: 'd1' })
+  })
+})
+
+describe('K11b · la analítica de cada línea y el pago por hacer (Respuesta K11b · 4)', () => {
+  it('el nombre entero si cabe; si no, el código corto, si lo tiene', () => {
+    expect(vistaAnalitica({ codigo: 'glovo', descripcion: 'Glovo' })).toBe('Glovo')
+    expect(vistaAnalitica({ codigo: 'mp1', descripcion: 'Marca de Prueba K11b 1' })).toBe('mp1')
+    // Un slug más largo que el nombre no ayuda: el nombre (entero en el title).
+    expect(vistaAnalitica({ codigo: 'marca-de-prueba-k11b-uno', descripcion: 'Marca de Prueba K11b Uno' })).toBe('Marca de Prueba K11b Uno')
+    // Un local no tiene código corto: su nombre, aunque no quepa (entero en el title).
+    expect(vistaAnalitica({ codigo: 'Local de Prueba K11b 1', descripcion: 'Local de Prueba K11b 1' })).toBe('Local de Prueba K11b 1')
+  })
+  it('la columna mide lo que pide su nombre más largo, entre 6 letras y el tope', () => {
+    expect(letrasDeLaColumna([{ codigo: 'glovo', descripcion: 'Glovo' }, { codigo: 'uber', descripcion: 'Uber Eats' }])).toBe(9)
+    expect(letrasDeLaColumna([{ codigo: 'a', descripcion: 'Alc' }])).toBe(6)
+    expect(letrasDeLaColumna([{ codigo: 'Local de Prueba K11b 1', descripcion: 'Local de Prueba K11b 1' }])).toBe(16)
+  })
+  it('el pago por hacer: al debe el proveedor, al haber la cuenta del pago; sin cuenta o sin importe, nada', () => {
+    const proveedor = { codigo: '41000013', nombre: 'Proveedor de Prueba, S.L.' }
+    expect(pagoPorHacer({ proveedor, cuenta: '57200001', nombreCuenta: 'Banco', importe: 63.6 })).toEqual([
+      { importe: 63.6, cuenta: '41000013', nombre: 'Proveedor de Prueba, S.L.', lado: 'debe' },
+      { importe: 63.6, cuenta: '57200001', nombre: 'Banco', lado: 'haber' }])
+    expect(pagoPorHacer({ proveedor, cuenta: '', nombreCuenta: '', importe: 63.6 })).toEqual([])
+    expect(pagoPorHacer({ proveedor, cuenta: '57200001', nombreCuenta: 'Banco', importe: 0 })).toEqual([])
+    expect(pagoPorHacer({ proveedor: null, cuenta: '57200001', nombreCuenta: 'Banco', importe: 63.6 })).toEqual([])
   })
 })

@@ -275,10 +275,11 @@ export async function cabeceraDeLaFactura(accountId: string, invoiceId: string):
 }
 
 /** Las marcas de la cuenta que se pueden poner: activas y sin archivar. Sin ninguna, la casilla no sale. */
-export async function marcasParaPoner(accountId: string): Promise<{ id: string; nombre: string }[]> {
-  const { data, error } = await tabla('brand').select('id, name, is_active, archived_at').eq('account_id', accountId).order('name')
+export async function marcasParaPoner(accountId: string): Promise<{ id: string; nombre: string; codigo: string }[]> {
+  const { data, error } = await tabla('brand').select('id, name, slug, is_active, archived_at').eq('account_id', accountId).order('name')
   if (error) throw new Error(`No se han podido leer las marcas: ${error.message}`)
-  return ((data ?? []) as Fila[]).filter((b) => b.is_active !== false && !b.archived_at).map((b) => ({ id: String(b.id), nombre: String(b.name) }))
+  // K11b · El código corto (su slug, el de la analítica) para cuando el nombre no cabe en la casilla.
+  return ((data ?? []) as Fila[]).filter((b) => b.is_active !== false && !b.archived_at).map((b) => ({ id: String(b.id), nombre: String(b.name), codigo: String(b.slug ?? b.name) }))
 }
 
 /** Los trimestres con el 303 presentado de la empresa, como «2026-3T» (los mismos estados que conta_iva_presentado). */

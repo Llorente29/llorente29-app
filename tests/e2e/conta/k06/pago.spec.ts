@@ -89,8 +89,9 @@ async function escribirAMano(page: Page, t: number, numero: string, gasto: { esc
   await expect(ficha(page).getByRole('textbox', { name: 'Base 2' })).toHaveCount(0)
   await ficha(page).locator('#kf-cuenta-0').fill(gasto.escribir)
   await page.getByRole('option', { name: new RegExp(`^${gasto.cuenta} · `) }).click()
-  const local = ficha(page).getByRole('combobox', { name: 'Local' })
-  if (await local.isEnabled()) await local.selectOption({ index: 1 })
+  // El local, con su lupa (K11b · 4): «Común» e Intro; apagada (sin locales), no se toca.
+  const local = ficha(page).getByRole('textbox', { name: 'Local', exact: true })
+  if (await local.isEditable()) { await local.fill('Común'); await local.press('Enter') }
   await ficha(page).getByRole('checkbox', { name: 'Guardarla sin documento' }).check()
   await ficha(page).getByRole('textbox', { name: 'Por qué no tiene documento' }).fill('Prueba e2e K06: escrita a mano, sin documento')
 }

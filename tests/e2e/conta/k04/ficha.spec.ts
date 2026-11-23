@@ -206,11 +206,12 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(page.locator('#kf-cuenta-0')).toHaveValue('60000000')
     await expect(page.locator('[data-prueba="cuadra"]')).toHaveText('Cuadra · 176,00')
     if (grande) await page.screenshot({ path: `${DIR}/a-mano-escribiendo-${ancho}.png` })
-    const local = page.getByRole('combobox', { name: 'Local' })
-    if (await local.isEnabled()) {
+    // El local, con su lupa (K11b · 4): se escribe «Común» y el Intro siguiente lo elige y pasa.
+    const local = page.getByRole('textbox', { name: 'Local', exact: true })
+    if (await local.isEditable()) {
       await page.keyboard.press('Enter')
       await expect(local).toBeFocused()
-      while ((await local.inputValue()) !== 'comun') await page.keyboard.press('ArrowDown')
+      await page.keyboard.type('Común')
     }
     for (let i = 0; i < 6 && !(await aviso(page).isVisible()); i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(300) }
     await expect(page.getByText(new RegExp(`Guardada la K04-M-${t}`)).first()).toBeVisible({ timeout: 60_000 })

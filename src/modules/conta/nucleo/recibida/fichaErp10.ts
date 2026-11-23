@@ -80,13 +80,48 @@ export function aVisual(lineas: readonly { codigo: string; nombre: string; debe:
   return r
 }
 
-/** La cuadrícula del IVA de ERP10: dos filas de dos tipos; los que haya, en orden, y el resto vacíos. */
-export function cuadriculaIva<T>(lineas: readonly T[]): (T | null)[][] {
-  const n = Math.max(4, lineas.length + (lineas.length % 2))
-  const todos: (T | null)[] = Array.from({ length: n }, (_, i) => lineas[i] ?? null)
-  const filas: (T | null)[][] = []
+/**
+ * La cuadrícula del IVA de ERP10: dos tipos por fila, y después del último el sitio del ⊕ (otro tipo). Solo las filas que
+ * hacen falta (Respuesta K11b · 4): con un tipo, una fila (el tipo y el ⊕); la segunda sale al usar el segundo tipo.
+ * `'mas'` es el sitio del ⊕; null, un hueco vacío.
+ */
+export function cuadriculaIva<T>(lineas: readonly T[], conMas = true): (T | 'mas' | null)[][] {
+  const todos: (T | 'mas' | null)[] = [...lineas, ...(conMas ? ['mas' as const] : [])]
+  if (!todos.length) todos.push(null)
+  if (todos.length % 2) todos.push(null)
+  const filas: (T | 'mas' | null)[][] = []
   for (let i = 0; i < todos.length; i += 2) filas.push([todos[i], todos[i + 1]])
   return filas
+}
+
+/** Cuántas letras caben en una casilla de la analítica (local, marca, plataforma) antes de pasar a su código corto. */
+export const LETRAS_ANALITICA = 16
+
+/**
+ * Lo que se ve en una casilla de la analítica (Respuesta K11b · 4, punto 3): su nombre entero si cabe; si no, el código
+ * corto (el de la analítica) si lo tiene y es más corto. El nombre entero va siempre en el `title`.
+ */
+export function vistaAnalitica(r: { codigo: string; descripcion: string }, letras = LETRAS_ANALITICA): string {
+  // El código, solo si de verdad es más corto que el nombre (un slug largo no ayuda).
+  return r.descripcion.length <= letras || !r.codigo || r.codigo.length >= r.descripcion.length ? r.descripcion : r.codigo
+}
+
+/** El ancho de la columna (en letras): lo que pide el nombre más largo que se ve, entre 6 y el tope. */
+export function letrasDeLaColumna(registros: readonly { codigo: string; descripcion: string }[], letras = LETRAS_ANALITICA): number {
+  const largo = registros.reduce((m, r) => Math.max(m, Math.min(vistaAnalitica(r, letras).length, letras)), 0)
+  return Math.max(6, largo)
+}
+
+/**
+ * El asiento del pago que aún no se ha hecho (la fila de «Pago factura» por validar), para la visualización: al debe el
+ * proveedor y al haber la cuenta del pago, como en la maqueta 17a. Sin cuenta, sin proveedor o sin importe, nada.
+ */
+export function pagoPorHacer(o: { proveedor: { codigo: string; nombre: string } | null; cuenta: string; nombreCuenta: string; importe: number }): LineaVisible[] {
+  if (!o.proveedor || !o.cuenta.trim() || !(o.importe > 0)) return []
+  return [
+    { importe: o.importe, cuenta: o.proveedor.codigo, nombre: o.proveedor.nombre, lado: 'debe' },
+    { importe: o.importe, cuenta: o.cuenta.trim(), nombre: o.nombreCuenta, lado: 'haber' },
+  ]
 }
 
 /**

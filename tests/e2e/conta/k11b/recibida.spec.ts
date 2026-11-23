@@ -29,6 +29,8 @@ const LOCAL = (n: number) => enCarril(`c0f60000-0000-4000-8000-0000000000c${n}`)
 const MARCA = (n: number) => enCarril(`c0f60000-0000-4000-8000-0000000000b${n}`)
 const PLATAFORMA = (n: number) => enCarril(`c0f60000-0000-4000-8000-0000000000d${n}`)
 const NOMBRE_LOCAL = ['', 'Local de Prueba K11b Uno', 'Local de Prueba K11b Dos', 'Local de Prueba K11b Tres']
+const NOMBRE_MARCA = ['', 'Marca de Prueba K11b Uno', 'Marca de Prueba K11b Dos']
+const NOMBRE_PLATAFORMA = ['', 'Plataforma de Prueba K11b Uno', 'Plataforma de Prueba K11b Dos']
 const FICHA = '[data-prueba="ficha-recibida-nucleo"]'
 const ficha = (page: Page) => page.locator(`.k-zona[data-activa="si"] ${FICHA}`)
 const aviso = (page: Page) => page.locator(`.k-zona[data-activa="si"] ${FICHA} [data-prueba="aviso-ficha"]`)
@@ -158,9 +160,10 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     await expect(page.getByRole('option', { name: /^62800001 · / })).toBeVisible({ timeout: 30_000 })
     await page.keyboard.press('Enter')
     await page.keyboard.press('Enter')
-    await expect(ficha(page).getByRole('combobox', { name: 'Local', exact: true })).toBeFocused()
+    // El local, con su lupa (Respuesta K11b · 4): se escribe su nombre e Intro lo elige y pasa a la casilla siguiente.
+    await expect(ficha(page).getByRole('textbox', { name: 'Local', exact: true })).toBeFocused()
     await page.keyboard.type(NOMBRE_LOCAL[1])
-    await expect(ficha(page).getByRole('combobox', { name: 'Local', exact: true })).toHaveValue(LOCAL(1))
+    await expect(ficha(page).getByRole('textbox', { name: 'Local', exact: true })).toHaveValue(NOMBRE_LOCAL[1])
     // El pago, en blanco: pendiente de pagar. Intro por la subcuenta y la fecha del pago; en la última, guarda y valida.
     await page.keyboard.press('Enter')
     await expect(ficha(page).locator('#kf-pago')).toBeFocused()
@@ -204,26 +207,50 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
       await ficha(page).locator(`#kr-importe-${i}`).press('Tab')
     }
     await expect(ficha(page).locator('[data-prueba="suma-contrapartidas"]')).toHaveText('Suma 300,00 · cuadra con la base')
+    // Local, marca y plataforma con su lupa (Respuesta K11b · 4): el nombre e Intro. La marca y la plataforma se guardan al
+    // momento; mientras se guardan, sus casillas se apagan (solo lectura).
+    const poner = async (nombre: string, valor: string) => {
+      const c = ficha(page).getByRole('textbox', { name: nombre, exact: true })
+      await expect(c).toBeEditable({ timeout: 30_000 })
+      await c.fill(valor)
+      await c.press('Enter')
+      await expect(c).toHaveValue(valor, { timeout: 30_000 })
+    }
     for (const i of [0, 1, 2]) {
       const n = i + 1
       const sufijo = i === 0 ? '' : ` ${n}`
-      await ficha(page).getByRole('combobox', { name: `Local${sufijo}`, exact: true }).selectOption(LOCAL(n))
-      await ficha(page).getByRole('combobox', { name: `Marca${sufijo}`, exact: true }).selectOption(MARCA(i === 1 ? 2 : 1))
+      await poner(`Local${sufijo}`, NOMBRE_LOCAL[n])
+      await poner(`Marca${sufijo}`, NOMBRE_MARCA[i === 1 ? 2 : 1])
       await expect(aviso(page)).toContainText(/marca|Marca|Guardado/, { timeout: 30_000 })
-      await expect(ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}`, exact: true })).toBeEnabled({ timeout: 30_000 })
-      await ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}`, exact: true }).selectOption(PLATAFORMA(i === 2 ? 2 : 1))
-      await expect(ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}`, exact: true })).toHaveValue(PLATAFORMA(i === 2 ? 2 : 1), { timeout: 30_000 })
-      await expect(ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}`, exact: true })).toBeEnabled({ timeout: 30_000 })
+      await poner(`Plataforma${sufijo}`, NOMBRE_PLATAFORMA[i === 2 ? 2 : 1])
+      await expect(ficha(page).getByRole('textbox', { name: `Plataforma${sufijo}`, exact: true })).toBeEditable({ timeout: 30_000 })
     }
+    await expect(ficha(page).locator('.kf-asiento')).toContainText('(60000001)', { timeout: 30_000 })
+    await expect(ficha(page).locator('.kf-asiento')).toContainText('(62900001)')
+    expect(await loQueSeCorta(page, FICHA), `lo que se corta, tres líneas, a ${ancho}`).toEqual([])
+    // Respuesta K11b · 4 · Con tres contrapartidas y un pago, el asiento entero se ve sin bajar: la última línea, dentro de
+    // la pantalla (a 1366 × 768 también). El pago se quita después: esta factura se valida pendiente de pagar.
+    await ficha(page).locator('#kf-pago').fill('57000000')
+    await page.getByRole('option', { name: /^57000000 · / }).click()
+    await expect(ficha(page).locator('[data-asiento-pago="por-hacer"]')).toBeVisible({ timeout: 30_000 })
+    const vista = await ficha(page).evaluate((el) => {
+      const p = el.querySelector('.kr-pantalla') as HTMLElement
+      const ultima = [...el.querySelectorAll('.kr-visual-marco tr')].pop() as HTMLElement
+      return { desplazada: p.scrollTop, abajo: Math.round(ultima.getBoundingClientRect().bottom), pantalla: Math.round(p.getBoundingClientRect().bottom), alto: window.innerHeight }
+    })
+    console.log(`[K11b ${ancho} · asiento] ${JSON.stringify(vista)}`)
+    expect(vista.desplazada, `a ${ancho}, la pantalla sin desplazar`).toBe(0)
+    expect(vista.abajo, `a ${ancho}, la última línea del asiento dentro de la pantalla`).toBeLessThanOrEqual(Math.min(vista.pantalla, vista.alto))
+    await cargada(page, 'tres contrapartidas y el pago')
+    await page.screenshot({ path: `${DIR}/tres-contrapartidas-${ancho}.png` })
+    await ficha(page).locator('#kf-pago').fill('')
+    await ficha(page).locator('#kf-pago').press('Tab')
+    await expect(ficha(page).locator('[data-asiento-pago="por-hacer"]')).toHaveCount(0, { timeout: 30_000 })
+    // Lo guardado en la base, después de lo que se ve (las capturas salen aunque esto caiga): la marca y la plataforma de cada línea.
     const datos = await rest<{ position: number; brand_id: string | null; channel_id: string | null }[]>(s,
       `supplier_invoice_expense_dato?select=position,brand_id,channel_id&account_id=eq.${NUCLEO.id}&supplier_invoice_id=eq.${factura(t, 1)}&order=position`)
     expect(datos.map((d) => [d.position, d.brand_id, d.channel_id]), 'la marca y la plataforma de cada línea, guardadas').toEqual([
       [0, MARCA(1), PLATAFORMA(1)], [1, MARCA(2), PLATAFORMA(1)], [2, MARCA(1), PLATAFORMA(2)]])
-    await expect(ficha(page).locator('.kf-asiento')).toContainText('(60000001)', { timeout: 30_000 })
-    await expect(ficha(page).locator('.kf-asiento')).toContainText('(62900001)')
-    expect(await loQueSeCorta(page, FICHA), `lo que se corta, tres líneas, a ${ancho}`).toEqual([])
-    await cargada(page, 'tres contrapartidas')
-    await page.screenshot({ path: `${DIR}/tres-contrapartidas-${ancho}.png` })
     await sinDocumento(page, 'Prueba e2e K11b: tres contrapartidas, sin documento')
     await introFuera(page)
     await expect(aviso(page)).toContainText(/Apuntada y (validada|en Diez)/, { timeout: 60_000 })
