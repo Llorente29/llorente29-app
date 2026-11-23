@@ -57,7 +57,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     // S02 · PR 3: la lista de liquidaciones, la ficha de una (y la de subir sus documentos) y la quincena de Catcher.
     // V01 · Entrega 3: la mensual del socio (y la de subir sus documentos) se marcan en Ventas › Liquidaciones.
     liquidaciones: 'compras.liquidaciones', liquidacionNueva: 'facturacion.liquidacionesVentas', liquidacion: 'facturacion.liquidacionesVentas', loteCatcher: 'compras.liquidaciones',
-    bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
+    // X29 · Conciliar (Gestión de extractos bancarios): en el menú de antes, con los movimientos.
+    conciliar: 'bancos.movimientos', bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
     impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
     // LS1 · Laboral: Equipo, una pantalla por su nombre y lo que «Llega en …».
     laboral: 'laboral.equipo', laboralPagina: 'laboral.centros', laboralLlega: 'laboral.contrato', laboralPersona: 'laboral.equipo',

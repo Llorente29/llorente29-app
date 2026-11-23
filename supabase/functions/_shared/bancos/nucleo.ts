@@ -60,7 +60,9 @@ export function emparejar(e: ExtractoLeido, bancos: readonly BancoFolvy[]): (str
   return e.cuentas.map((c) => (c.iban ? bancos.find((b) => b.iban === c.iban || b.ibanes.includes(c.iban!))?.id ?? null : null))
 }
 
-export interface ResultadoImportar { banco: string; repetido: boolean; mensaje: string | null; nuevos: number; repetidos: number; posiblesRepetidos: number; continuidad: string; hueco: number | null }
+export interface ResultadoImportar { banco: string; repetido: boolean; mensaje: string | null; nuevos: number; repetidos: number; posiblesRepetidos: number; continuidad: string; hueco: number | null
+  /** X29 · Las que no han entrado por estar borradas a mano (bank_movimiento_borrado), aparte de las repetidas. */
+  borradas: number }
 
 // ── Lo que sabe el motor ───────────────────────────────────────────────────
 
@@ -158,7 +160,7 @@ export function crearBancos(bd: Bd) {
         p_sin_comprobar: sinSaldo ? (cuadre.sinComprobar[0] ?? 'El fichero no trae saldos.') : null,
         p_iban_fichero: c.iban && (recordados[banco] ?? []).includes(c.iban) ? null : c.iban, p_movs: movs,
       })
-      out.push({ banco, repetido: !!r.repetido, mensaje: s(r.mensaje), nuevos: n(r.nuevos), repetidos: n(r.repetidos), posiblesRepetidos: n(r.posibles_repetidos),
+      out.push({ banco, repetido: !!r.repetido, mensaje: s(r.mensaje), nuevos: n(r.nuevos), repetidos: n(r.repetidos), borradas: n(r.borradas), posiblesRepetidos: n(r.posibles_repetidos),
         continuidad: String(r.continuidad ?? ''), hueco: r.hueco === null || r.hueco === undefined ? null : n(r.hueco) })
     }
     return out

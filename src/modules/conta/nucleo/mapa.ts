@@ -90,7 +90,10 @@ const EMITIDAS_ASIENTOS = b('emitidas', 'Emitidas', 'emitidas', R.emitidasPorRev
 // R05 (decisión 9): con hostelería o con «ventas por día» encendido, como Cierres del día en la barra de hoy.
 const VENTAS_DIA = b('ventasDia', 'Ventas del día', 'ventasDia', R.cierres, [R.cierres, R.ventas], { solo: 'ventas_por_dia', pestana: 'Ventas del día' })
 const RECIBIDAS = b('recibidas', 'Recibidas', 'recibidas', R.documentos, [R.documentos], { contador: 'compras.recibidas', pestana: 'Facturas recibidas' })
-const BANCOS = b('bancos', 'Bancos', 'bancos', R.bancos, [R.bancos], { contador: 'bancos.movimientos', pestana: 'Bancos' })
+// X29 · Julio (23/11): «Conciliar» (la Gestión de extractos bancarios de ERP10), la primera; la Introducción de asientos
+// por tesorería del X28 se llama «Asiento manual».
+const CONCILIAR = b('conciliar', 'Conciliar', 'bancos', `${R.bancos}/conciliar`, [`${R.bancos}/conciliar`], { contador: 'bancos.movimientos', pestana: 'Conciliar' })
+const BANCOS = b('bancos', 'Asiento manual', 'asientos', R.bancos, [R.bancos], { pestana: 'Asiento manual' })
 // Decisión 8: sin número hasta que haya una marca de verdad de lo hecho solo.
 const HECHO = b('hecho', 'Hecho por Sumied', 'hecho', `${R.bancos}/hecho`, [`${R.bancos}/hecho`], { pestana: 'Hecho por Sumied' })
 const CIERRE = b('cierre', 'Cierre', 'cierre', `${R.libros}/cierre/cierre-ejercicio`, [`${R.libros}/cierre/cierre-ejercicio`], { pestana: 'Cierre y apertura' })
@@ -211,7 +214,7 @@ export const MODULOS: Modulo[] = [
       {
         // E05 · Tesorería (la maqueta nueva de Bancos): Bancos vive aquí; lo demás son atajos a su sitio de siempre.
         id: 'tesoreria', etiqueta: 'Tesorería', grupos: [
-          { titulo: 'Bancos', botones: [BANCOS, atajo(EXTRACTO), CONCILIADOS, atajo(REGLAS), CONEXION] },
+          { titulo: 'Bancos', botones: [CONCILIAR, BANCOS, atajo(EXTRACTO), CONCILIADOS, atajo(REGLAS), CONEXION] },
         ],
       },
       {

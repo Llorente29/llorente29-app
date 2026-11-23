@@ -36,6 +36,7 @@ import RecibidaAMano from '@/modules/conta/documentos/RecibidaAMano'
 import RecibidaSegun from '@/modules/conta/nucleo/recibida/RecibidaSegun'
 import EmitidaSegun, { EmitidasPorRevisar, LlevarAlAsiento } from '@/modules/conta/nucleo/emitida/EmitidaSegun'
 import BancosSegun from '@/modules/conta/nucleo/bancos/BancosSegun'
+import ConciliarSegun from '@/modules/conta/nucleo/conciliar/ConciliarSegun'
 import FacturasPage from '@/modules/conta/ventas/FacturasPage'
 import FacturaVentaPage from '@/modules/conta/ventas/FacturaVentaPage'
 import LlevarAVentas from '@/modules/conta/ventas/LlevarAVentas'
@@ -152,6 +153,8 @@ export const contaModule: ModuleDefinition = {
     // Respuesta 4: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto».
     // E05 · Bancos a secas: dentro del núcleo, la pantalla nueva; fuera, la de hoy (BancosSegun). Sus pestañas (bancos/…), las de hoy.
     { path: CONTA.rutas.bancos, element: enMarco(<BancosSegun hoy={<BancosPage />} />, '¿Qué es la transferencia de 1.278,17?', true) },
+    // X29 · Conciliar (Gestión de extractos bancarios): dentro del núcleo, la pantalla nueva; fuera, la de hoy.
+    { path: CONTA.rutas.conciliar, element: enMarco(<ConciliarSegun hoy={<BancosPage />} />, '¿Qué es la transferencia de 1.278,17?', true) },
     { path: CONTA.rutas.bancosPestana, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
     // I01b · Impuestos (tableros 8, 9 y 10): el calendario, sus pestañas y el IVA de un periodo.
     // LS1 · Laboral (28/10): las pantallas de Folvy › Personal, dentro de Sumied.

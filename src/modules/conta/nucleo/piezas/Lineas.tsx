@@ -11,10 +11,12 @@ import { cuantasLineas, seDesplaza } from './logica'
 
 export interface Columna { clave: string; titulo: ReactNode; ancho?: string; cifra?: boolean; className?: string }
 
-export function Lineas<T>({ etiqueta, columnas, filas, celda, elegida, alElegir, edicion, otra, otraTexto, suma, vacia, claseFila }: {
+export function Lineas<T>({ etiqueta, columnas, filas, celda, elegida, alElegir, alIntro, edicion, otra, otraTexto, suma, vacia, claseFila }: {
   etiqueta: string; columnas: readonly Columna[]; filas: readonly T[]
   celda: (f: T, clave: string, i: number) => ReactNode
   elegida: number | null; alElegir?: (i: number) => void
+  /** X29 · Lo que hace Intro en una fila (sin él, la elige). */
+  alIntro?: (i: number) => void
   edicion?: ReactNode
   /** «⊕ otra línea»: qué hace (sin él, no sale el botón, pero sí el número de líneas). */
   otra?: () => void
@@ -36,7 +38,7 @@ export function Lineas<T>({ etiqueta, columnas, filas, celda, elegida, alElegir,
               {filas.map((f, i) => (
                 <tr key={i} aria-selected={elegida === i} tabIndex={alElegir ? 0 : undefined} {...claseFila?.(f, i)}
                   onClick={alElegir ? () => alElegir(i) : undefined}
-                  onKeyDown={alElegir ? (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) { e.preventDefault(); alElegir(i) } } : undefined}>
+                  onKeyDown={alElegir ? (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) { e.preventDefault(); (alIntro ?? alElegir)(i) } } : undefined}>
                   {columnas.map((c) => <td key={c.clave} className={`${c.cifra ? 'kp-num ' : ''}${c.className ?? ''}`.trim() || undefined}>{celda(f, c.clave, i)}</td>)}
                 </tr>
               ))}

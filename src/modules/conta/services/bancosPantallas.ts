@@ -144,15 +144,16 @@ export async function leerMovimientos(accountId: string, bancoId: string, mes: s
 }
 
 /**
- * X28 · Los movimientos de un banco entre dos fechas (Tesorería lee el ejercicio entero, como ERP10), de mil en mil
+ * X28 · Los movimientos de un banco entre dos fechas (X29: `conValidado`, también lo de antes del inicio y lo validado) (Tesorería lee el ejercicio entero, como ERP10), de mil en mil
  * para no quedarse en el tope de una sola lectura. `subiendo`: del más antiguo al más nuevo, como la rejilla de ERP10.
  */
-export async function leerMovimientosEntre(accountId: string, bancoId: string, desde: string, hasta: string, subiendo = false): Promise<MovimientoBanco[]> {
+export async function leerMovimientosEntre(accountId: string, bancoId: string, desde: string, hasta: string, subiendo = false, conValidado = false): Promise<MovimientoBanco[]> {
   const PAGINA = 1000
   const filas: Fila[] = []
   for (let i = 0; ; i += PAGINA) {
     const pagina = await leer(tabla('bank_movement')
-      .select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept, status))')
+      .select((conValidado ? 'id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, before_cutover, validated_at, validated_by_name, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept, status))'
+        : 'id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept, status))'))
       .eq('account_id', accountId).eq('treasury_account_id', bancoId).gte('op_date', desde).lte('op_date', hasta)
       .order('op_date', { ascending: subiendo }).order('created_at', { ascending: subiendo }).order('id').range(i, i + PAGINA - 1), 'los movimientos')
     filas.push(...pagina)
@@ -174,6 +175,8 @@ export async function leerMovimientosEntre(accountId: string, bancoId: string, d
       } : null,
       tarjeta: tarjeta ? { ultimos4: String(tarjeta.last4), titular: String(tarjeta.holder_name) } : null,
       ticket: s(m.receipt_path), motivoIgnorado: s(m.ignored_reason),
+      // X29 · Solo cuando se piden (Conciliar): validated_at llega con la 1712.
+      ...(conValidado ? { antesDelInicio: m.before_cutover === true, validado: m.validated_at ? { cuando: String(m.validated_at), quien: s(m.validated_by_name) } : null } : {}),
     }
   })
 }

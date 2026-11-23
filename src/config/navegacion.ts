@@ -282,6 +282,8 @@ export const CONTA = {
     loteCatcher: 'documentos/catcher/:loteId',
     /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
     bancos: 'bancos',
+    /** X29 · Conciliar: la Gestión de extractos bancarios de ERP10 (maqueta nucleo_23). */
+    conciliar: 'bancos/conciliar',
     /** Una pestaña de Bancos, o una de sus acciones (subir, hecho-por-folvy). */
     bancosPestana: 'bancos/:pestana',
     /** M01 · La muestra de las tres piezas comunes, con datos inventados. Solo fuera de producción (module.tsx). */

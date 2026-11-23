@@ -170,9 +170,9 @@ export async function leerFicheroDelExtracto(f: File, banco: BancoVista, todos: 
   if (r.length === 0) throw new Error(`«${f.name}» no es de ninguno de tus bancos.`)
   let agente = ''
   try { await pasarAgente(ctx.accountId, ctx.companyId, ctx.hoy, 'extracto') } catch (e) { agente = ` Sumied no ha podido proponer todavía (${e instanceof Error ? e.message : String(e)}).` }
-  const nuevos = r.reduce((t, x) => t + x.nuevos, 0), repetidos = r.reduce((t, x) => t + x.repetidos, 0)
+  const nuevos = r.reduce((t, x) => t + x.nuevos, 0), repetidos = r.reduce((t, x) => t + x.repetidos, 0), borradas = r.reduce((t, x) => t + (x.borradas ?? 0), 0)
   if (r.every((x) => x.repetido)) return `«${f.name}» ya estaba leído: no cambia nada.`
-  return `Leído «${f.name}»: ${nuevos === 1 ? '1 movimiento nuevo' : `${nuevos} movimientos nuevos`}${repetidos ? ` y ${repetidos} que ya estaban` : ''}.${agente}`
+  return `Leído «${f.name}»: ${nuevos === 1 ? '1 movimiento nuevo' : `${nuevos} movimientos nuevos`}${repetidos ? ` y ${repetidos} que ya estaban` : ''}${borradas ? ` · ${borradas} ${borradas === 1 ? 'borrada' : 'borradas'} antes` : ''}.${agente}`
 }
 
 /** La frase del total de un movimiento contabilizado (para el aviso de la barra). */

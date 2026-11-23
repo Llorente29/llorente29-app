@@ -68,6 +68,10 @@ export interface MovimientoBanco {
   tarjeta: { ultimos4: string; titular: string } | null
   ticket: string | null
   motivoIgnorado: string | null
+  /** X29 · De antes del día de inicio de la empresa (before_cutover). */
+  antesDelInicio?: boolean
+  /** X29 · Validado (revisado) como en ERP10: cuándo y quién. */
+  validado?: { cuando: string; quien: string | null } | null
 }
 
 export interface Fila {
