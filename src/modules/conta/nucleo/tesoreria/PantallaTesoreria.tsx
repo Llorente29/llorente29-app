@@ -207,7 +207,14 @@ export default function PantallaTesoreria() {
   // Las casillas de la línea, en el orden de Intro; en la última, contabiliza.
   const orden = [...(nuevo ? ['#ts-ed-fecha'] : []), '#ts-ed-subcuenta', '#ts-ed-concepto', ...(nuevo ? ['#ts-ed-ingreso', '#ts-ed-pago'] : []), '#ts-ed-local',
     ...(base?.hosteleria ? ['#ts-ed-marca', '#ts-ed-plataforma'] : [])]
-  const pasar = (desde: string) => { const j = orden.indexOf(desde); if (j >= 0 && j < orden.length - 1) enfocar(orden[j + 1]); else contabilizarLinea() }
+  // Intro pasa a la casilla siguiente EN EL MOMENTO (ya está pintada): si se escribe deprisa, el Intro de detrás cae en
+  // la casilla que toca y no en la de antes (e2e 45175265438: el tercero se lo comía el concepto). Si aún no está, después.
+  const pasar = (desde: string) => {
+    const j = orden.indexOf(desde)
+    if (j < 0 || j >= orden.length - 1) { contabilizarLinea(); return }
+    const ya = document.querySelector<HTMLElement>(`.ts ${orden[j + 1]}`)
+    if (ya) ya.focus(); else enfocar(orden[j + 1])
+  }
   const tecla = (desde: string) => (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.metaKey && !e.defaultPrevented) {
       e.preventDefault()

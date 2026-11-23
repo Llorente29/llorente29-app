@@ -131,6 +131,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
       await page.keyboard.press('Enter')   // la subcuenta → el concepto
       await expect(pantalla(page).locator('#ts-ed-concepto')).toBeFocused()
       await page.keyboard.press('Enter')   // el concepto → el local
+      await expect(pantalla(page).locator('#ts-ed-local')).toBeFocused()
       await page.keyboard.press('Enter')   // el local (el último, sin hostelería) → contabiliza
       await expect(aviso, `el ${i + 1}.º, contabilizado y dicho`).toContainText(`a la ${GASTO}`, { timeout: 30_000 })
       await expect(pantalla(page).locator(ids.map((id) => `tr[data-movimiento="${id}"][data-contabilizado="si"]`).join(', ')), 'contabilizados en la lista').toHaveCount(i + 1, { timeout: 30_000 })
