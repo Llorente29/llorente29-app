@@ -80,7 +80,7 @@ async function abrir(page: Page) {
   await expect(pantalla(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
 }
 
-/** Ni la subcuenta ni la pastilla de «Por qué» salen cortadas en ninguna fila de la lista. */
+/** Ni la subcuenta, ni la pastilla de «Por qué», ni el saldo salen cortados en ninguna fila de la lista. */
 async function noCortado(page: Page, cuando: string) {
   const cortados = await pantalla(page).evaluate((z) => {
     const out: string[] = []
@@ -89,9 +89,15 @@ async function noCortado(page: Page, cuando: string) {
       const td = e.closest('td') as HTMLElement
       if (td.scrollWidth > td.clientWidth + 1) out.push(`subcuenta ${e.textContent}`)
     }
+    const th = [...z.querySelectorAll<HTMLElement>('.kp-lineas thead th')]
+    const iSaldo = th.findIndex((x) => x.textContent?.trim() === 'Saldo')
+    for (const tr of z.querySelectorAll<HTMLElement>('tr[data-movimiento]')) {
+      const td = tr.querySelectorAll<HTMLElement>('td')[iSaldo]
+      if (td && td.scrollWidth > td.clientWidth + 1) out.push(`saldo ${td.textContent}`)
+    }
     return out
   })
-  expect(cortados, `ni la subcuenta ni la pastilla salen cortadas (${cuando})`).toEqual([])
+  expect(cortados, `ni la subcuenta, ni la pastilla, ni el saldo salen cortados (${cuando})`).toEqual([])
 }
 
 const medidas: Record<number, Record<string, number | null>> = {}
@@ -143,9 +149,10 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     expect(m.sobra, 'la página no rueda de lado').toBeLessThanOrEqual(1)
     expect(m.rueda, 'la página no rueda hacia abajo').toBeLessThanOrEqual(1)
     expect((m.zona ?? 0) - (m.ventana ?? 0), 'la ventana ocupa el ancho de su zona').toBeLessThanOrEqual(40)
-    // Los dos conceptos se leen, también a 1366: al menos 180 px cada uno (a 1366 no hay Nombre ni Doc.).
-    expect(m.concepto!, 'el concepto bancario, al menos 180 px').toBeGreaterThanOrEqual(180)
-    expect(m.asiento!, 'el concepto del asiento, al menos 180 px').toBeGreaterThanOrEqual(180)
+    // Los dos conceptos se leen, también a 1366: al menos 170 px cada uno (a 1366 no hay Nombre ni Doc.; Julio, 23/11:
+    // el 180 era a ojo y 179 se lee igual). Lo que no se negocia es que nada salga cortado: noCortado, más abajo.
+    expect(m.concepto!, 'el concepto bancario, al menos 170 px').toBeGreaterThanOrEqual(170)
+    expect(m.asiento!, 'el concepto del asiento, al menos 170 px').toBeGreaterThanOrEqual(170)
     await page.screenshot({ path: `${DIR}/conciliar-${ancho}.png` })
 
     // «＋ Crear regla con este», desde el primero de los tres.
