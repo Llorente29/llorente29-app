@@ -122,10 +122,17 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     // ── 1 · La de septiembre, con el 3T presentado: el 4T, y la franja lo dice. ──
     await page.goto(`/conta/documentos/recibidas/${factura(t, 2)}?ver=por-revisar`, { timeout: 30_000 })
     await fichaLista(page)
-    await expect(ficha(page).locator('#kf-deduce')).toHaveValue('2026-10-01', { timeout: 30_000 })
+    // K11b · 6 · El periodo, como la 17a: el ejercicio con su lupa y la descripción del trimestre en gris.
+    await expect(ficha(page).locator('#kf-deduce')).toHaveValue('4T de 2026', { timeout: 30_000 })
     // K11b · Sin frases: la casilla del periodo, en ámbar, con el motivo al pasar el ratón.
     await expect(ficha(page).locator('[data-comprobacion="periodo"]')).toHaveAttribute('title', /El 3T ya está presentado: va al 4T/)
-    await expect(ficha(page).locator('#kf-deduce option[value="2026-07-01"]')).toBeDisabled()
+    // El 3T, presentado, no se ofrece en la lupa del periodo.
+    await ficha(page).getByRole('button', { name: 'Buscar ejercicio' }).click()
+    const trimestres = page.locator('[data-pieza="lupa"]')
+    await expect(trimestres).toContainText('4T de 2026')
+    await expect(trimestres).not.toContainText('3T de 2026')
+    await page.keyboard.press('Escape')
+    await expect(trimestres).toHaveCount(0)
 
     // ── 1b · Sin propuesta (su proveedor no tiene NIF): la ficha lo dice. ──
     await page.goto(`/conta/documentos/recibidas/${factura(t, 3)}?ver=por-revisar`, { timeout: 30_000 })
@@ -138,9 +145,11 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await page.goto(`/conta/documentos/recibidas/${factura(t, 4)}?ver=por-revisar`, { timeout: 30_000 })
     await fichaLista(page)
     const origen = ficha(page).locator('[data-prueba="origen-operacion"]')
-    await expect(ficha(page).locator('#kf-operacion')).toHaveValue('interior', { timeout: 30_000 })
+    // K11b · 6 · El tipo de operación con su lupa: se ve su nombre corto.
+    await expect(ficha(page).locator('#kf-operacion')).toHaveValue('Interiores', { timeout: 30_000 })
     await expect(origen).toHaveText('De su ficha')
-    await ficha(page).locator('#kf-operacion').selectOption('intra_servicios')
+    await ficha(page).locator('#kf-operacion').fill('Intracom. servicios')
+    await ficha(page).locator('#kf-operacion').press('Enter')
     await expect(aviso(page)).toContainText('Tipo de operación: Adquisición intracomunitaria de servicios', { timeout: 30_000 })
     await expect(origen).toHaveText('Cambiado', { timeout: 30_000 })
     await expect(origen).toHaveAttribute('title', 'Cambiado en esta factura')

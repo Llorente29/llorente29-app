@@ -225,32 +225,37 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
       await poner(`Plataforma${sufijo}`, NOMBRE_PLATAFORMA[i === 2 ? 2 : 1])
       await expect(ficha(page).getByRole('textbox', { name: `Plataforma${sufijo}`, exact: true })).toBeEditable({ timeout: 30_000 })
     }
+    const datos = await rest<{ position: number; brand_id: string | null; channel_id: string | null }[]>(s,
+      `supplier_invoice_expense_dato?select=position,brand_id,channel_id&account_id=eq.${NUCLEO.id}&supplier_invoice_id=eq.${factura(t, 1)}&order=position`)
+    expect(datos.map((d) => [d.position, d.brand_id, d.channel_id]), 'la marca y la plataforma de cada línea, guardadas').toEqual([
+      [0, MARCA(1), PLATAFORMA(1)], [1, MARCA(2), PLATAFORMA(1)], [2, MARCA(1), PLATAFORMA(2)]])
     await expect(ficha(page).locator('.kf-asiento')).toContainText('(60000001)', { timeout: 30_000 })
     await expect(ficha(page).locator('.kf-asiento')).toContainText('(62900001)')
     expect(await loQueSeCorta(page, FICHA), `lo que se corta, tres líneas, a ${ancho}`).toEqual([])
-    // Respuesta K11b · 4 · Con tres contrapartidas y un pago, el asiento entero se ve sin bajar: la última línea, dentro de
-    // la pantalla (a 1366 × 768 también). El pago se quita después: esta factura se valida pendiente de pagar.
+    // Respuestas K11b · 4 y 6 · Con tres contrapartidas y un pago, a 1366 × 768 la página no se desplaza: la lista de
+    // contrapartidas enseña la primera línea y se desplaza dentro de su bloque, y el recuadro del asiento termina dentro de
+    // la pantalla (si tiene más líneas de las que caben, se desplazan dentro, con «Factura · Cuadra» fija). El pago se
+    // quita después: esta factura se valida pendiente de pagar.
     await ficha(page).locator('#kf-pago').fill('57000000')
     await page.getByRole('option', { name: /^57000000 · / }).click()
-    await expect(ficha(page).locator('[data-asiento-pago="por-hacer"]')).toBeVisible({ timeout: 30_000 })
+    await expect(ficha(page).locator('[data-asiento-pago="por-hacer"]')).toBeAttached({ timeout: 30_000 })
     const vista = await ficha(page).evaluate((el) => {
       const p = el.querySelector('.kr-pantalla') as HTMLElement
-      const ultima = [...el.querySelectorAll('.kr-visual-marco tr')].pop() as HTMLElement
-      return { desplazada: p.scrollTop, abajo: Math.round(ultima.getBoundingClientRect().bottom), pantalla: Math.round(p.getBoundingClientRect().bottom), alto: window.innerHeight }
+      const marco = el.querySelector('.kr-visual-marco') as HTMLElement
+      return {
+        desplazada: p.scrollTop, sobra: p.scrollHeight - p.clientHeight, marco: Math.round(marco.getBoundingClientRect().bottom),
+        pantalla: Math.round(p.getBoundingClientRect().bottom), alto: window.innerHeight, asientoDentro: marco.scrollHeight - marco.clientHeight,
+      }
     })
     console.log(`[K11b ${ancho} · asiento] ${JSON.stringify(vista)}`)
     expect(vista.desplazada, `a ${ancho}, la pantalla sin desplazar`).toBe(0)
-    expect(vista.abajo, `a ${ancho}, la última línea del asiento dentro de la pantalla`).toBeLessThanOrEqual(Math.min(vista.pantalla, vista.alto))
+    expect(vista.sobra, `a ${ancho}, nada de la ficha queda por debajo`).toBeLessThanOrEqual(1)
+    expect(vista.marco, `a ${ancho}, el recuadro del asiento termina dentro de la pantalla`).toBeLessThanOrEqual(Math.min(vista.pantalla, vista.alto))
     await cargada(page, 'tres contrapartidas y el pago')
     await page.screenshot({ path: `${DIR}/tres-contrapartidas-${ancho}.png` })
     await ficha(page).locator('#kf-pago').fill('')
     await ficha(page).locator('#kf-pago').press('Tab')
     await expect(ficha(page).locator('[data-asiento-pago="por-hacer"]')).toHaveCount(0, { timeout: 30_000 })
-    // Lo guardado en la base, después de lo que se ve (las capturas salen aunque esto caiga): la marca y la plataforma de cada línea.
-    const datos = await rest<{ position: number; brand_id: string | null; channel_id: string | null }[]>(s,
-      `supplier_invoice_expense_dato?select=position,brand_id,channel_id&account_id=eq.${NUCLEO.id}&supplier_invoice_id=eq.${factura(t, 1)}&order=position`)
-    expect(datos.map((d) => [d.position, d.brand_id, d.channel_id]), 'la marca y la plataforma de cada línea, guardadas').toEqual([
-      [0, MARCA(1), PLATAFORMA(1)], [1, MARCA(2), PLATAFORMA(1)], [2, MARCA(1), PLATAFORMA(2)]])
     await sinDocumento(page, 'Prueba e2e K11b: tres contrapartidas, sin documento')
     await introFuera(page)
     await expect(aviso(page)).toContainText(/Apuntada y (validada|en Diez)/, { timeout: 60_000 })
@@ -286,9 +291,14 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     const [f2] = await rest<{ deduct_from: string | null; vat_deductible_pct: number | null }[]>(s, `supplier_invoice?select=deduct_from,vat_deductible_pct&account_id=eq.${NUCLEO.id}&id=eq.${factura(t, 2)}`)
     expect(f2.deduct_from, 'la fecha fiscal en el 3T presentado no se ha guardado').toBeNull()
     expect(Number(f2.vat_deductible_pct)).toBe(50)
-    await expect(ficha(page).locator('#kf-deduce option[value="2026-07-01"]')).toBeDisabled()
     await page.keyboard.press('Escape')
     await expect(otros).toHaveCount(0)
+    // El 3T, presentado, no se ofrece en la lupa del periodo (K11b · 6).
+    await ficha(page).getByRole('button', { name: 'Buscar ejercicio' }).click()
+    await expect(page.locator('[data-pieza="lupa"]')).toBeVisible()
+    await expect(page.locator('[data-pieza="lupa"]')).not.toContainText('3T de 2026')
+    await page.keyboard.press('Escape')
+    await expect(page.locator('[data-pieza="lupa"]')).toHaveCount(0)
     // 100,00 de base y 21,00 de IVA: 10,50 deducible (al 472) y 10,50 al gasto (110,50).
     await expect(ficha(page).locator('.kf-asiento')).toContainText('110,50 (62800001)', { timeout: 30_000 })
     await expect(ficha(page).locator('.kf-asiento')).toContainText('10,50 (472')

@@ -133,54 +133,53 @@
 .kr-fila-1 { grid-template-columns: minmax(0, 238fr) minmax(0, 348fr) minmax(64px, 90fr) minmax(106px, 146fr) minmax(0, 135fr); }
 .kr-pago-cabeza, .kr-pago-fila { grid-template-columns: minmax(0, 62fr) minmax(0, 54fr) minmax(0, 128fr) minmax(92px, 110fr) minmax(0, 300fr) minmax(0, 110fr) 46px; }
 
-/* ── K11b · 4 (Respuesta K11b · 4, 23/11) · A 1366 × 768 se ve todo, con el asiento entero sin bajar (pieza 11) ──
-   Con tres contrapartidas y un pago, la pantalla no da para más: cada bloque mide lo suyo y nada más. */
-.kr .kp-bloque-titulo { margin: 1px 0 0; line-height: 15px; font-size: 12.5px; }
-.kr .kp-rotulo { min-height: 13px; line-height: 13px; font-size: 11px; }
-.kr-contra-cabeza > span, .kr-pago-cabeza > span { line-height: 13px; font-size: 11px; }
-.kr-pantalla { padding-bottom: 2px; }
-.kr-pie { min-height: 18px; }
-.kr-dudas { gap: 2px; margin-top: 2px; }
-.kr .kr-dudas .kf-duda { padding: 0 6px; }
-.kr .kr-dudas .kf-duda button { height: 20px; }
+/* ── K11b · 4 y 5 (Respuestas K11b · 4 y 5, 23/11) · Lo que cambia de la pantalla, sin tocar las medidas de la 17a ──
+   (la letra, el alto de las casillas y el de las filas del asiento son los de la maqueta, de arriba). */
 /* La visualización mide lo que sus líneas, a 1366 y a 1920 (no un recuadro que llena lo que queda). */
 .kr-pantalla > .kr-visual { flex: none; min-height: 0; display: block; }
 .kr-visual > .kr-visual-marco { flex: none; min-height: 0; overflow: visible; }
-.kr-visual-marco { min-height: 0; padding: 1px 0; }
-.kr-visual-marco th, .kr-visual-marco td { padding: 0 8px; line-height: 16px; }
-/* El ⊕ del IVA, detrás del último tipo: la segunda fila solo cuando se usa el segundo tipo. */
+.kr-visual-marco { min-height: 0; }
+/* Sin raya entre las filas del asiento, como la 17a (el alto, el de siempre). */
+.kr .kr-visual-marco td { border-top: 0; }
+.kr .kr-visual-marco td.kr-visual-haber-nombre { border-left: 1px solid #d14b4b; }
+/* El ⊕ del IVA, detrás del último tipo: la segunda fila solo cuando se usa el segundo tipo (Respuesta K11b · 4). */
 .kr .kr-iva-vacio { align-self: end; min-height: 21px; display: flex; align-items: center; }
 .kr .kr-iva-otro { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 21px; padding: 0; border: 0; background: none; color: var(--kp-rotulo); cursor: pointer; }
-/* Local, marca y plataforma con su lupa: cada columna, lo que pide su nombre más largo (--kr-*, en letras). */
-.kr-contra-cabeza, .kr-contra-fila {
-  grid-template-columns: minmax(0, 118fr) minmax(0, 198fr) minmax(0, 310fr) calc(var(--kr-local, 10) * 0.58em + 26px) minmax(0, 111fr) 12px; }
+/* K11b · 6 · Contrapartidas en dos filas por línea, como la 17a: la subcuenta, su nombre (en gris, entero si cabe), el
+   concepto y el importe; debajo, local, marca y plataforma con su lupa, cada una lo que pide su nombre más largo. */
+.kr-contra-cabeza, .kr-contra-fila,
 .kr-contra-rejilla[data-hosteleria='si'] .kr-contra-cabeza, .kr-contra-rejilla[data-hosteleria='si'] .kr-contra-fila {
-  grid-template-columns: minmax(0, 118fr) minmax(0, 150fr) minmax(0, 170fr) calc(var(--kr-local, 10) * 0.58em + 26px)
-    calc(var(--kr-marca, 8) * 0.58em + 26px) calc(var(--kr-plat, 8) * 0.58em + 26px) minmax(0, 105fr) 12px; }
+  grid-template-columns: minmax(76px, 118fr) minmax(0, 220fr) minmax(0, 300fr) minmax(0, 111fr) 12px; }
+.kr-contra-cabeza-2, .kr-contra-fila-2,
+.kr-contra-rejilla[data-hosteleria='si'] .kr-contra-cabeza-2 { display: grid; gap: 0 6px; align-items: center; justify-content: start;
+  grid-template-columns: calc(var(--kr-local, 10) * 0.58em + 26px); }
+.kr-contra-rejilla[data-hosteleria='si'] .kr-contra-cabeza-2, .kr-contra-rejilla[data-hosteleria='si'] .kr-contra-fila-2 {
+  grid-template-columns: calc(var(--kr-local, 10) * 0.58em + 26px) calc(var(--kr-marca, 8) * 0.58em + 26px) calc(var(--kr-plat, 8) * 0.58em + 26px); }
 .kr-contra-rejilla { font-size: 12.5px; }
+.kr-contra-linea { display: flex; flex-direction: column; gap: 3px; }
 .kr-contra-lineas { display: flex; flex-direction: column; gap: 3px; }
-/* Desde la quinta línea, la lista se desplaza dentro de su bloque (pieza 12) y el asiento sigue a la vista. */
-.kr-contra-rejilla[data-desplaza='si'] .kr-contra-lineas { max-height: calc(4 * 21px + 3 * 3px); overflow-y: auto; overflow-x: hidden; }
-/* «⊕ otra línea · N líneas» y la suma de control, en la línea del título del bloque (no una fila más). */
-.kr-contra { position: relative; }
-.kr-contra > .kr-pie { position: absolute; top: 1px; right: 0; height: 15px; min-height: 0; padding-left: 8px; background: var(--kp-blanco); gap: 14px; }
-.kr-contra > .kr-pie .kp-mas { height: 15px; font-size: 12px; }
-.kr-contra > .kr-pie .kp-mas svg { width: 15px; height: 15px; }
-.kr-contra > .kr-pie .kr-suma { font-size: 12px; line-height: 15px; }
-/* La subcuenta, sus ocho cifras siempre (la analítica no se la come). */
-.kr-contra-cabeza, .kr-contra-fila { grid-template-columns: minmax(76px, 118fr) minmax(0, 198fr) minmax(0, 310fr) calc(var(--kr-local, 10) * 0.58em + 26px) minmax(0, 111fr) 12px; }
-.kr-contra-rejilla[data-hosteleria='si'] .kr-contra-cabeza, .kr-contra-rejilla[data-hosteleria='si'] .kr-contra-fila {
-  grid-template-columns: minmax(76px, 118fr) minmax(0, 150fr) minmax(0, 170fr) calc(var(--kr-local, 10) * 0.58em + 26px)
-    calc(var(--kr-marca, 8) * 0.58em + 26px) calc(var(--kr-plat, 8) * 0.58em + 26px) minmax(0, 105fr) 12px; }
-/* Las filas del asiento, 16 px y sin raya entre ellas (como ERP10): el recuadro mide lo que sus líneas. */
-.kr .kr-visual-marco th, .kr .kr-visual-marco td { height: 16px; padding: 0 8px; line-height: 16px; border-top: 0; border-bottom: 0; }
-.kr .kr-visual-marco td.kr-visual-haber-nombre { border-left: 1px solid #d14b4b; }
-/* Las casillas de esta pantalla, 20 px (las piezas del K12); entre líneas, 2 px. */
-.kr .kp-ventana input:not([type='checkbox']):not([type='file']), .kr .kp-ventana select, .kr .kp-ventana textarea.kf-nombre-cuenta { height: 20px; line-height: 18px; }
-.kr-contra-lineas, .kr-pago-rejilla { gap: 2px; }
-.kr-contra-rejilla { gap: 2px; }
-.kr-contra-rejilla[data-desplaza='si'] .kr-contra-lineas { max-height: calc(4 * 20px + 3 * 2px); }
-/* Holgura para que el asiento entre entero a 1366 aunque la barra de arriba mida unos píxeles más (staging). */
-.kr-pantalla { padding-bottom: 0; }
-.kr .kp-bloque-titulo { margin-top: 0; }
-.kr-visual-marco { padding: 0; }
+/* A 1366 se ve la primera línea entera (sus dos filas); desde la segunda, la lista se desplaza dentro de su bloque, con
+   su barra siempre a la vista y una raya entre líneas («⊕ otra línea · 3 líneas», debajo, dice cuántas hay). */
+.kr-contra-rejilla[data-desplaza='si'] .kr-contra-lineas { max-height: calc(2 * 21px + 3px); overflow-y: scroll; overflow-x: hidden; scrollbar-gutter: stable; }
+.kr-contra-linea + .kr-contra-linea { border-top: 1px solid var(--kp-raya); padding-top: 3px; }
+/* K11b · 6 · A 1366 la página no baja nunca: el recuadro del asiento mide lo que sus líneas con un alto máximo hasta el
+   borde de abajo; si hay más líneas, se desplazan dentro, con la cabecera «Factura · Cuadra» fija. A 1920, sus líneas. */
+.kr-pantalla > * { flex-shrink: 0; }
+.kr-pantalla > .kr-visual { flex: 0 1 auto; min-height: 58px; display: flex; flex-direction: column; }
+.kr-visual > .kr-visual-marco { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+.kr-visual-marco tbody.kr-visual-cabeza th { position: sticky; top: 0; z-index: 1; }
+/* K11b · 6 · Lo que no se escribe, en gris (tipo de introducción, el periodo, documento, saldo, nombres): la regla de las
+   casillas blancas de arriba pesaba más que la del gris y las dejaba en blanco. */
+.kr .kp-ventana input[readonly]:not([type='checkbox']):not([type='file']), .kr .kp-casilla[data-gris='si'] input:not([type='checkbox']):not([type='file']) {
+  background: var(--kp-gris-fondo); color: var(--kp-gris-tinta); }
+/* El ámbar de una duda pesa más que el gris (una casilla que no se escribe también puede ser dudosa). */
+.kr .kp-ventana .kp-casilla[data-ambar='si'] input:not([type='checkbox']):not([type='file']), .kr .kp-ventana input[data-ambar='si']:not([type='checkbox']):not([type='file']),
+.kr .kp-ventana .kr-celda[data-ambar='si'] input:not([type='checkbox']):not([type='file']), .kr .kp-ventana input[data-duda='si']:not([type='checkbox']):not([type='file']),
+.kr .kp-ventana textarea.kf-nombre-cuenta[data-duda='si'] {
+  background: var(--kp-ambar-fondo); border: 1px solid var(--kp-ambar-borde); color: var(--kp-tinta); }
+/* K11b · 6 · La franja de la barra, sin cortar: si lo fuerte ya es una frase entera, el resto va solo en el title. */
+.kr .kp-barra-aviso .kf-estado-resto[data-sobra='si'] { display: none; }
+.kr-pago-mas { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 21px; padding: 0; border: 0; background: none; color: var(--kp-rotulo); cursor: pointer; }
+.kr-pago-mas:disabled { color: #9aa5b1; cursor: default; }
+.kr-visual-marco col.kr-col-cifra { width: 21%; }
+.kr-visual-marco col.kr-col-nombre { width: 29%; }

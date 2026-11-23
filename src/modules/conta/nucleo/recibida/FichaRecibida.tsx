@@ -65,7 +65,7 @@ import { CasillaFecha, Duda, EstadoFicha, NombreDeCuenta } from '../ficha/piezas
 import { Barra, Bloque, BotonMas, Casilla as KCasilla, OtrosDatos, Ventana } from '../piezas/Ventana'
 import { CasillaLupa } from '../piezas/Lupa'
 import { CasillaImporte } from '../piezas/Importe'
-import { MOTIVO_IMPORTE_DUDOSO, importeDudoso, leerImporte, seDesplaza } from '../piezas/logica'
+import { MOTIVO_IMPORTE_DUDOSO, importeDudoso, leerImporte } from '../piezas/logica'
 import { aVisual, cambioDeLinea, conIvaDeducible, cuadriculaIva, filasDePago, letrasDeLaColumna, otraLinea, otroPago, pagoPorHacer, rotuloDeLaSuma, sumaDeContrapartidas, vistaAnalitica } from './fichaErp10'
 import { apuntarUnPago, borrarPago, cambiarPago, leerPagos, sePuedeCambiarPago } from './pagosServicio'
 import { plataformasDeLaCuenta } from '@/modules/conta/services/asientoGeneralService'
@@ -697,7 +697,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   // ── El teclado: Intro (decisiones 11 y 12), las flechas de la cola y Esc ──
   const raiz = useRef<HTMLDivElement>(null)
   // K11b · 4 · Intro en una lupa elige y pasa a la casilla siguiente (como ERP10), en el orden de la pantalla.
-  const pasarDe = (id: string) => () => {
+  const pasarDe = (id: string) => {
     const lista = casillasDe(raiz.current)
     const s = lista[lista.findIndex((x) => x.id === id) + 1]
     if (s) { s.focus(); if (s instanceof HTMLInputElement) s.select() }
@@ -918,13 +918,13 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                   <div className="kr-fila kr-fila-1">
                     <KCasilla rotulo="Tipo de introducción" htmlFor="kr-tipo" gris><input id="kr-tipo" readOnly tabIndex={-1} value="Factura recibida" /></KCasilla>
                     <KCasilla rotulo="Periodo contable" htmlFor="kf-deduce" className="kr-periodo" ambar={!!comprobacion('periodo')} {...marcaComprobacion('periodo')}>
-                      <input id="kr-ejercicio" aria-label="Ejercicio" readOnly tabIndex={-1} value={ejercicio} />
-                      {cabEscribible && trimestres.length > 0 ? (
-                        <select id="kf-deduce" aria-label="Se deduce en" value={trim?.trimestre?.inicio ?? ''} disabled={guardandoCab} title={trim?.elegido ? 'Elegido en esta factura' : 'El de su fecha'}
-                          onChange={(e) => void ponerCabecera({ deduce_en: e.target.value || null })}>
-                          {trimestres.map((t) => <option key={t.inicio} value={t.inicio} disabled={t.presentado}>{t.texto}{t.presentado ? ' · presentado' : ''}</option>)}
-                        </select>
-                      ) : <input id="kf-deduce" aria-label="Se deduce en" readOnly tabIndex={-1} value={trim?.trimestre?.texto ?? trimestreDe(b.fecha)} />}
+                      {/* K11b · 6 · Como la 17a: el código (el ejercicio) con su lupa, que elige el trimestre en que se deduce (los
+                          presentados no salen), y su descripción en gris. */}
+                      <CasillaLupa id="kr-ejercicio" etiqueta="Ejercicio" registros={trimestres.filter((t) => !t.presentado).map((t) => ({ id: t.inicio, codigo: ejercicio, descripcion: t.texto }))}
+                        valor={trim?.trimestre?.inicio ?? null} vista={() => ejercicio} gris={!cabEscribible || trimestres.length === 0 || guardandoCab}
+                        titulo={trim?.elegido ? 'Elegido en esta factura (F4 abre los trimestres)' : 'El de su fecha (F4 abre los trimestres)'}
+                        poner={(r) => { if (r) void ponerCabecera({ deduce_en: r.id }) }} />
+                      <input id="kf-deduce" aria-label="Se deduce en" readOnly tabIndex={-1} value={trim?.trimestre?.texto ?? trimestreDe(b.fecha)} />
                     </KCasilla>
                     <KCasilla rotulo="Documento" htmlFor="kf-serie" gris><input id="kf-serie" readOnly tabIndex={-1} value={fac?.asiento?.numero ? String(fac.asiento.numero) : ''} title={fac?.asiento?.numero ? `Serie 2 · asiento ${fac.asiento.numero}` : 'Lo pone el programa al validarla'} /></KCasilla>
                     <KCasilla rotulo="Fecha introducción" htmlFor="kr-contable" gris={!otrosL?.fechaContable}>
@@ -934,7 +934,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                   </div>
                   <div className="kr-fila kr-fila-2">
                     <KCasilla rotulo="Proveedor" htmlFor="kf-proveedor" ambar={!!emisor} title={emisor ? `No conozco al que la emite${emisor.nombre ? `: ${emisor.nombre}` : ''}` : origen.proveedor ?? undefined}>
-                      <Buscador id="kf-proveedor" etiqueta="Proveedor" cargando={proveedoresL === null} enfocar={abrirProveedor} duda={!!emisor} valor={textoProv ?? (provId ? textoCasillaProveedor({ subcuenta, futura: cuentasAsiento?.proveedor?.codigo ?? '', nombre: prov?.nombre ?? null }) : '')} cuenta={subcuenta || null}
+                      <Buscador id="kf-proveedor" lupa etiqueta="Proveedor" cargando={proveedoresL === null} enfocar={abrirProveedor} duda={!!emisor} valor={textoProv ?? (provId ? textoCasillaProveedor({ subcuenta, futura: cuentasAsiento?.proveedor?.codigo ?? '', nombre: prov?.nombre ?? null }) : '')} cuenta={subcuenta || null}
                         placeholder={aMano ? 'Código o NIF' : undefined}
                         ponerTexto={setTextoProv} lista={(t) => proveedoresQueEncajan(t, proveedores, codigosProv ?? new Map())}
                         texto={(p) => `${p.nombre}${codigosProv?.get(p.id) ? ` · ${codigosProv.get(p.id)}` : ''}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { if (emisor) void elegirYGuardar(p.id, p.nombre, `Elegido ${p.nombre}.`); else { ed.poner('proveedorId', p.id); setTextoProv(null) } }} />
@@ -972,11 +972,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                     <KCasilla rotulo="Tipo de operación" htmlFor="kf-operacion" ambar={origenOp === 'Cambiado en esta factura'}
                       mas={!aMano && otrosL ? <BotonMas etiqueta="Otros datos" abierto={otrosAbiertos} hacer={() => setOtrosAbierto((x) => (x === invoiceId ? null : invoiceId))} /> : undefined}>
                       {cabEscribible ? (
-                        <select id="kf-operacion" aria-label="Tipo de operación" value={opFactura ?? opFicha ?? ''} disabled={guardandoCab} title={`${textoDeOperacion(opFactura ?? opFicha)}${origenOp ? ` · ${origenOp}` : ''}`}
-                          onChange={(e) => { const v = esOperacion(e.target.value) ? e.target.value : null; void ponerCabecera({ operacion: v === opFicha ? null : v }) }}>
-                          {!opFactura && !opFicha && <option value="">—</option>}
-                          {OPERACIONES.map((o) => <option key={o.valor} value={o.valor} title={o.texto}>{o.corto}</option>)}
-                        </select>
+                        <CasillaLupa id="kf-operacion" etiqueta="Tipo de operación" registros={OPERACIONES.map((o) => ({ id: o.valor, codigo: o.corto, descripcion: o.texto }))}
+                          valor={opFactura ?? opFicha ?? null} gris={guardandoCab} titulo={`${textoDeOperacion(opFactura ?? opFicha)}${origenOp ? ` · ${origenOp}` : ''}` || undefined}
+                          poner={(r) => { const v = r && esOperacion(r.id) ? r.id : null; void ponerCabecera({ operacion: v === opFicha ? null : v }) }} />
                       ) : <input id="kf-operacion" readOnly tabIndex={-1} value={cortoDeOperacion(opFactura ?? opFicha) || (textoOperacion(delProv?.regimen ?? null) ?? '')} title={textoDeOperacion(opFactura ?? opFicha) || undefined} />}
                       {/* De dónde sale, sin frase: en el `title` de la casilla; aquí, la marca corta que leen las pruebas. */}
                       {origenOp && <span className="kf-origen kr-oculto" data-prueba="origen-operacion" title={origenOp}>{origenOp === 'De su ficha' ? 'De su ficha' : 'Cambiado'}</span>}
@@ -1065,10 +1063,10 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                     </div>
                     <div className="kr-retencion">
                       <KCasilla rotulo="Tipo retención" htmlFor="kr-retencion">
-                        <select id="kr-retencion" data-casilla aria-label="Retención" value={b.retencion?.tipo ?? ''} onChange={(e) => ed.poner('retencion', e.target.value ? rehacerRetencion({ tipo: e.target.value, importe: '' }, totales.base) : null)}>
-                          <option value="">—</option>
-                          {TIPOS_RETENCION.map((t) => <option key={t} value={String(t)}>{t} %</option>)}
-                        </select>
+                        <CasillaLupa id="kr-retencion" etiqueta="Retención" registros={TIPOS_RETENCION.map((t) => ({ id: String(t), codigo: String(t), descripcion: `${t} %` }))}
+                          valor={b.retencion?.tipo ?? null} vista={(r) => r.descripcion} datos={{ 'data-casilla': '' }} alIntro={() => pasarDe('kr-retencion')}
+                          titulo={b.retencion ? `Retención del ${b.retencion.tipo} %` : 'Sin retención (F4 abre los tipos)'}
+                          poner={(r) => ed.poner('retencion', r ? rehacerRetencion({ tipo: r.id, importe: '' }, totales.base) : null)} />
                       </KCasilla>
                       <KCasilla rotulo="Base" htmlFor="kr-ret-base" gris><input id="kr-ret-base" className="kp-num" readOnly tabIndex={-1} value={b.retencion ? cifra(totales.base) : ''} /></KCasilla>
                       <KCasilla rotulo="%" htmlFor="kr-ret-tipo" gris><input id="kr-ret-tipo" className="kp-num" readOnly tabIndex={-1} value={b.retencion?.tipo ?? ''} /></KCasilla>
@@ -1093,21 +1091,26 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
 
                 {/* ── Contrapartida/s: una fila por línea (pieza 12) ── */}
                 <Bloque titulo="Contrapartida/s" className="kr-contra" >
-                  <div className="kr-contra-rejilla" data-hosteleria={hosteleria ? 'si' : undefined} data-desplaza={seDesplaza(b.gastos.length) ? 'si' : undefined}
+                  <div className="kr-contra-rejilla" data-hosteleria={hosteleria ? 'si' : undefined} data-desplaza={b.gastos.length > 1 ? 'si' : undefined}
                     role="table" aria-label="Las contrapartidas" style={anchos}>
+                    {/* K11b · 6 · Dos filas por línea, como la 17a: la subcuenta, su nombre, el concepto y el importe; debajo, la analítica. */}
                     <div className="kr-contra-cabeza" role="row">
                       <span role="columnheader" title="Subcuenta gasto">Subcuenta gasto</span><span role="columnheader" />
-                      <span role="columnheader" title="Concepto de gastos">Concepto de gastos</span><span role="columnheader" title="Local">Local</span>
-                      {hosteleria && <><span role="columnheader" title="Marca">Marca</span><span role="columnheader" title="Plataforma">Plataforma</span></>}
+                      <span role="columnheader" title="Concepto de gastos">Concepto de gastos</span>
                       <span role="columnheader" className="kp-num">Importe</span><span role="columnheader" />
+                    </div>
+                    <div className="kr-contra-cabeza kr-contra-cabeza-2" role="row">
+                      <span role="columnheader" title="Local">Local</span>
+                      {hosteleria && <><span role="columnheader" title="Marca">Marca</span><span role="columnheader" title="Plataforma">Plataforma</span></>}
                     </div>
                     <div className="kr-contra-lineas" role="rowgroup">
                     {b.gastos.map((g, i) => {
                       const d = datoDe(i)
                       return (
-                        <div className="kr-contra-fila" role="row" key={i} data-una={unaLinea ? 'si' : undefined}>
+                        <div className="kr-contra-linea" role="row" key={i} data-una={unaLinea ? 'si' : undefined}>
+                        <div className="kr-contra-fila">
                           <span className="kr-celda" data-ambar={(!!duda && i === 0) || (i === 0 && !!comprobacion('gasto-propuesto')) ? 'si' : undefined} title={i === 0 ? (duda?.texto ?? comprobacion('gasto-propuesto')?.texto) : undefined}>
-                            <Buscador id={`kf-cuenta-${i}`} etiqueta={`Cuenta de gasto ${i + 1}`} cargando={cuentasGastoL === null} valor={textoCuenta[i] ?? g.cuenta} cuenta={g.cuenta || null} duda={!!duda && i === 0}
+                            <Buscador id={`kf-cuenta-${i}`} lupa etiqueta={`Cuenta de gasto ${i + 1}`} cargando={cuentasGastoL === null} valor={textoCuenta[i] ?? g.cuenta} cuenta={g.cuenta || null} duda={!!duda && i === 0}
                               ponerTexto={(t) => { setTextoCuenta((x) => ({ ...x, [i]: t })); if (!t.trim()) ponerGasto(i, { cuenta: '' }) }} lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8)}
                               texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }}
                               crear={crearCuenta((c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) })} />
@@ -1120,10 +1123,18 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                               onBlur={(e) => { const v = e.currentTarget.value.trim() || null; if (v !== (d?.concepto ?? null)) ponerDatoLinea(i, { concepto: v }) }} />
                           </span>
                           <span className="kr-celda">
+                            {unaLinea
+                              ? <input className="kp-num" aria-label={`Importe del gasto ${i + 1}`} readOnly tabIndex={-1} value={importeEs(baseGasto + noDeducible)} title={pct < 100 ? `La base y el ${100 - pct} % del IVA que no se deduce` : undefined} />
+                              : <CasillaImporte id={`kr-importe-${i}`} etiqueta={`Importe del gasto ${i + 1}`} valor={g.importe} poner={(t) => ponerGasto(i, { importe: t })} />}
+                          </span>
+                          <span className="kr-celda">{!unaLinea && <button type="button" className="kr-quitar" aria-label={`Quitar la cuenta ${i + 1}`} tabIndex={-1} onClick={() => ed.poner('gastos', b.gastos.filter((_, j) => j !== i))}>×</button>}</span>
+                        </div>
+                        <div className="kr-contra-fila-2">
+                          <span className="kr-celda">
                             {/* K11b · 4 · Local, marca y plataforma con su lupa (pieza 5), con el nombre que cabe y entero en el `title`. */}
                             <CasillaLupa id={`kr-local-${i}`} etiqueta={i === 0 ? 'Local' : `Local ${i + 1}`} registros={registrosLocal} valor={ejeLocal ? g.local ?? '' : ''}
                               gris={!ejeLocal} vista={vistaAnalitica} datos={ejeLocal ? { 'data-casilla': '' } : undefined}
-                              titulo={tituloLocal(g.local)} poner={(r) => ponerGasto(i, { local: r ? r.id : '' })} alIntro={pasarDe(`kr-local-${i}`)} />
+                              titulo={tituloLocal(g.local)} poner={(r) => ponerGasto(i, { local: r ? r.id : '' })} alIntro={() => pasarDe(`kr-local-${i}`)} />
                           </span>
                           {hosteleria && <>
                             <span className="kr-celda">
@@ -1137,12 +1148,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                                 titulo={plataformasLupa.find((x) => x.id === d?.canalId)?.descripcion ?? 'Sin plataforma'} poner={(r) => ponerDatoLinea(i, { plataforma: r?.id ?? null })} />
                             </span>
                           </>}
-                          <span className="kr-celda">
-                            {unaLinea
-                              ? <input className="kp-num" aria-label={`Importe del gasto ${i + 1}`} readOnly tabIndex={-1} value={importeEs(baseGasto + noDeducible)} title={pct < 100 ? `La base y el ${100 - pct} % del IVA que no se deduce` : undefined} />
-                              : <CasillaImporte id={`kr-importe-${i}`} etiqueta={`Importe del gasto ${i + 1}`} valor={g.importe} poner={(t) => ponerGasto(i, { importe: t })} />}
-                          </span>
-                          <span className="kr-celda">{!unaLinea && <button type="button" className="kr-quitar" aria-label={`Quitar la cuenta ${i + 1}`} tabIndex={-1} onClick={() => ed.poner('gastos', b.gastos.filter((_, j) => j !== i))}>×</button>}</span>
+                        </div>
                         </div>
                       )
                     })}
@@ -1175,7 +1181,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                           <input aria-label="Periodo del pago" readOnly tabIndex={-1} value={f.ejercicio} />
                           <input aria-label="Documento del pago" readOnly tabIndex={-1} value="" title="Lo pone el programa al apuntarlo" />
                           <span className="kr-celda" data-prueba="pago-cuenta" data-ambar={dudaPago ? 'si' : undefined} title={dudaPago ? textoDudaPago(dudaPago, (x) => cuentasPago?.nombres.get(x) ?? '').texto : [nombrePago, origenPago].filter(Boolean).join(' · ') || undefined}>
-                            <Buscador id="kf-pago" etiqueta="La cuenta del pago" cargando={!cuentasPago} valor={textoPago ?? pagoCuenta} cuenta={pagoCuenta || null} duda={!!dudaPago}
+                            <Buscador id="kf-pago" lupa etiqueta="La cuenta del pago" cargando={!cuentasPago} valor={textoPago ?? pagoCuenta} cuenta={pagoCuenta || null} duda={!!dudaPago}
                               ponerTexto={(t) => { setTextoPago(t); if (!t.trim()) ed.poner('pagoCuenta', '') }} lista={(t) => cuentasQueEncajan(t, [...(cuentasPago?.lista ?? []), ...creadas], 8)}
                               texto={(x) => `${x.codigo} · ${x.nombre}`} elegir={(x) => { ed.poner('pagoCuenta', x.codigo); setTextoPago(null) }}
                               crear={crearCuenta((x) => { ed.poner('pagoCuenta', x.codigo); setTextoPago(null) })} />
@@ -1183,7 +1189,13 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                           <CasillaFecha id="kf-pago-fecha" etiqueta="La fecha del pago" iso={pagoCuenta ? pagoFecha : ''} hoy={hoy} poner={(x) => ed.poner('pagoFecha', x)} />
                           <input aria-label="Concepto del pago" readOnly tabIndex={-1} value={pagoCuenta ? f.concepto : ''} title={[pagoCuenta ? f.concepto : '', asientoDelPago].filter(Boolean).join(' · ') || undefined} data-prueba="pago-asiento" />
                           <input className="kp-num" readOnly tabIndex={-1} aria-label="Importe del pago" value={cifra(importePago)} />
-                          <span>{origenPago && <span className="kf-origen kr-oculto" data-prueba="origen-pago" title={origenPago}>{origenPago}</span>}</span>
+                          {/* K11b · 6 · El ⊕ detrás del importe, como la 17a: otro pago se apunta una vez validada (K10c). */}
+                          <span className="kr-pago-botones">
+                            <button type="button" className="kr-pago-mas" disabled title="Otro pago: se apunta una vez validada la factura" aria-label="Otro pago">
+                              <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M10 5.5v9M5.5 10h9" stroke="currentColor" strokeWidth="1.6" /></svg>
+                            </button>
+                            {origenPago && <span className="kf-origen kr-oculto" data-prueba="origen-pago" title={origenPago}>{origenPago}</span>}
+                          </span>
                         </div>
                       )
                     }
@@ -1315,6 +1327,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 <Bloque titulo="Visualización del asiento" className="kr-visual">
                   <div className="kf-asiento kr-visual-marco" aria-label="El asiento que sale">
                     <table>
+                      {/* K11b · 6 · Los nombres, más anchos que las cifras: «Distribuciones Ejemplo, S.L.» entero a 1366 si cabe. */}
+                      <colgroup><col className="kr-col-cifra" /><col className="kr-col-nombre" /><col className="kr-col-nombre" /><col className="kr-col-cifra" /></colgroup>
                       <tbody className="kr-visual-cabeza"><tr>
                         <th colSpan={2}>Factura{modo === 'contabilizada' && fac?.asiento?.numero ? ` · asiento 2 / ${fac.asiento.numero}` : ''}</th>
                         <th colSpan={2} className="kp-num">

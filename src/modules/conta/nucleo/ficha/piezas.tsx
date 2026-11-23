@@ -51,7 +51,9 @@ export function EstadoFicha({ tono, fuerte, resto }: { tono: TonoEstado; fuerte:
   return (
     <span className="kf-estado" data-tono={tono} role="status" title={`${fuerte} ${resto}`.trim()}>
       <span className="kf-estado-punto" aria-hidden="true" />
-      <strong>{fuerte}</strong> {resto}
+      {/* K11b · 6 · El resto, en su span: la recibida como ERP10 lo esconde cuando lo fuerte ya es una frase entera (se lee
+          entero en el title) para que la franja no salga cortada. */}
+      <strong>{fuerte}</strong> <span className="kf-estado-resto" data-sobra={/\.$/.test(fuerte.trim()) ? 'si' : undefined}>{resto}</span>
     </span>
   )
 }
