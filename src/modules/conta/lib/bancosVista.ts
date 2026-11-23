@@ -46,6 +46,8 @@ export interface PropuestaGuardada {
   facturaSinAprobar?: boolean
   /** S01d · Las cuentas de una regla con reparto cuyo importe no cuadró: la ventana abre con ellas. */
   reparto?: { cuenta: string; importeCent: number | null; concepto: string | null; modelo?: string | null; periodo?: string | null }[] | null
+  /** X30 · El porcentaje de seguridad (0–100) con el que lo propone Sumied. Sin él, de antes del X30. */
+  seguridad?: number | null
 }
 
 export interface MovimientoBanco {
@@ -64,7 +66,9 @@ export interface MovimientoBanco {
   propuesta: PropuestaGuardada | null
   casado: { id: string; tipo: string; porque: string; porQuien: 'folvy' | 'persona'; asientoId: string | null; asientoConcepto: string | null
     /** S02 · PR 2: el estado de su asiento (propuesto: espera en «Por validar»; validado; anulado). */
-    asientoEstado?: 'propuesto' | 'borrador' | 'validado' | 'anulado' | null } | null
+    asientoEstado?: 'propuesto' | 'borrador' | 'validado' | 'anulado' | null
+    /** X30 · Cuándo se concilió y con qué porcentaje (Conciliar). */
+    cuando?: string | null; seguridad?: number | null } | null
   tarjeta: { ultimos4: string; titular: string } | null
   ticket: string | null
   motivoIgnorado: string | null

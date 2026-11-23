@@ -11,6 +11,8 @@
 //   · el color de cada fila y el «Por qué» (lo que la propuesta sabe hoy: regla, factura o memoria, y su seguridad);
 //   · los avisos (más de 10 días sin conciliar, un banco sin leer desde hace más de un día, pagos sin factura) y la
 //     franja de lo que Sumied ha conciliado solo hoy.
+// X30 (pieza 2): el porcentaje de seguridad en el «Por qué» («Como 6 ant. · 91 %»), quién concilió y cuándo («Sumied ·
+// 23/11 08:12»), los días del aviso por empresa y el día de «hoy» de Madrid todo el año. Lo prueba tests/conta/x30-conciliar.
 
 import type { MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import { formatoImporte } from '../piezas/logica'
@@ -53,26 +55,50 @@ export function filtrar(ls: readonly Linea[], f: Filtros): Linea[] {
 }
 
 /** Por qué no se ha contabilizado y qué dice la propuesta: la etiqueta corta de la columna y su porqué entero (title). */
-export interface PorQue { texto: string; tono: 'regla' | 'factura' | 'memoria' | 'falta' | 'otro' | 'hecho'; title: string }
+export interface PorQue { texto: string; tono: 'regla' | 'factura' | 'memoria' | 'falta' | 'otro' | 'hecho' | 'solo'; title: string }
 
 const SEGURIDAD: Record<string, string> = { seguro: 'segura', probable: 'probable', duda: 'en duda' }
+
+/** X30 · La seguridad de una propuesta: su porcentaje si lo trae («91 %»); si es de antes del X30, la palabra. */
+function seguridadTexto(m: MovimientoBanco): string | null {
+  const p = m.propuesta?.seguridad
+  if (typeof p === 'number' && Number.isFinite(p)) return `${Math.round(p)} %`
+  return m.confianza ? SEGURIDAD[m.confianza] ?? m.confianza : null
+}
+
+/** «23/11 08:12», en hora de Madrid. */
+export function cuandoCorto(iso: string): string {
+  const f = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(iso))
+  const v = (t: string) => f.find((x) => x.type === t)?.value ?? ''
+  return `${v('day')}/${v('month')} ${v('hour')}:${v('minute')}`
+}
 
 export function porQueDe(l: Linea): PorQue | null {
   const m = l.m
   if (m.estado === 'casado' && m.casado) {
     const k = m.casado.tipo
-    const texto = k === 'factura_recibida' || k === 'factura_emitida' ? 'Factura' : k === 'liquidacion' ? 'Liquidación' : k === 'traspaso' ? 'Traspaso'
-      : k === 'contrato' ? 'Contrato' : k === 'asiento' ? 'Asiento' : m.casado.porQuien === 'folvy' ? 'Regla' : 'A mano'
-    return { texto, tono: 'hecho', title: m.casado.porque }
+    const c = m.casado
+    const que = k === 'factura_recibida' || k === 'factura_emitida' ? 'Factura' : k === 'liquidacion' ? 'Liquidación' : k === 'traspaso' ? 'Traspaso'
+      : k === 'contrato' ? 'Contrato' : k === 'asiento' ? 'Asiento' : c.porQuien === 'folvy' ? 'Regla' : 'A mano'
+    // X30 · Lo que concilió Sumied solo se ve: «Sumied · 23/11 08:12»; el porqué, su porcentaje y qué era, en el title.
+    if (c.porQuien === 'folvy') {
+      return { texto: `Sumied${c.cuando ? ` · ${cuandoCorto(c.cuando)}` : ''}`, tono: 'solo',
+        title: [`Lo concilió Sumied solo${c.cuando ? ` el ${cuandoCorto(c.cuando)}` : ''}${typeof c.seguridad === 'number' ? ` con un ${c.seguridad} %` : ''}`, que, c.porque].filter(Boolean).join(' · ') }
+    }
+    return { texto: que, tono: 'hecho', title: [c.porque, c.cuando ? `el ${cuandoCorto(c.cuando)}` : null].filter(Boolean).join(' · ') }
   }
   if (l.antes || m.estado === 'ignorado') return null
   const p = m.propuesta
-  const seg = m.confianza ? SEGURIDAD[m.confianza] ?? m.confianza : null
+  const seg = seguridadTexto(m)
   const title = [m.porque, p?.que].filter(Boolean).join(' · ')
   if (p?.destino) {
     const d = p.destino as { facturas?: unknown[] }
     switch (p.origen) {
-      case 'regla': return { texto: `Regla${seg ? ` · ${seg}` : ''}`, tono: 'regla', title }
+      case 'regla': {
+        // «Regla · TGSS · 75 %»: lo que dice la regla (sus palabras), corto.
+        const palabras = /^Regla(?: confirmada \d+ veces)?: ([^.(]+)/.exec(m.porque ?? '')?.[1]?.trim()
+        return { texto: `Regla${palabras ? ` · ${palabras}` : ''}${seg ? ` · ${seg}` : ''}`, tono: 'regla', title }
+      }
       case 'factura': {
         const n = Array.isArray(d.facturas) ? d.facturas.length : 1
         return { texto: `${n === 1 ? '1 factura' : `${n} facturas`}${seg ? ` · ${seg}` : ''}`, tono: 'factura', title }
@@ -155,22 +181,24 @@ export function siguientePendiente(ls: readonly Linea[], desde: number): number 
 }
 
 /** Los avisos de la franja ámbar. */
-export interface Avisos { viejos: number; sinLeer: { banco: string; desde: string }[]; pagosSinFactura: number }
+export interface Avisos { viejos: number; sinLeer: { banco: string; desde: string }[]; pagosSinFactura: number; dias?: number }
+/** Los días del aviso por defecto; cada empresa los cambia junto al umbral (X30, bank_settings.aviso_dias). */
 export const DIAS_AVISO = 10
 
-export function avisos(ls: readonly Linea[], bancos: readonly { nombre: string; leido: string | null }[], hoy: string): Avisos {
-  const corte = new Date(Date.parse(`${hoy}T12:00:00Z`) - DIAS_AVISO * 86400000).toISOString().slice(0, 10)
+export function avisos(ls: readonly Linea[], bancos: readonly { nombre: string; leido: string | null }[], hoy: string, dias = DIAS_AVISO): Avisos {
+  const corte = new Date(Date.parse(`${hoy}T12:00:00Z`) - dias * 86400000).toISOString().slice(0, 10)
   const ayer = new Date(Date.parse(`${hoy}T12:00:00Z`) - 86400000).toISOString().slice(0, 10)
   return {
     viejos: ls.filter((l) => pendiente(l) && l.m.fecha < corte).length,
     sinLeer: bancos.filter((b) => b.leido && b.leido.slice(0, 10) < ayer).map((b) => ({ banco: b.nombre, desde: b.leido!.slice(0, 10) })),
     pagosSinFactura: ls.filter(pagoSinFactura).length,
+    dias,
   }
 }
 
 export function textosDeAvisos(a: Avisos): string[] {
   const out: string[] = []
-  if (a.viejos > 0) out.push(`${a.viejos === 1 ? '1 movimiento lleva' : `${a.viejos} movimientos llevan`} más de ${DIAS_AVISO} días sin conciliar`)
+  if (a.viejos > 0) out.push(`${a.viejos === 1 ? '1 movimiento lleva' : `${a.viejos} movimientos llevan`} más de ${a.dias ?? DIAS_AVISO} días sin conciliar`)
   for (const b of a.sinLeer) out.push(`${b.banco}: el extracto no se lee desde el ${dm(b.desde)}`)
   if (a.pagosSinFactura > 0) out.push(`${a.pagosSinFactura === 1 ? '1 pago' : `${a.pagosSinFactura} pagos`} sin factura`)
   return out
@@ -183,4 +211,17 @@ export function textoHechoHoy(h: HechoHoy): string | null {
   if (h.n === 0) return null
   const partes = [h.regla && `${h.regla} por regla`, h.factura && `${h.factura} con su factura`, h.memoria && `${h.memoria} como los anteriores`, h.otros && `${h.otros} por otras razones`].filter(Boolean)
   return `Hoy Sumied ha conciliado solo ${h.n === 1 ? '1 movimiento' : `${h.n} movimientos`} de ${h.bancos === 1 ? '1 banco' : `los ${h.bancos} bancos`}${partes.length ? ` (${partes.join(', ')})` : ''}.`
+}
+
+/**
+ * X30 · El comienzo de un día de Madrid, en UTC, todo el año (hora de invierno +01:00, de verano +02:00): la franja de
+ * «hoy» empieza a las 00:00 de Madrid. `dia` en AAAA-MM-DD.
+ */
+export function inicioDelDiaEnMadrid(dia: string): string {
+  // La diferencia de Madrid con UTC a las 23:00 UTC del día anterior: es la que rige a las 00:00 de Madrid (el cambio de
+  // hora es a la 01:00 UTC, después).
+  const antes = new Date(Date.parse(`${dia}T00:00:00Z`) - 3600000)
+  const hora = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hour12: false }).format(antes))
+  const off = (hora - 23 + 24) % 24
+  return new Date(Date.parse(`${dia}T00:00:00Z`) - off * 3600000).toISOString()
 }

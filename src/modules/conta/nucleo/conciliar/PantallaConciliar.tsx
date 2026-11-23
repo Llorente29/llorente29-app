@@ -12,6 +12,9 @@
 //   · «Datos del movimiento», con el saldo de Sumied frente al del banco;
 //   · el panel «Casar con facturas», plegable (Sumied recuerda por persona si está plegado): con UNA factura, como R08.
 // Sin frases en pantalla: el porqué, en el title. Lo que no cabe se corta con «…» y el title lo dice entero.
+// X30 (pieza 2): la pantalla usa todo el ancho (las listas se estiran; las fichas, no) y lo que sobra va a las columnas de
+// texto; «Solo desde 95 %» y los días del aviso, por empresa, en la barra; el porcentaje en «Por qué» y quién concilió
+// solo y cuándo; «Reglas (N)» y «＋ Crear regla con este» (VentanasReglas); el «hoy» de la franja, el de Madrid.
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -40,7 +43,12 @@ import { emitidasQueEncajan, facturasQueEncajan, type FacturaEmitidaPendiente } 
 import { enPalabras } from '../bancos/seleccion'
 import { contabilizar, esDeHosteleria, leerFicheroDelExtracto } from '../tesoreria/servicio'
 import { queHaceIntro, type LineaEd } from '../tesoreria/tesoreria'
-import { borrarLineas, cuentasDeLosBancos, guardarPlegado, hechoHoy, leerBanco, leerPlegado, quitarValidacion, validar } from './servicio'
+import {
+  aplicarHaciaAtras, borrarLineas, borrarRegla, cuentasDeLosBancos, estadoRegla, guardarAjustes, guardarPlegado, guardarRegla, hechoHoy, leerAjustes, leerBanco,
+  leerPlegado, leerReglas, pendientesDeLaEmpresa, quitarValidacion, validar,
+} from './servicio'
+import { fraseDeRegla, reglaDesdeMovimiento, type ReglaEd } from './reglas'
+import { VentanaListaReglas, VentanaRegla } from './VentanasReglas'
 import {
   avisos, colorDe, contabilizada, filtrar, pendiente, porQueDe, recuento, saldos, siguientePendiente, textoDelPie, textoHechoHoy, textoMarcados, textosDeAvisos,
   type Filtros, type Linea, type Tri,
@@ -117,6 +125,11 @@ export default function PantallaConciliar() {
   const cuentas = useUltimo(useLeer(datos ? () => cuentasDeLosBancos(accountId, bancos, inicio) : null, `${companyId}:${bancos.length}:${inicio}:${vuelta}:cuentas`).datos, companyId)
   const hecho = useUltimo(useLeer(companyId ? () => hechoHoy(companyId, hoy) : null, `${companyId}:${hoy}:${vuelta}:hoy`).datos, companyId)
   const [verHoy, setVerHoy] = useState(false)
+  // X30 · El umbral y los días del aviso de la empresa, y sus reglas.
+  const ajustes = useUltimo(useLeer(accountId && companyId ? () => leerAjustes(accountId, companyId) : null, `${companyId}:${vuelta}:ajustes`).datos, companyId)
+  const reglas = useUltimo(useLeer(accountId && companyId ? () => leerReglas(accountId, companyId) : null, `${companyId}:${vuelta}:reglas`).datos, companyId)
+  const [ventana, setVentana] = useState<null | { que: 'lista' } | { que: 'regla'; regla: ReglaEd; volver: boolean }>(null)
+  const pendientesTodos = useLeer(ventana?.que === 'regla' ? () => pendientesDeLaEmpresa(accountId, companyId) : null, `${companyId}:${vuelta}:${ventana?.que}:pendientes`).datos
   const filas = useMemo(() => { const v = filtrar(todas, f); return verHoy && hecho ? v.filter((l) => hecho.movimientos.includes(l.m.id)) : v }, [todas, f, verHoy, hecho])
   const r = recuento(todas, lectura?.antesFuera ?? 0)
 
@@ -245,6 +258,8 @@ export default function PantallaConciliar() {
       if (e.key === 'F5' && !e.ctrlKey) { e.preventDefault(); validarMarcados(); return }
       if (e.key !== 'Escape') return
       if ((e.target as HTMLElement | null)?.closest('[role="dialog"]')) return
+      // X30 · Escape cierra antes la ventana de las reglas que esté abierta que la pestaña.
+      if (ventana) { e.preventDefault(); setVentana(ventana.que === 'regla' && ventana.volver ? { que: 'lista' } : null); return }
       if (confirmaBorrar) { setConfirmaBorrar(false); return }
       if (pestana?.cerrar) { e.preventDefault(); pestana.cerrar() }
     }
@@ -274,9 +289,9 @@ export default function PantallaConciliar() {
     { clave: 'importe', titulo: 'Importe', cifra: true, ancho: '78px' },
     { clave: 'saldo', titulo: 'Saldo', cifra: true, ancho: '90px' },
     { clave: 'subcuenta', titulo: 'Subcuenta', ancho: '76px' },
-    { clave: 'nombre', titulo: 'Nombre', ancho: '10%' },
-    { clave: 'porque', titulo: 'Por qué', ancho: '128px' },
-    { clave: 'doc', titulo: 'Doc.', ancho: '52px' },
+    { clave: 'nombre', titulo: 'Nombre', ancho: '12%' },
+    { clave: 'porque', titulo: 'Por qué', ancho: '144px' },
+    { clave: 'doc', titulo: 'Doc.', ancho: '7%' },
     { clave: 'validado', titulo: <span title="Validado">✓</span>, ancho: '22px' },
   ]
   const celda = (x: Linea, c: string): ReactNode => {
@@ -299,7 +314,23 @@ export default function PantallaConciliar() {
   }
 
   const textoHoy = hecho ? textoHechoHoy(hecho) : null
-  const listaAvisos = textosDeAvisos(avisos(todas, bancos.filter((b) => b.id === banco?.id).map((b) => ({ nombre: nombreCorto(b), leido: b.conexion?.leida ?? b.ultimoExtracto?.subido ?? null })), hoy))
+  const listaAvisos = textosDeAvisos(avisos(todas, bancos.filter((b) => b.id === banco?.id).map((b) => ({ nombre: nombreCorto(b), leido: b.conexion?.leida ?? b.ultimoExtracto?.subido ?? null })), hoy, ajustes?.dias))
+  const activas = (reglas ?? []).filter((x) => x.estado === 'activa').length
+  const ponerAjustes = (x: Partial<{ umbral: number; dias: number }>) => { if (ajustes) void hacer(() => guardarAjustes(companyId, { ...ajustes, ...x })) }
+  const crearRegla = () => { if (m && l && !l.antes) setVentana({ que: 'regla', volver: false, regla: reglaDesdeMovimiento(m, { cuenta: ed.cuenta,
+    // El concepto del asiento, solo si es uno escrito (el del banco cambia en cada movimiento: la regla no lo copia).
+    concepto: [m.conceptoLimpio.trim(), m.conceptoBanco.trim()].includes(ed.concepto.trim()) ? '' : ed.concepto, local: ed.local, marca: ed.marca, plataforma: ed.plataforma }) }) }
+  const guardarLaRegla = (rg: ReglaEd, atras: boolean, cuantos: number) => {
+    const frase = fraseDeRegla(rg, nombreDe)
+    const volver = ventana?.que === 'regla' && ventana.volver
+    void hacer(async () => {
+      const idRegla = await guardarRegla(companyId, rg, atras)
+      if (!atras) return `Regla guardada: «${frase}». Mirará lo que entre desde hoy${cuantos ? ` (ahora casaría con ${cuantos === 1 ? '1 pendiente' : `${cuantos} pendientes`})` : ''}.`
+      const a = await aplicarHaciaAtras(idRegla, rg, pendientesTodos ?? todas)
+      const hecho = `Regla guardada y aplicada hacia atrás: ${a.bien === 1 ? '1 movimiento conciliado' : `${a.bien} movimientos conciliados`}, ${formatoImporte(a.cent / 100)} €, en el diario (serie ${serie}).`
+      return a.no.length ? `${hecho} ${a.no.length === 1 ? 'Uno no' : `${a.no.length} no`}: ${a.no.map(enPalabras).join(' · ')}.` : hecho
+    }, () => setVentana(volver ? { que: 'lista' } : null))
+  }
   const pie = textoDelPie(r, inicio)
   const ip = m ? { ingreso: m.importeCent > 0, cent: m.importeCent } : null
   const marcadosTexto = textoMarcados(marcadas)
@@ -321,6 +352,20 @@ export default function PantallaConciliar() {
       <button type="button" data-boton="traer" disabled={ocupado} onClick={() => fichero.current?.click()} title="Norma 43 o Excel">⇪ Traer el extracto</button>
       <input ref={fichero} type="file" hidden accept=".n43,.q43,.aeb,.txt,.csv,.xls,.xlsx,text/plain,text/csv" aria-label="Fichero del extracto" data-prueba="fichero-extracto"
         onChange={(e) => { const x = e.target.files?.[0]; if (x) leerFichero(x); e.target.value = '' }} />
+      <span className="cn-sep" aria-hidden="true" />
+      <label className="cn-umbral" title="Desde este porcentaje Sumied concilia solo lo que propone por una regla o por lo de antes; por debajo, lo propone en ámbar. Lo seguro (99 %) siempre.">
+        Solo desde
+        <select id="cn-umbral" data-prueba="umbral" value={ajustes?.umbral ?? 95} disabled={!ajustes || ocupado} onChange={(e) => ponerAjustes({ umbral: Number(e.target.value) })}>
+          {[80, 85, 90, 95, 97, 99, 100].map((v) => <option key={v} value={v}>{v} %</option>)}
+        </select>
+      </label>
+      <label className="cn-umbral" title="Avisa de lo que lleva más de estos días sin conciliar">
+        Aviso a
+        <select id="cn-dias" data-prueba="dias-aviso" value={ajustes?.dias ?? 10} disabled={!ajustes || ocupado} onChange={(e) => ponerAjustes({ dias: Number(e.target.value) })}>
+          {[3, 5, 7, 10, 15, 20, 30].map((v) => <option key={v} value={v}>{v} días</option>)}
+        </select>
+      </label>
+      <button type="button" data-boton="reglas" disabled={ocupado} onClick={() => setVentana({ que: 'lista' })} title="Las reglas del banco: cuántas veces ha saltado cada una, corregirlas, apagarlas o borrarlas">⚙ Reglas ({activas})</button>
       {m?.casado && <button type="button" data-boton="deshacer" disabled={ocupado} onClick={deshacer} title="Lo quita del diario y vuelve a estar sin contabilizar">Deshacer</button>}
       {aviso && <div className="kp-barra-aviso"><span className="kp-aviso" data-tono={aviso.tono} role="status" title={aviso.texto} data-prueba="aviso-conciliar">{aviso.texto}</span></div>}
     </div>
@@ -385,7 +430,10 @@ export default function PantallaConciliar() {
               )}
             </div>
             <section className="cn-datos" aria-label="Datos del movimiento" data-prueba="datos-movimiento">
-              <h2 className="kp-bloque-titulo"><span>Datos del movimiento</span></h2>
+              <h2 className="kp-bloque-titulo cn-datos-titulo"><span>Datos del movimiento</span>
+                <button type="button" className="cn-enlace" data-boton="crear-regla" disabled={!m || !!l?.antes || ocupado} onClick={crearRegla}
+                  title="Una regla con lo de este movimiento: a qué va lo que tenga este concepto">＋ Crear regla con este</button>
+              </h2>
               <div className="cn-datos-uno">
                 <Casilla rotulo="Fecha" htmlFor="cn-ed-fecha" gris><input id="cn-ed-fecha" readOnly tabIndex={-1} value={m ? fechaVista(m.fecha) : ''} /></Casilla>
                 <Casilla rotulo="Concepto bancario" htmlFor="cn-ed-banco" gris><input id="cn-ed-banco" readOnly tabIndex={-1} value={m?.conceptoBanco ?? ''} title={m?.conceptoBanco} /></Casilla>
@@ -439,6 +487,18 @@ export default function PantallaConciliar() {
           )}
         </div>
       </Ventana>
+      {ventana?.que === 'regla' && (
+        <VentanaRegla key={ventana.regla.id ?? `${m?.id}`} inicial={ventana.regla} pendientes={pendientesTodos ?? null} bancos={bancos} cuentas={registrosCuenta} nombreDe={nombreDe}
+          base={base ? { locales: base.locales, marcas: base.marcas, plataformas: base.plataformas, hosteleria: base.hosteleria } : null} ocupado={ocupado}
+          alGuardar={guardarLaRegla} alCerrar={() => setVentana(ventana.volver ? { que: 'lista' } : null)} />
+      )}
+      {ventana?.que === 'lista' && (
+        <VentanaListaReglas reglas={reglas ?? null} nombreDe={nombreDe} bancos={bancos} ocupado={ocupado}
+          corregir={(x) => setVentana({ que: 'regla', regla: x, volver: true })}
+          cambiarEstado={(x, e) => void hacer(async () => { await estadoRegla(x.id!, e); return `Regla «${x.contiene}» ${e === 'apagada' ? 'apagada: ya no propone nada' : 'encendida'}.` })}
+          borrar={(x) => void hacer(async () => { await borrarRegla(x.id!); return `Regla «${x.contiene}» borrada.` })}
+          alCerrar={() => setVentana(null)} />
+      )}
     </div>
   )
 }

@@ -18,7 +18,7 @@
 
 import { huellas, huellasSuaves, limpiarConcepto, movimientoSinTarjetas, type Cuadre, type ExtractoLeido } from '../extractoBanco.ts'
 import {
-  MOTOR_BANCOS, conciliar, contraparte, cuentaDeTienda, ventanaDeCobro, type Aprendido, type AsientoLibre, type Contexto, type Contrato, type Decision, type Destino, type Impuesto, type Movimiento, type Plataforma,
+  MOTOR_BANCOS, UMBRAL_POR_DEFECTO, conciliar, contraparte, cuentaDeTienda, seCasaSolo, ventanaDeCobro, type Aprendido, type Regla, type AsientoLibre, type Contexto, type Contrato, type Decision, type Destino, type Impuesto, type Movimiento, type Plataforma,
 } from './conciliacion.ts'
 
 type Fila = Record<string, unknown>
@@ -40,6 +40,23 @@ export interface Bd {
 
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
 const n = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v))
+const aCent = (v: unknown): number | null => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Math.round(Math.abs(Number(v)) * 100))
+
+/**
+ * X30 · Lo nuevo de una regla (bank_rule): en `condition`, el importe ({exacto} o {desde, hasta}, en euros) y el banco;
+ * en `target`, el concepto del asiento y la analítica (local_id, marca_id, canal_id); y desde cuándo mira y si es de partida.
+ */
+export function reglaX30(cond: Fila, dest: Fila, r: Fila): Pick<Regla, 'correcciones' | 'importe' | 'bancoId' | 'desde' | 'concepto' | 'analitica' | 'partida'> {
+  const imp = (cond.importe ?? null) as Fila | null
+  const ana: Record<string, string> = {}
+  for (const k of ['local_id', 'marca_id', 'canal_id'] as const) if (s(dest[k])) ana[k] = String(dest[k])
+  return {
+    correcciones: n(r.corrections),
+    importe: imp ? { exactoCent: aCent(imp.exacto), desdeCent: aCent(imp.desde), hastaCent: aCent(imp.hasta) } : null,
+    bancoId: s(cond.banco), desde: s(r.applies_from), concepto: s(dest.concepto),
+    analitica: Object.keys(ana).length ? ana : null, partida: r.seed === 'partida',
+  }
+}
 const cent = (v: unknown) => Math.round(n(v) * 100)
 const abs = Math.abs
 
@@ -170,7 +187,7 @@ export function crearBancos(bd: Bd) {
     const hace = (d: number) => new Date(Date.parse(`${hoy}T00:00:00Z`) - d * 86400000).toISOString().slice(0, 10)
     const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa, tiendas, cuentasLocal, emitidas, cobroEmitidas, pasarela, declaraciones, gocardless] = await Promise.all([
       bancosDeLaEmpresa(accountId, companyId),
-      leer(tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, common_code, document_no, reference_1, reference_2, before_cutover, status, counterparty, movement_type')
+      leer(tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, common_code, document_no, reference_1, reference_2, before_cutover, status, counterparty, movement_type, created_at')
         .eq('account_id', accountId).eq('company_id', companyId).in('status', ['pendiente', 'propuesto', 'por_aclarar']), 'los movimientos sin casar'),
       // B02: también las «en revisión» (en ámbar, «factura sin aprobar»).
       rpc<Fila[]>('bank_facturas_para_casar', { p_company: companyId }),
@@ -185,7 +202,7 @@ export function crearBancos(bd: Bd) {
       leer(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
       leer(tabla('company_account').select('id, code, name, plain_name, template_code, kind, withholding_model').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
       leer(tabla('recurring_contract').select('*').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'los contratos'),
-      leer(tabla('bank_rule').select('id, words, condition, target, confirmations').eq('account_id', accountId).eq('company_id', companyId).eq('status', 'activa'), 'las reglas'),
+      leer(tabla('bank_rule').select('id, words, condition, target, confirmations, corrections, applies_from, seed').eq('account_id', accountId).eq('company_id', companyId).eq('status', 'activa'), 'las reglas'),
       leer(tabla('supplier').select('id, name, legal_name').eq('account_id', accountId).eq('is_active', true), 'los proveedores'),
       leer(tabla('bank_card').select('id, treasury_account_id, last4, holder_name, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'las tarjetas'),
       leer(tabla('company').select('legal_name, trade_name').eq('id', companyId), 'la empresa'),
@@ -234,6 +251,7 @@ export function crearBancos(bd: Bd) {
       concepto: String(m.bank_concept || m.clean_concept || m.movement_type || ''), conceptoComun: s(m.common_code),
       contraparte: s(m.counterparty), tipo: s(m.movement_type),
       referencias: [s(m.document_no), s(m.reference_1), s(m.reference_2)].filter((x): x is string => !!x), antesDelCorte: !!m.before_cutover,
+      creado: s(m.created_at),
     }))
 
     // Lo aprendido por contraparte: lo casado en Bancos y lo traído de Diez.
@@ -310,6 +328,8 @@ export function crearBancos(bd: Bd) {
         const cond = r.condition as Fila, dest = r.target as Fila
         return { id: String(r.id), palabras: String(r.words), contiene: String(cond.contiene), signo: cond.signo === 1 || cond.signo === -1 ? cond.signo : null,
           cuenta: String(dest.cuenta), terceroId: s(dest.tercero_id), confirmaciones: n(r.confirmations),
+          // X30 · Las condiciones y lo que pone la regla, además del texto y el signo.
+          ...reglaX30(cond, dest, r),
           // S01d · «Recordar este reparto»: las líneas de la regla (importe en céntimos; null = lo que falte).
           lineas: Array.isArray(dest.lineas) ? (dest.lineas as Fila[]).map((l) => ({ cuenta: String(l.cuenta), importeCent: l.importe_cent === null || l.importe_cent === undefined ? null : Number(l.importe_cent),
             concepto: s(l.concepto), modelo: s(l.modelo), periodo: s(l.periodo) })) : null }
@@ -345,6 +365,11 @@ export function crearBancos(bd: Bd) {
 
   async function conciliarPendientes(accountId: string, companyId: string, hoy: string): Promise<ResultadoConciliar> {
     const { ctx, movimientos } = await cargarContexto(accountId, companyId, hoy)
+    try {
+      // X30 · El umbral de la empresa («Solo desde 95 %»). Sin la columna (antes de su tanda), el de siempre.
+      const aj = await leer(tabla('bank_settings').select('auto_threshold').eq('account_id', accountId).eq('company_id', companyId), 'el umbral')
+      ctx.umbral = aj[0]?.auto_threshold === null || aj[0]?.auto_threshold === undefined ? UMBRAL_POR_DEFECTO : n(aj[0].auto_threshold)
+    } catch { ctx.umbral = UMBRAL_POR_DEFECTO }
     const decisiones = conciliar(movimientos, ctx)
     const r: ResultadoConciliar = { casadosSolos: 0, propuestos: 0, porAclarar: 0, antesDelCorte: 0, fallos: [], decisiones }
     const hechos = new Set<string>()
@@ -353,11 +378,15 @@ export function crearBancos(bd: Bd) {
       if (hechos.has(d.movimientoId) || d.otroLadoDe) continue
       const propuesta = { que: d.que, destino: d.destino, falta: d.falta, pideTicket: d.pideTicket, reglaId: d.reglaId, contraparte: d.contraparte, tarjetaId: d.tarjetaId,
         origen: d.origen, preseleccionar: d.preseleccionar, tarjetaDesconocida: d.tarjetaDesconocida, alternativas: d.alternativas,
-        quedaPorCasarCent: d.quedaPorCasarCent, facturaSinAprobar: d.facturaSinAprobar, reparto: d.reparto ?? null, motor: MOTOR_BANCOS }
+        quedaPorCasarCent: d.quedaPorCasarCent, facturaSinAprobar: d.facturaSinAprobar, reparto: d.reparto ?? null, motor: MOTOR_BANCOS,
+        seguridad: d.seguridad ?? null }
       try {
         if (d.tarjetaId) await rpc('bank_tarjeta_del_movimiento', { p_movement: d.movimientoId, p_card: d.tarjetaId })
-        if (d.confianza === 'seguro' && d.destino) {
-          await casarDestino(d.movimientoId, d.destino, 'seguro', d.porque, 'folvy', d.reglaId)
+        if (d.destino && seCasaSolo(d, ctx)) {
+          // X30 · Lo que llega al umbral sin ser «seguro»: queda escrita su propuesta (con su porcentaje) y se casa solo;
+          // el porcentaje va a bank_match por su disparador (2051).
+          if (d.confianza !== 'seguro') await rpc('bank_proponer', { p_movement: d.movimientoId, p_estado: 'propuesto', p_confianza: d.confianza, p_porque: d.porque, p_propuesta: propuesta })
+          await casarDestino(d.movimientoId, d.destino, d.confianza, d.porque, 'folvy', d.reglaId)
           if (d.destino.tipo === 'traspaso') hechos.add(d.destino.otro_movimiento_id)
           r.casadosSolos++
         } else if (d.antesDelCorteSinPareja) {

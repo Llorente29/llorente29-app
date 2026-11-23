@@ -30,7 +30,9 @@
 /* ── 1 · La ventana ─────────────────────────────────────────────────────────────────────────────── */
 .kp-ventana {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
-  /* X27c · En una pantalla grande no se estira (Julio, 22/11, a 1920): el ancho de la maqueta a 1366; lo que sobra, vacío. */
+  /* X27c · En una pantalla grande no se estira (Julio, 22/11, a 1920): el ancho de la maqueta a 1366; lo que sobra, vacío.
+   * X30 (Julio, 23/11): «las fichas no se estiran; las listas usan todo el ancho». Una pantalla de lista (Conciliar) pone
+   * --kp-ventana-max: 100% y reparte lo que sobra entre sus columnas de texto. */
   width: 100%; max-width: var(--kp-ventana-max, 1350px); box-sizing: border-box;
   background: var(--kp-blanco); border: 1px solid var(--kp-titulo-borde); color: var(--kp-tinta);
   font-size: 12.5px; line-height: 1.25;
