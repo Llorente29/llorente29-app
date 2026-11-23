@@ -143,7 +143,7 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     await expect(ficha(page).getByRole('textbox', { name: 'Base 1' })).toBeFocused()
     await page.keyboard.type('100')
     await page.keyboard.press('Enter')
-    await expect(ficha(page).getByRole('combobox', { name: 'Tipo de IVA 1' })).toBeFocused()
+    await expect(ficha(page).getByRole('combobox', { name: 'Tipo de IVA 1', exact: true })).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(ficha(page).getByRole('textbox', { name: 'Base 2' })).toBeFocused()
     await page.keyboard.type('50')
@@ -158,9 +158,9 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     await expect(page.getByRole('option', { name: /^62800001 · / })).toBeVisible({ timeout: 30_000 })
     await page.keyboard.press('Enter')
     await page.keyboard.press('Enter')
-    await expect(ficha(page).getByRole('combobox', { name: 'Local' })).toBeFocused()
+    await expect(ficha(page).getByRole('combobox', { name: 'Local', exact: true })).toBeFocused()
     await page.keyboard.type(NOMBRE_LOCAL[1])
-    await expect(ficha(page).getByRole('combobox', { name: 'Local' })).toHaveValue(LOCAL(1))
+    await expect(ficha(page).getByRole('combobox', { name: 'Local', exact: true })).toHaveValue(LOCAL(1))
     // El pago, en blanco: pendiente de pagar. Intro por la subcuenta y la fecha del pago; en la última, guarda y valida.
     await page.keyboard.press('Enter')
     await expect(ficha(page).locator('#kf-pago')).toBeFocused()
@@ -207,13 +207,13 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     for (const i of [0, 1, 2]) {
       const n = i + 1
       const sufijo = i === 0 ? '' : ` ${n}`
-      await ficha(page).getByRole('combobox', { name: `Local${sufijo}` }).selectOption(LOCAL(n))
-      await ficha(page).getByRole('combobox', { name: `Marca${sufijo}` }).selectOption(MARCA(i === 1 ? 2 : 1))
+      await ficha(page).getByRole('combobox', { name: `Local${sufijo}`, exact: true }).selectOption(LOCAL(n))
+      await ficha(page).getByRole('combobox', { name: `Marca${sufijo}`, exact: true }).selectOption(MARCA(i === 1 ? 2 : 1))
       await expect(aviso(page)).toContainText(/marca|Marca|Guardado/, { timeout: 30_000 })
-      await expect(ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}` })).toBeEnabled({ timeout: 30_000 })
-      await ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}` }).selectOption(PLATAFORMA(i === 2 ? 2 : 1))
-      await expect(ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}` })).toHaveValue(PLATAFORMA(i === 2 ? 2 : 1), { timeout: 30_000 })
-      await expect(ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}` })).toBeEnabled({ timeout: 30_000 })
+      await expect(ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}`, exact: true })).toBeEnabled({ timeout: 30_000 })
+      await ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}`, exact: true }).selectOption(PLATAFORMA(i === 2 ? 2 : 1))
+      await expect(ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}`, exact: true })).toHaveValue(PLATAFORMA(i === 2 ? 2 : 1), { timeout: 30_000 })
+      await expect(ficha(page).getByRole('combobox', { name: `Plataforma${sufijo}`, exact: true })).toBeEnabled({ timeout: 30_000 })
     }
     const datos = await rest<{ position: number; brand_id: string | null; channel_id: string | null }[]>(s,
       `supplier_invoice_expense_dato?select=position,brand_id,channel_id&account_id=eq.${NUCLEO.id}&supplier_invoice_id=eq.${factura(t, 1)}&order=position`)

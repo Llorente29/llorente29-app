@@ -962,7 +962,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                     </KCasilla>
                   </div>
                   {aMano && !provId && !nuevo && (
-                    <button type="button" className="kp-mas kr-nuevo-proveedor" data-prueba="nuevo-proveedor" onClick={() => setNuevo({ nif: '', nombre: textoProv?.trim() ?? '', fallo: null, ocupado: false })}>＋ Nuevo proveedor</button>
+                    <button type="button" className="kp-mas kr-nuevo-proveedor" data-prueba="nuevo-proveedor" onClick={() => setNuevo({ nif: '', nombre: textoProv?.trim() ?? '', fallo: null, ocupado: false })}>+ Nuevo proveedor</button>
                   )}
                   {nuevo && (
                     <div className="kf-nuevo-proveedor" role="group" aria-label="Nuevo proveedor" data-prueba="nuevo-proveedor-abierto">
