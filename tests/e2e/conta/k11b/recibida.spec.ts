@@ -3,7 +3,7 @@
 //
 // K11b · La factura recibida entera, como ERP10 (maquetas nucleo_17a, 17b, 17c y 18b), contra staging, en la empresa de
 // hostelería de la cuenta del núcleo (semilla K11b), a 1366 × 768 y a 1920 × 1080:
-//   1. una recibida a mano de principio a fin SOLO CON EL TECLADO (el proveedor por su código, el número, la base, la
+//   1. una recibida a mano de principio a fin SOLO CON EL TECLADO (el proveedor por su código, el número, dos bases, la
 //      cuenta, el local; Intro casilla a casilla y, en la última, guarda y valida), pendiente de pagar;
 //   2. tres contrapartidas en tres locales, con su marca y su plataforma (empresa de hostelería): la suma de control
 //      cuadra con la base, y el asiento validado lleva las tres líneas, cada una con su local, su marca y su plataforma;
@@ -135,15 +135,23 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     await expect(ficha(page).locator('#kf-numero')).toBeFocused()
     await page.keyboard.type(numero)
     await page.keyboard.press('Enter')
+    // La fecha de la factura (decisión 11: después del número), la de hoy; Intro la deja y sigue a la base.
+    await expect(ficha(page).locator('#kf-fecha')).toBeFocused()
+    await page.keyboard.press('Enter')
     await expect(ficha(page).getByRole('textbox', { name: 'Base 1' })).toBeFocused()
     await page.keyboard.type('100')
+    await page.keyboard.press('Enter')
+    await expect(ficha(page).getByRole('combobox', { name: 'Tipo de IVA 1' })).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(ficha(page).getByRole('textbox', { name: 'Base 2' })).toBeFocused()
+    await page.keyboard.type('50')
     for (let i = 0; i < 12; i++) {
-      // Intro hasta la cuenta de gasto: el tipo (21), la base y el tipo del 10 (vacíos), la retención y el total.
+      // Intro hasta la cuenta de gasto: el tipo (10), la retención y el total.
       await page.keyboard.press('Enter')
       if (await ficha(page).locator('#kf-cuenta-0').evaluate((x) => x === document.activeElement)) break
     }
     await expect(ficha(page).locator('#kf-cuenta-0')).toBeFocused()
-    await expect(ficha(page).locator('#kr-total')).toHaveValue('121,00')
+    await expect(ficha(page).locator('#kr-total')).toHaveValue('176,00')
     await page.keyboard.type('62800001')
     await expect(page.getByRole('option', { name: /^62800001 · / })).toBeVisible({ timeout: 30_000 })
     await page.keyboard.press('Enter')
@@ -162,7 +170,7 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     await contar(page, `${ancho} · 1`)
     const [nueva] = await rest<{ id: string; status: string; grand_total: number }[]>(s, `supplier_invoice?select=id,status,grand_total&account_id=eq.${NUCLEO.id}&invoice_number=eq.${numero}`)
     expect(nueva, 'la factura escrita con el teclado').toBeTruthy()
-    expect(Number(nueva.grand_total)).toBe(121)
+    expect(Number(nueva.grand_total)).toBe(176)
     expect(nueva.status, 'validada y pendiente de pagar').toBe('aprobada')
     const a1 = await lineasDe(s, nueva.id)
     expect(a1.estado).toBe('validado')
@@ -245,9 +253,9 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     // ── 4 · Dos pagos de la del punto 1 (caja y banco), cambiar uno y borrar otro: lo pendiente y el asiento cambian. ──
     await abrir(page, nueva.id)
     const pendiente = ficha(page).locator('[data-prueba="pendiente"]')
-    await expect(pendiente).toHaveText('Pendiente 121,00', { timeout: 30_000 })
+    await expect(pendiente).toHaveText('Pendiente 176,00', { timeout: 30_000 })
     const otroPago = ficha(page).getByRole('button', { name: 'Otro pago' })
-    for (const [cuenta, importe, queda] of [['57000000', '50', 'Pendiente 71,00'], ['57200001', '71', 'Pagada']] as const) {
+    for (const [cuenta, importe, queda] of [['57000000', '50', 'Pendiente 126,00'], ['57200001', '126', 'Pagada']] as const) {
       await otroPago.click()
       await ficha(page).locator('#kr-pago-cuenta-nuevo').fill(cuenta)
       await ficha(page).locator('#kr-pago-cuenta-nuevo').press('Enter')
@@ -271,13 +279,13 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     await expect(pendiente).toHaveText('Pendiente 10,00', { timeout: 30_000 })
     await expect(pendiente).toHaveAttribute('data-ambar', 'si')
     await expect(pendiente).toHaveAttribute('title', /faltan 10,00/)
-    // Borrar el del banco (dos pulsaciones: la primera lo arma): faltan 81,00, y su asiento ya no sale.
+    // Borrar el del banco (dos pulsaciones: la primera lo arma): faltan 136,00, y su asiento ya no sale.
     const banco = ficha(page).locator('[data-pago]').nth(1)
     await expect(banco.getByRole('textbox', { name: 'Subcuenta pago' })).toHaveValue('57200001')
     await banco.getByRole('button', { name: /^Borrar el pago/ }).click()
     await banco.getByRole('button', { name: /^Borrar el pago/ }).click()
     await expect(aviso(page)).toContainText('borrado', { timeout: 30_000 })
-    await expect(pendiente).toHaveText('Pendiente 81,00', { timeout: 30_000 })
+    await expect(pendiente).toHaveText('Pendiente 136,00', { timeout: 30_000 })
     await expect(ficha(page).locator('[data-asiento-pago]')).toHaveCount(1)
     const pagos = await rest<{ amount: number }[]>(s, `supplier_invoice_payment?select=amount&account_id=eq.${NUCLEO.id}&invoice_id=eq.${nueva.id}`)
     expect(pagos.map((p) => Number(p.amount)), 'queda el de la caja, cambiado').toEqual([40])
