@@ -1,0 +1,4 @@
+# X28 · Tesorería como ERP10 (0800 añade, de verdad desde la rama; 0801 cambia el casado, en ROLLBACK).
+supabase/migrations/20261123T0800_x28_tesoreria_modificar.sql
+supabase/migrations/20261123T0801_x28_banco_con_marca.sql
+supabase/staging/sql/20261123_x28_tesoreria_prueba.sql
