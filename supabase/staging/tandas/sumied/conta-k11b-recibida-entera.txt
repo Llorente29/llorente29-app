@@ -6,3 +6,7 @@ supabase/seeds/conta/seed_k11b_recibida_hosteleria_staging.sql
 # El candado de ERP10 de los pagos por el camino del Excel (conta_erp10_salida_partida), que el K10c no probó: en
 # ROLLBACK, staging no cambia.
 supabase/staging/sql/20261123_k11b_erp10_excel_prueba.sql
+# Las facturas del «emisor que no se conoce» de las e2e K04b y K07, sin proveedor de verdad: desde la R14 (21/11) las de
+# sus semillas se quedaron con el proveedor que les puso el alta sola. Van otras, nuevas, como las deja su «Deshacer»
+# (su fila de conta_proveedor_solo deshecha). Solo añade (W07), de verdad desde la rama (W05).
+supabase/seeds/conta/seed_k11b_emisor_sin_proveedor_staging.sql
