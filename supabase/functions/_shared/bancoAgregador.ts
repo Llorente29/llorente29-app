@@ -380,6 +380,8 @@ export interface ParteCuenta {
   leidos: number
   nuevos: number
   repetidos: number
+  /** X29 · Las que no han entrado por estar borradas a mano, aparte de las repetidas. */
+  borradas: number
   posiblesRepetidos: number
   continuidad: string | null
   huecoCent: number | null
@@ -417,7 +419,7 @@ export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgrega
     const saldo = saldos[c.id] ?? null
     const parte: ParteCuenta = {
       banco: banco?.nombre ?? null, cuentaProveedor: c.id, iban4: c.iban.slice(-4), estado: 'al_dia', mensaje: '', desde: null, hasta: null,
-      leidos: 0, nuevos: 0, repetidos: 0, posiblesRepetidos: 0, continuidad: null, huecoCent: null,
+      leidos: 0, nuevos: 0, repetidos: 0, borradas: 0, posiblesRepetidos: 0, continuidad: null, huecoCent: null,
       saldoBancoCent: saldo?.cent ?? null, saldoFinalCent: null, caduca: permiso.caduca,
       pendientes: 0, pendientesCent: 0, tarde: 0, tardeCent: 0, desdeReleido: null,
     }
@@ -530,11 +532,11 @@ export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgrega
         p_sin_comprobar: sinSaldo ? 'La conexión con el banco no ha dado el saldo contable: no se puede comprobar que empiece donde acabó el anterior.' : null,
         p_iban_fichero: null, p_movs: movs,
       })
-      parte.nuevos = Number(r.nuevos ?? 0); parte.repetidos = Number(r.repetidos ?? 0) + yaEstaban; parte.posiblesRepetidos = Number(r.posibles_repetidos ?? 0)
+      parte.nuevos = Number(r.nuevos ?? 0); parte.repetidos = Number(r.repetidos ?? 0) + yaEstaban; parte.borradas = Number(r.borradas ?? 0); parte.posiblesRepetidos = Number(r.posibles_repetidos ?? 0)
       parte.continuidad = r.continuidad == null ? null : String(r.continuidad)
       parte.huecoCent = r.hueco == null ? null : Math.round(Number(r.hueco) * 100)
       parte.saldoFinalCent = pag.saldoFinalCent
-      parte.mensaje = `${parte.nuevos} nuevos y ${parte.repetidos} que ya estaban, del ${desde} al ${ayer}`
+      parte.mensaje = `${parte.nuevos} nuevos y ${parte.repetidos} que ya estaban${parte.borradas ? ` · ${parte.borradas} ${parte.borradas === 1 ? 'borrada' : 'borradas'} antes` : ''}, del ${desde} al ${ayer}`
         + (parte.continuidad === 'hueco' && parte.huecoCent !== null ? `. No empieza donde acabó el anterior: faltan ${euros(parte.huecoCent)}.` : '.') + tardeTexto
       await apuntar()
     } catch (err) {

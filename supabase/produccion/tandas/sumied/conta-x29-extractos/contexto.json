@@ -1,0 +1,26 @@
+{
+ "_que": "X29 · Gestión de extractos bancarios · contexto medido en la BASE LOCAL con la estructura de staging (main e8ba0c9), en SOLO LECTURA: no en producción (esta sesión no lee producción). 1712 solo añade (dos columnas en bank_movement, una en conta_user_pref, una tabla y cuatro funciones); 1713 cambia bank_importar (trozos exactos, misma firma, con respaldo) y añade un disparador before insert en bank_movement, con su prueba de staging. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-23T17:15Z",
+ "tanda": {
+  "supabase/migrations/20261123T1712_x29_extractos_anade.sql": "d1fc62b60b6a2a65c52abe28b2393b99",
+  "supabase/migrations/20261123T1713_x29_borradas_no_vuelven.sql": "0321a90f833683751aeb100d0cec143c"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_movement",
+   "public.conta_user_pref"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.bank_movement": 14,
+   "public.conta_user_pref": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

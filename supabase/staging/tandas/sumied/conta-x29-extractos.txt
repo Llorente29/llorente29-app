@@ -1,0 +1,4 @@
+# X29 · Gestión de extractos bancarios (1712 añade, de verdad desde la rama; 1713 cambia bank_importar y bank_movement, en ROLLBACK).
+supabase/migrations/20261123T1712_x29_extractos_anade.sql
+supabase/migrations/20261123T1713_x29_borradas_no_vuelven.sql
+supabase/staging/sql/20261123_x29_extractos_prueba.sql
