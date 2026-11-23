@@ -88,3 +88,30 @@ export function cuadriculaIva<T>(lineas: readonly T[]): (T | null)[][] {
   for (let i = 0; i < todos.length; i += 2) filas.push([todos[i], todos[i + 1]])
   return filas
 }
+
+/**
+ * El IVA deducible de «Otros datos» (K11a) en la visualización: lo que no se deduce de cada 472 pasa al gasto, repartido
+ * entre las líneas de gasto por su importe (la última se queda los céntimos). Al 100 %, las líneas tal cual.
+ */
+export function conIvaDeducible<T extends { codigo: string; debe: number | null; haber: number | null }>(lineas: readonly T[], pct: number): T[] {
+  if (!(pct >= 0 && pct < 100)) return [...lineas]
+  const esIva = (l: T) => /^472/.test(l.codigo) && (l.debe ?? 0) !== 0
+  const esGasto = (l: T) => !/^472/.test(l.codigo) && (l.debe ?? 0) !== 0 && !/^4[01]/.test(l.codigo)
+  let noDeduce = 0
+  const r = lineas.map((l) => {
+    if (!esIva(l)) return { ...l }
+    const fuera = Math.round(cent(l.debe ?? 0) * (100 - pct) / 100)
+    noDeduce += fuera
+    return { ...l, debe: (cent(l.debe ?? 0) - fuera) / 100 }
+  })
+  const gastos = r.map((l, i) => [l, i] as const).filter(([l]) => esGasto(l))
+  const total = gastos.reduce((t, [l]) => t + cent(l.debe ?? 0), 0)
+  if (!noDeduce || !gastos.length || !total) return r
+  let puesto = 0
+  gastos.forEach(([l, i], k) => {
+    const parte = k === gastos.length - 1 ? noDeduce - puesto : Math.round(noDeduce * cent(l.debe ?? 0) / total)
+    puesto += parte
+    r[i] = { ...l, debe: (cent(l.debe ?? 0) + parte) / 100 }
+  })
+  return r
+}

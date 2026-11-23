@@ -5,7 +5,7 @@
 // prueba de staging del K10c (121 en 60 + 61).
 
 import { describe, expect, it } from 'vitest'
-import { aVisual, cuadriculaIva, filasDePago, otraLinea, otroPago, rotuloDeLaSuma, sumaDeContrapartidas } from '@/modules/conta/nucleo/recibida/fichaErp10'
+import { aVisual, conIvaDeducible, cuadriculaIva, filasDePago, otraLinea, otroPago, rotuloDeLaSuma, sumaDeContrapartidas } from '@/modules/conta/nucleo/recibida/fichaErp10'
 
 const cifra = (n: number) => n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -73,5 +73,21 @@ describe('K11b · la visualización del asiento y la cuadrícula del IVA', () =>
     expect(cuadriculaIva(['21'])).toEqual([['21', null], [null, null]])
     expect(cuadriculaIva(['21', '10', '4'])).toEqual([['21', '10'], ['4', null]])
     expect(cuadriculaIva(['a', 'b', 'c', 'd', 'e'])).toEqual([['a', 'b'], ['c', 'd'], ['e', null]])
+  })
+})
+
+describe('K11b · el IVA deducible en la visualización', () => {
+  const l = (codigo: string, debe: number | null, haber: number | null = null) => ({ codigo, debe, haber })
+  it('al 50 %: de 21,00 de IVA, 10,50 al 472 y 10,50 al gasto (110,50)', () => {
+    expect(conIvaDeducible([l('62800001', 100), l('47200021', 21), l('40000101', null, 121)], 50))
+      .toEqual([l('62800001', 110.5), l('47200021', 10.5), l('40000101', null, 121)])
+  })
+  it('con dos líneas de gasto, repartido por su importe, y la última se queda los céntimos', () => {
+    expect(conIvaDeducible([l('62800001', 100), l('60000001', 200), l('47200021', 63.01), l('40000101', null, 363.01)], 0))
+      .toEqual([l('62800001', 121), l('60000001', 242.01), l('47200021', 0), l('40000101', null, 363.01)])
+  })
+  it('al 100 %, tal cual', () => {
+    const x = [l('62800001', 100), l('47200021', 21), l('40000101', null, 121)]
+    expect(conIvaDeducible(x, 100)).toEqual(x)
   })
 })
