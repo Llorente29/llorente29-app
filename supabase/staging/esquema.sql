@@ -6835,6 +6835,41 @@ $$;
 
 
 --
+-- Name: _conta_k10c_en_erp10(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_k10c_en_erp10(p_entry uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select exists (select 1 from public.conta_erp10_envio v where v.entry_id = p_entry and v.estado in ('en_erp10', 'enviando'))
+      or exists (select 1 from public.conta_erp10_salida_partida x where x.entry_id = p_entry and x.estado = 'salida')
+$$;
+
+
+--
+-- Name: _conta_k10c_estado(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_k10c_estado(p_invoice uuid, p_quien text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_inv public.supplier_invoice; v_pagado numeric; v_ultimo date;
+begin
+  select * into v_inv from public.supplier_invoice where id = p_invoice for update;
+  select coalesce(sum(amount), 0), max(paid_on) into v_pagado, v_ultimo from public.supplier_invoice_payment where invoice_id = p_invoice and entry_id is not null;
+  if v_inv.status = 'pagada' and v_pagado < coalesce(v_inv.grand_total, 0) - 0.005 then
+    update public.supplier_invoice set status = 'aprobada', paid_at = null, paid_method = null, paid_by = null, paid_by_name = null, updated_at = now() where id = p_invoice;
+    insert into public.supplier_invoice_payment_log (account_id, invoice_id, action, paid_at, paid_method, actor_id, actor_name)
+    values (v_inv.account_id, p_invoice, 'unpaid', v_inv.paid_at, v_inv.paid_method, auth.uid(), p_quien);
+  elsif v_inv.status = 'aprobada' and v_pagado >= coalesce(v_inv.grand_total, 0) - 0.005 and coalesce(v_inv.grand_total, 0) <> 0 then
+    perform public.mark_supplier_invoice_paid(p_invoice, v_ultimo, null);
+  end if;
+end $$;
+
+
+--
 -- Name: _conta_lectura_caida(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -50569,6 +50604,56 @@ COMMENT ON FUNCTION public.conta_lectura_estado(p_company uuid) IS 'E02: la fran
 
 
 --
+-- Name: conta_lectura_lineas_guardar(uuid, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_lectura_lineas_guardar(p_session uuid, p_lineas jsonb, p_validacion jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_s record; f record; v_facturas int := 0; v_casadas int := 0; v_n int;
+begin
+  select id, account_id into v_s from public.goods_receipt_ai_session where id = p_session for update;
+  if v_s.id is null then raise exception 'Esa lectura no está.' using errcode = 'P0002'; end if;
+  if not (coalesce(auth.role(), '') = 'service_role' or public.current_user_is_admin_or_manager_of(v_s.account_id)) then
+    raise exception 'Solo un administrador o un encargado de la cuenta.' using errcode = '42501';
+  end if;
+  if jsonb_typeof(coalesce(p_lineas, 'null'::jsonb)) <> 'array' then raise exception 'Las líneas tienen que ser una lista.' using errcode = '22023'; end if;
+  if jsonb_typeof(coalesce(p_validacion, 'null'::jsonb)) <> 'object' then raise exception 'Falta la validación.' using errcode = '22023'; end if;
+
+  update public.goods_receipt_ai_session
+     set parsed_result = jsonb_set(coalesce(parsed_result, '{}'::jsonb), '{lines}', p_lineas, true),
+         validation = p_validacion,
+         updated_at = now()
+   where id = p_session;
+
+  for f in select i.id from public.supplier_invoice i where i.ai_session_id = p_session and i.account_id = v_s.account_id loop
+    if exists (select 1 from public.supplier_invoice_line l where l.supplier_invoice_id = f.id
+                and (l.goods_receipt_line_id is not null or l.recipe_item_id is not null)) then
+      v_casadas := v_casadas + 1;
+      continue;
+    end if;
+    delete from public.supplier_invoice_line where supplier_invoice_id = f.id;
+    -- Las mismas columnas que pone conta_factura_desde_lectura al crearla.
+    insert into public.supplier_invoice_line (supplier_invoice_id, raw_text, qty, unit_price, line_amount, vat_pct, position)
+    select f.id, coalesce(x->>'raw_text', '—'), nullif(x->>'quantity', '')::numeric, nullif(x->>'unit_price_net', '')::numeric,
+           nullif(x->>'line_amount', '')::numeric, nullif(x->>'vat_pct', '')::numeric, o::int
+      from jsonb_array_elements(p_lineas) with ordinality as e(x, o);
+    v_facturas := v_facturas + 1;
+  end loop;
+  v_n := jsonb_array_length(p_lineas);
+  return jsonb_build_object('facturas', v_facturas, 'lineas', v_n, 'casadas', v_casadas);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_lectura_lineas_guardar(p_session uuid, p_lineas jsonb, p_validacion jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_lectura_lineas_guardar(p_session uuid, p_lineas jsonb, p_validacion jsonb) IS 'E10: guarda las líneas de una factura larga leída por páginas, en su sesión de lectura (con cuántas se han leído de cuántas) y en cada factura hecha de esa sesión (si ninguna línea está casada). La llama ocr-albaran.';
+
+
+--
 -- Name: conta_lectura_proveedor_releida(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -60288,6 +60373,269 @@ COMMENT ON FUNCTION public.conta_recibida_pagar_con_cuenta(p_company uuid, p_inv
 
 
 --
+-- Name: conta_recibida_pago_apuntar(uuid, uuid, text, date, numeric, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_pago_apuntar(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text DEFAULT NULL::text, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_cuenta uuid := public._pc01e2_empresa(p_company);
+  v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'Sumied');
+  v_inv public.supplier_invoice; v_s public.supplier; v_prov text; v_ca public.company_account;
+  v_pend numeric; v_imp numeric := round(coalesce(p_importe, 0), 2); v_party uuid; v_pago uuid; v_r jsonb; v_entry uuid; v_val jsonb;
+  v_numero text; v_concepto text; v_nombre text; v_queda numeric;
+begin
+  if p_fecha is null then raise exception 'Falta el día del pago.' using errcode = '22023'; end if;
+  if p_fecha > public.conta_hoy() then
+    raise exception 'El pago es de un día que aún no ha llegado (%): queda pendiente de pagar.', to_char(p_fecha, 'DD/MM/YYYY') using errcode = '22023';
+  end if;
+  select * into v_inv from public.supplier_invoice where id = p_invoice and account_id = v_cuenta for update;
+  if v_inv.id is null or coalesce(v_inv.company_id, p_company) <> p_company then raise exception 'Esa factura no es de la empresa.' using errcode = '23514'; end if;
+  v_numero := coalesce(v_inv.invoice_number, 'sin número');
+  if v_inv.status <> 'aprobada' then raise exception 'La factura % no está por pagar (está %).', v_numero, v_inv.status using errcode = '23514'; end if;
+  if v_inv.payment_method is not distinct from 'compensation' then
+    raise exception 'La factura % se paga con su liquidación (compensación): no con otra cuenta.', v_numero using errcode = '23514';
+  end if;
+  select * into v_s from public.supplier where id = v_inv.supplier_id;
+  v_prov := public._pc01e2_cuenta_proveedor(p_company, v_s.id);
+  if v_prov is null then
+    raise exception '% no tiene su cuenta de proveedor (400) en el plan: sin ella el pago no tendría asiento.', coalesce(v_s.name, 'Su proveedor') using errcode = '23514';
+  end if;
+  select * into v_ca from public.company_account where company_id = p_company and code = btrim(coalesce(p_cuenta, ''));
+  if v_ca.id is null then raise exception 'La cuenta % no está en el plan de la empresa.', coalesce(nullif(btrim(p_cuenta), ''), '(vacía)') using errcode = '23514'; end if;
+  if v_ca.kind = 'group' then raise exception 'La % es un grupo del plan: elige una subcuenta.', v_ca.code using errcode = '23514'; end if;
+  if v_ca.code = v_prov then raise exception 'La % es la del proveedor: no es una cuenta de pago.', v_ca.code using errcode = '23514'; end if;
+  if exists (select 1 from public.company_account_link l where l.company_id = p_company and l.entity = 'bank_account' and l.company_account_id = v_ca.id) then
+    raise exception 'La % es de un banco, una tarjeta o la caja: ese pago espera el cargo y se casa en Bancos.', v_ca.code using errcode = '23514';
+  end if;
+  select pendiente into v_pend from public.conta_recibida_pago where invoice_id = v_inv.id;
+  v_pend := round(coalesce(v_pend, 0) - public._pc01e2_en_remesa(v_inv.id), 2);
+  if v_imp <= 0 then raise exception 'El importe del pago tiene que ser mayor que cero.' using errcode = '22023'; end if;
+  if v_imp > v_pend + 0.005 then
+    raise exception 'A la factura % le quedan % por pagar: este pago de % pasa del total.', v_numero,
+      public.conta_euros_exactos(greatest(v_pend, 0)), public.conta_euros_exactos(v_imp) using errcode = '23514';
+  end if;
+
+  select party_id into v_party from public.party_role where account_id = v_cuenta and supplier_id = v_s.id and role = 'supplier' order by created_at limit 1;
+  v_nombre := coalesce(nullif(v_ca.plain_name, ''), v_ca.name);
+  v_concepto := coalesce(nullif(btrim(p_concepto), ''), 'Pago factura ' || v_numero);
+  insert into public.supplier_invoice_payment (account_id, company_id, invoice_id, paid_on, amount, method, note, created_by, created_by_name)
+  values (v_cuenta, p_company, v_inv.id, p_fecha, v_imp, null, format('Pagada con la %s (%s): %s', v_ca.code, v_nombre, v_concepto), auth.uid(), v_quien)
+  returning id into v_pago;
+  v_r := public._journal_entry_proponer(p_company,
+    jsonb_build_object('series', 4, 'fecha', p_fecha, 'source_type', 'supplier_payment', 'source_id', v_pago,
+      'concepto', v_concepto, 'party_id', v_party, 'documento', v_inv.invoice_number, 'fecha_documento', v_inv.invoice_date,
+      'confianza', 'seguro', 'porque', format('Pago de la factura con la %s.', v_ca.code)),
+    jsonb_build_array(
+      jsonb_build_object('cuenta', v_prov, 'tercero_id', v_party, 'documento', v_inv.invoice_number, 'concepto', v_concepto, 'debe', v_imp, 'haber', 0, 'comun', true),
+      jsonb_build_object('cuenta', v_ca.code, 'documento', v_inv.invoice_number, 'concepto', v_concepto, 'debe', 0, 'haber', v_imp, 'comun', true)),
+    null, v_quien, auth.uid());
+  v_entry := nullif(v_r->>'id', '')::uuid;
+  if v_entry is null then raise exception 'El asiento del pago no se ha podido proponer (%).', v_r using errcode = '23514'; end if;
+  v_val := public.journal_entry_validar(v_entry, v_quien);
+  update public.supplier_invoice_payment set entry_id = v_entry where id = v_pago;
+  v_queda := round(v_pend - v_imp, 2);
+  if v_queda < 0.005 then perform public.mark_supplier_invoice_paid(v_inv.id, p_fecha, null); end if;
+  return jsonb_build_object('pago', v_pago, 'asiento', v_entry, 'serie', 4, 'numero', v_val->'numero', 'importe', v_imp, 'cuenta', v_ca.code, 'pendiente', greatest(v_queda, 0),
+    'frase', format('Pago apuntado con la %s (%s): %s el %s, asiento 4 / %s. La factura %s %s.',
+      v_ca.code, v_nombre, public.conta_euros_exactos(v_imp), to_char(p_fecha, 'DD/MM/YYYY'), v_val->>'numero', v_numero,
+      case when v_queda < 0.005 then 'queda pagada' else format('queda pagada en parte: faltan %s', public.conta_euros_exactos(v_queda)) end));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_pago_apuntar(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_pago_apuntar(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text) IS 'K10c · Un pago de una recibida validada, POR UN IMPORTE, con una cuenta que no es del banco: su asiento validado (serie 4, Debe 400 / Haber la cuenta), su fila en supplier_invoice_payment y, si queda cubierta, la factura pagada. No pasa de lo pendiente.';
+
+
+--
+-- Name: conta_recibida_pago_borrar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_pago_borrar(p_pago uuid, p_motivo text, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare p public.supplier_invoice_payment; e public.journal_entry; v_se jsonb; v_quien text; v_r jsonb;
+begin
+  select * into p from public.supplier_invoice_payment where id = p_pago for update;
+  v_se := public.conta_recibida_pago_se_puede_cambiar(p_pago);
+  if not coalesce((v_se->>'puede')::boolean, false) then raise exception '%', v_se->>'porque' using errcode = '23514'; end if;
+  if coalesce(btrim(p_motivo), '') = '' then raise exception 'Falta por qué se borra el pago.' using errcode = '22023'; end if;
+  v_quien := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  select * into e from public.journal_entry where id = p.entry_id;
+  -- Borrar renumera su serie: si eso movería un asiento que ya está en ERP10, no se borra.
+  if exists (select 1 from public.journal_entry o
+              where o.company_id = e.company_id and o.fiscal_year_id = e.fiscal_year_id and o.series = e.series
+                and o.number > e.number and public._conta_k10c_en_erp10(o.id)) then
+    raise exception 'Este pago ya está en ERP10: borrarlo renumeraría asientos de la serie % que ya están allí. Para quitarlo, anúlalo allí y aquí con un contraasiento.', e.series
+      using errcode = '23514';
+  end if;
+  delete from public.supplier_invoice_payment where id = p.id;
+  v_r := public._conta_asientos_borrar(e.company_id, array[e.id], format('K10c · pago de %s borrado: %s', public.conta_euros_exactos(p.amount), btrim(p_motivo)), v_quien);
+  perform public._conta_k10c_estado(p.invoice_id, v_quien);
+  insert into public.supplier_invoice_change (account_id, supplier_invoice_id, by_name, what, cambios)
+  values (p.account_id, p.invoice_id, v_quien, 'guardar', jsonb_build_object('pago_borrado', true, 'asiento', e.number, 'importe', p.amount, 'fecha', p.paid_on, 'motivo', btrim(p_motivo)));
+  return jsonb_build_object('borrado', v_r,
+    'frase', format('Pago de %s del %s borrado, con su asiento %s / %s (la serie se ha renumerado sin huecos).',
+                    public.conta_euros_exactos(p.amount), to_char(p.paid_on, 'DD/MM/YYYY'), e.series, e.number));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_pago_borrar(p_pago uuid, p_motivo text, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_pago_borrar(p_pago uuid, p_motivo text, p_quien_nombre text) IS 'K10c · Borrar un pago apuntado de una recibida y su asiento, con el «Borrar» del S01q (_conta_asientos_borrar: respaldo, serie renumerada, cadena comprobada). La factura vuelve a pagada en parte o por pagar.';
+
+
+--
+-- Name: conta_recibida_pago_cambiar(uuid, text, date, numeric, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_pago_cambiar(p_pago uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text DEFAULT NULL::text, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  p public.supplier_invoice_payment; e public.journal_entry; y public.fiscal_year; v_inv public.supplier_invoice; v_se jsonb; v_quien text;
+  v_ca public.company_account; v_prov text; v_imp numeric := round(coalesce(p_importe, 0), 2); v_concepto text; v_lp public.journal_line; v_lc public.journal_line;
+  v_canon text; v_prev text; r record; v_antes jsonb; v_iva jsonb;
+begin
+  select * into p from public.supplier_invoice_payment where id = p_pago for update;
+  v_se := public.conta_recibida_pago_se_puede_cambiar(p_pago);
+  if not coalesce((v_se->>'puede')::boolean, false) then raise exception '%', v_se->>'porque' using errcode = '23514'; end if;
+  v_quien := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  select * into e from public.journal_entry where id = p.entry_id for update;
+  select * into v_inv from public.supplier_invoice where id = p.invoice_id for update;
+  perform pg_advisory_xact_lock(hashtextextended('journal_entry_numero:' || e.company_id, 0));
+  if p_fecha is null or p_fecha > public.conta_hoy() then raise exception 'El día del pago falta o aún no ha llegado.' using errcode = '22023'; end if;
+  select * into y from public.fiscal_year where id = e.fiscal_year_id;
+  if p_fecha not between y.starts_on and y.ends_on then
+    raise exception 'El % no es del ejercicio %: el pago no cambia de ejercicio.', to_char(p_fecha, 'DD/MM/YYYY'), y.code using errcode = '22023';
+  end if;
+  if p_fecha <> e.entry_date then
+    v_iva := public.conta_iva_presentado(e.company_id, p_fecha);
+    if v_iva is not null then raise exception 'El IVA del % ya está presentado: el pago no va a esa fecha.', v_iva->>'periodo' using errcode = '23514'; end if;
+    if public.conta_mes_cerrado(e.company_id, p_fecha) then raise exception 'El mes de % está cerrado: el pago no va a esa fecha.', to_char(p_fecha, 'MM/YYYY') using errcode = '23514'; end if;
+  end if;
+  if v_imp <= 0 then raise exception 'El importe del pago tiene que ser mayor que cero.' using errcode = '22023'; end if;
+  v_prov := public._pc01e2_cuenta_proveedor(e.company_id, v_inv.supplier_id);
+  select * into v_ca from public.company_account where company_id = e.company_id and account_id = e.account_id and code = btrim(coalesce(p_cuenta, ''));
+  if v_ca.id is null then raise exception 'La cuenta % no está en el plan de la empresa.', coalesce(nullif(btrim(p_cuenta), ''), '(vacía)') using errcode = '23514'; end if;
+  if v_ca.kind = 'group' then raise exception 'La % es un grupo del plan: elige una subcuenta.', v_ca.code using errcode = '23514'; end if;
+  if v_ca.code = v_prov then raise exception 'La % es la del proveedor: no es una cuenta de pago.', v_ca.code using errcode = '23514'; end if;
+  if exists (select 1 from public.company_account_link l where l.company_id = e.company_id and l.entity = 'bank_account' and l.company_account_id = v_ca.id) then
+    raise exception 'La % es de un banco, una tarjeta o la caja: ese pago espera el cargo y se casa en Bancos.', v_ca.code using errcode = '23514';
+  end if;
+  v_concepto := coalesce(nullif(btrim(p_concepto), ''), e.concept);
+  -- Las dos líneas del asiento del pago: la del proveedor (al debe) y la de la cuenta (al haber).
+  select l.* into v_lp from public.journal_line l join public.company_account c on c.id = l.company_account_id where l.entry_id = e.id and c.code = v_prov and l.debit > 0;
+  select l.* into v_lc from public.journal_line l where l.entry_id = e.id and l.credit > 0 and l.id <> coalesce(v_lp.id, '00000000-0000-0000-0000-000000000000');
+  if v_lp.id is null or v_lc.id is null or (select count(*) from public.journal_line where entry_id = e.id) <> 2 then
+    raise exception 'El asiento %/% del pago no es el de siempre (proveedor al debe y la cuenta al haber): no se cambia aquí.', e.series, e.number using errcode = '23514';
+  end if;
+  v_antes := jsonb_build_object('fecha', p.paid_on, 'importe', p.amount, 'cuenta', (select code from public.company_account where id = v_lc.company_account_id), 'concepto', e.concept);
+
+  -- El pago (el tope sigue mandando: no pasa del total).
+  update public.supplier_invoice_payment set amount = v_imp, paid_on = p_fecha,
+         note = format('Pagada con la %s (%s): %s', v_ca.code, coalesce(nullif(v_ca.plain_name, ''), v_ca.name), v_concepto) where id = p.id;
+
+  -- Su asiento, con el mismo número: solo en esta transacción, sin los candados de «inalterable» (como el X26).
+  v_canon := public.journal_entry_canonico(e.id);
+  set constraints public.trg_journal_entry_valida_con_pdf immediate;
+  alter table public.journal_entry disable trigger trg_journal_entry_inalterable;
+  alter table public.journal_line disable trigger trg_journal_line_inalterable;
+  update public.journal_entry set entry_date = p_fecha, concept = v_concepto, updated_at = now() where id = e.id;
+  update public.journal_line set debit = v_imp, concept = v_concepto where id = v_lp.id;
+  update public.journal_line set credit = v_imp, company_account_id = v_ca.id, concept = v_concepto where id = v_lc.id;
+  if public.journal_entry_canonico(e.id) is distinct from v_canon then
+    select hash into v_prev from public.journal_entry where company_id = e.company_id and chain_seq is not null and chain_seq < e.chain_seq order by chain_seq desc limit 1;
+    for r in select o.id from public.journal_entry o where o.company_id = e.company_id and o.chain_seq >= e.chain_seq order by o.chain_seq loop
+      update public.journal_entry set prev_hash = v_prev where id = r.id;
+      update public.journal_entry set hash = public.journal_huella(v_prev, public.journal_entry_canonico(r.id)) where id = r.id returning hash into v_prev;
+    end loop;
+  end if;
+  alter table public.journal_line enable trigger trg_journal_line_inalterable;
+  alter table public.journal_entry enable trigger trg_journal_entry_inalterable;
+  set constraints public.trg_journal_entry_valida_con_pdf deferred;
+  if public._conta_cadena_rota(e.company_id) <> 0 then raise exception 'No se cambia nada: después de cambiarlo, la cadena de huellas no cuadra.' using errcode = '23514'; end if;
+
+  perform public._conta_k10c_estado(v_inv.id, v_quien);
+  insert into public.supplier_invoice_change (account_id, supplier_invoice_id, by_name, what, cambios)
+  values (v_inv.account_id, v_inv.id, v_quien, 'guardar', jsonb_build_object('pago_cambiado', true, 'asiento', e.number, 'antes', v_antes,
+          'despues', jsonb_build_object('fecha', p_fecha, 'importe', v_imp, 'cuenta', v_ca.code, 'concepto', v_concepto)));
+  return jsonb_build_object('pago', p.id, 'asiento', e.id, 'serie', e.series, 'numero', e.number,
+    'frase', format('Pago cambiado: el asiento %s / %s sigue siendo el %s, con %s el %s con la %s.', e.series, e.number, e.number,
+                    public.conta_euros_exactos(v_imp), to_char(p_fecha, 'DD/MM/YYYY'), v_ca.code));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_pago_cambiar(p_pago uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_pago_cambiar(p_pago uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text) IS 'K10c · Cambiar un pago apuntado de una recibida (cuenta, fecha, importe, concepto) y su asiento, con el mismo número: candados quitados solo en la transacción, cadena reencadenada y comprobada. El tope manda; la factura vuelve a pagada en parte si ya no queda cubierta.';
+
+
+--
+-- Name: conta_recibida_pago_se_puede_cambiar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_pago_se_puede_cambiar(p_pago uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare p public.supplier_invoice_payment; e public.journal_entry; y public.fiscal_year; v_p jsonb; v_no text;
+begin
+  select * into p from public.supplier_invoice_payment where id = p_pago;
+  if p.id is null or not public.belongs_to_account(p.account_id) then return jsonb_build_object('puede', false, 'porque', 'Ese pago no está.'); end if;
+  if p.bank_match_id is not null then
+    return jsonb_build_object('puede', false, 'porque', 'Este pago está conciliado con un movimiento del banco: se deshace en Bancos.');
+  end if;
+  select * into e from public.journal_entry where id = p.entry_id;
+  if e.id is null or e.source_type <> 'supplier_payment' or e.source_id is distinct from p.id then
+    return jsonb_build_object('puede', false, 'porque', 'Este pago viene de una remesa, una liquidación o un abono: se deshace allí.');
+  end if;
+  if public._conta_k10c_en_erp10(e.id) then
+    v_no := 'Este pago ya está en ERP10. Para quitarlo, anúlalo allí y aquí con un contraasiento.';
+  end if;
+  if v_no is null and not public.current_user_is_admin_or_manager_of(p.account_id) then v_no := 'Solo un administrador o un encargado de la cuenta cambia un pago.'; end if;
+  if v_no is null then
+    v_p := public.conta_iva_presentado(e.company_id, e.entry_date);
+    if v_p is not null then
+      v_no := format('El IVA del %s ya está presentado: este pago no se cambia.', case when v_p->>'periodo' ~ 'T$' then v_p->>'periodo' else 'mes ' || (v_p->>'periodo') end);
+    end if;
+  end if;
+  if v_no is null then
+    select * into y from public.fiscal_year where id = e.fiscal_year_id;
+    if y.status is distinct from 'open' then v_no := format('El ejercicio %s está cerrado: este pago no se cambia.', coalesce(y.code, '')); end if;
+  end if;
+  if v_no is null and public.conta_mes_cerrado(e.company_id, e.entry_date) then
+    v_no := format('El mes de %s está cerrado: reábrelo antes de cambiar este pago.', to_char(e.entry_date, 'MM/YYYY'));
+  end if;
+  if v_no is null and exists (select 1 from public.external_send x where x.entry_id = e.id and x.status in ('enviado', 'enlazado')) then
+    v_no := 'Su asiento ya salió a Diez o a ERP10: se cambia allí, no aquí.';
+  end if;
+  if v_no is null and public._conta_cadena_rota(e.company_id) <> 0 then
+    v_no := 'La cadena de huellas de la empresa ya estaba rota: no se cambia nada hasta arreglarla.';
+  end if;
+  return jsonb_build_object('puede', v_no is null, 'porque', v_no, 'asiento', e.id, 'serie', e.series, 'numero', e.number);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_recibida_pago_se_puede_cambiar(p_pago uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_pago_se_puede_cambiar(p_pago uuid) IS 'K10c · Si un pago de una recibida se puede cambiar o borrar y, si no, por qué (conciliado en el banco, de una remesa o una liquidación, ya en ERP10, IVA presentado, ejercicio o mes cerrado, ya en Diez, cadena rota, sin permiso). Borrar, además, para si renumeraría un asiento que ya está en ERP10.';
+
+
+--
 -- Name: conta_recibida_papel_poner(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -63132,6 +63480,295 @@ begin
     then format('%s: sin «Qué incluye» propio; la factura pone el de siempre.', v_s.nombre)
     else format('%s incluye «%s»: así sale en las facturas.', v_s.nombre, v_nuevo) end, 'quien', v_quien);
 end $$;
+
+
+--
+-- Name: conta_tesoreria_a_mano(uuid, date, text, text, numeric, text, uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tesoreria_a_mano(p_banco uuid, p_fecha date, p_cuenta text, p_concepto text, p_importe numeric, p_quien_nombre text DEFAULT NULL::text, p_local uuid DEFAULT NULL::uuid, p_marca uuid DEFAULT NULL::uuid, p_plataforma uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  t public.treasury_account; v_572 text; v_nombre572 text; v_cta public.company_account; v_imp numeric := round(coalesce(p_importe, 0), 2);
+  v_concepto text := nullif(btrim(p_concepto), ''); v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  v_res jsonb; v_entry uuid; v_val jsonb; v_lineas jsonb; v_ana jsonb;
+begin
+  select * into t from public.treasury_account where id = p_banco;
+  if t.id is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(t.account_id)) then
+    raise exception 'Ese banco no es de tu cuenta.' using errcode = '42501';
+  end if;
+  -- La 572 del banco (regla 9: de su empresa y su cuenta).
+  select a.code, a.name into v_572, v_nombre572
+    from public.company_account_link l join public.company_account a on a.id = l.company_account_id and a.company_id = t.company_id
+   where l.account_id = t.account_id and l.company_id = t.company_id and l.entity = 'bank_account' and l.entity_id = t.id::text and l.role = 'principal'
+   limit 1;
+  if v_572 is null then raise exception 'Este banco no tiene su cuenta (572) en el plan: dásela en Cuentas y extractos.' using errcode = '22023'; end if;
+  if p_fecha is null then raise exception 'Pon la fecha.' using errcode = '22023'; end if;
+  if v_imp = 0 then raise exception 'Pon el ingreso o el pago.' using errcode = '22023'; end if;
+  select * into v_cta from public.company_account a
+   where a.company_id = t.company_id and a.account_id = t.account_id and a.code = btrim(coalesce(p_cuenta, ''));
+  if v_cta.id is null then raise exception 'La cuenta % no está en el plan de la empresa.', coalesce(nullif(btrim(p_cuenta), ''), '(vacía)') using errcode = '22023'; end if;
+  if v_cta.code = v_572 then raise exception 'La cuenta no puede ser la del propio banco (%).', v_572 using errcode = '22023'; end if;
+  -- X28 · la analítica de la línea de edición: el local (de la cuenta); marca y plataforma, solo en hostelería.
+  if p_local is not null and not exists (select 1 from public.locations x where x.id = p_local and x.account_id = t.account_id) then
+    raise exception 'Ese local no es de la cuenta.' using errcode = '22023';
+  end if;
+  if p_marca is not null or p_plataforma is not null then
+    if (select c.sector from public.company c where c.id = t.company_id) is distinct from 'hosteleria' then
+      raise exception 'La marca y la plataforma son de una empresa de hostelería: esta no lo es.' using errcode = '22023';
+    end if;
+    if p_marca is not null and not exists (select 1 from public.brand b where b.id = p_marca and b.account_id = t.account_id) then
+      raise exception 'Esa marca no es de la cuenta.' using errcode = '22023';
+    end if;
+    if p_plataforma is not null and not exists (select 1 from public.sales_channel c where c.id = p_plataforma and c.account_id = t.account_id) then
+      raise exception 'Esa plataforma no es de la cuenta.' using errcode = '22023';
+    end if;
+  end if;
+  v_ana := jsonb_strip_nulls(jsonb_build_object('comun', p_local is null, 'local_id', p_local, 'marca_id', p_marca, 'canal_id', p_plataforma));
+  v_concepto := coalesce(v_concepto, v_cta.name);
+  -- Ingreso: el banco al debe; pago: al haber. La otra cuenta, al revés.
+  v_lineas := jsonb_build_array(
+    jsonb_build_object('cuenta', v_572, 'debe', case when v_imp > 0 then v_imp else 0 end, 'haber', case when v_imp > 0 then 0 else -v_imp end,
+                       'concepto', v_concepto) || v_ana,
+    jsonb_build_object('cuenta', v_cta.code, 'debe', case when v_imp > 0 then 0 else -v_imp end, 'haber', case when v_imp > 0 then v_imp else 0 end,
+                       'concepto', v_concepto) || v_ana);
+  v_res := public._journal_entry_proponer(t.company_id,
+    jsonb_build_object('series', 3, 'fecha', p_fecha, 'concepto', v_concepto, 'source_type', 'manual', 'source_id', null,
+                       'confianza', 'seguro', 'porque', format('Escrito a mano en Bancos (%s): no venía en el extracto.', coalesce(t.short_name, t.name)),
+                       'razones', jsonb_build_array(jsonb_build_object('decision', 'Escrito a mano', 'porque', 'no venía en el extracto'))),
+    v_lineas, null, v_quien, null);
+  v_entry := nullif(v_res->>'id', '')::uuid;
+  if v_entry is null then raise exception 'No ha salido su asiento (%).', v_res using errcode = 'P0001'; end if;
+  -- Validado al momento, como en ERP10: con las reglas de siempre. Si no se puede, no queda nada.
+  v_val := public._journal_entry_validar(v_entry, v_quien);
+  return jsonb_build_object('asiento_id', v_entry, 'numero', v_val->>'numero', 'serie', v_val->>'serie',
+    'texto', format('Apuntado y validado: asiento %s, %s de %s en %s (%s). Cuando llegue en el extracto, se enlaza con él: no se duplica.',
+                    v_val->>'numero', case when v_imp > 0 then 'ingreso' else 'pago' end,
+                    public.conta_euros_exactos(abs(v_imp)), v_cta.code, v_concepto));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_tesoreria_a_mano(p_banco uuid, p_fecha date, p_cuenta text, p_concepto text, p_importe numeric, p_quien_nombre text, p_local uuid, p_marca uuid, p_plataforma uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_tesoreria_a_mano(p_banco uuid, p_fecha date, p_cuenta text, p_concepto text, p_importe numeric, p_quien_nombre text, p_local uuid, p_marca uuid, p_plataforma uuid) IS 'X28 · ⊕ otro movimiento en Tesorería: como conta_banco_a_mano (E05, validado al momento en la serie 3), con su local, su marca y su plataforma (marca y plataforma, solo en hostelería); sin ellos, común, como el de siempre.';
+
+
+--
+-- Name: conta_tesoreria_modificar(uuid, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tesoreria_modificar(p_asiento uuid, p_cambios jsonb, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  e public.journal_entry; v_se jsonb; v_quien text; l public.journal_line; v_cta public.company_account; v_banco public.journal_line;
+  v_concepto text; v_local uuid; v_comun boolean; v_marca uuid; v_canal uuid; v_sector text; v_textos text[] := '{}';
+  v_antes jsonb; v_entrada jsonb; v_despues jsonb; v_cadena jsonb; v_prev text; r record; v_n int := 0; v_otra text;
+begin
+  select * into e from public.journal_entry where id = p_asiento for update;
+  v_se := public.conta_tesoreria_se_puede_modificar(p_asiento);
+  if not coalesce((v_se->>'puede')::boolean, false) then raise exception '%', v_se->>'porque' using errcode = '23514'; end if;
+  if jsonb_typeof(coalesce(p_cambios, 'null')) <> 'object' or p_cambios = '{}'::jsonb then
+    raise exception 'No hay nada que cambiar.' using errcode = '22023';
+  end if;
+  v_quien := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  perform pg_advisory_xact_lock(hashtextextended('journal_entry_numero:' || e.company_id, 0));
+  -- La línea del banco es la primera (así la escriben el casado y el «a mano»); la contrapartida, las demás.
+  select * into v_banco from public.journal_line where entry_id = e.id and position = 1;
+
+  -- Lo que cambia, comprobado antes de tocar nada.
+  if p_cambios ? 'cuenta' then
+    select * into l from public.journal_line where entry_id = e.id and position <> 1 order by position limit 1;
+    select code into v_otra from public.company_account where id = l.company_account_id;
+    if v_otra is distinct from btrim(coalesce(p_cambios->>'cuenta', '')) then
+      if not coalesce((v_se->>'subcuenta')::boolean, false) then raise exception '%', v_se->>'subcuenta_porque' using errcode = '23514'; end if;
+      select * into v_cta from public.company_account
+       where company_id = e.company_id and account_id = e.account_id and code = btrim(coalesce(p_cambios->>'cuenta', ''));
+      if v_cta.id is null then raise exception 'La cuenta % no está en el plan de la empresa.', coalesce(nullif(btrim(p_cambios->>'cuenta'), ''), '(vacía)') using errcode = '22023'; end if;
+      if v_cta.id = v_banco.company_account_id then raise exception 'La cuenta no puede ser la del propio banco (%).', v_cta.code using errcode = '22023'; end if;
+      if v_cta.status is distinct from 'activa' then raise exception 'La % está oculta o cerrada: no se le puede apuntar nada.', v_cta.code using errcode = '22023'; end if;
+    end if;
+  end if;
+  if p_cambios ? 'local' then
+    v_comun := coalesce(p_cambios->>'local', '') in ('', 'comun');
+    v_local := case when coalesce(p_cambios->>'local', '') ~ '^[0-9a-f-]{36}$' then (p_cambios->>'local')::uuid end;
+    if v_local is not null and not exists (select 1 from public.locations x where x.id = v_local and x.account_id = e.account_id) then
+      raise exception 'Ese local no es de la cuenta.' using errcode = '22023';
+    end if;
+  end if;
+  if nullif(p_cambios->>'marca', '') is not null or nullif(p_cambios->>'plataforma', '') is not null then
+    select sector into v_sector from public.company where id = e.company_id;
+    if v_sector is distinct from 'hosteleria' then
+      raise exception 'La marca y la plataforma son de una empresa de hostelería: esta no lo es.' using errcode = '22023';
+    end if;
+  end if;
+  if p_cambios ? 'marca' then
+    v_marca := nullif(p_cambios->>'marca', '')::uuid;
+    if v_marca is not null and not exists (select 1 from public.brand b where b.id = v_marca and b.account_id = e.account_id) then
+      raise exception 'Esa marca no es de la cuenta.' using errcode = '22023';
+    end if;
+  end if;
+  if p_cambios ? 'plataforma' then
+    v_canal := nullif(p_cambios->>'plataforma', '')::uuid;
+    if v_canal is not null and not exists (select 1 from public.sales_channel c where c.id = v_canal and c.account_id = e.account_id) then
+      raise exception 'Esa plataforma no es de la cuenta.' using errcode = '22023';
+    end if;
+  end if;
+  v_concepto := nullif(btrim(p_cambios->>'concepto'), '');
+
+  -- El respaldo: el asiento, sus líneas y la cadena de este y de todos los de detrás (los que se vuelven a encadenar).
+  select coalesce(jsonb_agg(jsonb_build_object('entry_id', o.id, 'chain_seq', o.chain_seq, 'prev_hash', o.prev_hash, 'hash', o.hash) order by o.chain_seq), '[]')
+    into v_cadena from public.journal_entry o where o.company_id = e.company_id and o.chain_seq >= e.chain_seq;
+  select coalesce(jsonb_agg(to_jsonb(j) order by j.position), '[]') into v_antes from public.journal_line j where j.entry_id = e.id;
+  v_entrada := to_jsonb(e);
+
+  -- Solo en esta transacción: sin los dos candados de «inalterable» (como el X26 y el S01q).
+  set constraints public.trg_journal_entry_valida_con_pdf immediate;
+  alter table public.journal_entry disable trigger trg_journal_entry_inalterable;
+  alter table public.journal_line disable trigger trg_journal_line_inalterable;
+
+  if v_cta.id is not null then
+    update public.journal_line set company_account_id = v_cta.id where id = l.id;
+    v_textos := array_append(v_textos, format('%s → %s', v_otra, v_cta.code)); v_n := v_n + 1;
+  end if;
+  if v_concepto is not null and v_concepto is distinct from e.concept then
+    update public.journal_entry set concept = v_concepto where id = e.id;
+    update public.journal_line set concept = v_concepto where entry_id = e.id;
+    v_textos := array_append(v_textos, 'el concepto'); v_n := v_n + 1;
+  end if;
+  if p_cambios ? 'local' and exists (select 1 from public.journal_line j where j.entry_id = e.id
+                                       and (j.location_id is distinct from v_local or j.is_common is distinct from v_comun)) then
+    update public.journal_line set location_id = v_local, is_common = v_comun where entry_id = e.id;
+    v_textos := array_append(v_textos, 'el local'); v_n := v_n + 1;
+  end if;
+  if p_cambios ? 'marca' and exists (select 1 from public.journal_line j where j.entry_id = e.id and j.brand_id is distinct from v_marca) then
+    update public.journal_line set brand_id = v_marca where entry_id = e.id;
+    v_textos := array_append(v_textos, 'la marca'); v_n := v_n + 1;
+  end if;
+  if p_cambios ? 'plataforma' and exists (select 1 from public.journal_line j where j.entry_id = e.id and j.channel_id is distinct from v_canal) then
+    update public.journal_line set channel_id = v_canal where entry_id = e.id;
+    v_textos := array_append(v_textos, 'la plataforma'); v_n := v_n + 1;
+  end if;
+
+  if v_n > 0 then
+    -- La cadena: desde este asiento, cada huella con la función de siempre (los eslabones y su orden no cambian).
+    select hash into v_prev from public.journal_entry where company_id = e.company_id and chain_seq is not null and chain_seq < e.chain_seq order by chain_seq desc limit 1;
+    for r in select o.id from public.journal_entry o where o.company_id = e.company_id and o.chain_seq >= e.chain_seq order by o.chain_seq loop
+      update public.journal_entry set prev_hash = v_prev where id = r.id;
+      update public.journal_entry set hash = public.journal_huella(v_prev, public.journal_entry_canonico(r.id)) where id = r.id returning hash into v_prev;
+    end loop;
+  end if;
+
+  alter table public.journal_line enable trigger trg_journal_line_inalterable;
+  alter table public.journal_entry enable trigger trg_journal_entry_inalterable;
+  set constraints public.trg_journal_entry_valida_con_pdf deferred;
+
+  if v_n = 0 then
+    return jsonb_build_object('texto', format('No había nada distinto: el asiento %s se queda como estaba.', e.number), 'numero', e.number, 'cambiadas', 0);
+  end if;
+  if public._conta_cadena_rota(e.company_id) <> 0 then
+    raise exception 'No se modifica nada: después de cambiarlo, la cadena de huellas no cuadra.' using errcode = '23514';
+  end if;
+
+  select coalesce(jsonb_agg(to_jsonb(j) order by j.position), '[]') into v_despues from public.journal_line j where j.entry_id = e.id;
+  insert into public.conta_tesoreria_modificada (account_id, company_id, entry_id, movement_id, numero, asiento_antes, lineas_antes, lineas_despues,
+                                                 cadena_antes, cambios, quien)
+  values (e.account_id, e.company_id, e.id, nullif(v_se->>'movimiento', '')::uuid, e.number, v_entrada, v_antes, v_despues, v_cadena, p_cambios, v_quien);
+  return jsonb_build_object('texto', format('Modificado: el asiento %s sigue siendo el %s, con %s. La misma fecha y los mismos importes.',
+                                            e.number, e.number, array_to_string(v_textos, ', ')),
+                            'numero', e.number, 'cambiadas', v_n);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_tesoreria_modificar(p_asiento uuid, p_cambios jsonb, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_tesoreria_modificar(p_asiento uuid, p_cambios jsonb, p_quien_nombre text) IS 'X28 · Modificar un asiento de tesorería contabilizado: la subcuenta de la contrapartida, el concepto y la analítica (local, marca, plataforma), en el mismo asiento (mismo número, fecha e importes). Respaldo, candados quitados solo en la transacción, cadena vuelta a encadenar y comprobada. p_cambios: {cuenta?, concepto?, local?: uuid | ''comun'', marca?: uuid | '''', plataforma?: uuid | ''''}.';
+
+
+--
+-- Name: conta_tesoreria_se_puede_modificar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tesoreria_se_puede_modificar(p_asiento uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  e public.journal_entry; y public.fiscal_year; v_p jsonb; v_lock public.fiscal_period_lock; v_no text; v_mov uuid;
+  v_paga text; v_lineas int;
+begin
+  select * into e from public.journal_entry where id = p_asiento;
+  if e.id is null or not public.belongs_to_account(e.account_id) then
+    return jsonb_build_object('puede', false, 'porque', 'Ese asiento no está.');
+  end if;
+  if e.source_type not in ('bank', 'manual') then
+    return jsonb_build_object('puede', false, 'porque', 'Ese asiento no es de tesorería: se cambia en su sitio.');
+  end if;
+  if e.status <> 'validado' then
+    return jsonb_build_object('puede', false, 'porque', 'No está contabilizado: no hay nada que modificar.');
+  end if;
+  select m.movement_id into v_mov from public.bank_match m where m.journal_entry_id = e.id and m.status = 'vivo' and m.kind <> 'traspaso' limit 1;
+  if not public.current_user_is_admin_or_manager_of(e.account_id) then
+    v_no := 'Solo un administrador o un encargado de la cuenta modifica un movimiento contabilizado.';
+  end if;
+  if v_no is null then
+    v_p := public.conta_iva_presentado(e.company_id, e.entry_date);
+    if v_p is not null then
+      v_no := format('El IVA del %s ya está presentado: este movimiento no se puede modificar.',
+                     case when v_p->>'periodo' ~ 'T$' then v_p->>'periodo' else 'mes ' || (v_p->>'periodo') end);
+    end if;
+  end if;
+  if v_no is null then
+    select * into y from public.fiscal_year where id = e.fiscal_year_id;
+    if y.status is distinct from 'open' then v_no := format('El ejercicio %s está cerrado: este movimiento no se puede modificar.', coalesce(y.code, '')); end if;
+  end if;
+  if v_no is null then
+    select * into v_lock from public.fiscal_period_lock
+     where company_id = e.company_id and month = date_trunc('month', e.entry_date)::date and reopened_at is null limit 1;
+    if v_lock.id is not null then
+      v_no := format('El mes de %s está cerrado: reábrelo antes de modificar este movimiento.', to_char(e.entry_date, 'MM/YYYY'));
+    end if;
+  end if;
+  if v_no is null and (exists (select 1 from public.external_send x where x.entry_id = e.id and x.status in ('enviado', 'enlazado'))
+                       or exists (select 1 from public.conta_erp10_salida_partida p where p.entry_id = e.id)
+                       or exists (select 1 from public.conta_erp10_envio x where x.entry_id = e.id)) then
+    v_no := 'Su asiento ya salió a Diez o a ERP10: se modifica allí, no aquí.';
+  end if;
+  if v_no is null and public._conta_cadena_rota(e.company_id) <> 0 then
+    v_no := 'La cadena de huellas de la empresa ya estaba rota: no se modifica nada hasta arreglarla.';
+  end if;
+  -- Qué se puede cambiar: la subcuenta, solo si la contrapartida es una línea y no paga ni cobra un documento.
+  select count(*) into v_lineas from public.journal_line where entry_id = e.id;
+  select case when i.supplier_invoice_id is not null then 'una factura recibida'
+              when i.customer_invoice_id is not null then 'una factura emitida'
+              when i.channel_settlement_id is not null then 'una liquidación de plataforma' end
+    into v_paga
+    from public.bank_match m join public.bank_match_item i on i.match_id = m.id
+   where m.journal_entry_id = e.id and m.status = 'vivo'
+     and (i.supplier_invoice_id is not null or i.customer_invoice_id is not null or i.channel_settlement_id is not null)
+   limit 1;
+  if v_paga is null and exists (select 1 from public.bank_match m where m.journal_entry_id = e.id and m.status = 'vivo' and m.kind = 'traspaso') then
+    v_paga := 'un traspaso';
+  end if;
+  return jsonb_build_object('puede', v_no is null, 'porque', v_no, 'numero', e.number, 'serie', e.series, 'asiento', e.id, 'movimiento', v_mov,
+                            'subcuenta', v_no is null and v_paga is null and v_lineas = 2,
+                            'subcuenta_porque', case when v_paga is not null then format('Paga o cobra %s: su subcuenta es la de ese documento.', v_paga)
+                                                     when v_lineas <> 2 then 'Tiene más de una contrapartida: su subcuenta se cambia en el diario.' end);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_tesoreria_se_puede_modificar(p_asiento uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_tesoreria_se_puede_modificar(p_asiento uuid) IS 'X28 · Si un asiento de tesorería contabilizado se puede modificar y, si no, por qué (IVA presentado, ejercicio o mes cerrado, ya en Diez o ERP10, cadena rota, sin permiso). Dice también si se puede cambiar su subcuenta.';
 
 
 --
@@ -123056,6 +123693,34 @@ COMMENT ON COLUMN public.conta_solicitud.portal_acceso_id IS 'GP · Si la pidió
 
 
 --
+-- Name: conta_tesoreria_modificada; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_tesoreria_modificada (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    entry_id uuid NOT NULL,
+    movement_id uuid,
+    numero integer,
+    asiento_antes jsonb NOT NULL,
+    lineas_antes jsonb NOT NULL,
+    lineas_despues jsonb NOT NULL,
+    cadena_antes jsonb NOT NULL,
+    cambios jsonb NOT NULL,
+    quien text NOT NULL,
+    at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_tesoreria_modificada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_tesoreria_modificada IS 'X28 · Cada cambio de un movimiento de tesorería ya contabilizado: el asiento y sus líneas antes y después, y la cadena de huellas de antes de cada asiento que se volvió a encadenar (para saber qué era y poder volver).';
+
+
+--
 -- Name: conta_tienda_local_antes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -138747,6 +139412,14 @@ ALTER TABLE ONLY public.conta_tarifa
 
 
 --
+-- Name: conta_tesoreria_modificada conta_tesoreria_modificada_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tesoreria_modificada
+    ADD CONSTRAINT conta_tesoreria_modificada_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_tienda_local_antes conta_tienda_local_antes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -145756,6 +146429,13 @@ CREATE INDEX idx_conta_proveedor_solo_cuenta ON public.conta_proveedor_solo USIN
 --
 
 CREATE INDEX idx_conta_recibida_modificada_factura ON public.conta_recibida_modificada USING btree (invoice_id, at DESC);
+
+
+--
+-- Name: idx_conta_tesoreria_modificada_asiento; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_conta_tesoreria_modificada_asiento ON public.conta_tesoreria_modificada USING btree (entry_id, at DESC);
 
 
 --
@@ -156309,6 +156989,22 @@ ALTER TABLE ONLY public.conta_tarifa
 
 ALTER TABLE ONLY public.conta_tarifa
     ADD CONSTRAINT conta_tarifa_servicio_id_fkey FOREIGN KEY (servicio_id) REFERENCES public.conta_servicio(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tesoreria_modificada conta_tesoreria_modificada_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tesoreria_modificada
+    ADD CONSTRAINT conta_tesoreria_modificada_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tesoreria_modificada conta_tesoreria_modificada_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tesoreria_modificada
+    ADD CONSTRAINT conta_tesoreria_modificada_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
 
 
 --
@@ -168022,6 +168718,19 @@ CREATE POLICY conta_tarifa_leer ON public.conta_tarifa FOR SELECT TO authenticat
 
 
 --
+-- Name: conta_tesoreria_modificada; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_tesoreria_modificada ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_tesoreria_modificada conta_tesoreria_modificada_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_tesoreria_modificada_leer ON public.conta_tesoreria_modificada FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_tienda_local_antes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -176605,6 +177314,22 @@ GRANT ALL ON FUNCTION public._conta_iva_tolerancia(p_entry uuid, p_tipo numeric)
 
 
 --
+-- Name: FUNCTION _conta_k10c_en_erp10(p_entry uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_k10c_en_erp10(p_entry uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_k10c_en_erp10(p_entry uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_k10c_estado(p_invoice uuid, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_k10c_estado(p_invoice uuid, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_k10c_estado(p_invoice uuid, p_quien text) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_lectura_caida(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -185032,6 +185757,15 @@ GRANT ALL ON FUNCTION public.conta_lectura_estado(p_company uuid) TO service_rol
 
 
 --
+-- Name: FUNCTION conta_lectura_lineas_guardar(p_session uuid, p_lineas jsonb, p_validacion jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_lectura_lineas_guardar(p_session uuid, p_lineas jsonb, p_validacion jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_lectura_lineas_guardar(p_session uuid, p_lineas jsonb, p_validacion jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_lectura_lineas_guardar(p_session uuid, p_lineas jsonb, p_validacion jsonb) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_lectura_proveedor_releida(p_invoice uuid, p_session uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -186824,6 +187558,42 @@ GRANT ALL ON FUNCTION public.conta_recibida_pagar_con_cuenta(p_company uuid, p_i
 
 
 --
+-- Name: FUNCTION conta_recibida_pago_apuntar(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_pago_apuntar(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_pago_apuntar(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_pago_apuntar(p_company uuid, p_invoice uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibida_pago_borrar(p_pago uuid, p_motivo text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_pago_borrar(p_pago uuid, p_motivo text, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_pago_borrar(p_pago uuid, p_motivo text, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_pago_borrar(p_pago uuid, p_motivo text, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibida_pago_cambiar(p_pago uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_pago_cambiar(p_pago uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_pago_cambiar(p_pago uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_pago_cambiar(p_pago uuid, p_cuenta text, p_fecha date, p_importe numeric, p_concepto text, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibida_pago_se_puede_cambiar(p_pago uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_pago_se_puede_cambiar(p_pago uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_pago_se_puede_cambiar(p_pago uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_pago_se_puede_cambiar(p_pago uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_recibida_papel_poner(p_invoice uuid, p_ruta text, p_nombre text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -187462,6 +188232,33 @@ GRANT ALL ON FUNCTION public.conta_tarifa_servicio_crear(p_company uuid, p_nombr
 REVOKE ALL ON FUNCTION public.conta_tarifa_servicio_incluye(p_company uuid, p_servicio uuid, p_incluye text, p_ensayo boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_tarifa_servicio_incluye(p_company uuid, p_servicio uuid, p_incluye text, p_ensayo boolean) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_tarifa_servicio_incluye(p_company uuid, p_servicio uuid, p_incluye text, p_ensayo boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tesoreria_a_mano(p_banco uuid, p_fecha date, p_cuenta text, p_concepto text, p_importe numeric, p_quien_nombre text, p_local uuid, p_marca uuid, p_plataforma uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tesoreria_a_mano(p_banco uuid, p_fecha date, p_cuenta text, p_concepto text, p_importe numeric, p_quien_nombre text, p_local uuid, p_marca uuid, p_plataforma uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tesoreria_a_mano(p_banco uuid, p_fecha date, p_cuenta text, p_concepto text, p_importe numeric, p_quien_nombre text, p_local uuid, p_marca uuid, p_plataforma uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tesoreria_a_mano(p_banco uuid, p_fecha date, p_cuenta text, p_concepto text, p_importe numeric, p_quien_nombre text, p_local uuid, p_marca uuid, p_plataforma uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tesoreria_modificar(p_asiento uuid, p_cambios jsonb, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tesoreria_modificar(p_asiento uuid, p_cambios jsonb, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tesoreria_modificar(p_asiento uuid, p_cambios jsonb, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tesoreria_modificar(p_asiento uuid, p_cambios jsonb, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tesoreria_se_puede_modificar(p_asiento uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tesoreria_se_puede_modificar(p_asiento uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tesoreria_se_puede_modificar(p_asiento uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tesoreria_se_puede_modificar(p_asiento uuid) TO service_role;
 
 
 --
@@ -197977,6 +198774,14 @@ GRANT SELECT ON TABLE public.conta_servicio_nivel TO authenticated;
 
 GRANT ALL ON TABLE public.conta_solicitud TO service_role;
 GRANT SELECT ON TABLE public.conta_solicitud TO authenticated;
+
+
+--
+-- Name: TABLE conta_tesoreria_modificada; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_tesoreria_modificada TO service_role;
+GRANT SELECT ON TABLE public.conta_tesoreria_modificada TO authenticated;
 
 
 --
