@@ -41,6 +41,17 @@
 // puro está en _shared/ocrAlbaranNucleo.ts (sacado tal cual) y
 // _shared/lecturaFactura.ts. Sin modo, lo que devuelve a Cocina no cambia.
 //
+// E10 (23/11) · LA FACTURA LARGA SE LEE ENTERA. En modo factura, si la respuesta llega
+// CORTADA (stop_reason max_tokens: la factura trae más líneas de las que caben), se lee en
+// dos pasos (_shared/lecturaPorPartes.ts): primero la cabecera, siempre corta, y se guarda
+// la sesión como siempre (la factura entra con sus bases); después, sin esperar, las líneas
+// página a página, que se guardan en la misma sesión y en la factura
+// (conta_lectura_lineas_guardar). Con { releer_lineas: sesión } se leen las páginas que
+// faltan («Leer las que faltan»). Lo que hoy no llega cortado no cambia en nada.
+// E10b (23/11) · Las líneas son de Folvy, no de Sumied: el paso 2 solo se hace si la empresa recibe la
+// mercancía con Folvy (company_purchase_setting.receives_goods). Si no, la factura entra con la cabecera
+// y sus líneas quedan sin leer («Leer las que faltan», en Folvy, si un día empieza a usarlo).
+//
 // Auth: usuario autenticado (JWT, respeta RLS) o llamada interna (x-internal-key).
 // Patrón calcado de extract-recipe. Deploy NORMAL (no es webhook externo).
 
@@ -50,6 +61,8 @@ import { MODELO_VISION, buildPrompt, extractJson, validate, type ParsedDoc } fro
 import { PROMPT_CUADRO, comprobarCuadro } from '../_shared/lecturaCuadro.ts';
 import { leerFactura, PROMPT_FACTURA, type LecturaModelo } from '../_shared/lecturaFactura.ts';
 import { falloDeContenido, falloDeExcepcion, falloDeRespuesta, paraGuardar, type FalloLectura } from '../_shared/lecturaFallo.ts';
+import { baseDeLaCabecera, esCortada, estadoVisto, leerCabecera, leerLasLineas, lineasSinLeer, seLeenLasLineas, type EstadoLineas, type Fichero, type LineaLeida } from '../_shared/lecturaPorPartes.ts';
+import { PDFDocument } from 'npm:pdf-lib@1.17.1';
 
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -69,6 +82,8 @@ interface OcrRequest {
   // un aplazamiento y devuelve sus filas comprobadas (_shared/lecturaCuadro.ts),
   // sin guardar sesión: lo guarda Bancos cuando la persona confirma.
   modo?: 'factura' | 'cuadro';
+  // E10: «Leer las que faltan» de una factura larga: la sesión cuyas líneas faltan.
+  releer_lineas?: string;
 }
 
 const MEDIR_MAX = 40;
@@ -83,9 +98,10 @@ function jsonResponse(status: number, body: unknown): Response {
 // deno-lint-ignore no-explicit-any
 type Sb = any;
 
-async function bloquesDe(sb: Sb, paths: string[]): Promise<{ blocks: unknown[]; files: { path: string; bucket: string }[] } | { error: string }> {
+async function bloquesDe(sb: Sb, paths: string[]): Promise<{ blocks: unknown[]; files: { path: string; bucket: string }[]; ficheros: Fichero[] } | { error: string }> {
   const blocks: unknown[] = [];
   const files: { path: string; bucket: string }[] = [];
+  const ficheros: Fichero[] = []; // E10: los bytes, para partir una factura larga en páginas
   for (const path of paths) {
     const { data: file, error: dlErr } = await sb.storage.from(BUCKET).download(path);
     if (dlErr || !file) return { error: `No se pudo leer ${path}: ${dlErr?.message ?? 'desconocido'}` };
@@ -94,6 +110,7 @@ async function bloquesDe(sb: Sb, paths: string[]): Promise<{ blocks: unknown[]; 
     for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
     const b64 = btoa(binary);
     const mime = file.type || 'image/jpeg';
+    ficheros.push({ bytes: buf, mime });
     // PDF como document, imagen como image (la API de visión acepta ambos).
     if (mime === 'application/pdf') {
       blocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } });
@@ -102,7 +119,7 @@ async function bloquesDe(sb: Sb, paths: string[]): Promise<{ blocks: unknown[]; 
     }
     files.push({ path, bucket: BUCKET });
   }
-  return { blocks, files };
+  return { blocks, files, ficheros };
 }
 
 // E02 · Una lectura que falla también deja su sesión (status 'failed'): con qué falló, en
@@ -143,6 +160,173 @@ async function leerConIa(anthropicKey: string, model: string, blocks: unknown[],
   // deno-lint-ignore no-explicit-any
   const textOut = ((raw as any).content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
   return { parsed: extractJson(textOut), raw };
+}
+
+// ── E10 · La factura larga, en dos pasos ────────────────────────────────────
+
+function aB64(buf: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
+  return btoa(binary);
+}
+
+/** Cada página de un PDF, como un PDF de una página. */
+async function partirPdf(bytes: Uint8Array): Promise<Uint8Array[]> {
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  const out: Uint8Array[] = [];
+  for (let i = 0; i < doc.getPageCount(); i++) {
+    const una = await PDFDocument.create();
+    const [pagina] = await una.copyPages(doc, [i]);
+    una.addPage(pagina);
+    out.push(await una.save());
+  }
+  return out;
+}
+
+/** Lo que sigue después de contestar (EdgeRuntime.waitUntil). Fuera de Supabase, se espera. */
+function enSegundoPlano(p: Promise<unknown>): Promise<unknown> | null {
+  const seguro = p.catch((e) => console.error('[ocr-albaran] líneas en segundo plano:', String(e)));
+  const rt = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  if (rt?.waitUntil) { rt.waitUntil(seguro); return null; }
+  return seguro;
+}
+
+/**
+ * Guarda las líneas en la sesión y en su factura (conta_lectura_lineas_guardar). Al leerla
+ * por primera vez, la factura se crea justo después de contestar: si aún no está, se espera
+ * y se vuelve a guardar (la base las pone de la sesión si la crea después).
+ */
+async function guardarLineas(sb: Sb, sesion: string, lineas: LineaLeida[], validacion: unknown, esperarFactura: boolean): Promise<{ facturas: number; lineas: number } | null> {
+  const veces = esperarFactura ? 4 : 1;
+  for (let i = 0; i < veces; i++) {
+    const { data, error } = await sb.rpc('conta_lectura_lineas_guardar', { p_session: sesion, p_lineas: lineas, p_validacion: validacion });
+    if (error) { console.error('[ocr-albaran] guardar las líneas:', error.message); return null; }
+    const r = data as { facturas: number; lineas: number };
+    if (r.facturas > 0 || i === veces - 1) return r;
+    await new Promise((ok) => setTimeout(ok, 15_000));
+  }
+  return null;
+}
+
+/**
+ * E10b · ¿Recibe la mercancía con Folvy la empresa de esta factura? Su empresa, por su llegada
+ * (document_inbox con ese fichero: «Subir factura» y el correo la registran antes de leerla), y su
+ * ajuste de compras (company_purchase_setting.receives_goods: lo mismo que dice conta_recibe_mercancia,
+ * que solo puede llamar una sesión). Sin llegada, sin empresa o sin ajuste: null (no se leen).
+ */
+async function recibeMercancia(sb: Sb, accountId: string, rutas: string[]): Promise<boolean | null> {
+  const { data: l, error } = await sb.from('document_inbox').select('company_id').eq('account_id', accountId).in('file_path', rutas).not('company_id', 'is', null).limit(1);
+  const empresa = !error ? (l as { company_id: string }[] | null)?.[0]?.company_id : null;
+  if (!empresa) return null;
+  const { data: a, error: e2 } = await sb.from('company_purchase_setting').select('receives_goods').eq('account_id', accountId).eq('company_id', empresa).limit(1);
+  if (e2) { console.error('[ocr-albaran] el ajuste de compras:', e2.message); return null; }
+  return (a as { receives_goods: boolean }[] | null)?.[0]?.receives_goods ?? null;
+}
+
+type Base = { sb: Sb; anthropicKey: string; model: string; accountId: string };
+const llamarCon = (x: Base) => (bloques: unknown[], prompt: string) => leerConIa(x.anthropicKey, x.model, bloques, prompt);
+
+/** Paso 2: las líneas por páginas, juntas, a la sesión y a su factura. Devuelve su estado. */
+async function completarLineas(x: Base & {
+  sesion: string; ficheros: Fichero[]; parsed: ParsedDoc; factura: unknown; esperadas: number | null; paginas: number | null
+  faltan?: { paginas: number[]; lineas: LineaLeida[]; porPagina: { pagina: number; lineas: number }[] } | null; esperarFactura: boolean
+}): Promise<EstadoLineas> {
+  const desde = new Date().toISOString();
+  const base = baseDeLaCabecera(x.parsed as unknown as Parameters<typeof baseDeLaCabecera>[0]);
+  let r: { lineas: LineaLeida[]; estado: EstadoLineas };
+  try {
+    r = await leerLasLineas({ llamar: llamarCon(x), ficheros: x.ficheros, partirPdf, aB64, esperadas: x.esperadas, base, desde, faltan: x.faltan });
+  } catch (e) {
+    // No se ha podido partir: no se ha leído ninguna página nueva.
+    console.error('[ocr-albaran] partir en páginas:', String(e));
+    const previas = x.faltan?.lineas ?? [];
+    const sinLeer = x.faltan?.paginas ?? Array.from({ length: x.paginas ?? 1 }, (_, i) => i + 1);
+    r = { lineas: previas, estado: { estado: 'faltan', leidas: previas.length, esperadas: x.esperadas, paginas: x.paginas, sin_leer: sinLeer, por_pagina: x.faltan?.porPagina ?? [], cuadre: null, desde } };
+  }
+  const conLineas = { ...x.parsed, lines: r.lineas } as ParsedDoc;
+  await guardarLineas(x.sb, x.sesion, r.lineas, { ...validate(conLineas), factura: x.factura, lineas: r.estado }, x.esperarFactura);
+  return r.estado;
+}
+
+/**
+ * Llegó cortada: la cabecera (siempre corta) y la sesión como siempre, para que la factura
+ * entre ya con sus bases; las líneas, después de contestar.
+ */
+async function facturaLarga(x: Base & { esFactura: boolean; inputFiles: { path: string; bucket: string }[]; contentBlocks: unknown[]; ficheros: Fichero[]; t0: number; primera: unknown }): Promise<Response> {
+  let cab: Awaited<ReturnType<typeof leerCabecera>>;
+  try {
+    cab = await leerCabecera(llamarCon(x), x.contentBlocks);
+  } catch (e) {
+    const fallo = falloDeExcepcion(e);
+    const sesion_fallo = await guardarFallo(x.sb, { account_id: x.accountId, files: x.inputFiles, model: x.model, latencyMs: Date.now() - x.t0, fallo });
+    return jsonResponse(502, { error: 'Fallo llamando a la IA', clase: fallo.clase, causa: fallo.causa, sesion_fallo });
+  }
+  if ('error' in cab) {
+    const fallo = falloDeRespuesta(cab.status, cab.error);
+    const sesion_fallo = await guardarFallo(x.sb, { account_id: x.accountId, files: x.inputFiles, model: x.model, latencyMs: Date.now() - x.t0, fallo });
+    return jsonResponse(502, { error: 'Error del servicio de IA', detail: cab.error, clase: fallo.clase, causa: fallo.causa, sesion_fallo });
+  }
+  const latencyMs = Date.now() - x.t0;
+  if (!cab.parsed || !cab.parsed.document || esCortada(cab.raw)) {
+    const fallo = falloDeContenido(cab.raw, esCortada(cab.raw) ? null : cab.parsed) ?? falloDeContenido(x.primera, null)!;
+    const sesion_fallo = await guardarFallo(x.sb, { account_id: x.accountId, files: x.inputFiles, model: x.model, latencyMs, fallo });
+    return jsonResponse(422, { error: 'La IA no devolvió un albarán legible', raw: cab.raw, clase: fallo.clase, causa: fallo.causa, sesion_fallo });
+  }
+  const parsed = cab.parsed;
+  const validation = validate(parsed);
+  // Solo en modo factura (la guarda del E2b: Cocina, sin modo, nunca pasa por la lectura de facturas).
+  const factura = x.esFactura ? leerFactura(parsed as unknown as LecturaModelo, { hoy: new Date().toISOString().slice(0, 10) }) : null;
+  // E10b · Las líneas solo se leen si la empresa recibe la mercancía con Folvy: son de Folvy, no de Sumied.
+  const conFolvy = seLeenLasLineas(await recibeMercancia(x.sb, x.accountId, x.inputFiles.map((f) => f.path)));
+  const desde = new Date().toISOString();
+  const lineas: EstadoLineas = conFolvy
+    ? { estado: 'leyendo', leidas: 0, esperadas: cab.esperadas, paginas: cab.paginas, sin_leer: [], por_pagina: [], cuadre: null, desde }
+    : lineasSinLeer({ esperadas: cab.esperadas, paginas: cab.paginas, desde });
+  const p1 = x.primera as { stop_reason?: unknown; usage?: unknown } | null;
+  const kind = x.inputFiles.some(f => f.path.toLowerCase().endsWith('.pdf')) ? 'pdf' : 'photo';
+  const { data: session, error: sessErr } = await x.sb.from('goods_receipt_ai_session').insert({
+    account_id: x.accountId,
+    kind,
+    input_files: x.inputFiles as unknown,
+    // La cabecera, y de la primera (la cortada) solo por qué paró y lo que gastó.
+    raw_response: { ...(cab.raw as Record<string, unknown>), e10_primera: { stop_reason: p1?.stop_reason ?? null, usage: p1?.usage ?? null } } as unknown,
+    parsed_result: parsed as unknown,
+    validation: { ...validation, factura, lineas } as unknown,
+    ai_model: x.model,
+    ai_latency_ms: latencyMs,
+    status: 'pending_review',
+  }).select('id').single();
+  if (sessErr) {
+    console.error('[ocr-albaran] insert sesión:', sessErr.message);
+    return jsonResponse(500, { error: 'No se pudo guardar la sesión', detail: sessErr.message });
+  }
+  if (conFolvy) {
+    const espera = enSegundoPlano(completarLineas({ ...x, sesion: session.id, parsed, factura, esperadas: cab.esperadas, paginas: cab.paginas, esperarFactura: true }));
+    if (espera) await espera;
+  }
+  return jsonResponse(200, {
+    session_id: session.id, status: 'pending_review', parsed, validation, lines_extracted: 0, ai_model: x.model, ai_latency_ms: latencyMs, factura, lineas,
+  });
+}
+
+/** «Leer las que faltan»: las páginas que no se leyeron (o todas, si la lectura se paró). */
+async function releerLineas(x: Base & { sesion: string }): Promise<Response> {
+  const { data: s, error } = await x.sb.from('goods_receipt_ai_session').select('id, input_files, parsed_result, validation')
+    .eq('account_id', x.accountId).eq('id', x.sesion).maybeSingle();
+  if (error) return jsonResponse(500, { error: error.message });
+  if (!s) return jsonResponse(404, { error: 'Esa lectura no está.' });
+  const v = (s.validation ?? {}) as { lineas?: EstadoLineas; factura?: unknown };
+  const e = estadoVisto(v.lineas as EstadoLineas | undefined);
+  if (!e) return jsonResponse(200, { lineas: null, texto: 'Esta factura se leyó entera de una vez: no le falta ninguna línea.' });
+  if (e.estado === 'completas') return jsonResponse(200, { lineas: e });
+  if (e.estado === 'leyendo') return jsonResponse(409, { error: 'Aún se están leyendo sus líneas: en un momento aparecen.' });
+  const paths = ((s.input_files ?? []) as { path: string }[]).map((f) => f.path);
+  const b = await bloquesDe(x.sb, paths);
+  if ('error' in b) return jsonResponse(400, { error: b.error });
+  const previas = ((s.parsed_result?.lines ?? []) as LineaLeida[]);
+  const faltan = e.sin_leer.length > 0 ? { paginas: e.sin_leer, lineas: previas, porPagina: e.por_pagina } : null;
+  const estado = await completarLineas({ ...x, ficheros: b.ficheros, parsed: s.parsed_result as ParsedDoc, factura: v.factura ?? null, esperadas: e.esperadas, paginas: e.paginas, faltan, esperarFactura: false });
+  return jsonResponse(200, { lineas: estado });
 }
 
 // MEDIR: lo que se compara entre el prompt de antes y el de ahora. Ni nombres
@@ -236,6 +420,10 @@ Deno.serve(async (req) => {
   if (medir_sesiones && medir_sesiones.length > 0) {
     return await medir(sb, anthropicKey, model, account_id, medir_sesiones);
   }
+  // E10 · «Leer las que faltan» de una factura larga.
+  if (esFactura && body.releer_lineas) {
+    return await releerLineas({ sb, anthropicKey, model, accountId: account_id, sesion: body.releer_lineas });
+  }
   if (!file_paths || file_paths.length === 0) return jsonResponse(400, { error: 'Faltan file_paths' });
 
   // ── 1) Leer fichero(s) de Storage como base64 ──
@@ -274,6 +462,12 @@ Deno.serve(async (req) => {
     return jsonResponse(502, { error: 'Fallo llamando a la IA', clase: fallo.clase, causa: fallo.causa, sesion_fallo });
   }
   const latencyMs = Date.now() - t0;
+
+  // E10 · Cortada en modo factura (trae más líneas de las que caben en una respuesta): la
+  // cabecera ahora y las líneas por páginas después. Lo que no llega cortado sigue igual.
+  if (esFactura && esCortada(rawResponse)) {
+    return await facturaLarga({ sb, anthropicKey, model, accountId: account_id, esFactura, inputFiles, contentBlocks, ficheros: b.ficheros, t0, primera: rawResponse });
+  }
 
   if (!parsed || !parsed.document) {
     // E02 · Cortada (max_tokens), rechazada, sin JSON o sin el documento: este documento no se ha podido leer.

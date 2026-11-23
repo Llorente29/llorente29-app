@@ -1,0 +1,20 @@
+[
+ {
+  "id": "792-1",
+  "pr": 792,
+  "fecha": "2026-11-23T10:27:58Z",
+  "producto": "sumied",
+  "apartado": "Facturas recibidas",
+  "frase": "una factura larga se ve como cualquier otra: con su cabecera, sus bases y su total, sin líneas de artículo.",
+  "ruta": null
+ },
+ {
+  "id": "792-2",
+  "pr": 792,
+  "fecha": "2026-11-23T10:27:58Z",
+  "producto": "folvy",
+  "apartado": "Facturas de proveedor",
+  "frase": "las líneas de una factura larga se leen solo si la empresa recibe la mercancía con Folvy; si faltan, «Leer las que faltan» en su detalle.",
+  "ruta": null
+ }
+]

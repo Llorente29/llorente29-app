@@ -1,0 +1,12 @@
+# K10c · Varios pagos de una factura recibida, como ERP10 (23/11). La última base de la ficha recibida (K11b).
+# Rama conta/k10c-varios-pagos. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0920  Añade conta_recibida_pago_apuntar (un pago por un importe con una cuenta que no es del banco), conta_recibida_
+#         pago_se_puede_cambiar, conta_recibida_pago_cambiar (el pago y su asiento, con el mismo número) y conta_recibida_
+#         pago_borrar (con el «Borrar» del S01q, renumerando). Los N pagos ya se guardaban (supplier_invoice_payment, PC01).
+#         Nada que exista cambia: el pago de hoy se queda con su asiento y su huella. Lo cuenta k10c-varios-pagos.sql
+#         (regla 31: las recibidas por estado de pago y la huella de sus pagos, iguales).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k10c-varios-pagos.sql
+supabase/migrations/20261123T0920_k10c_varios_pagos.sql

@@ -40,6 +40,7 @@ import { listSuppliers } from '@/modules/kitchen/services/purchaseFormatService'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
 import { listGoodsReceipts, type GoodsReceipt } from '@/modules/supply/services/goodsReceiptService'
 import type { Supplier } from '@/types/kitchen'
+import { LineasLeidas } from '@/modules/supply/lineas/LineasLeidas'
 
 const STATUS_LABEL: Record<SupplierInvoiceStatus, string> = {
   borrador: 'Borrador',
@@ -318,6 +319,7 @@ export default function SupplierInvoicesPage() {
         onBack={() => { setView('list'); setDetailId(null); setDetailHead(null); setDetailLines([]); setMatchSummary(null) }}
         onRunMatch={handleRunMatch}
         onApprove={handleApprove}
+        onReload={() => void refreshDetail()}
         onMarkDiscrepancy={handleMarkDiscrepancy}
       />
     )
@@ -598,7 +600,7 @@ function MatchDetailText({ result, detail }: { result: string | null; detail: Re
 }
 
 function InvoiceDetail({
-  head, lines, loading, busy, summary, costImpact, canApprove, error, onBack, onRunMatch, onApprove, onMarkDiscrepancy,
+  head, lines, loading, busy, summary, costImpact, canApprove, error, onBack, onRunMatch, onApprove, onMarkDiscrepancy, onReload,
 }: {
   head: SupplierInvoice | null
   lines: SupplierInvoiceLine[]
@@ -612,6 +614,8 @@ function InvoiceDetail({
   onRunMatch: () => void
   onApprove: () => void
   onMarkDiscrepancy: () => void
+  /** E10b · Las líneas han cambiado (terminó la lectura de una larga): volver a leer la factura. */
+  onReload: () => void
 }) {
   const hasDiscrepancies = summary
     ? (summary.diffPrice + summary.diffQty + summary.notReceived + summary.vatBad + summary.unmatched) > 0
@@ -731,6 +735,9 @@ function InvoiceDetail({
               </div>
             </div>
           )}
+
+          {/* E10b · Las líneas de una factura larga: «Leyendo…» o, si faltan, «Leer las que faltan». */}
+          <LineasLeidas accountId={head?.accountId ?? null} invoiceId={head?.id ?? null} lineas={lines.length} alCambiar={onReload} />
 
           {/* Líneas con veredicto */}
           <div className="border border-border-default rounded-lg overflow-hidden">

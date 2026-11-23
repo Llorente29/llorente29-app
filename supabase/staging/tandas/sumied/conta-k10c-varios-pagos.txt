@@ -1,0 +1,3 @@
+# K10c · Varios pagos de una recibida. La 0920 solo añade funciones (va de verdad desde la rama, W05).
+supabase/migrations/20261123T0920_k10c_varios_pagos.sql
+supabase/staging/sql/20261123_k10c_varios_pagos_prueba.sql

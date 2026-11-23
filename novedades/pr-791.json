@@ -1,0 +1,20 @@
+[
+ {
+  "id": "791-1",
+  "pr": 791,
+  "fecha": "2026-11-23T09:38:18Z",
+  "producto": "sumied",
+  "apartado": "Facturas recibidas",
+  "frase": "una factura larga (muchos albaranes y líneas) entra leída entera: primero con sus importes y, en un momento, con todas sus líneas.",
+  "ruta": null
+ },
+ {
+  "id": "791-2",
+  "pr": 791,
+  "fecha": "2026-11-23T09:38:18Z",
+  "producto": "sumied",
+  "apartado": "Ficha de la factura",
+  "frase": "bajo los importes, sus líneas; si falta alguna, en ámbar, cuántas de cuántas y «Leer las que faltan».",
+  "ruta": null
+ }
+]
