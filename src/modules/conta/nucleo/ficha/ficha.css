@@ -332,18 +332,3 @@ tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opac
 
 /* K10b · Sin propuesta: su porqué, debajo de la cabecera del asiento (regla 8). */
 .kf-asiento-nota { margin: 6px 0 0; font-size: 13px; color: var(--kf-ambar-tinta, #8a5a00); }
-
-/* E10 · La fila de las líneas de la factura, bajo los importes: siempre en su sitio. */
-.kf-lineas { display: flex; flex-direction: column; gap: 4px; padding: 4px 8px; background: var(--k-gris); border-radius: 3px; color: var(--k-apoyo); }
-.kf-lineas[data-tono='ambar'] { background: var(--kf-ambar-fondo); color: var(--kf-ambar-tinta); }
-.kf-lineas-fila { display: flex; align-items: center; gap: 10px; min-height: 26px; }
-.kf-lineas-fila > span { flex: 1 1 auto; min-width: 0; }
-.kf-lineas-leer { padding: 2px 10px; }
-.kf-lineas-ver { white-space: nowrap; }
-.kf-lineas-dicho { margin: 0; color: var(--kf-verde-tinta); }
-.kf-lineas-dicho[data-mal='si'] { color: var(--kf-ambar-tinta); }
-.kf-lineas-tabla { max-height: 240px; overflow: auto; background: var(--k-blanco); border: 1px solid var(--k-raya); border-radius: 3px; }
-.kf-lineas-tabla table { width: 100%; border-collapse: collapse; color: var(--k-tinta); font-variant-numeric: tabular-nums; }
-.kf-lineas-tabla th, .kf-lineas-tabla td { padding: 3px 8px; border-bottom: 1px solid var(--k-gris); text-align: right; white-space: nowrap; }
-.kf-lineas-tabla th:first-child, .kf-lineas-tabla td:first-child { text-align: left; white-space: normal; }
-.kf-lineas-tabla th { position: sticky; top: 0; background: var(--k-gris); font-weight: 600; }

@@ -148,6 +148,23 @@ export type EstadoLineas = {
   cuadre: { suman: number; base: number; cuadra: boolean } | null
   /** Cuándo empezó a leerlas (una que se queda «leyendo» mucho rato, faltan). */
   desde: string
+  /** E10b · No se han leído porque la empresa no recibe la mercancía con Folvy (las líneas son de Folvy). */
+  sin_folvy?: boolean
+}
+
+/**
+ * E10b · ¿Se leen las líneas de una factura larga? Solo si su empresa recibe la mercancía con Folvy
+ * (company_purchase_setting.receives_goods, lo mismo que dice conta_recibe_mercancia): las líneas de
+ * artículo, con su lote y su caducidad, son de Folvy (compras, inventario, coste). A Sumied le basta la
+ * cabecera. Sin empresa o sin el ajuste, no (como conta_recibe_mercancia: sin fila, no).
+ */
+export function seLeenLasLineas(recibeMercancia: boolean | null | undefined): boolean {
+  return recibeMercancia === true
+}
+
+/** E10b · Lo que se guarda cuando no se leen: sin leer ninguna, por no usar Folvy; «Leer las que faltan» las lee todas. */
+export function lineasSinLeer(x: { esperadas: number | null; paginas: number | null; desde: string }): EstadoLineas {
+  return { estado: 'faltan', leidas: 0, esperadas: x.esperadas, paginas: x.paginas, sin_leer: [], por_pagina: [], cuadre: null, desde: x.desde, sin_folvy: true }
 }
 
 export function estadoLineas(x: { trozos: readonly TrozoLeido[]; esperadas: number | null; paginas: number | null; base: number | null; desde: string }): { lineas: LineaLeida[]; estado: EstadoLineas } {
