@@ -1,0 +1,13 @@
+# X29 · Gestión de extractos bancarios, como ERP10 (encargo y respuestas X29 · 1 y 2, 23/11). Rama conta/x29-extractos.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1712  Añade: validar por movimiento (validated_at, validated_by_name, bank_validar, bank_quitar_validacion),
+#         conta_user_pref.casar_plegado, y borrar líneas sin que vuelvan (bank_movimiento_borrado: solo banco, huella,
+#         cuándo y quién, con su índice único; bank_movimientos_borrar; bank_movimiento_borrado_quitar).
+#   1713  Cambia public.bank_importar (trozos exactos, la misma firma, con su respaldo: una borrada no entra y cuenta
+#         aparte de las repetidas) y public.bank_movement (el disparador before insert, como red). Declarado, con su prueba.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x29-extractos.sql
+supabase/migrations/20261123T1712_x29_extractos_anade.sql
+supabase/migrations/20261123T1713_x29_borradas_no_vuelven.sql
