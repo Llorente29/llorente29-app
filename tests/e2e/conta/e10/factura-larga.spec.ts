@@ -135,7 +135,9 @@ async function abrirFicha(page: Page, id: string) {
   await page.goto(`/conta/documentos/recibidas/${id}?ver=por-revisar`, { timeout: 30_000 })
   await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
   await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
-  await expect(page.locator('[data-prueba="cuadra"]')).toContainText(/Cuadra|Falta/, { timeout: 30_000 })
+  // La ficha está cargada cuando el asiento ya dice algo: «Cuadra», «Falta…» o, con el proveedor recién dado de alta y
+  // aún sin tipo de gasto, «Sin propuesta» (run 45141043810: la ficha estaba bien y la espera no lo contaba).
+  await expect(page.locator('[data-prueba="cuadra"]')).toContainText(/Cuadra|Falta|Sin propuesta/, { timeout: 30_000 })
 }
 
 async function capturar(page: Page, nombre: string) {
