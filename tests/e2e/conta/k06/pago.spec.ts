@@ -37,7 +37,8 @@ const PROVEEDOR = (t: number) => (t === 1 ? 'Proveedor de Prueba Ficha Uno, S.L.
 const FICHA = '[data-prueba="ficha-recibida-nucleo"]'
 const ficha = (page: Page) => page.locator(`.k-zona[data-activa="si"] ${FICHA}`)
 const aviso = (page: Page) => page.locator('[data-prueba="aviso-ficha"]')
-const nombrePago = (page: Page) => ficha(page).getByRole('textbox', { name: 'Nombre de la cuenta del pago' })
+// K11b · El nombre de la cuenta del pago, sin casilla propia (como ERP10): en el `title` de la subcuenta del pago.
+const nombrePago = (page: Page) => ficha(page).locator('[data-prueba="pago-cuenta"]')
 
 async function rest<T>(s: Sesion, ruta: string, cuerpo?: unknown): Promise<T> {
   const r = await fetch(`${STAGING_URL}/rest/v1/${ruta}`, {
@@ -72,6 +73,9 @@ async function entrarEnLaGestoria(page: Page): Promise<Sesion> {
 async function escribirAMano(page: Page, t: number, numero: string, gasto: { escribir: string; cuenta: string } = { escribir: '600', cuenta: '60000000' }) {
   await page.goto('/conta/documentos/nueva', { timeout: 30_000 })
   await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
+  // K11b · La nueva entra por la primera casilla de la pantalla (la fecha de la factura, la de hoy); Intro pasa al proveedor.
+  await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
+  await page.keyboard.press('Enter')
   await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
   await page.keyboard.type(t === 1 ? 'Ficha Uno' : 'Ficha Dos')
   await page.keyboard.press('Enter')
@@ -85,8 +89,9 @@ async function escribirAMano(page: Page, t: number, numero: string, gasto: { esc
   await expect(ficha(page).getByRole('textbox', { name: 'Base 2' })).toHaveCount(0)
   await ficha(page).locator('#kf-cuenta-0').fill(gasto.escribir)
   await page.getByRole('option', { name: new RegExp(`^${gasto.cuenta} · `) }).click()
-  const local = ficha(page).getByRole('combobox', { name: 'Local' })
-  if (await local.isEnabled()) await local.selectOption({ index: 1 })
+  // El local, con su lupa (K11b · 4): «Común» e Intro; apagada (sin locales), no se toca.
+  const local = ficha(page).getByRole('textbox', { name: 'Local', exact: true })
+  if (await local.isEditable()) { await local.fill('Común'); await local.press('Enter') }
   await ficha(page).getByRole('checkbox', { name: 'Guardarla sin documento' }).check()
   await ficha(page).getByRole('textbox', { name: 'Por qué no tiene documento' }).fill('Prueba e2e K06: escrita a mano, sin documento')
 }
@@ -138,7 +143,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await ficha(page).locator('#kf-pago').fill('5720')
     await page.getByRole('option', { name: /^57200001 · / }).click()
     await expect(ficha(page).locator('#kf-pago')).toHaveValue('57200001')
-    await expect(nombrePago(page)).toHaveValue('Bancos · Cuenta principal')
+    await expect(nombrePago(page)).toHaveAttribute('title', /^Bancos · Cuenta principal/)
     await expect(ficha(page).locator('#kf-pago-fecha')).toHaveValue('20/10/2026')
     await expect(ficha(page).getByRole('textbox', { name: 'Importe del pago' })).toHaveValue('121,00')
     await cargada(page, 'a mano, por banco')
@@ -150,14 +155,22 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     const banco = await idDe(s, nBanco)
     expect(banco.status).toBe('aprobada')
 
-    // ── 2 · Vacía: la siguiente del mismo proveedor propone la 57200001 «de la última»; vaciada, pendiente de pagar. ──
+    // ── 2 · Vacía (K11b, Julio, 23/11): la siguiente del mismo proveedor NO trae la 57200001 escrita (una factura no queda
+    //    pagada por haber pagado otra antes): la casilla, vacía; la del último pago, la primera al abrir la lupa. Elegida y
+    //    vaciada otra vez, pendiente de pagar (vaciarla es un cambio de verdad: no vuelve a la propuesta). ──
     const nVacia = `K06V-${t}-${sello}`
     await escribirAMano(page, t, nVacia)
-    await expect(ficha(page).locator('#kf-pago')).toHaveValue('57200001', { timeout: 30_000 })
-    await expect(ficha(page).locator('[data-prueba="origen-pago"]')).toHaveText('La del último pago')
+    await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
+    await expect(ficha(page).locator('#kf-pago')).toHaveValue('')
+    await expect(ficha(page).locator('[data-prueba="origen-pago"]')).toHaveCount(0)
+    await ficha(page).getByRole('button', { name: 'Buscar la cuenta del pago' }).click()
+    const primera = page.locator('#kf-pago-lista [role="option"]').first()
+    await expect(primera).toContainText('57200001', { timeout: 30_000 })
+    await primera.click()
+    await expect(ficha(page).locator('#kf-pago')).toHaveValue('57200001')
     await ficha(page).locator('#kf-pago').fill('')
-    await expect(nombrePago(page)).toHaveValue('')
-    await expect(nombrePago(page)).toHaveAttribute('placeholder', 'Pendiente de pagar')
+    // Vacía: pendiente de pagar (en ERP10, la fila del pago en blanco).
+    await expect(ficha(page).locator('#kf-pago')).toHaveValue('')
     expect(await loQueSeCorta(page, FICHA), 'lo que se corta, vacía').toEqual([])
     if (grande) await page.screenshot({ path: `${DIR}/vacia-${ancho}.png` })
     await ficha(page).locator('[data-guardar-y-siguiente]').click()
@@ -184,7 +197,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
     await expect(ficha(page).locator('#kf-pago')).toHaveValue('43000091', { timeout: 30_000 })
     await expect(ficha(page).locator('[data-prueba="origen-pago"]')).toHaveText('De su ficha')
-    await expect(nombrePago(page)).toHaveValue('Plataforma de Prueba K06')
+    await expect(nombrePago(page)).toHaveAttribute('title', /^Plataforma de Prueba K06/)
     await expect(ficha(page)).not.toContainText('Compensación con la liquidación')
     await cargada(page, 'la de plataforma')
     expect(await loQueSeCorta(page, FICHA), 'lo que se corta, por la 430').toEqual([])
@@ -234,11 +247,18 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     expect([plat.status, plat.paid_method]).toEqual(['pagada', 'compensation'])
 
     // ── 5 · El asiento: lo suyo, sin documento. ──
+    // K11b · Desde el K12 el asiento es el general como ERP10, con el documento a la derecha (la pieza 8, DocumentoDerecha,
+    // que sustituyó al «.kf-soltar»): el nuevo deja adjuntar el justificante; el de la factura, sin documento, no lleva
+    // ninguno y no deja adjuntarlo aquí (viene de su ficha: se cambia allí).
+    const documento = page.locator('.k-zona[data-activa="si"] [data-pieza="documento"]')
     await page.goto('/conta/libros/diario/nuevo', { timeout: 30_000 })
-    await expect(page.locator('.k-zona[data-activa="si"] .kf-soltar')).toContainText('Arrastra aquí el justificante', { timeout: 30_000 })
+    await expect(documento.getByRole('button', { name: 'Adjuntar el documento' })).toBeVisible({ timeout: 30_000 })
     const [e] = await rest<{ id: string }[]>(s, `journal_entry?select=id&account_id=eq.${NUCLEO.id}&source_type=eq.supplier_invoice&source_id=eq.${banco.id}&status=eq.validado`)
     await page.goto(`/conta/libros/diario/${e.id}`, { timeout: 30_000 })
-    await expect(page.locator('.k-zona[data-activa="si"] .kf-panel')).toContainText('Este asiento no tiene justificante.', { timeout: 30_000 })
+    await expect(page.locator('.k-zona[data-activa="si"] .kp-barra-aviso')).toContainText('Viene de su ficha: se cambia allí.', { timeout: 30_000 })
+    await expect(documento).toBeVisible()
+    await expect(documento.locator('.kp-hoja'), 'el asiento de la factura, sin justificante').toHaveCount(0)
+    await expect(documento.getByRole('button', { name: 'Adjuntar el documento' })).toHaveCount(0)
     if (grande) { await cargada(page, 'el asiento guardado'); await page.screenshot({ path: `${DIR}/asiento-sin-justificante-${ancho}.png` }) }
 
     expect(errores, 'errores de la página').toEqual([])

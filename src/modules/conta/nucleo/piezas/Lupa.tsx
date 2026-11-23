@@ -62,7 +62,7 @@ export function Lupa<T extends Registro>({ titulo = 'Localización de registros'
  * La casilla con lupa. `valor` es el id elegido (o ''); lo que se ve, «código · descripción» del elegido o lo que se
  * está escribiendo. `alIntro` se llama después de elegir con Intro (la pantalla pasa a la casilla siguiente).
  */
-export function CasillaLupa<T extends Registro>({ id, etiqueta, registros, valor, poner, alIntro, gris = false, ambar = false, alta, vista, teclas, titulo, resolver }: {
+export function CasillaLupa<T extends Registro>({ id, etiqueta, registros, valor, poner, alIntro, gris = false, ambar = false, alta, vista, teclas, titulo, resolver, datos }: {
   id: string; etiqueta: string; registros: readonly T[]; valor: string | null; poner: (r: T | null) => void
   alIntro?: () => void; gris?: boolean; ambar?: boolean; alta?: (texto: string, elegir: (r: T) => void) => void
   /** Cómo se ve lo elegido (por defecto, el código). */
@@ -72,6 +72,8 @@ export function CasillaLupa<T extends Registro>({ id, etiqueta, registros, valor
   titulo?: string
   /** Cómo se resuelve lo escrito (la subcuenta: el atajo de ERP10, «572.1» → 57200001). Por defecto, el código o el único que encaja. */
   resolver?: (texto: string) => { registro: T | null; abrir: boolean }
+  /** Atributos data-* de la casilla (K11b: `data-casilla`, para que Intro la recorra en el orden de la pantalla). */
+  datos?: Record<`data-${string}`, string>
 }) {
   const resolverlo = resolver ?? ((t: string) => elegirConIntro(registros, t))
   const elegido = registros.find((r) => r.id === valor) ?? null
@@ -100,7 +102,7 @@ export function CasillaLupa<T extends Registro>({ id, etiqueta, registros, valor
   return (
     <>
       <span className="kp-con-lupa">
-        <input ref={yo} id={id} aria-label={etiqueta} aria-describedby={ayuda} readOnly={gris} data-ambar={ambar ? 'si' : undefined}
+        <input ref={yo} id={id} aria-label={etiqueta} aria-describedby={ayuda} readOnly={gris} data-ambar={ambar ? 'si' : undefined} {...datos}
           value={texto ?? ver(elegido)} title={titulo ?? (elegido ? `${elegido.codigo} · ${elegido.descripcion}` : undefined)}
           onChange={(e) => setTexto(e.target.value)}
           onBlur={() => { if (texto !== null && !abierta) { const r = resolverlo(texto); if (!texto.trim()) poner(null); else if (r.registro) poner(r.registro); setTexto(null) } }}

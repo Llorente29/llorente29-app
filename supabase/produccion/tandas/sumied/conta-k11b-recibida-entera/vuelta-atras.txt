@@ -1,0 +1,3 @@
+# K11b · la vuelta atrás: conta_recibida_otros_datos desde su respaldo (las líneas vuelven a guardar sus tres datos juntos).
+cuenta: scripts/conta/produccion/cuentas/k11b-recibida-entera.sql
+supabase/vuelta-atras/20261123T1750_k11b_lineas_solo_lo_que_cambia.down.sql

@@ -5,8 +5,8 @@
 //   1. Una a mano de su proveedor (base 100 al 21 %): en «Cómo se paga», una 430 de cliente que existe y no es la de
 //      ninguna plataforma (el caso de Julio: la escribió y salía «No está: crearla»). Sale en la lista, se elige con su
 //      nombre, y una línea dice el asiento que hará: la del proveedor al debe y la 430 al haber, por 121,00 €.
-//   2. Otro buscador con la misma regla: esa 430, escrita en «A qué cuenta de gasto va», dice que existe pero que
-//      ahí solo van cuentas de gasto; ningún «No está».
+//   2. Otro buscador con la misma regla: esa 430, escrita en la contrapartida, sale en su lista (desde el K10, #773, la
+//      contrapartida admite cualquier subcuenta: las del 6 primero y después el resto); ningún «No está».
 // No se guarda la factura. La 430: la primera de cliente de la empresa que no es de una plataforma o, si no hay, una
 // inventada (T11) que se crea antes con company_account_add_codigo (X20).
 
@@ -80,6 +80,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     // Una a mano: su proveedor, base 100 al 21 %, a la 600.
     await page.goto('/conta/documentos/nueva', { timeout: 30_000 })
     await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
+    // K11b · La nueva entra por la primera casilla de la pantalla (la fecha de la factura, la de hoy); Intro pasa al proveedor.
+    await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
+    await page.keyboard.press('Enter')
     await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
     await page.keyboard.type('Ficha Uno')
     await page.keyboard.press('Enter')
@@ -90,10 +93,11 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await ficha(page).getByRole('combobox', { name: 'Tipo de IVA 1' }).selectOption('21')
     await ficha(page).getByRole('button', { name: 'Quitar el tipo 10 %' }).click()
 
-    // 2 · «A qué cuenta de gasto va»: la 430 existe, pero ahí solo van las de gasto. Ningún «No está».
+    // 2 · La contrapartida: la 430 existe y, desde el K10 (#773: «la contrapartida, con cualquier subcuenta»), sale en
+    //    su lista como cualquier otra. Ningún «No está», y ya no el «existe, pero aquí solo van cuentas de gasto» del X21b.
     await ficha(page).locator('#kf-cuenta-0').fill(cliente.code)
-    const noVa = ficha(page).locator('[data-prueba="existe-no-va"]')
-    await expect(noVa).toHaveText(`La ${cliente.code} · ${cliente.name} existe, pero aquí solo van cuentas de gasto (las del 6).`, { timeout: 30_000 })
+    await expect(page.getByRole('option', { name: `${cliente.code} · ${cliente.name}` })).toBeVisible({ timeout: 30_000 })
+    await expect(ficha(page).locator('[data-prueba="existe-no-va"]')).toHaveCount(0)
     await expect(ficha(page).getByRole('button', { name: /^No está/ })).toHaveCount(0)
     await page.screenshot({ path: `${DIR}/gasto-existe-${ancho}.png` })
     await ficha(page).locator('#kf-cuenta-0').fill('600')
@@ -106,13 +110,15 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(ficha(page).getByRole('button', { name: /^No está/ })).toHaveCount(0)
     await opcion.click()
     await expect(ficha(page).locator('#kf-pago')).toHaveValue(cliente.code)
-    await expect(ficha(page).getByRole('textbox', { name: 'Nombre de la cuenta del pago' })).toHaveValue(cliente.name)
+    // K11b · El nombre de la cuenta del pago, en el `title` de su subcuenta (sin casilla propia, como ERP10).
+    await expect(ficha(page).locator('[data-prueba="pago-cuenta"]')).toHaveAttribute('title', new RegExp(`^${cliente.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
     await expect(ficha(page).locator('#kf-pago-fecha')).toHaveValue('20/10/2026')
+    // K11b · Sin frases (la ficha como ERP10): el asiento que hará el pago, en el `title` del concepto del pago.
     const linea = ficha(page).locator('[data-prueba="pago-asiento"]')
-    await expect(linea).toHaveText(new RegExp(`^No es un banco ni la caja: al validar, un asiento del pago con (la \\d{8} del proveedor|la del proveedor) al debe y la ${cliente.code} · ${cliente.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} al haber, por 121,00 €, y la factura queda pagada\\.$`))
-    // No se corta y cabe: la línea, entera dentro de la ficha.
-    const cabe = await linea.evaluate((e) => { const r = e.getBoundingClientRect(); return r.right <= window.innerWidth + 1 && e.scrollWidth <= e.clientWidth + 1 })
-    expect(cabe, 'la línea del asiento cabe').toBe(true)
+    await expect(linea).toHaveAttribute('title', new RegExp(`(^|· )No es un banco ni la caja: al validar, un asiento del pago con (la \\d{8} del proveedor|la del proveedor) al debe y la ${cliente.code} · ${cliente.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} al haber, por 121,00 €, y la factura queda pagada\\.$`))
+    // Cabe: la casilla, entera dentro de la ficha.
+    const cabe = await linea.evaluate((e) => e.getBoundingClientRect().right <= window.innerWidth + 1)
+    expect(cabe, 'la casilla del concepto del pago cabe').toBe(true)
     await page.screenshot({ path: `${DIR}/pago-con-430-${ancho}.png` })
 
     // Y lo que no está en el plan, sí: «No está: crear la …».

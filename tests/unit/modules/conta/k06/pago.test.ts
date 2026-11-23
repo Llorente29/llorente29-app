@@ -1,32 +1,34 @@
 // tests/unit/modules/conta/k06/pago.test.ts
 //
 // K06 · La cuenta del pago de la recibida (src/modules/conta/nucleo/recibida/pago.ts):
-// la propuesta (la última del proveedor, la 430 de plataforma, vacía) y qué hace al guardar.
+// la propuesta (la de su ficha, o vacía; la del último pago, solo en la lupa) y qué hace al guardar.
 import { describe, expect, it } from 'vitest'
-import { fechaDelPago, propuestaDelPago, queHaceElPago, textoDudaPago } from '@/modules/conta/nucleo/recibida/pago'
+import { PAGO_VACIO, cuentaDeLaCasilla, fechaDelPago, primerasDeLaLupa, propuestaDelPago, queHaceElPago, textoDudaPago } from '@/modules/conta/nucleo/recibida/pago'
 
-// K10 (Julio, 21/11): el orden es el de ERP10 — la «Cuenta de pago» de la ficha, después la del último pago, y vacía.
-// La plataforma ya no se propone (su 430 pasó a la ficha con la tanda del K10).
+// K10 (Julio, 21/11): la «Cuenta de pago» de la ficha y, sin ella, vacía. K11b (Julio, 23/11): la del último pago ya no
+// se escribe en la casilla («una factura metida a mano no puede quedar pagada por haber validado otra antes»): va la
+// primera al abrir la lupa. Lo que se ve es lo que se apunta: vaciada, pendiente aunque haya propuesta.
 describe('la propuesta de la cuenta del pago', () => {
-  it('la de su ficha, antes que la del último pago', () => {
+  it('la de su ficha', () => {
     expect(propuestaDelPago({ deLaFicha: '43000002', ultimas: ['57200001'] })).toEqual({ cuenta: '43000002', origen: 'De su ficha', duda: null })
   })
-  it('sin la de su ficha, la de su último pago, con su origen', () => {
-    expect(propuestaDelPago({ deLaFicha: null, ultimas: ['57200001', '57200001'] })).toEqual({ cuenta: '57200001', origen: 'La del último pago', duda: null })
-  })
-  it('si sus últimos pagos van por más de una cuenta, la última y la duda con las dos', () => {
-    expect(propuestaDelPago({ deLaFicha: null, ultimas: ['55100001', '57200001', '55100001'] }))
-      .toEqual({ cuenta: '55100001', origen: 'La del último pago', duda: { cuentas: ['55100001', '57200001'] } })
-  })
-  it('la duda mira solo los cinco últimos', () => {
-    expect(propuestaDelPago({ deLaFicha: null, ultimas: ['57200001', '57200001', '57200001', '57200001', '57200001', '55100001'] }).duda).toBeNull()
-  })
-  it('con la de su ficha no hay duda, aunque sus pagos fueran por varias', () => {
-    expect(propuestaDelPago({ deLaFicha: '57200001', ultimas: ['55100001', '57200001'] }).duda).toBeNull()
+  it('sin la de su ficha, vacía aunque haya pagos de antes (la del último pago no se escribe)', () => {
+    expect(propuestaDelPago({ deLaFicha: null, ultimas: ['57200001', '57200001'] })).toEqual({ cuenta: '', origen: null, duda: null })
+    expect(propuestaDelPago({ deLaFicha: null, ultimas: ['55100001', '57200001', '55100001'] })).toEqual({ cuenta: '', origen: null, duda: null })
   })
   it('sin ninguna, vacía: pendiente de pagar', () => {
     expect(propuestaDelPago({ deLaFicha: null, ultimas: [] })).toEqual({ cuenta: '', origen: null, duda: null })
     expect(propuestaDelPago({ deLaFicha: '  ', ultimas: [] })).toEqual({ cuenta: '', origen: null, duda: null })
+  })
+  it('las de sus últimos pagos, las primeras de la lupa: sin repetir, de la más nueva a la más vieja, cinco', () => {
+    expect(primerasDeLaLupa({ ultimas: ['55100001', '57200001', '55100001', ' '] })).toEqual(['55100001', '57200001'])
+    expect(primerasDeLaLupa({ ultimas: ['a', 'b', 'c', 'd', 'e', 'f'] })).toHaveLength(5)
+  })
+  it('lo que se ve es lo que se apunta: la puesta; vaciada, nada (aunque haya propuesta); sin tocar, la propuesta', () => {
+    expect(cuentaDeLaCasilla('57000000', '43000002')).toBe('57000000')
+    expect(cuentaDeLaCasilla(PAGO_VACIO, '43000002')).toBe('')
+    expect(cuentaDeLaCasilla(null, '43000002')).toBe('43000002')
+    expect(cuentaDeLaCasilla(null, '')).toBe('')
   })
 })
 
@@ -67,5 +69,16 @@ describe('la fecha del pago y la duda', () => {
     const n = new Map([['55100001', 'Socio de Prueba'], ['57200001', 'Bancos · Cuenta principal']])
     expect(textoDudaPago({ cuentas: ['55100001', '57200001'] }, (c) => n.get(c) ?? '').texto)
       .toBe('Sus últimos pagos van por la 55100001 (Socio de Prueba) y la 57200001 (Bancos · Cuenta principal): mira cuál es esta')
+  })
+})
+
+// K11b (e2e 45268936661): vaciada, la casilla volvía a la propuesta cuando la ficha se releía, porque para el editor de
+// cambios '' y null son lo mismo («vacío es vacío») y una relectura adopta lo que no se ha tocado. PAGO_VACIO no es vacío.
+describe('la casilla del pago vaciada sobrevive a una relectura', () => {
+  it('con PAGO_VACIO se queda vaciada; con la cadena vacía de antes volvía a null (y a la propuesta)', async () => {
+    const { adoptar } = await import('@/modules/conta/diseno/plantillas/cambios')
+    const base = { pagoCuenta: null as string | null }
+    expect(adoptar(base, { pagoCuenta: PAGO_VACIO }, { pagoCuenta: null }).valor.pagoCuenta).toBe(PAGO_VACIO)
+    expect(adoptar(base, { pagoCuenta: '' }, { pagoCuenta: null }).valor.pagoCuenta).toBeNull()
   })
 })

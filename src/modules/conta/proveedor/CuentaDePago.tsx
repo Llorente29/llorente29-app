@@ -47,7 +47,7 @@ export function CuentaDePago() {
     if (!empresa) return
     try {
       await quitarCuentaProveedor(empresa.id, f.id, 'pago', actor.name)
-      setDicho({ tono: 'ok', texto: 'Quitada: sus facturas proponen la cuenta de su último pago.' }); setTexto(null); setVuelta((v) => v + 1)
+      setDicho({ tono: 'ok', texto: 'Quitada: sus facturas quedan pendientes de pagar hasta que se escriba la cuenta del pago en cada una.' }); setTexto(null); setVuelta((v) => v + 1)
     } catch (e) { setDicho({ tono: 'mal', texto: `No se ha quitado: ${e instanceof Error ? e.message.replace(/\.$/, '') : String(e)}.` }) }
   }
 
@@ -63,7 +63,7 @@ export function CuentaDePago() {
             <CrearDesdeBuscador accountId={f.accountId} companyId={empresa.id} q={q} quien={actor.name ?? null}
               alCrear={(c) => { const n = { codigo: c.code, nombre: c.name }; setCreadas((x) => [...x, n]); void guardar(n, c.id); cerrar() }} />
           )} />
-        <NombreDeCuenta etiqueta="Nombre de la cuenta de pago" valor={cuenta ? nombre(cuenta) : ''} placeholder="Sin cuenta: la del último pago" />
+        <NombreDeCuenta etiqueta="Nombre de la cuenta de pago" valor={cuenta ? nombre(cuenta) : ''} placeholder="Sin cuenta: se escribe en cada factura" />
         {cuenta && <button type="button" className="kf-enlace" onClick={() => void quitar()}>Quitar</button>}
       </div>
       <p className="cx-ayuda">En {empresa.nombre}. Puede ser un banco, una caja, la 551 de un socio o la 430 de una plataforma (Glovo, Uber…). En una factura se cambia sin tocar esto.</p>

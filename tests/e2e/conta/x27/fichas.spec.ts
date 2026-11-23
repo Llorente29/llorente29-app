@@ -98,6 +98,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
 
     await page.goto('/conta/documentos/nueva', { timeout: 30_000 })
     await expect(recibida(page)).toBeVisible({ timeout: 30_000 })
+    // K11b · La nueva entra por la primera casilla de la pantalla (la fecha de la factura, la de hoy); Intro pasa al proveedor.
+    await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
+    await page.keyboard.press('Enter')
     await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
     await page.keyboard.type(`Proveedor Inventado X27 ${ancho}-${n}`)
     await page.keyboard.press('Enter')
@@ -109,6 +112,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     const numero = `X27-${ancho}-${n}`
     await page.goto('/conta/documentos/nueva', { timeout: 30_000 })
     await expect(recibida(page)).toBeVisible({ timeout: 30_000 })
+    // K11b · La nueva entra por la primera casilla de la pantalla (la fecha de la factura, la de hoy); Intro pasa al proveedor.
+    await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
+    await page.keyboard.press('Enter')
     await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
     await page.keyboard.type('Ficha Uno')
     await page.keyboard.press('Enter')
@@ -120,8 +126,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await recibida(page).getByRole('button', { name: 'Quitar el tipo 10 %' }).click()
     await recibida(page).locator('#kf-cuenta-0').fill('62800000')
     await page.getByRole('option', { name: /^62800000 · / }).click()
-    const local = recibida(page).getByRole('combobox', { name: 'Local' })
-    if (await local.isEnabled()) await local.selectOption({ index: 1 })
+    // El local, con su lupa (K11b · 4): «Común» e Intro; apagada (sin locales), no se toca.
+    const local = recibida(page).getByRole('textbox', { name: 'Local', exact: true })
+    if (await local.isEditable()) { await local.fill('Común'); await local.press('Enter') }
     await recibida(page).getByRole('checkbox', { name: 'Guardarla sin documento' }).check()
     await recibida(page).getByRole('textbox', { name: 'Por qué no tiene documento' }).fill('Prueba e2e X27: escrita a mano, sin documento')
     await expect(async () => {

@@ -275,10 +275,11 @@ export async function cabeceraDeLaFactura(accountId: string, invoiceId: string):
 }
 
 /** Las marcas de la cuenta que se pueden poner: activas y sin archivar. Sin ninguna, la casilla no sale. */
-export async function marcasParaPoner(accountId: string): Promise<{ id: string; nombre: string }[]> {
-  const { data, error } = await tabla('brand').select('id, name, is_active, archived_at').eq('account_id', accountId).order('name')
+export async function marcasParaPoner(accountId: string): Promise<{ id: string; nombre: string; codigo: string }[]> {
+  const { data, error } = await tabla('brand').select('id, name, slug, is_active, archived_at').eq('account_id', accountId).order('name')
   if (error) throw new Error(`No se han podido leer las marcas: ${error.message}`)
-  return ((data ?? []) as Fila[]).filter((b) => b.is_active !== false && !b.archived_at).map((b) => ({ id: String(b.id), nombre: String(b.name) }))
+  // K11b · El código corto (su slug, el de la analítica) para cuando el nombre no cabe en la casilla.
+  return ((data ?? []) as Fila[]).filter((b) => b.is_active !== false && !b.archived_at).map((b) => ({ id: String(b.id), nombre: String(b.name), codigo: String(b.slug ?? b.name) }))
 }
 
 /** Los trimestres con el 303 presentado de la empresa, como «2026-3T» (los mismos estados que conta_iva_presentado). */
@@ -324,13 +325,16 @@ export interface OtrosDatos {
   no347: boolean
   /** 0 a 100; 100 si no se dijo. */
   ivaDeducible: number
+  /** K11b · Las fechas contable y fiscal escritas en la factura (K11f1: accounting_date y deduct_from); null = las de siempre. */
+  fechaContable: string | null
+  fechaFiscal: string | null
   lineas: { posicion: number; concepto: string | null; marcaId: string | null; canalId: string | null }[]
 }
 
 /** «Otros datos» de una recibida y los datos de sus líneas de gasto. */
 export async function otrosDatosDeLaFactura(accountId: string, invoiceId: string): Promise<OtrosDatos> {
   const [f, d, def] = await Promise.all([
-    tabla('supplier_invoice').select('invoice_type, regime_key, exclude_from_vat_return, deduction_rectification, exclude_from_347, vat_deductible_pct')
+    tabla('supplier_invoice').select('invoice_type, regime_key, exclude_from_vat_return, deduction_rectification, exclude_from_347, vat_deductible_pct, accounting_date, deduct_from')
       .eq('account_id', accountId).eq('id', invoiceId).maybeSingle(),
     tabla('supplier_invoice_expense_dato').select('position, concept, brand_id, channel_id').eq('account_id', accountId).eq('supplier_invoice_id', invoiceId).order('position'),
     rpc<Fila | null>('conta_recibida_por_defecto', { p_invoice: invoiceId }),
@@ -343,15 +347,17 @@ export async function otrosDatosDeLaFactura(accountId: string, invoiceId: string
     tipoFactura: s(x.invoice_type) ?? s(def?.tipo_factura) ?? 'F1', claveRegimen: s(x.regime_key) ?? s(def?.clave_regimen) ?? '01',
     tipoElegido: !!s(x.invoice_type), claveElegida: !!s(x.regime_key),
     noIva: x.exclude_from_vat_return === true, rectificacion: x.deduction_rectification === true, no347: x.exclude_from_347 === true,
-    ivaDeducible: pct,
+    ivaDeducible: pct, fechaContable: s(x.accounting_date), fechaFiscal: s(x.deduct_from),
     lineas: ((d.data ?? []) as Fila[]).map((l) => ({ posicion: Number(l.position), concepto: s(l.concept), marcaId: s(l.brand_id), canalId: s(l.channel_id) })),
   }
 }
 
-/** Guarda «Otros datos» y los datos de las líneas (conta_recibida_otros_datos, 0839). */
+/** Guarda «Otros datos» y los datos de las líneas (conta_recibida_otros_datos, 0839; por clave desde la 20261123T1750). */
 export async function guardarOtrosDatos(invoiceId: string, cambios: {
   tipo_factura?: string | null; clave_regimen?: string | null; no_iva?: boolean; rectificacion?: boolean; no_347?: boolean; iva_deducible?: number | null
-  lineas?: { posicion: number; concepto: string | null; marca: string | null; plataforma: string | null }[]
+  fecha_contable?: string | null; fecha_fiscal?: string | null
+  /** Por línea, solo las claves que cambian: la que no viene se queda; con null, se borra (20261123T1750). */
+  lineas?: { posicion: number; concepto?: string | null; marca?: string | null; plataforma?: string | null }[]
 }, quien: string | null): Promise<{ texto: string; asientoQuitado: boolean }> {
   const r = await rpc<Fila>('conta_recibida_otros_datos', { p_invoice: invoiceId, p_cambios: cambios, p_quien_nombre: quien })
   return { texto: String(r.texto ?? 'Guardado.'), asientoQuitado: r.asiento_quitado === true }

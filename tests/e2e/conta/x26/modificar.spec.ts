@@ -66,6 +66,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     // Una a mano, a la 62800000, validada.
     await page.goto('/conta/documentos/nueva', { timeout: 30_000 })
     await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
+    // K11b · La nueva entra por la primera casilla de la pantalla (la fecha de la factura, la de hoy); Intro pasa al proveedor.
+    await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
+    await page.keyboard.press('Enter')
     await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
     await page.keyboard.type('Ficha Uno')
     await page.keyboard.press('Enter')
@@ -77,8 +80,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await ficha(page).getByRole('button', { name: 'Quitar el tipo 10 %' }).click()
     await ficha(page).locator('#kf-cuenta-0').fill('62800000')
     await page.getByRole('option', { name: /^62800000 · / }).click()
-    const local = ficha(page).getByRole('combobox', { name: 'Local' })
-    if (await local.isEnabled()) await local.selectOption({ index: 1 })
+    // El local, con su lupa (K11b · 4): «Común» e Intro; apagada (sin locales), no se toca.
+    const local = ficha(page).getByRole('textbox', { name: 'Local', exact: true })
+    if (await local.isEditable()) { await local.fill('Común'); await local.press('Enter') }
     await ficha(page).getByRole('checkbox', { name: 'Guardarla sin documento' }).check()
     await ficha(page).getByRole('textbox', { name: 'Por qué no tiene documento' }).fill('Prueba e2e X26: escrita a mano, sin documento')
     // Si aún está leyendo cómo se paga, la ficha lo dice y no guarda: se vuelve a pulsar (e2e 44957890884).

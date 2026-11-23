@@ -49,9 +49,11 @@ export type TonoEstado = 'ambar' | 'gris' | 'verde'
 
 export function EstadoFicha({ tono, fuerte, resto }: { tono: TonoEstado; fuerte: string; resto: string }) {
   return (
-    <span className="kf-estado" data-tono={tono} role="status">
+    <span className="kf-estado" data-tono={tono} role="status" title={`${fuerte} ${resto}`.trim()}>
       <span className="kf-estado-punto" aria-hidden="true" />
-      <strong>{fuerte}</strong> {resto}
+      {/* K11b · 6 · El resto, en su span: la recibida como ERP10 lo esconde cuando lo fuerte ya es una frase entera (se lee
+          entero en el title) para que la franja no salga cortada. */}
+      <strong>{fuerte}</strong> <span className="kf-estado-resto" data-sobra={/\.$/.test(fuerte.trim()) ? 'si' : undefined}>{resto}</span>
     </span>
   )
 }
@@ -79,7 +81,7 @@ export function Duda({ fuerte = 'Mira esto.', texto, principal, secundario }: {
 }) {
   return (
     <div className="kf-duda" role="group" aria-label={fuerte}>
-      <p><strong>{fuerte}</strong> {texto}</p>
+      <p title={typeof texto === 'string' ? `${fuerte} ${texto}` : undefined}><strong>{fuerte}</strong> {texto}</p>
       {(principal || secundario) && (
         <div className="kf-duda-botones">
           {principal && <button type="button" className="kf-boton-ambar" onClick={principal.hacer}>{principal.texto}</button>}

@@ -5,10 +5,11 @@
 // red, como «Cómo se cobra» en la emitida (K05):
 //
 //   · La PROPUESTA (K10, Julio, 21/11: como en ERP10): la «Cuenta de pago» de
-//     la ficha del proveedor; si no la tiene, la del último pago; si no hay
-//     ninguna, vacía (pendiente de pagar). Si sus últimos pagos van por más de
-//     una cuenta, la duda en ámbar. La «plataforma» ya no se propone: su 430
-//     pasó a la ficha con la tanda del K10.
+//     la ficha del proveedor; si no la tiene, vacía (pendiente de pagar). La
+//     del último pago YA NO se escribe en la casilla (Julio, 23/11, K11b: una
+//     factura no puede quedar pagada por haber pagado otra antes): sale la
+//     primera al abrir la lupa. La «plataforma» ya no se propone: su 430 pasó
+//     a la ficha con la tanda del K10.
 //   · Qué HACE al guardar la cuenta que hay en la casilla:
 //       - un banco, una tarjeta o la caja de la empresa (su tesorería): lo
 //         mismo que «Ya la he pagado» de Pagos (conta_pago_a_mano): queda
@@ -24,8 +25,8 @@ import type { TonoEstado } from '../ficha/piezas'
 
 const fechaEs = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 
-/** De dónde sale la cuenta propuesta (el rótulo pequeño, en gris). */
-export type OrigenPago = 'De su ficha' | 'La del último pago'
+/** De dónde sale la cuenta propuesta (el rótulo pequeño, en gris). Solo la de su ficha (K11b, 23/11). */
+export type OrigenPago = 'De su ficha'
 
 export interface DatosPropuestaPago {
   /** K10 · La «Cuenta de pago» de la ficha del proveedor en esta empresa (company_account_link, papel «pago»), o null. */
@@ -46,17 +47,30 @@ export interface PropuestaPago {
 export const PAGOS_PARA_LA_DUDA = 5
 
 /**
- * K10 · La cuenta del pago que se propone, como en ERP10:
+ * K10 · La cuenta del pago que se escribe en la casilla, como en ERP10:
  *   1. la «Cuenta de pago» de su ficha;
- *   2. si no la tiene, la de su último pago; si los últimos van por más de una cuenta, la duda;
- *   3. sin ninguna, vacía (pendiente de pagar).
+ *   2. sin ella, vacía (pendiente de pagar). La de su último pago no se escribe (K11b, Julio, 23/11: «una factura
+ *      metida a mano no puede quedar pagada por haber validado otra antes»): va la primera en la lupa
+ *      (primerasDeLaLupa), y la elige la persona.
  */
 export function propuestaDelPago(d: DatosPropuestaPago): PropuestaPago {
   if (d.deLaFicha?.trim()) return { cuenta: d.deLaFicha.trim(), origen: 'De su ficha', duda: null }
-  const ultimas = d.ultimas.filter((c) => c.trim() !== '').slice(0, PAGOS_PARA_LA_DUDA)
-  if (!ultimas.length) return { cuenta: '', origen: null, duda: null }
-  const distintas = [...new Set(ultimas)]
-  return { cuenta: ultimas[0], origen: 'La del último pago', duda: distintas.length > 1 ? { cuentas: distintas } : null }
+  return { cuenta: '', origen: null, duda: null }
+}
+
+/** K11b · Las cuentas de sus últimos pagos, sin repetir y del más nuevo al más viejo: las primeras al abrir la lupa. */
+export function primerasDeLaLupa(d: Pick<DatosPropuestaPago, 'ultimas'>): string[] {
+  return [...new Set(d.ultimas.map((c) => c.trim()).filter(Boolean))].slice(0, PAGOS_PARA_LA_DUDA)
+}
+
+/**
+ * K11b · Lo que se ve es lo que se apunta: la cuenta del pago es la de la casilla. `PAGO_VACIO` es la casilla vaciada
+ * a mano (un cambio de verdad: no vuelve a la propuesta aunque la ficha se relea, como volvería un '' o un null).
+ */
+export const PAGO_VACIO = '(vacía)'
+export function cuentaDeLaCasilla(puesta: string | null, propuesta: string): string {
+  if (puesta === PAGO_VACIO) return ''
+  return puesta ?? propuesta
 }
 
 export type QueHaceElPago =

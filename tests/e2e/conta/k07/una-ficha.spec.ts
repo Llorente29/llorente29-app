@@ -26,6 +26,9 @@ test.use({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
 
 const DIR = 'docs/conta/capturas/k07'
 const factura = (t: number, n: number) => enCarril(`c0e70000-0000-4000-8000-000000000d${t}${n}`)
+// K11b · La del recorrido de Julio, de un emisor que no se conoce, de la semilla K11b (emisor): la de la K07 ya lleva el
+// proveedor que le puso el alta sola de la R14 (21/11). Esta llega sin proveedor de verdad, como la deja su «Deshacer».
+const deJulio = (t: number) => enCarril(`c0f80000-0000-4000-8000-000000000e${t}3`)
 const FICHA = '[data-prueba="ficha-recibida-nucleo"]'
 const ficha = (page: Page) => page.locator(`.k-zona[data-activa="si"] ${FICHA}`)
 const franja = (page: Page) => ficha(page).locator('.kf-estado')
@@ -157,7 +160,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await fichaLista(page)
 
     // ── 2 · ‹ vuelve a la validada, en la ficha nueva. ──
-    await ficha(page).getByRole('button', { name: 'La anterior' }).click()
+    await ficha(page).getByRole('button', { name: 'El anterior' }).click()
     await expect(page).toHaveURL(new RegExp(factura(t, 1)), { timeout: 30_000 })
     await laValidada(page, `la validada a ${ancho}`)
     await expect(ficha(page).locator('#kf-numero')).toHaveValue(`K07-${t}-1-B`)
@@ -195,19 +198,19 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     page.on('pageerror', (e) => errores.push(`${page.url()}: ${e.message}`))
     await page.setViewportSize({ width: ancho, height: alto })
     const s = await entrarEnLaGestoria(page)
-    await ponerDocumento(s, factura(t, 3), 'k07-julio.pdf')
+    await ponerDocumento(s, deJulio(t), 'k07-julio.pdf')
     if (alto < 800) {
       const plegar = page.getByRole('button', { name: /Plegar los botones/ })
       if (await plegar.isVisible()) await plegar.click()
     }
 
-    await page.goto(`/conta/documentos/recibidas/${factura(t, 3)}?ver=por-revisar`, { timeout: 30_000 })
+    await page.goto(`/conta/documentos/recibidas/${deJulio(t)}?ver=por-revisar`, { timeout: 30_000 })
     await fichaLista(page)
     await expect(franja(page)).toContainText('No conozco al que la emite', { timeout: 30_000 })
     await ficha(page).locator('.kf-duda').getByRole('button', { name: 'Darlo de alta' }).click()
     const form = page.locator('[data-prueba="formulario-alta-factura"]')
     await expect(form).toBeVisible()
-    await expect(form.getByLabel('Nombre con el que lo conocéis')).toHaveValue(`Emisor Nuevo K07 de Prueba ${t}, S.L.`)
+    await expect(form.getByLabel('Nombre con el que lo conocéis')).toHaveValue(`Emisor Desconocido K07 de Prueba ${t}, S.L.`)
     await form.getByRole('button', { name: 'Darlo de alta y elegirlo' }).click()
     await expect(aviso(page)).toContainText('dado de alta y elegido', { timeout: 30_000 })
     await expect(laDeAntes(page)).toHaveCount(0)
@@ -224,9 +227,9 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(laDeAntes(page)).toHaveCount(0)
 
     // Abrirla otra vez: la misma ficha, contabilizada.
-    await page.goto(`/conta/documentos/recibidas/${factura(t, 3)}`, { timeout: 30_000 })
+    await page.goto(`/conta/documentos/recibidas/${deJulio(t)}`, { timeout: 30_000 })
     await laValidada(page, `el recorrido de Julio a ${ancho}`)
-    await expect(ficha(page).locator('#kf-nombre')).toHaveValue(`Emisor Nuevo K07 de Prueba ${t}, S.L.`)
+    await expect(ficha(page).locator('#kf-nombre')).toHaveValue(`Emisor Desconocido K07 de Prueba ${t}, S.L.`)
     if (t === 1) { await cargada(page, 'la de Julio, abierta otra vez'); await page.screenshot({ path: `${DIR}/recorrido-julio-${ancho}.png` }) }
 
     expect(errores, 'errores de la página').toEqual([])

@@ -40,7 +40,8 @@ const ICONOS = {
   siguiente: 'M5 12h14M13 6l6 6-6 6',
 } as const
 
-export interface BotonBarra { hacer: () => void; puede?: boolean; titulo?: string }
+/** `datos`: atributos `data-…` de la pantalla en el botón (K11b: la recibida conserva `data-guardar-y-siguiente`). */
+export interface BotonBarra { hacer: () => void; puede?: boolean; titulo?: string; datos?: Readonly<Record<`data-${string}`, string>> }
 
 /**
  * 2 · La barra: guardar, cancelar, nuevo, anterior y siguiente; y, según la pantalla, «Documento» y lo demás (`extra`).
@@ -51,7 +52,7 @@ export function Barra({ guardar, cancelar, nuevo, anterior, siguiente, documento
   documento?: BotonBarra & { hay: boolean }; extra?: ReactNode; aviso?: ReactNode
 }) {
   const b = (clave: keyof typeof ICONOS, nombre: string, x: BotonBarra, relleno = false) => (
-    <button type="button" className="kp-barra-icono" data-boton={clave} aria-label={nombre} title={x.titulo ?? nombre} disabled={x.puede === false} onClick={x.hacer}>
+    <button type="button" className="kp-barra-icono" data-boton={clave} aria-label={nombre} title={x.titulo ?? nombre} disabled={x.puede === false} onClick={x.hacer} {...x.datos}>
       <Icono d={ICONOS[clave]} relleno={relleno} />
     </button>
   )
@@ -103,11 +104,15 @@ export type Mide = 'cifra' | 'corto' | 'subcuenta' | 'medio' | 'nombre' | 'largo
  * 4 · La casilla: el rótulo encima, en azul, con el nombre contable de ERP10. Blanca se escribe; gris (`gris`) la pone
  * el programa. En ámbar (`ambar`), la que Sumied propone y conviene mirar: la única ayuda visible (sin frases).
  */
-export function Casilla({ rotulo, htmlFor, gris = false, ambar = false, className, children, mas, mide }: {
+export function Casilla({ rotulo, htmlFor, gris = false, ambar = false, className, children, mas, mide, title, datos }: {
   rotulo: string; htmlFor: string; gris?: boolean; ambar?: boolean; className?: string; children: ReactNode; mas?: ReactNode; mide?: Mide
+  /** K11b · El motivo del ámbar (o de dónde sale el dato), al pasar el ratón: sin frases en la pantalla. */
+  title?: string
+  /** K11b · Atributos `data-…` de la pantalla (la recibida: `data-comprobacion`). */
+  datos?: Readonly<Record<`data-${string}`, string>>
 }) {
   return (
-    <div className={`kp-casilla${className ? ` ${className}` : ''}`} data-gris={gris ? 'si' : undefined} data-ambar={ambar ? 'si' : undefined} data-mide={mide} data-pieza="casilla">
+    <div className={`kp-casilla${className ? ` ${className}` : ''}`} data-gris={gris ? 'si' : undefined} data-ambar={ambar ? 'si' : undefined} data-mide={mide} data-pieza="casilla" title={title} {...datos}>
       <label className="kp-rotulo" htmlFor={htmlFor}>{rotulo}</label>
       <div className="kp-casilla-dentro">{children}{mas}</div>
     </div>

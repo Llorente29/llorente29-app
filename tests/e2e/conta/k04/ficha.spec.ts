@@ -107,7 +107,8 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     // ── 1a · Su primera factura: a 1456, con la ficha nueva (Intro); a 1366, con la de hoy (regla 31). ──
     await abrirFicha(page, factura(t, 1))
     await expect(page.getByRole('tab', { name: new RegExp(`^Factura recibida · ${PROVEEDOR(t).replace(/\./g, '\\.')}`) })).toBeVisible()
-    await expect(ficha(page).locator('[data-prueba="origen"]', { hasText: 'por NIF' })).toBeVisible()
+    // K11b · De dónde sale el proveedor, sin frase: al pasar el ratón por su casilla.
+    await expect(ficha(page).locator('.kp-casilla', { has: page.locator('#kf-proveedor') })).toHaveAttribute('title', /por NIF/)
     if (grande) {
       await page.locator('body').press('Enter')
     } else {
@@ -185,15 +186,18 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await page.goto('/conta/documentos/nueva', { timeout: 30_000 })
     await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
     await expect(ficha(page).locator('.kf-estado')).toContainText('La escribes tú.')
-    await expect(page.locator('#kf-proveedor')).toBeFocused({ timeout: 30_000 })
+    // K11b · La nueva entra por la primera casilla de la pantalla, como ERP10: la fecha de la factura, arriba. Intro sigue
+    // el orden de la pantalla: de la fecha al proveedor, al número y a las bases.
+    await expect(page.locator('#kf-fecha')).toBeFocused({ timeout: 30_000 })
     if (grande) { await cargada(page, 'a mano, vacía'); await page.screenshot({ path: `${DIR}/a-mano-vacia-${ancho}.png` }) }
+    await page.keyboard.type('15/10/2026'); await page.keyboard.press('Enter')
+    await expect(page.locator('#kf-proveedor')).toBeFocused()
     await page.keyboard.type(t === 1 ? 'Ficha Uno' : 'Ficha Dos')
     await page.keyboard.press('Enter')
     await expect(page.locator('#kf-nombre')).toHaveValue(PROVEEDOR(t))
     await expect(page.getByRole('tab', { name: new RegExp(`^Factura recibida · ${PROVEEDOR(t).replace(/\./g, '\\.')}`) })).toBeVisible()
     await page.keyboard.press('Enter')
     await page.keyboard.type(`K04-M-${t}`); await page.keyboard.press('Enter')
-    await page.keyboard.type('15/10/2026'); await page.keyboard.press('Enter')
     await page.keyboard.type('100'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter')
     await page.keyboard.type('50'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter')
     await page.keyboard.press('Enter') // el total: sale de las bases
@@ -202,11 +206,12 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(page.locator('#kf-cuenta-0')).toHaveValue('60000000')
     await expect(page.locator('[data-prueba="cuadra"]')).toHaveText('Cuadra · 176,00')
     if (grande) await page.screenshot({ path: `${DIR}/a-mano-escribiendo-${ancho}.png` })
-    const local = page.getByRole('combobox', { name: 'Local' })
-    if (await local.isEnabled()) {
+    // El local, con su lupa (K11b · 4): se escribe «Común» y el Intro siguiente lo elige y pasa.
+    const local = page.getByRole('textbox', { name: 'Local', exact: true })
+    if (await local.isEditable()) {
       await page.keyboard.press('Enter')
       await expect(local).toBeFocused()
-      while ((await local.inputValue()) !== 'comun') await page.keyboard.press('ArrowDown')
+      await page.keyboard.type('Común')
     }
     for (let i = 0; i < 6 && !(await aviso(page).isVisible()); i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(300) }
     await expect(page.getByText(new RegExp(`Guardada la K04-M-${t}`)).first()).toBeVisible({ timeout: 60_000 })

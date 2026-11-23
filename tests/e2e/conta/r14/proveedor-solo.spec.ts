@@ -91,7 +91,10 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
       await expect(page.locator('#kf-nombre')).toHaveValue(nombre)
       await expect(page.locator('#kf-nif')).toHaveValue(nif)
       await expect(ficha(page).locator('#kf-cuenta-0')).toHaveValue('60000000', { timeout: 30_000 })
-      await expect(ficha(page).getByText(PROPUESTA)).toBeVisible({ timeout: 30_000 })
+      // K11b · Sin frases (la ficha como ERP10, punto 8): la cuenta propuesta, en ámbar, con su porqué al pasar el ratón.
+      const cuenta = ficha(page).locator('.kr-celda', { has: page.locator('#kf-cuenta-0') })
+      await expect(cuenta).toHaveAttribute('data-ambar', 'si', { timeout: 30_000 })
+      await expect(cuenta).toHaveAttribute('title', PROPUESTA)
       await expect(ficha(page).locator('.kf-estado')).toContainText('mira lo ámbar y pulsa Intro')
     } catch (e) { await contarPantalla(page, 'la primera'); throw e }
     if (grande) { await cargada(page, 'la primera, con el proveedor nuevo'); await page.screenshot({ path: `${DIR}/proveedor-nuevo-${ancho}.png` }) }
@@ -106,7 +109,8 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
       await expect(page.locator('#kf-nombre')).toHaveValue(nombre, { timeout: 30_000 })
       await expect(ficha(page).locator('#kf-cuenta-0')).toHaveValue('60000000', { timeout: 30_000 })
       await expect(ficha(page).locator('.kf-duda', { hasText: 'Proveedor nuevo:' })).toHaveCount(0)
-      await expect(ficha(page).getByText(/^Propuesta:/)).toHaveCount(0)
+      // K11b · Sin ámbar: la casilla de la cuenta, sin el porqué de una propuesta (antes, la frase «Propuesta: …»).
+      await expect(ficha(page).locator('.kr-celda', { has: page.locator('#kf-cuenta-0') })).not.toHaveAttribute('data-ambar', 'si')
     } catch (e) { await contarPantalla(page, 'la siguiente'); throw e }
     if (grande) await page.screenshot({ path: `${DIR}/la-siguiente-sin-ambar-${ancho}.png` })
 
