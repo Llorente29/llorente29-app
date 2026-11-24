@@ -43529,7 +43529,9 @@ CREATE FUNCTION public.conta_erp10_cola(p_limite integer DEFAULT 10) RETURNS TAB
      and not exists (select 1 from public.conta_erp10_envio v where v.entry_id = e.id and (
             (v.estado = 'en_erp10' and (v.lote_id is not null or v.cambiado_en > now() - interval '2 minutes'))
          or (v.estado = 'enviando' and v.cambiado_en > now() - interval '10 minutes')
-         or (v.estado = 'no_pudo' and (v.intentos >= 3 or v.como = 'excel' or v.cambiado_en > now() - interval '5 minutes'))))
+         or (v.estado = 'no_pudo' and (v.intentos >= 3 or v.como = 'excel' or v.cambiado_en > now() - interval '5 minutes'))
+         -- X31 · Lo que ya está en ERP10 espera a una persona.
+         or v.estado = 'duda'))
    order by e.validated_at nulls last, e.id
    limit greatest(1, least(coalesce(p_limite, 10), 50))
 $$;
@@ -43964,6 +43966,72 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_erp10_emitidas_por_salir(p_company uuid, p_mes date) IS 'X05 · De cada factura emitida que sale a ERP10 ese mes (las de conta_erp10_por_salir que salen, sin los días del TPV), lo que necesita su fila: factura, cliente, origen, si es rectificativa, la operación decidida, las líneas con su IVA, recargo, retención y su PDF; las cuentas que usan con el NIF de su cliente; las ya salidas; y las que salieron y después se corrigieron. Solo lee.';
+
+
+--
+-- Name: conta_erp10_envio_es_la_misma(uuid, boolean, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_envio_es_la_misma(p_envio uuid, p_mirada boolean DEFAULT false, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.conta_erp10_envio; d jsonb; v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+begin
+  select * into v from public.conta_erp10_envio where id = p_envio for update;
+  if v.id is null then raise exception 'Ese envío no está.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v.account_id) then raise exception 'Solo quien administra la cuenta lo decide.' using errcode = '42501'; end if;
+  if v.estado <> 'duda' or v.duda is null then raise exception 'Ese envío no espera a nadie: ya está decidido.' using errcode = '23514'; end if;
+  d := v.duda;
+  if d ? 'totalErp10Cent' and d ? 'totalSumiedCent' and (d->>'totalErp10Cent') is distinct from (d->>'totalSumiedCent') and not coalesce(p_mirada, false) then
+    raise exception 'Los totales no son iguales: mira antes la diferencia.' using errcode = '23514';
+  end if;
+  update public.conta_erp10_envio
+     set estado = 'en_erp10', erp10_ejercicio = d->>'ejercicio', erp10_serie = d->>'serie', erp10_documento = (d->>'documento')::int,
+         enlazada = true, motivo = null, decision = 'la_misma', decision_por = v_quien, decision_en = now(), cambiado_en = now()
+   where id = v.id;
+  return jsonb_build_object('documento', (d->>'documento')::int,
+    'texto', format('Es la misma: no se manda; queda unida al asiento %s de ERP10.', d->>'documento'));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_envio_es_la_misma(p_envio uuid, p_mirada boolean, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_envio_es_la_misma(p_envio uuid, p_mirada boolean, p_quien_nombre text) IS 'X31 · «Es la misma, no la mandes»: el envío en duda queda enlazado con lo que ya está en ERP10 (sin escribir ni subir el PDF). Con totales distintos, solo con p_mirada.';
+
+
+--
+-- Name: conta_erp10_envio_es_otro(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_envio_es_otro(p_envio uuid, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.conta_erp10_envio; v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+begin
+  select * into v from public.conta_erp10_envio where id = p_envio for update;
+  if v.id is null then raise exception 'Ese envío no está.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v.account_id) then raise exception 'Solo quien administra la cuenta lo decide.' using errcode = '42501'; end if;
+  if v.estado <> 'duda' or v.duda is null then raise exception 'Ese envío no espera a nadie: ya está decidido.' using errcode = '23514'; end if;
+  if v.duda->>'que' is distinct from 'asiento' then
+    raise exception 'Una factura no puede ser otra: ERP10 no admite dos con el mismo número del mismo tercero. Si no es la misma, el número está mal en un lado.' using errcode = '23514';
+  end if;
+  update public.conta_erp10_envio
+     set estado = 'no_pudo', intentos = 1, motivo = 'Es otro: sale en la siguiente salida.', decision = 'otro', decision_por = v_quien, decision_en = now(),
+         cambiado_en = now() - interval '6 minutes'
+   where id = v.id;
+  return jsonb_build_object('texto', 'Es otro: sale a ERP10 en la siguiente salida, sin volver a mirar.');
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_envio_es_otro(p_envio uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_envio_es_otro(p_envio uuid, p_quien_nombre text) IS 'X31 · «Es otro, mándalo» (solo un asiento en duda): sale en la siguiente salida sin volver a mirar lo que encaja en ERP10.';
 
 
 --
@@ -45574,6 +45642,71 @@ begin
   if not found then raise exception 'Ese cargo no estaba marcado como cobrado por otra vía.' using errcode = 'P0002'; end if;
   return jsonb_build_object('frase', 'Quitado: ese cargo vuelve a salir en «Te deben».');
 end $$;
+
+
+--
+-- Name: conta_gc_enlace_decision_externa(uuid, text, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gc_enlace_decision_externa(p_company uuid, p_gc_cliente text, p_party uuid, p_origen text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_r jsonb; v_quien text := public.conta_nombre_actor(); v_cliente text; v_origen text := nullif(btrim(left(coalesce(p_origen, ''), 80)), '');
+begin
+  if v_origen is null then raise exception 'Falta quién lo decidió (el origen).' using errcode = '22023'; end if;
+  v_r := public.conta_gc_enlace_confirmar(p_company, p_gc_cliente, p_party);
+  select name into v_cliente from public.party where id = p_party;
+  update public.conta_gc_enlace
+     set quien_name = v_origen || coalesce(' · lo cargó ' || v_quien, ''),
+         porque = format('%s: es «%s».', v_origen, v_cliente)
+   where company_id = p_company and gc_cliente_id = p_gc_cliente;
+  return jsonb_build_object('frase', format('Atado a «%s», como dice %s.', v_cliente, v_origen));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_gc_enlace_decision_externa(p_company uuid, p_gc_cliente text, p_party uuid, p_origen text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_gc_enlace_decision_externa(p_company uuid, p_gc_cliente text, p_party uuid, p_origen text) IS 'Q08 · Ata un cliente de GoCardless a su ficha como «Es esta» (conta_gc_enlace_confirmar) y deja escrito quién lo decidió fuera de Sumied (p. ej. «QBO, Excel del 12/11») y quién lo cargó.';
+
+
+--
+-- Name: conta_gc_enlace_pendiente_externo(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gc_enlace_pendiente_externo(p_company uuid, p_gc_cliente text, p_texto text, p_origen text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_gestoria_puede(p_company); v_gc text; v_e public.conta_gc_enlace; v_quien text := public.conta_nombre_actor();
+        v_origen text := nullif(btrim(left(coalesce(p_origen, ''), 80)), ''); v_texto text := nullif(btrim(left(coalesce(p_texto, ''), 300)), '');
+begin
+  if v_origen is null or v_texto is null then raise exception 'Falta el texto o quién lo escribió.' using errcode = '22023'; end if;
+  select coalesce(nombre, gc_id) into v_gc from public.conta_gc_cliente where company_id = p_company and gc_id = p_gc_cliente;
+  if v_gc is null then raise exception 'Ese cliente no está en lo leído de GoCardless.' using errcode = 'P0002'; end if;
+  select * into v_e from public.conta_gc_enlace where company_id = p_company and gc_cliente_id = p_gc_cliente for update;
+  -- Lo que ya decidió una persona manda: no se pisa.
+  if v_e.por = 'persona' and v_e.estado in ('atado', 'sin_ficha') then
+    return jsonb_build_object('frase', format('%s ya estaba decidido; no se toca.', v_gc), 'sin_cambios', true);
+  end if;
+  insert into public.conta_gc_enlace (company_id, gc_cliente_id, account_id, party_id, por, estado, candidatas, porque, quien, quien_name, decidido_at, updated_at, antes)
+  values (p_company, p_gc_cliente, v_cuenta, null, 'persona', 'propuesto', coalesce(v_e.candidatas, '{}'),
+          format('Pendiente de revisar. %s escribió: «%s».', v_origen, v_texto), auth.uid(), v_origen || coalesce(' · lo cargó ' || v_quien, ''), now(), now(),
+          jsonb_build_object('enlace', case when v_e.gc_cliente_id is null then null else to_jsonb(v_e) - 'antes' end))
+  on conflict (company_id, gc_cliente_id) do update set
+    party_id = null, por = 'persona', estado = 'propuesto', porque = excluded.porque,
+    quien = excluded.quien, quien_name = excluded.quien_name, decidido_at = excluded.decidido_at, updated_at = excluded.updated_at, antes = excluded.antes;
+  return jsonb_build_object('frase', format('%s, pendiente de revisar con lo que escribió %s.', v_gc, v_origen));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_gc_enlace_pendiente_externo(p_company uuid, p_gc_cliente text, p_texto text, p_origen text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_gc_enlace_pendiente_externo(p_company uuid, p_gc_cliente text, p_texto text, p_origen text) IS 'Q08 · Lo que una decisión de fuera (p. ej. el Excel de QBO) no deja claro: el cliente de GoCardless queda «propuesto», sin ficha, con el texto entre comillas, para que una persona lo revise. No pisa lo que ya decidió una persona.';
 
 
 --
@@ -121320,10 +121453,16 @@ CREATE TABLE public.conta_erp10_envio (
     cobro_serie text,
     cobro_documento integer,
     como text,
+    duda jsonb,
+    decision text,
+    decision_por text,
+    decision_en timestamp with time zone,
+    alta_pedida_en timestamp with time zone,
     CONSTRAINT conta_erp10_envio_check CHECK (((estado = 'en_erp10'::text) = (erp10_documento IS NOT NULL))),
     CONSTRAINT conta_erp10_envio_clase_check CHECK ((clase = ANY (ARRAY['recibida'::text, 'emitida'::text, 'asiento'::text]))),
+    CONSTRAINT conta_erp10_envio_decision_valores CHECK (((decision IS NULL) OR (decision = ANY (ARRAY['la_misma'::text, 'otro'::text])))),
     CONSTRAINT conta_erp10_envio_erp10_documento_check CHECK (((erp10_documento IS NULL) OR (erp10_documento > 0))),
-    CONSTRAINT conta_erp10_envio_estado_check CHECK ((estado = ANY (ARRAY['enviando'::text, 'en_erp10'::text, 'no_pudo'::text]))),
+    CONSTRAINT conta_erp10_envio_estado_check CHECK ((estado = ANY (ARRAY['enviando'::text, 'en_erp10'::text, 'no_pudo'::text, 'duda'::text]))),
     CONSTRAINT conta_erp10_envio_intentos_check CHECK ((intentos > 0)),
     CONSTRAINT conta_erp10_envio_pdf_check CHECK (((pdf IS NULL) OR (pdf = ANY (ARRAY['subido'::text, 'fallo'::text]))))
 );
@@ -121362,6 +121501,27 @@ COMMENT ON COLUMN public.conta_erp10_envio.cobro_documento IS 'X10e · El númer
 --
 
 COMMENT ON COLUMN public.conta_erp10_envio.como IS 'X10f · Cómo salió: «sola» (la cola, conta-erp10-cola), «a_mano» (el botón o «Volver a intentarlo») o «excel» (no sale por la conexión: sale con el Excel; la cola no lo vuelve a coger). Null: lo de antes del X10f.';
+
+
+--
+-- Name: COLUMN conta_erp10_envio.duda; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_erp10_envio.duda IS 'X31 · Lo que ya estaba en ERP10 y encaja (estado «duda»): {que, ejercicio, serie, documento, cuantos, numero?, fecha?, totalErp10Cent?, totalSumiedCent?}.';
+
+
+--
+-- Name: COLUMN conta_erp10_envio.decision; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_erp10_envio.decision IS 'X31 · Lo que dijo una persona de la duda: «la_misma» (enlazada, no se manda) u «otro» (un asiento: se manda).';
+
+
+--
+-- Name: COLUMN conta_erp10_envio.alta_pedida_en; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_erp10_envio.alta_pedida_en IS 'X31 · Cuándo pidió Sumied el alta en ERP10 (justo antes de escribir). Si el envío se cortó y vuelve, lo que encuentra es lo suyo: se enlaza.';
 
 
 --
@@ -185518,6 +185678,24 @@ GRANT ALL ON FUNCTION public.conta_erp10_emitidas_por_salir(p_company uuid, p_me
 
 
 --
+-- Name: FUNCTION conta_erp10_envio_es_la_misma(p_envio uuid, p_mirada boolean, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_envio_es_la_misma(p_envio uuid, p_mirada boolean, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_envio_es_la_misma(p_envio uuid, p_mirada boolean, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_envio_es_la_misma(p_envio uuid, p_mirada boolean, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_erp10_envio_es_otro(p_envio uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_envio_es_otro(p_envio uuid, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_envio_es_otro(p_envio uuid, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_envio_es_otro(p_envio uuid, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_erp10_envio_tomar(p_company uuid, p_entry uuid, p_clase text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -185783,6 +185961,24 @@ GRANT ALL ON FUNCTION public.conta_gc_cobro_otra_via(p_company uuid, p_gc_cobro 
 REVOKE ALL ON FUNCTION public.conta_gc_cobro_otra_via_quitar(p_company uuid, p_gc_cobro text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_gc_cobro_otra_via_quitar(p_company uuid, p_gc_cobro text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_gc_cobro_otra_via_quitar(p_company uuid, p_gc_cobro text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gc_enlace_decision_externa(p_company uuid, p_gc_cliente text, p_party uuid, p_origen text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gc_enlace_decision_externa(p_company uuid, p_gc_cliente text, p_party uuid, p_origen text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gc_enlace_decision_externa(p_company uuid, p_gc_cliente text, p_party uuid, p_origen text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gc_enlace_decision_externa(p_company uuid, p_gc_cliente text, p_party uuid, p_origen text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gc_enlace_pendiente_externo(p_company uuid, p_gc_cliente text, p_texto text, p_origen text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gc_enlace_pendiente_externo(p_company uuid, p_gc_cliente text, p_texto text, p_origen text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gc_enlace_pendiente_externo(p_company uuid, p_gc_cliente text, p_texto text, p_origen text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gc_enlace_pendiente_externo(p_company uuid, p_gc_cliente text, p_texto text, p_origen text) TO service_role;
 
 
 --
