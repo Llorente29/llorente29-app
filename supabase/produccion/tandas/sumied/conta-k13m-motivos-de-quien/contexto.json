@@ -1,0 +1,21 @@
+{
+ "_que": "K13m · conta_motivos_para_validar llama a conta_de_quien_es · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción (esta sesión no lee producción para esto). 0720 cambia una función con la misma firma (conta_motivos_para_validar) y no escribe en ninguna fila. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-24T08:33Z",
+ "tanda": {
+  "supabase/migrations/20261124T0720_k13_motivos_de_quien.sql": "f45760b6bcaa08ed0826e5e6f90b078e"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_motivos_para_validar(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
