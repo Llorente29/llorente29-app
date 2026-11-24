@@ -871,8 +871,9 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const plataformasLupa = (plataformas ?? []).map((x) => ({ ...x, codigo: codigoDe('sales_channel', x.id) ?? x.codigo }))
   const localesLupa = locales.map((l) => ({ id: l.id, codigo: codigoDe('locations', l.id) ?? l.nombre, descripcion: l.nombre }))
   // K11b · 4 · El local de cada línea, con su lupa: «Común» (o «Sin locales», en gris) y los locales de la cuenta.
-  // K13 · «Común» va sin código (vacío e Intro, como en ERP10); su nombre, en la casilla gris de al lado.
-  const comunLocal = { id: aMano && ejeLocal ? LOCAL_COMUN : '', codigo: '', descripcion: ejeLocal ? 'Común a todos los locales' : 'Sin locales' }
+  // K13 · «Común» lleva su código, 000 (delante del 001 de los locales: Julio, 24/11, todos llevan el suyo); su nombre, en
+  // la casilla gris de al lado. Vacío e Intro también lo eligen.
+  const comunLocal = { id: aMano && ejeLocal ? LOCAL_COMUN : '', codigo: ejeLocal ? '000' : '', descripcion: ejeLocal ? 'Común a todos los locales' : 'Sin locales' }
   const registrosLocal = [comunLocal, ...localesLupa]
   const tituloLocal = (v: string | null | undefined) => {
     const r = localesLupa.find((l) => l.id === v)
@@ -1553,6 +1554,11 @@ function BotonMas17({ etiqueta, hacer, puede = true, abierto, titulo }: { etique
   )
 }
 
+/** K13 · La cuenta de un apunte, entre paréntesis; la que falta, «(falta)» en ámbar (Julio, 24/11: nunca «()»). */
+function Cuenta({ codigo }: { codigo: string }) {
+  return codigo ? <i className="kp-visual-cuenta">({codigo})</i> : <i className="kp-visual-cuenta kr-falta" data-prueba="cuenta-falta">(falta)</i>
+}
+
 /** Un asiento visto como en la 17b: el debe a la izquierda («importe (cuenta) nombre») y el haber a la derecha. */
 function AsientoVisto({ lineas, cifra: c }: { lineas: ReturnType<typeof aVisual>; cifra: (n: number) => string }) {
   const debe = lineas.filter((l) => l.lado === 'debe')
@@ -1560,8 +1566,8 @@ function AsientoVisto({ lineas, cifra: c }: { lineas: ReturnType<typeof aVisual>
   if (!debe.length && !haber.length) return null
   return (
     <div className="kr-visual-cols">
-      <div aria-label="Debe">{debe.map((l, i) => <div className="kr-al" key={i} title={`${l.cuenta} · ${l.nombre}`}><b className="kp-num">{c(l.importe)}</b> <i className="kp-visual-cuenta">({l.cuenta})</i><span>{l.nombre}</span></div>)}</div>
-      <div aria-label="Haber">{haber.map((l, i) => <div className="kr-ar" key={i} title={`${l.cuenta} · ${l.nombre}`}><span>{l.nombre}</span><span><i className="kp-visual-cuenta">({l.cuenta})</i> <span className="kp-num">{c(l.importe)}</span></span></div>)}</div>
+      <div aria-label="Debe">{debe.map((l, i) => <div className="kr-al" key={i} data-falta={l.cuenta ? undefined : 'si'} title={`${l.cuenta || 'Falta la cuenta'} · ${l.nombre}`}><b className="kp-num">{c(l.importe)}</b> <Cuenta codigo={l.cuenta} /><span>{l.nombre}</span></div>)}</div>
+      <div aria-label="Haber">{haber.map((l, i) => <div className="kr-ar" key={i} data-falta={l.cuenta ? undefined : 'si'} title={`${l.cuenta || 'Falta la cuenta'} · ${l.nombre}`}><span>{l.nombre}</span><span><Cuenta codigo={l.cuenta} /> <span className="kp-num">{c(l.importe)}</span></span></div>)}</div>
     </div>
   )
 }

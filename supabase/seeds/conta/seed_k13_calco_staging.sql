@@ -57,11 +57,16 @@ begin
              'base', 350.00, 'cuota', 43.00, 'total', 393.00, 'desgloseDe', 'papel')),
          v_cuando + x.n * interval '1 minute', v_cuando + x.n * interval '1 minute'
     from (values ('c0f14000-0000-4000-8000-0000000000f1', 'K13-CALCO-1', 1, k_prov, 'Proveedor de Prueba K13, S.L.', 'B00013118'),
-                 ('c0f14000-0000-4000-8000-0000000000f2', 'K13-CALCO-2', 2, null::uuid, 'Emisor Desconocido de Prueba K13, S.L.', 'B00013126')) x(id, numero, n, prov, nombre, nif)
+                 ('c0f14000-0000-4000-8000-0000000000f2', 'K13-CALCO-2', 2, null::uuid, 'Emisor Desconocido de Prueba K13, S.L.', 'B00013126'),
+                 -- K13 (24/11, Julio): las del calco, con una línea por tipo de IVA y su % (las dos de arriba llevaban una sola
+                 -- línea sin %; ya están en staging y una semilla no las cambia: se quedan, y el calco usa estas).
+                 ('c0f14000-0000-4000-8000-0000000000f3', 'K13-CALCO-3', 3, k_prov, 'Proveedor de Prueba K13, S.L.', 'B00013118'),
+                 ('c0f14000-0000-4000-8000-0000000000f4', 'K13-CALCO-4', 4, null::uuid, 'Emisor Desconocido de Prueba K13 Cuatro, S.L.', 'B00013134')) x(id, numero, n, prov, nombre, nif)
   on conflict (id) do nothing;
   -- La del emisor que no se conoce, como la deja «Deshacer» de la R14 (en la misma transacción: su disparador es diferido).
   insert into public.conta_proveedor_solo (invoice_id, account_id, company_id, que, supplier_id, nif, cuando, created_at, deshecho_at, deshecho_por)
-  values ('c0f14000-0000-4000-8000-0000000000f2', k_cuenta, k_emp, 'alta', null, 'B00013126', 'al_leer', v_cuando, v_cuando, 'Semilla K13')
+  values ('c0f14000-0000-4000-8000-0000000000f2', k_cuenta, k_emp, 'alta', null, 'B00013126', 'al_leer', v_cuando, v_cuando, 'Semilla K13'),
+         ('c0f14000-0000-4000-8000-0000000000f4', k_cuenta, k_emp, 'alta', null, 'B00013134', 'al_leer', v_cuando, v_cuando, 'Semilla K13')
   on conflict (invoice_id) do nothing;
   insert into public.supplier_invoice_tax (account_id, supplier_invoice_id, vat_pct, base, vat_amount)
   select k_cuenta, i.id, x.pct, x.base, x.cuota
@@ -71,20 +76,32 @@ begin
   insert into public.supplier_invoice_line (supplier_invoice_id, raw_text, qty, unit_price, line_amount, vat_pct, position, expense_account_code)
   select i.id, 'Mercaderías de prueba K13', 1, null, 350.00, null, 1, '60000001'
     from public.supplier_invoice i
-   where i.company_id = k_emp and i.created_by_name = 'Semilla K13'
+   where i.id in ('c0f14000-0000-4000-8000-0000000000f1', 'c0f14000-0000-4000-8000-0000000000f2')
      and not exists (select 1 from public.supplier_invoice_line z where z.supplier_invoice_id = i.id);
+  -- Las del calco: una línea por tipo, con su %.
+  insert into public.supplier_invoice_line (supplier_invoice_id, raw_text, qty, unit_price, line_amount, vat_pct, position, expense_account_code)
+  select i.id, 'Mercaderías de prueba K13 al ' || x.pct || ' %', 1, null, x.base, x.pct, x.pos, '60000001'
+    from public.supplier_invoice i, (values (1, 21, 100.00), (2, 10, 200.00), (3, 4, 50.00)) x(pos, pct, base)
+   where i.id in ('c0f14000-0000-4000-8000-0000000000f3', 'c0f14000-0000-4000-8000-0000000000f4')
+     and not exists (select 1 from public.supplier_invoice_line z where z.supplier_invoice_id = i.id and z.position = x.pos);
+  -- El restaurante, con la 472 de cada tipo enlazada (la pone la semilla K11b): sin ella, el asiento saldría con la
+  -- cuenta que falta («(falta)»), y la prueba de calco sin duda lo mira.
+  if (select count(distinct t.rate) from public.company_account_link l join public.tax_rate t on t.id::text = l.entity_id
+       where l.company_id = k_emp and l.entity = 'tax_rate' and l.role = 'soportado' and t.rate in (4, 10, 21)) <> 3 then
+    raise exception 'Semilla K13: el restaurante no tiene la 472 del 4, el 10 y el 21 %% enlazada a su tipo (semilla K11b).';
+  end if;
 
   select count(*) into v_n from public.supplier_invoice where company_id = k_emp and created_by_name = 'Semilla K13';
-  if v_n <> 2 then raise exception 'Semilla K13: hay % facturas y tenían que ser 2.', v_n; end if;
-  if exists (select 1 from public.supplier where account_id = k_cuenta and tax_id = 'B00013126') then
+  if v_n <> 4 then raise exception 'Semilla K13: hay % facturas y tenían que ser 4.', v_n; end if;
+  if exists (select 1 from public.supplier where account_id = k_cuenta and tax_id in ('B00013126', 'B00013134')) then
     raise exception 'Semilla K13: el NIF del emisor que no se conoce ya es de un proveedor de la cuenta.';
   end if;
-  if (select supplier_id from public.supplier_invoice where id = 'c0f14000-0000-4000-8000-0000000000f2') is not null then
+  if exists (select 1 from public.supplier_invoice where id in ('c0f14000-0000-4000-8000-0000000000f2', 'c0f14000-0000-4000-8000-0000000000f4') and supplier_id is not null) then
     raise exception 'Semilla K13: la del emisor que no se conoce tiene proveedor.';
   end if;
   if (select count(*) from public.supplier_invoice_tax z join public.supplier_invoice i on i.id = z.supplier_invoice_id
-       where i.company_id = k_emp and i.created_by_name = 'Semilla K13') <> 6 then
+       where i.company_id = k_emp and i.created_by_name = 'Semilla K13') <> 12 then
     raise exception 'Semilla K13: cada factura lleva sus tres tipos de IVA.';
   end if;
-  raise notice 'Semilla K13 OK: el proveedor 40000113, K13-CALCO-1 (sin duda) y K13-CALCO-2 (de un emisor que no se conoce), por revisar.';
+  raise notice 'Semilla K13 OK: el proveedor 40000113 y, por revisar, K13-CALCO-1 y K13-CALCO-3 (sin duda) y K13-CALCO-2 y K13-CALCO-4 (de un emisor que no se conoce).';
 end $$;

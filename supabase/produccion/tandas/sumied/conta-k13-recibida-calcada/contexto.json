@@ -1,13 +1,16 @@
 {
- "_que": "K13 · código corto y reparto en tramos · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. Las dos solo añaden (tablas y funciones nuevas; el relleno escribe solo en la tabla nueva). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "_que": "K13 · código corto y reparto en tramos · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. 2347 y 0001 solo añaden; 0720 cambia una función con la misma firma (conta_motivos_para_validar) y no escribe en ninguna fila (tablas y funciones nuevas; el relleno escribe solo en la tabla nueva). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
  "medido": "2026-11-24T00:01Z",
  "tanda": {
   "supabase/migrations/20261123T2347_k13_codigo_corto.sql": "af63cf191227337cd4d21c8722172709",
-  "supabase/migrations/20261124T0001_k13_reparto_en_tramos.sql": "e82fa4415e37350d9766a64666ae10dc"
+  "supabase/migrations/20261124T0001_k13_reparto_en_tramos.sql": "e82fa4415e37350d9766a64666ae10dc",
+  "supabase/migrations/20261124T0720_k13_motivos_de_quien.sql": "f45760b6bcaa08ed0826e5e6f90b078e"
  },
  "contexto": {
   "tablas": [],
-  "funciones": [],
+  "funciones": [
+   "public.conta_motivos_para_validar(uuid)"
+  ],
   "filas": {},
   "otras": {},
   "camino": {

@@ -25,8 +25,9 @@ const MARGEN = 4
 const RESTAURANTE = 'Restaurante de Ejemplo Núcleo, S.L.'
 const FICHA = '[data-prueba="ficha-recibida-nucleo"]'
 const ficha = (page: Page) => page.locator(`.k-zona[data-activa="si"] ${FICHA}`)
-const SIN_DUDA = enCarril('c0f14000-0000-4000-8000-0000000000f1')
-const CON_DUDA = enCarril('c0f14000-0000-4000-8000-0000000000f2')
+// K13-CALCO-3 y -4 (24/11): una línea por tipo de IVA, con su %.
+const SIN_DUDA = enCarril('c0f14000-0000-4000-8000-0000000000f3')
+const CON_DUDA = enCarril('c0f14000-0000-4000-8000-0000000000f4')
 
 interface Medida { ficha: [number, number]; alto: number | null; campos: Record<string, [number, number, number, number]> }
 
@@ -72,7 +73,14 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
       await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })
       await expect(ficha(page).locator('[data-prueba="cuadra"]')).toBeVisible({ timeout: 30_000 })
       if (duda) await expect(ficha(page).locator('.kr-dudas .kf-duda')).toHaveCount(1, { timeout: 30_000 })
-      else await expect(ficha(page).locator('.kr-dudas > *')).toHaveCount(0)
+      else {
+        await expect(ficha(page).locator('.kr-dudas > *')).toHaveCount(0)
+        // Sin duda, el asiento entero, con todas sus cuentas: ninguna «(falta)» (Julio, 24/11: nunca «()»).
+        await expect(ficha(page).locator('.kf-asiento .kr-al, .kf-asiento .kr-ar').first()).toBeVisible({ timeout: 30_000 })
+        const faltan = await ficha(page).locator('[data-prueba="cuenta-falta"]').count()
+        if (faltan) console.log(`[K13 calco ${cual}] el asiento: ${(await ficha(page).locator('.kf-asiento').innerText()).replace(/\s+/g, ' ').slice(0, 400)}`)
+        expect(faltan, 'cuentas que faltan en el asiento, sin duda').toBe(0)
+      }
       await page.waitForTimeout(500)
       const sumied = await medir(page, `.k-zona[data-activa="si"] ${FICHA}`, '.kp-ventana-cuerpo', '.kp-ventana-titulo', '.kr-hd')
 

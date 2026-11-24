@@ -16,7 +16,7 @@
 // 768, el marco con los botones desplegados (respuesta K02 · 1).
 
 import { test, expect, type Page } from '@playwright/test'
-import { entrarComo } from '../sesion'
+import { STAGING_URL, anonKey, entrarComo, type Sesion } from '../sesion'
 import { abierta, cargada, EMPRESA, GESTORIA, noRueda, NUCLEO } from './comun'
 
 const DIR = 'docs/conta/capturas/k02'
@@ -25,6 +25,21 @@ async function verBotones(page: Page) {
   const ver = page.getByRole('button', { name: 'Ver los botones' })
   if (await ver.isVisible()) await ver.click()
   await expect(page.locator('#k-cinta-botones')).toBeVisible()
+}
+
+/**
+ * K13 · Los asientos por revisar de una empresa, como los cuenta la base para la línea de estado (conta_pendientes).
+ * null era el fallo de la 20261124T0720: «no se ha podido contar» y la frase de los asientos no salía.
+ */
+async function asientosPorRevisar(s: Sesion, empresa: string): Promise<number | null> {
+  const cab = { apikey: anonKey(), Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json' }
+  const r = await fetch(`${STAGING_URL}/rest/v1/company?select=id&account_id=eq.${NUCLEO.id}&legal_name=eq.${encodeURIComponent(empresa)}`, { headers: cab })
+  const [c] = (await r.json()) as { id: string }[]
+  expect(c?.id, `la empresa «${empresa}»`).toBeTruthy()
+  const p = await fetch(`${STAGING_URL}/rest/v1/rpc/conta_pendientes`, { method: 'POST', headers: cab, body: JSON.stringify({ p_company: c.id }) })
+  expect(p.status, 'conta_pendientes').toBeLessThan(300)
+  const v = ((await p.json()) as Record<string, unknown>).asientos_por_validar
+  return typeof v === 'number' ? v : null
 }
 
 async function elegirEnArriba(page: Page, nombre: RegExp) {
@@ -39,7 +54,7 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     const errores: string[] = []
     page.on('pageerror', (e) => errores.push(`${page.url()}: ${e.message}`))
     await page.setViewportSize({ width: ancho, height: alto })
-    await entrarComo(page, NUCLEO.email)
+    const sesion = await entrarComo(page, NUCLEO.email)
     // Con la marca Sumied (fuera de producción se pide con ?marca=, y se recuerda en la sesión):
     // así lo ve una gestoría en app.sumied.com, y así salen las capturas.
     await page.goto('/conta/inicio?marca=sumied', { timeout: 30_000 })
@@ -86,7 +101,11 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     const nRecibidas = Number(await recibidas.textContent())
     const estado = page.getByRole('contentinfo', { name: 'Cómo va la empresa' })
     await expect(estado).toContainText(/\d+ movimientos? del banco por revisar|Bancos al día/)
-    await expect(estado).toContainText('Asientos al día')
+    // La regla (nucleo/estado.ts): los asientos salen siempre que se puedan contar; con 0, «Asientos al día»; si no,
+    // «N asientos por revisar». En la gestoría no se podían contar (la 20261124T0720): que la base dé un número, y la frase.
+    const nAsientos = await asientosPorRevisar(sesion, GESTORIA)
+    expect(nAsientos, 'los asientos por revisar de la gestoría, contados (no null)').not.toBeNull()
+    await expect(estado).toContainText(nAsientos === 0 ? 'Asientos al día' : `${nAsientos} asiento${nAsientos === 1 ? '' : 's'} por revisar`)
     await expect(estado).toContainText(`${nRecibidas} factura${nRecibidas === 1 ? '' : 's'} por revisar`)
     // A 1366 × 768, además, es la del marco con los botones desplegados (arreglo 5).
     await page.screenshot({ path: `${DIR}/marco-inicio-${ancho}.png` })

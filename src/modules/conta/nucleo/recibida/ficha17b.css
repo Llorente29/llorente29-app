@@ -230,3 +230,6 @@
 .kf-ficha.kr .kr-ar .kp-visual-cuenta { color: #6b7587; }
 .kr-nuevo-proveedor { position: absolute; top: calc(var(--kr-f2) - 15px); left: 6.5%; height: 14px; padding: 0 4px; border: 0; background: none; color: #1f5fbf; font-size: 11px; cursor: pointer; }
 .kr-alta { flex-shrink: 1; min-height: 0; overflow: auto; margin-bottom: 4px; }
+
+/* K13 · La cuenta que falta en el asiento: «(falta)», en ámbar. */
+.kf-ficha.kr .kr-visual-marco .kp-visual-cuenta.kr-falta { background: #fde7b0; color: #7a4b00; font-weight: 600; padding: 0 3px; border-radius: 2px; }

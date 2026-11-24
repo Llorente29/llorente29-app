@@ -6,6 +6,10 @@
 #         ya existe (solo escribe en la tabla nueva). Solo añade: no toca locations, brand ni sales_channel.
 #   0001  El reparto analítico de cada línea de gasto en tramos (supplier_invoice_expense_tramo) y la función que lo pone
 #         (conta_recibida_reparto_linea). Solo añade.
+#   0720  Cambia conta_motivos_para_validar (misma firma): para una recibida, a nombre de quién va con conta_de_quien_es
+#         en vez de la interna _conta_de_quien, que una persona no puede ejecutar. Hoy, en producción también, el contador
+#         de los asientos de la línea de estado da null en cuanto la empresa tiene un asiento de una recibida sin
+#         validar (y no sale nada de los asientos). No escribe en ninguna fila.
 #
 # Lo cuenta k13-recibida-calcada.sql (regla 31): los locales, marcas y plataformas sin moverse, los asientos validados de
 # las recibidas sin moverse, y cuántos códigos salen de cada manera, cuenta por cuenta. Nada en el camino del pedido. El
@@ -13,3 +17,4 @@
 cuenta: scripts/conta/produccion/cuentas/k13-recibida-calcada.sql
 supabase/migrations/20261123T2347_k13_codigo_corto.sql
 supabase/migrations/20261124T0001_k13_reparto_en_tramos.sql
+supabase/migrations/20261124T0720_k13_motivos_de_quien.sql
