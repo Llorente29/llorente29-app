@@ -16,7 +16,6 @@
 // como los demás vigías. En el registro, solo recuentos (sin textos de ERP10: esos van a la base).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { MOTIVO_SALIDA_PARADA, SALIDA_ERP10_PARADA } from "../_shared/erp10Parada.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { leerLaBase, puertosDelServidor } from "../_shared/erp10Puerto.ts";
 import { pasadaDeLaCola, type EnCola } from "../_shared/erp10Sacar.ts";
@@ -36,8 +35,6 @@ Deno.serve(async (req) => {
   const esperado = Deno.env.get("CRON_SECRET") ?? "";
   const dado = req.headers.get("x-cron-secret") ?? "";
   if (!esperado || dado !== esperado) return json({ error: "no autorizado" }, 401);
-  // X31 · 0 · La salida a ERP10, parada: la cola no coge nada (lo validado espera en su sitio, sin envío ni fallo).
-  if (SALIDA_ERP10_PARADA) return json({ parada: true, motivo: MOTIVO_SALIDA_PARADA });
 
   const t0 = Date.now();
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });

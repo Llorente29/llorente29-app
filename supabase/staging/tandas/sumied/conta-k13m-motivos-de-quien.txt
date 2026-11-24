@@ -1,0 +1,5 @@
+# K13m · conta_motivos_para_validar llama a conta_de_quien_es (cambia en caliente: desde la rama, en ROLLBACK; de verdad
+# desde main al fusionar). Su prueba: una persona cuenta los asientos de una empresa con una recibida sin validar (con la
+# función de antes, null), y la vuelta atrás.
+supabase/migrations/20261124T0720_k13_motivos_de_quien.sql
+supabase/staging/sql/20261124_k13_motivos_de_quien_prueba.sql

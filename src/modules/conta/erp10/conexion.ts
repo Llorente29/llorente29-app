@@ -45,7 +45,7 @@ export function queVaAEntrar(o: { recibidas: number; emitidas: number; asientos?
   return `Van a entrar en ERP10: ${facturas(o.recibidas, o.emitidas, o.asientos ?? 0, o.dias ?? 0)} de ${o.mes}. ${NO_SE_BORRA}`
 }
 
-type Salida = { numero: string; clase?: 'recibida' | 'emitida' | 'asiento' | 'dia'; cobroDe?: string; estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'; serie?: string; documento?: number; enlazada?: boolean; pdf?: 'subido' | 'fallo' | null; porque?: string
+type Salida = { numero: string; clase?: 'recibida' | 'emitida' | 'asiento' | 'dia'; cobroDe?: string; estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo' | 'duda'; serie?: string; documento?: number; enlazada?: boolean; pdf?: 'subido' | 'fallo' | null; porque?: string
   cobro?: { serie: string; documento: number } }
 
 /** Después: lo que ha entrado (con sus números de ERP10), lo que ya estaba y lo que no ha podido, con su porqué. */
@@ -55,6 +55,8 @@ export function loQueHaEntrado(xs: readonly Salida[], mes: string): { texto: str
   const ya = xs.filter((x) => x.estado === 'ya_estaba')
   const mal = xs.filter((x) => x.estado === 'no_pudo' || x.estado === 'en_marcha')
   const sinPdf = xs.filter((x) => x.estado === 'en_erp10' && x.pdf === 'fallo')
+  // X31 · 2 · Lo que ya estaba en ERP10 y encaja: no se ha mandado; lo decide una persona.
+  const dudas = xs.filter((x) => x.estado === 'duda')
   const nums = (ys: readonly Salida[]) => {
     const d = ys.map((y) => `${y.serie}/${y.documento}`)
     return d.length > 3 ? `${d[0]} a ${d[d.length - 1]}` : d.join(', ')
@@ -75,7 +77,8 @@ export function loQueHaEntrado(xs: readonly Salida[], mes: string): { texto: str
   if (enlazadas.length) partes.push(`${n(enlazadas.length, 'ya estaba', 'ya estaban')} en ERP10 (${nums(enlazadas)}): ${enlazadas.length === 1 ? 'se ha enlazado' : 'se han enlazado'}, sin meter otra.`)
   if (ya.length) partes.push(`${n(ya.length, 'había entrado', 'habían entrado')} antes (${nums(ya)}).`)
   for (const x of sinPdf) partes.push(`El PDF de la ${x.numero} no ha subido (${x.porque ?? 'sin motivo'}): súbelo a mano en ERP10.`)
+  if (dudas.length) partes.push(`${n(dudas.length, 'ya estaba', 'ya estaban')} en ERP10 y no ${dudas.length === 1 ? 'se ha mandado' : 'se han mandado'} (${dudas.map((x) => `${x.numero || 'una'}: ${(x.porque ?? 'ya está en ERP10').replace(/\.$/, '')}`).join('; ')}): ${dudas.length === 1 ? 'míralo' : 'míralos'} en «Ya está en ERP10».`)
   if (mal.length) partes.push(`${n(mal.length, 'no ha podido', 'no han podido')}: ${mal.map((x) => `${x.numero || 'una'}, ${(x.porque ?? 'sin motivo').replace(/\.$/, '')}`).join('; ')}.`)
   if (!partes.length) partes.push('No ha entrado nada.')
-  return { texto: partes.join(' '), bien: mal.length === 0 && sinPdf.length === 0 }
+  return { texto: partes.join(' '), bien: mal.length === 0 && sinPdf.length === 0 && dudas.length === 0 }
 }
