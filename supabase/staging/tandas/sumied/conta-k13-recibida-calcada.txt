@@ -9,7 +9,3 @@ supabase/staging/sql/20261124_k13_codigo_corto_y_tramos_prueba.sql
 # Las recibidas de la e2e de calco (tests/e2e/conta/k13/calco.spec.ts), en el restaurante de la semilla K11b: una sin duda
 # y otra de un emisor que no se conoce (su duda). Solo añade, con ids fijos (W07), de verdad desde la rama (W05).
 supabase/seeds/conta/seed_k13_calco_staging.sql
-# 0720 · conta_motivos_para_validar llama a conta_de_quien_es (cambia en caliente: desde la rama, en ROLLBACK). Su prueba:
-# una persona cuenta los asientos de una empresa con una recibida sin validar (antes, null), y la vuelta atrás.
-supabase/migrations/20261124T0720_k13_motivos_de_quien.sql
-supabase/staging/sql/20261124_k13_motivos_de_quien_prueba.sql
