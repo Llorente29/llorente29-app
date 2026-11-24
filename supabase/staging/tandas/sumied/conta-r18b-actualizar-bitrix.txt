@@ -1,0 +1,4 @@
+# R18b · «Actualizar Bitrix24».
+# 1730 (solo añade: desde la rama, de verdad, W05), con su prueba.
+supabase/migrations/20261124T1730_r18b_actualizar_bitrix.sql
+supabase/staging/sql/20261124_r18b_actualizar_bitrix_prueba.sql

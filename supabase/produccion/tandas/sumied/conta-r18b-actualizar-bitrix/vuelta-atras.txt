@@ -1,0 +1,3 @@
+# R18b · la vuelta atrás: quita las funciones y las columnas del interruptor (la clave en Vault se queda).
+cuenta: scripts/conta/produccion/cuentas/r18b-actualizar-bitrix.sql
+supabase/vuelta-atras/20261124T1730_r18b_actualizar_bitrix.down.sql

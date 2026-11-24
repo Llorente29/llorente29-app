@@ -74,12 +74,17 @@ async function bitrix(portal: string, metodo: string, auth: string, cuerpo: Reco
 }
 
 /**
- * R18 · El interruptor «Actualizar Bitrix24» (Ajustes, lo enciende Julio; apagado de serie). Llega en el PR
- * siguiente con su ajuste en la base: hasta entonces está apagado siempre y Sumied no escribe en ninguna ficha.
+ * R18 · El interruptor «Actualizar Bitrix24» de la conexión con ese portal (Ajustes › Cobros, lo enciende
+ * Julio; apagado de serie): conta_crm_escribir_de_portal (R18b). Si no se puede leer, apagado.
  */
 async function actualizarBitrix(portal: string): Promise<boolean> {
-  void portal
-  return false
+  try {
+    const { data, error } = await baseDeDatos().rpc('conta_crm_escribir_de_portal', { p_portal: portal })
+    if (error) return false
+    return ((data ?? []) as { actualizar?: boolean }[]).some((f) => f.actualizar === true)
+  } catch {
+    return false
+  }
 }
 
 async function formulario(req: Request): Promise<URLSearchParams> {
