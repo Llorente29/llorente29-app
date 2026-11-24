@@ -1,0 +1,61 @@
+# Origen: la pantalla real del plan contable en staging-conta, tal como salió en el registro del run 44247888358 (Q03, 18/11, la prueba que falló a propósito), con la versión de antes del orden: las primeras 60 líneas del árbol, en el orden de Playwright (el menú delante). Las 28 de detrás no salieron en el registro.
+- status: "BUILD LOCAL · NO ES PRODUCCIÓN — base de pruebas staging-conta: los datos son inventados"
+- navigation "Menú de contabilidad":
+  - link "Inicio":
+    - /url: /conta/inicio
+    - img "Folvy"
+  - list:
+    - listitem:
+      - link "Inicio":
+        - /url: /conta/inicio
+    - listitem:
+      - link "Contabilidad":
+        - /url: /conta/libros/diario
+      - list "Páginas de Contabilidad":
+        - listitem:
+          - link "Asientos":
+            - /url: /conta/libros/diario
+        - listitem:
+          - link "Libros y listados":
+            - /url: /conta/libros/mayor/libro-mayor
+        - listitem:
+          - link "Definiciones":
+            - /url: /conta/ajustes/plan
+        - listitem:
+          - link "Cierre y Registro":
+            - /url: /conta/libros/cierre/ejercicios
+    - listitem:
+      - link "Ventas":
+        - /url: /conta/ventas/facturas
+    - listitem:
+      - link "Compras y gastos":
+        - /url: /conta/documentos
+    - listitem:
+      - link "Bancos":
+        - /url: /conta/bancos
+    - listitem:
+      - link "Contactos":
+        - /url: /conta/clientes-y-proveedores
+  - list:
+    - listitem:
+      - button "Favoritos"
+    - listitem:
+      - link "Ajustes":
+        - /url: /conta/ajustes
+  - button "Plegar el menú" [expanded]
+- banner:
+  - button "Taberna de Prueba Norte, Taberna de Prueba Norte, S.L.. Cambiar de empresa": Taberna de Prueba Norte Taberna de Prueba Norte, S.L.
+  - button "Buscar o hacer algo"
+  - button "Ayuda"
+  - button "Admin Norte, nivel medio. Tus preferencias": Admin Norte
+- main:
+  - toolbar "Acciones de Definiciones":
+    - 'button "Ver: Plan contable. Cambiar"': "Ver: Plan contable"
+  - text: Definiciones
+  - heading "Plan contable" [level=1]
+  - paragraph: Plan de pymes · subcuentas de 8 dígitos · la longitud queda fija con el primer asiento
+  - link "Qué va a cada sitio":
+    - /url: /conta/ajustes/plan/que-va-a-cada-sitio
+  - button "Añadir subcuenta": + Añadir subcuenta
+  - region "Cuentas":
+    - searchbox "Buscar una cuenta": zzz q03 no existe

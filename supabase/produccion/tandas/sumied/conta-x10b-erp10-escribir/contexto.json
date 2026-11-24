@@ -1,0 +1,19 @@
+{
+ "_que": "X10b · lo que Sumied escribe en ERP10 · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción (esta sesión no lee producción). 1433 añade una tabla y una función nuevas; no cambia ninguna que exista. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-19T14:33Z",
+ "tanda": {
+  "supabase/migrations/20261119T1433_x10b_erp10_envio.sql": "93077548646a9c1e8451aa85a7743b8b"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

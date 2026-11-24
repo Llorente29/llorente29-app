@@ -1,0 +1,4 @@
+# X29 · la vuelta atrás: bank_importar de su respaldo, sin el disparador, y quita lo nuevo.
+cuenta: scripts/conta/produccion/cuentas/x29-extractos.sql
+supabase/vuelta-atras/20261123T1713_x29_borradas_no_vuelven.down.sql
+supabase/vuelta-atras/20261123T1712_x29_extractos_anade.down.sql

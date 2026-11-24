@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · reclasificación de tres pagos · contexto de producción, medido en SOLO LECTURA el 13/11 a las 08:11Z: la 0915 no crea ni cambia ningún objeto; apunta tres asientos de octubre con _dl1_asiento_iva y los valida con _dl1_validar (en producción). 41000023 a 31/10 en −720,02, 41000011 en −59,98; los tres pagos llevan 419,89 de gasto. Nada en el camino del pedido; la 0915 no está en el historial.",
+ "medido": "2026-11-13T08:11Z",
+ "tanda": {
+  "supabase/migrations/20261113T0915_dl1_reclasifica_pagos.sql": "b9587bee4d522bf876b85e653538a69f"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

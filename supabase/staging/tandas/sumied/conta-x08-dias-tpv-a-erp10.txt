@@ -1,0 +1,11 @@
+# X08 · los días del TPV salen a ERP10 como facturas expedidas.
+# Primero, la medida de cómo son hoy los días del TPV (solo lee, ROLLBACK).
+supabase/staging/sql/20261118_x08_dias_tpv_medida.sql
+# Respuesta X08 · 1, pregunta 2: varias marcas o varios locales el mismo día (solo lee, ROLLBACK).
+supabase/staging/sql/20261118_x08_marcas_locales_medida.sql
+# Después, 0551 (añade los días del TPV por salir) y su prueba (ROLLBACK, empresas
+# inventadas en las cuentas A y B, con su vuelta atrás).
+supabase/migrations/20261119T0551_x08_dias_tpv_por_salir.sql
+supabase/staging/sql/20261119_x08_dias_tpv_a_erp10_prueba.sql
+# Para el parte: cuántos días salen y cuántos no, por cada motivo (solo lee, ROLLBACK).
+supabase/staging/sql/20261119_x08_dias_que_salen_medida.sql

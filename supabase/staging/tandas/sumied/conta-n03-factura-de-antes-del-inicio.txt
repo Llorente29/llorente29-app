@@ -1,0 +1,7 @@
+# N03 · una factura de antes del día de inicio: 0955 añade la respuesta y cuatro funciones;
+# 0956 cambia tres funciones con la misma firma. Su prueba (ROLLBACK, cuenta A, datos
+# inventados): para sin respuesta, «ya estaba», «no estaba», «es nueva», la traída, sin día
+# de inicio y las dos vueltas atrás.
+supabase/migrations/20261117T0955_n03_respuesta_antes_del_inicio.sql
+supabase/migrations/20261117T0956_n03_parar_y_preguntar.sql
+supabase/staging/sql/20261117_n03_antes_del_inicio_prueba.sql

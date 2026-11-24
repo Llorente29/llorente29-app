@@ -1,0 +1,21 @@
+{
+ "_que": "K11b · los datos de cada línea, por clave · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción (esta sesión no lee producción). 1750 cambia una función con la misma firma (conta_recibida_otros_datos) y no escribe en ninguna fila. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-23T17:51Z",
+ "tanda": {
+  "supabase/migrations/20261123T1750_k11b_lineas_solo_lo_que_cambia.sql": "425906e9f2ba047dae297276170a049d"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_recibida_otros_datos(uuid,jsonb,text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

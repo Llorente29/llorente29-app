@@ -1,0 +1,11 @@
+[
+ {
+  "id": "745-1",
+  "pr": 745,
+  "fecha": "2026-11-19T22:05:55Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "las facturas emitidas también salen directamente a ERP10, la primera sola para probar, y el paso 3 comprueba factura a factura las que salieron así.",
+  "ruta": null
+ }
+]

@@ -1,0 +1,11 @@
+# K11b · La recibida entera, como ERP10 (23/11). Rama conta/k11b-recibida-entera. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   1750  Cambia conta_recibida_otros_datos: en cada línea, solo las claves que vienen (la que no viene se queda; con
+#         null, se borra). Hasta hoy escribía concepto, marca y plataforma juntos, y elegir la plataforma con la lectura
+#         de la marca aún por volver la borraba (e2e 45225555049 y #1790). No escribe en ninguna fila. Lo cuenta
+#         k11b-recibida-entera.sql (regla 31: los datos de las líneas, iguales antes y después).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k11b-recibida-entera.sql
+supabase/migrations/20261123T1750_k11b_lineas_solo_lo_que_cambia.sql

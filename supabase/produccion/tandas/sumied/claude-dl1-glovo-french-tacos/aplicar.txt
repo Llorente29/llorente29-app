@@ -1,0 +1,22 @@
+# DL1·26 · Glovo, French Tacos Club de Vallecas (Julio, 14/11, 07:50). Rama
+# claude/dl1-glovo-french-tacos. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   0815  Sus cuentas 70000012 y 70800012; sus ventas de los PDF de Glovo,
+#         liquidación a liquidación (agosto y septiembre a 01/10, octubre en su
+#         fecha), con la promoción a su cargo en la 70009002 y el IVA del 10 %
+#         sobre lo neto; la compensación de la 551592 (577,42); la factura de
+#         la 585810 con su asiento y su compensación; la nota de «cobrado
+#         fuera» en sus 12 liquidaciones. Validado como Julio. No crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-glovo-french-tacos.sql
+supabase/migrations/20261114T0815_dl1_glovo_french_tacos.sql
+sin-vuelta-atras: supabase/migrations/20261114T0815_dl1_glovo_french_tacos.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-glovo-french-tacos · cuentas 70000012 y 70800012 que faltan = 0
+esperado: dl1-glovo-french-tacos · 70000012 de 2026, menos 5.594,59 = 0.00
+esperado: dl1-glovo-french-tacos · 70009002 de sus ventas, más 2.545,58 = 0.00
+esperado: dl1-glovo-french-tacos · 47700010 de sus ventas, menos 296,91 = 0.00
+esperado: dl1-glovo-french-tacos · 43000001 de lo que apunta la tanda, menos 1.760,01 = 0.00
+esperado: dl1-glovo-french-tacos · 47200021 de la factura I170326000585810, menos 152,70 = 0.00
+esperado: dl1-glovo-french-tacos · liquidaciones de la ···2149 sin la nota = 0

@@ -1,0 +1,3 @@
+# N09 · la vuelta atrás: la 0800 (las dos funciones de Bancos desde su respaldo y la vista de Pagos con su texto de antes).
+cuenta: scripts/conta/produccion/cuentas/n09-pagadas-a-medias.sql
+supabase/vuelta-atras/20261119T0800_n09_pagos_lee_lo_traido.down.sql

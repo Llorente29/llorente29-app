@@ -57,8 +57,11 @@ export type AccountConnectorStatus =
   | 'connected'
   | 'paused'
   | 'error'
+  // B01r26 (15/11): la renovación del token falló (connector_mark_down); se levanta volviendo a guardar las credenciales.
+  | 'down'
 
-export type AccountConnectorScope = 'account' | 'brand' | 'location'
+// C04b (12/10): «company», una conexión por sociedad (Diez; X10: el código de empresa de ERP10).
+export type AccountConnectorScope = 'account' | 'brand' | 'location' | 'company'
 
 // Forma del config_schema (campos que pide un conector para conectarse).
 // Render dinámico del formulario "Configurar" en la UI (I2).

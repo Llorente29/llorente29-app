@@ -3,7 +3,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  ClienteDiez, ConexionCaida, FrenoDiez, MARGEN_RENOVAR_MS, limitesMes,
+  ClienteDiez, ConexionCaida, FrenoDiez, MARGEN_RENOVAR_MS, limitesMes, tokenConLaBase, tokenDeLaBase,
   type AlmacenToken, type Apunte, type TokenGuardado,
 } from '../../../supabase/functions/_shared/diezCliente'
 import { arrancarDiezFalso } from '../../../scripts/conta/diez/falso.mjs'
@@ -92,10 +92,36 @@ describe('token', () => {
   it('con un token guardado de más de 2 días no entra', async () => {
     falso = await arrancarDiezFalso({ bases: { C0009: {} } })
     const tok = await new ClienteDiez({ base: falso.url, nombreBd: 'C0009', credenciales: falso.credenciales, almacen: almacen().api }).entrar()
-    const al = almacen({ token: tok.token, expiresAt: new Date(Date.now() + MARGEN_RENOVAR_MS + 3600e3).toISOString() })
+    const al = almacen({ token: tokenConLaBase('C0009', tok.token), expiresAt: new Date(Date.now() + MARGEN_RENOVAR_MS + 3600e3).toISOString() })
     const antes = falso.estado.peticiones.length
     await new ClienteDiez({ base: falso.url, nombreBd: 'C0009', credenciales: falso.credenciales, almacen: al.api }).series()
     expect(falso.estado.peticiones.slice(antes).map((p) => p.ruta)).toEqual(['/api/series'])
+  })
+
+  // B01r26 (14/11): el token de la C0009 del ensayo siguió guardado cuando la conexión volvió a la
+  // C0008, y el traspaso de octubre leyó y escribió en la C0009 durante un día.
+  it('un token guardado de OTRA base no se usa: entra en la pedida y lo guarda con ella', async () => {
+    falso = await arrancarDiezFalso({ bases: { C0008: {}, C0009: {} } })
+    const de9 = await new ClienteDiez({ base: falso.url, nombreBd: 'C0009', credenciales: falso.credenciales, almacen: almacen().api }).entrar()
+    const al = almacen({ token: tokenConLaBase('C0009', de9.token), expiresAt: new Date(Date.now() + 10 * 86400e3).toISOString() })
+    const antes = falso.estado.peticiones.length
+    await new ClienteDiez({ base: falso.url, nombreBd: 'C0008', credenciales: falso.credenciales, almacen: al.api }).series()
+    expect(falso.estado.peticiones.slice(antes).map((p) => p.ruta)).toEqual(['/token', '/api/series'])
+    expect(falso.estado.peticiones.slice(antes)[1].bd).toBe('C0008')
+    expect(tokenDeLaBase(al.a.guardado!.token)?.bd).toBe('C0008')
+  })
+  it('un token guardado de antes, sin su base, no se usa: no se sabe de qué base es', async () => {
+    falso = await arrancarDiezFalso({ bases: { C0008: {} } })
+    const al = almacen({ token: 'de-antes-sin-base', expiresAt: new Date(Date.now() + 10 * 86400e3).toISOString() })
+    const antes = falso.estado.peticiones.length
+    await new ClienteDiez({ base: falso.url, nombreBd: 'C0008', credenciales: falso.credenciales, almacen: al.api }).series()
+    expect(falso.estado.peticiones.slice(antes).map((p) => p.ruta)).toEqual(['/token', '/api/series'])
+    expect(tokenDeLaBase(al.a.guardado!.token)?.bd).toBe('C0008')
+  })
+  it('tokenConLaBase / tokenDeLaBase: ida y vuelta, y lo de antes es null', () => {
+    expect(tokenDeLaBase(tokenConLaBase('c0008', 'abc|def'))).toEqual({ bd: 'C0008', token: 'abc|def' })
+    expect(tokenDeLaBase('abc')).toBeNull()
+    expect(tokenDeLaBase('diez-bd:|abc')).toBeNull()
   })
 
   it('le quedan menos de 2 días: renueva ANTES de que caduque', async () => {

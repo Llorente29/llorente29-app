@@ -1,0 +1,20 @@
+[
+ {
+  "id": "787-1",
+  "pr": 787,
+  "fecha": "2026-11-22T18:31:31Z",
+  "producto": "sumied",
+  "apartado": "Modelo 347",
+  "frase": "Sumied calcula el 347 entero, compras y ventas, por cliente y proveedor y por trimestres, y salta lo marcado «No incluir en modelo 347».",
+  "ruta": null
+ },
+ {
+  "id": "787-2",
+  "pr": 787,
+  "fecha": "2026-11-22T18:31:31Z",
+  "producto": "sumied",
+  "apartado": "347, desgloses",
+  "frase": "los alquileres de local con su arrendador y su referencia catastral, y los cobros en metálico de más de 6.000 € por cliente.",
+  "ruta": null
+ }
+]

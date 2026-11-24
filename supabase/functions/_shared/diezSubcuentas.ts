@@ -72,3 +72,16 @@ export async function asegurarSubcuentas(c: Pick<ClienteDiez, 'subcuentas' | 'cr
   }
   return { creadas: q.crear.map((s) => s.codigo), yaEstaban: new Set(usadas.map((u) => u.codigo)).size - q.crear.length - q.frenos.length, otroNombre: q.otroNombre }
 }
+
+/**
+ * B01r26 (14/11) · El nombre con el que se crea una subcuenta en Diez: el de Sumied,
+ * y si pasa de 60 caracteres (el máximo de Descripcion: Diez contesta 400), cortado
+ * por la última palabra entera que cabe. En el ensayo de la C0009, la 62300004
+ * («CATCHER MARKETPLACE SERVICIOS DE PROFESIONALES INDEPENDIENTES», 61) no entró.
+ */
+export function nombreParaDiez(nombre: string, max = MAX_DESCRIPCION): { nombre: string; recortado: boolean } {
+  const n = nombre.trim().replace(/\s+/g, ' ')
+  if (n.length <= max) return { nombre: n, recortado: false }
+  const corte = n.slice(0, max + 1).lastIndexOf(' ')
+  return { nombre: (corte > 0 ? n.slice(0, corte) : n.slice(0, max)).replace(/[\s·,;:-]+$/, ''), recortado: true }
+}

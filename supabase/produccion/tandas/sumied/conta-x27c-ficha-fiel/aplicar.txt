@@ -1,0 +1,12 @@
+# X27c · La ficha de proveedor y la de cliente, fieles a ERP10 (respuesta X27 · 1, 22/11). Rama conta/x27c-ficha-fiel.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1920  Añade: la web del cliente (customer_fiscal.website) y dos funciones para partir un domicilio en calle, código
+#         postal, población y provincia. No escribe en ninguna fila.
+#   1921  Cambia public.supplier (declarado, con su prueba): al dar de alta un proveedor, su domicilio partido (solo lo
+#         vacío). Lo ya guardado no se toca: la cuenta dice cuántos hay sin partir.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x27c-ficha-fiel.sql
+supabase/migrations/20261122T1920_x27c_web_y_domicilio.sql
+supabase/migrations/20261122T1921_x27c_alta_parte_el_domicilio.sql

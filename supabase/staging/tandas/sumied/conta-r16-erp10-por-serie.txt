@@ -1,0 +1,4 @@
+# R16 · el día del TPV a ERP10 como su libro de IVA.
+# 0810 (solo añade: desde la rama, de verdad, W05: la e2e usa sus funciones), con su prueba.
+supabase/migrations/20261122T0810_r16_erp10_dia_por_serie_anade.sql
+supabase/staging/sql/20261122_r16_erp10_dia_por_serie_prueba.sql

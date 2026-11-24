@@ -1,0 +1,150 @@
+/* src/modules/conta/estilo/tpv.css
+ *
+ * R06 · Las dos ventanas del TPV, fieles a las maquetas 2 y 3 (aprobadas por Julio):
+ * ventana lateral ANCHA sobre la lista en gris, los pasos arriba con su número en
+ * un círculo, dos columnas (lo de la izquierda rueda solo; la derecha, también si
+ * hace falta), y el pie con la frase y los dos botones, siempre a la vista.
+ * Es propia (no la de Dialogo, que es de 420 px y apila los botones): lo dice el parte.
+ */
+
+.tpv-velo { position: fixed; inset: 0; z-index: 70; background: var(--s-velo); display: flex; justify-content: flex-end; }
+.tpv-ventana {
+  /* Tres cuartos de la pantalla, como la maqueta; en las de 1366 a 1500, algo más (1160 px) para que nada se parta. */
+  width: min(1500px, max(75vw, min(1160px, calc(100vw - 160px)))); height: 100%; background: var(--s-superficie);
+  box-shadow: var(--s-sombra); display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.tpv-cabeza {
+  display: flex; align-items: center; gap: var(--s-6); padding: var(--s-4) var(--s-6);
+  border-bottom: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.tpv-titulo { margin: 0; font-size: var(--s-t-xl); font-weight: var(--s-peso-titulo); white-space: nowrap; }
+.tpv-cerrar { margin-left: auto; }
+
+/* Los pasos: 1 Suelta los ficheros —— 2 Mira lo que he leído —— 3 Guardado */
+.tpv-pasos { display: flex; align-items: center; gap: var(--s-2); list-style: none; margin: 0; padding: 0; color: var(--s-apoyo); font-size: var(--s-t-m); }
+.tpv-paso { display: flex; align-items: center; gap: var(--s-2); white-space: nowrap; }
+.tpv-paso-num {
+  width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid currentColor; display: inline-grid; place-items: center;
+  font-size: var(--s-t-xs); font-weight: var(--s-peso-medio);
+}
+.tpv-paso[aria-current='step'] { color: var(--s-accion); font-weight: var(--s-peso-medio); }
+.tpv-paso[aria-current='step'] .tpv-paso-num { background: var(--s-accion); border-color: var(--s-accion); color: var(--s-sobre-accion); }
+.tpv-paso-raya { width: 24px; height: 1px; background: var(--s-borde-control); }
+
+/* Dos columnas: la principal y «por dentro», separadas por una línea. */
+.tpv-cuerpo { display: grid; grid-template-columns: minmax(0, 55fr) minmax(0, 45fr); min-height: 0; }
+.tpv-cuerpo-solo { grid-template-columns: minmax(0, 1fr); }
+.tpv-izq, .tpv-der { min-height: 0; overflow-y: auto; padding: var(--s-4) var(--s-6); display: flex; flex-direction: column; gap: var(--s-4); }
+.tpv-der { border-left: var(--s-linea) solid var(--s-borde-decorativo); }
+.tpv-der-titulo, .tpv-seccion-titulo { margin: 0; font-size: var(--s-t-m); font-weight: var(--s-peso-fuerte); }
+
+.tpv-pie {
+  display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-6);
+  border-top: var(--s-linea) solid var(--s-borde-decorativo); background: var(--s-superficie);
+}
+.tpv-pie-frase { margin: 0 auto 0 0; color: var(--s-apoyo); font-size: var(--s-t-s); }
+
+/* La zona de soltar, con su borde de rayas. */
+.tpv-soltar {
+  display: flex; align-items: center; gap: var(--s-4); padding: var(--s-4) var(--s-5);
+  border: 1.5px dashed var(--s-accion-borde, var(--s-borde-control)); border-radius: var(--s-radio-bloque); background: var(--s-accion-suave);
+}
+.tpv-soltar[data-encima] { border-color: var(--s-accion); }
+.tpv-soltar-icono { color: var(--s-tinta); flex: none; }
+.tpv-soltar-texto { flex: 1 1 auto; }
+.tpv-soltar-texto strong { display: block; }
+.tpv-soltar-texto span { color: var(--s-apoyo); font-size: var(--s-t-s); }
+
+/* Los cuatro ficheros, de dos en dos, con su visto. */
+.tpv-ficheros { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2) var(--s-3); list-style: none; margin: 0; padding: 0; }
+.tpv-fichero {
+  display: flex; align-items: center; gap: var(--s-2); min-width: 0; padding: var(--s-2) var(--s-3);
+  border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-campo);
+}
+.tpv-fichero-visto { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--s-ok); color: var(--s-superficie); }
+.tpv-fichero[data-falta] .tpv-fichero-visto { background: var(--s-neutro-fondo); color: var(--s-apoyo); }
+.tpv-fichero[data-mal] .tpv-fichero-visto { background: var(--s-falta); }
+.tpv-fichero-clase { font-weight: var(--s-peso-medio); }
+.tpv-fichero-nombre { color: var(--s-apoyo); font-size: var(--s-t-s); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* La tabla de días: rueda ella; la elegida, en azul con su filo. */
+.tpv-tabla-caja { border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); overflow: auto; max-height: 40vh; }
+.tpv-tabla { width: 100%; border-collapse: collapse; font-size: var(--s-t-m); }
+.tpv-tabla th { text-align: left; font-weight: var(--s-peso-medio); color: var(--s-apoyo); font-size: var(--s-t-s); padding: var(--s-2) var(--s-3); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); position: sticky; top: 0; background: var(--s-superficie); }
+.tpv-tabla td { padding: var(--s-2) var(--s-3); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.tpv-tabla tr:last-child td { border-bottom: 0; }
+.tpv-tabla .tpv-cifra, .tpv-tabla th.tpv-cifra { text-align: right; font-variant-numeric: tabular-nums; }
+.tpv-tabla tbody tr { cursor: pointer; }
+.tpv-tabla tbody tr[aria-selected='true'] { background: var(--s-accion-suave); box-shadow: inset 3px 0 0 var(--s-accion); }
+.tpv-tabla tbody tr:hover { background: var(--s-fila, var(--s-fondo)); }
+
+/* El aviso rojo (o ámbar) con su filo a la izquierda. */
+.tpv-aviso { padding: var(--s-3) var(--s-4); border-radius: var(--s-radio-bloque); background: var(--s-falta-fondo); box-shadow: inset 4px 0 0 var(--s-falta); color: var(--s-falta); }
+.tpv-aviso[data-tono='duda'] { background: var(--s-duda-fondo); box-shadow: inset 4px 0 0 var(--s-duda); color: var(--s-duda); }
+.tpv-aviso[data-tono='ok'] { background: var(--s-ok-fondo); box-shadow: inset 4px 0 0 var(--s-ok); color: var(--s-ok); }
+.tpv-aviso p { margin: 0; }
+.tpv-aviso p + p { margin-top: var(--s-2); }
+.tpv-aviso-problemas { margin: var(--s-2) 0 0; padding-left: var(--s-5); color: var(--s-falta); font-size: var(--s-t-s); }
+
+/* «Por dentro»: tarjetas con filas de cifra a la derecha. */
+.tpv-tarjeta { border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); padding: var(--s-3) var(--s-4); display: flex; flex-direction: column; gap: var(--s-1); }
+.tpv-tarjeta-titulo { margin: 0 0 var(--s-1); font-size: var(--s-t-m); font-weight: var(--s-peso-fuerte); }
+.tpv-fila { display: flex; align-items: baseline; gap: var(--s-2); }
+.tpv-fila > :last-child { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tpv-fila-apoyo { color: var(--s-apoyo); font-size: var(--s-t-s); }
+.tpv-fila-total { border-top: var(--s-linea) solid var(--s-borde-decorativo); padding-top: var(--s-2); margin-top: var(--s-1); font-weight: var(--s-peso-fuerte); }
+.tpv-sin-cuenta { border: 0; background: var(--s-duda-fondo); color: var(--s-duda); border-radius: var(--s-radio-pildora); padding: 1px var(--s-2); font: inherit; font-size: var(--s-t-s); font-weight: var(--s-peso-medio); cursor: pointer; }
+.tpv-comprobaciones { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.tpv-comprobaciones li { color: var(--s-ok); display: flex; gap: var(--s-2); align-items: baseline; }
+.tpv-comprobaciones li[data-tono='duda'] { color: var(--s-duda); }
+
+.tpv-hecho { display: flex; flex-direction: column; gap: var(--s-3); max-width: 720px; }
+.tpv-hecho-frase { margin: 0; font-size: var(--s-t-l); }
+
+/* «A qué cuenta va cada forma de pago» */
+.tpv-formas { width: 100%; border-collapse: collapse; }
+.tpv-formas th { text-align: left; font-weight: var(--s-peso-medio); font-size: var(--s-t-s); color: var(--s-apoyo); padding: var(--s-2) var(--s-3); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.tpv-formas td { padding: var(--s-2) var(--s-3); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: middle; }
+.tpv-formas tr:last-child td { border-bottom: 0; }
+.tpv-formas .tpv-cifra { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tpv-forma-nombre { font-weight: var(--s-peso-fuerte); }
+.tpv-formas { table-layout: fixed; }
+.tpv-formas col.tpv-col-forma { width: 38%; } .tpv-formas col.tpv-col-cuenta { width: 42%; } .tpv-formas col.tpv-col-mes { width: 20%; }
+.tpv-asiento th.tpv-cifra, .tpv-asiento td.tpv-cifra { width: 92px; }
+.cx .tpv-ventana:focus, .cx .tpv-ventana:focus-visible { outline: none; box-shadow: var(--s-sombra); }
+/* La 3 (formas de pago) reparte como su maqueta: más ancha la tabla. */
+.tpv-cuerpo[data-reparto='formas'] { grid-template-columns: minmax(0, 58fr) minmax(0, 42fr); }
+.tpv-elegir { position: relative; }
+.tpv-caja-abierta { max-height: none; overflow: visible; }
+.tpv-elegir-boton {
+  width: 100%; min-height: var(--s-alto-control); display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-3);
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-control); border-radius: var(--s-radio-campo);
+  font: inherit; color: var(--s-tinta); text-align: left; cursor: pointer;
+}
+/* R07 · Nada se corta: una cuenta larga se lee entera, en dos líneas si hace falta. */
+.tpv-elegir-boton > :first-child { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; padding: var(--s-1) 0; }
+.tpv-elegir-boton[data-falta] { border-color: var(--s-falta); color: var(--s-falta); }
+.tpv-elegir .s-hoja-buscar { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; }
+.tpv-nota { margin: 0; color: var(--s-apoyo); font-size: var(--s-t-s); }
+.tpv-asiento { width: 100%; border-collapse: collapse; font-size: var(--s-t-m); }
+.tpv-asiento th { text-align: left; font-weight: var(--s-peso-medio); font-size: var(--s-t-s); color: var(--s-apoyo); padding: var(--s-2) var(--s-3); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.tpv-asiento td { padding: var(--s-2) var(--s-3); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.tpv-asiento .tpv-cifra { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tpv-asiento tr[data-sin-cuenta] td { color: var(--s-falta); }
+.tpv-asiento tfoot td { color: var(--s-apoyo); font-size: var(--s-t-s); border-bottom: 0; background: var(--s-fondo); }
+
+/* R07 · La factura del día (maqueta 4): su sección arriba a la izquierda y, a la derecha, los dos asientos. */
+.tpv-seccion { display: flex; flex-direction: column; gap: var(--s-2); }
+.tpv-asiento-titulo { margin: 0; font-size: var(--s-t-m); font-weight: var(--s-peso-medio); }
+.tpv-asiento tr[data-contado] td:first-child { font-weight: var(--s-peso-medio); }
+.tpv-asiento td:first-child { overflow-wrap: anywhere; }
+
+@media (max-width: 900px) {
+  .tpv-ventana { width: 100vw; min-width: 0; }
+  .tpv-cuerpo { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  .tpv-izq, .tpv-der { overflow: visible; }
+  .tpv-der { border-left: 0; border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+  .tpv-pasos .tpv-paso-texto { display: none; }
+  .tpv-pasos .tpv-paso[aria-current='step'] .tpv-paso-texto { display: inline; }
+  .tpv-ficheros { grid-template-columns: 1fr; }
+}

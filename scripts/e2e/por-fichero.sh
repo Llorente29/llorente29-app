@@ -38,6 +38,14 @@
 # lo que busca: «Test timeout of …», «Timeout … exceeded», «TimeoutError» o
 # «element(s) not found». Un fallo que ve otra cosa (un texto distinto, un
 # error de la página) bloquea siempre, y en un fichero de la zona, todo bloquea.
+#
+# LO QUE HABÍA EN PANTALLA (Q03, 18/11). Las sesiones leen el registro pero no
+# pueden bajar los artefactos. De cada prueba que falla, el reporter
+# scripts/e2e/reporter-pantalla.mjs deja qué esperaba, lo que había en
+# pantalla (el árbol de la página de error-context.md), lo que contestó la base
+# con un 4xx o un 5xx y los errores de la página. Aquí se saca al registro
+# justo después del grupo plegado de su fichero, y al resumen del run, al final.
+# Con tope por prueba y por run (pantalla.mjs, TOPES); lo que se corta, se dice.
 set -uo pipefail
 
 LISTA=${1:?uso: por-fichero.sh <lista> [trozo]}
@@ -51,6 +59,9 @@ TSV=${POR_FICHERO_TSV:-${RUNNER_TEMP:-/tmp}/por-fichero.tsv}
 RESUMEN=${GITHUB_STEP_SUMMARY:-/dev/null}
 CARRIL_DIR=${CARRIL_DIR:-${RUNNER_TEMP:-/tmp}/carril}
 export CARRIL_DIR
+TMP=${RUNNER_TEMP:-/tmp}
+export PANTALLA_ESTADO="$TMP/pantalla-estado.json" PANTALLA_RESUMEN="$TMP/pantalla-resumen.md"
+rm -f "$PANTALLA_ESTADO" "$PANTALLA_RESUMEN"
 
 mapfile -t FICHEROS < <(grep -v '^[[:space:]]*$' "$LISTA")
 if [ "${#FICHEROS[@]}" = 0 ]; then echo "A este trozo no le toca ningún fichero."; exit 0; fi
@@ -98,7 +109,8 @@ for f in "${FICHEROS[@]}"; do
   t0=$(date +%s)
   E2E_SERVIDOR_FUERA=1 E2E_SALIDA="test-results/$n" \
     PLAYWRIGHT_BLOB_OUTPUT_FILE="blob-report/trozo-$TROZO-$n.zip" PWTEST_BLOB_DO_NOT_REMOVE=1 \
-    $PLAYWRIGHT test "$f" --reporter=list,github,blob 2>&1 | tee "${RUNNER_TEMP:-/tmp}/salida-$n.txt"
+    PANTALLA_REGISTRO="$TMP/pantalla-$n.txt" \
+    $PLAYWRIGHT test "$f" --reporter="list,github,blob,$AQUI/reporter-pantalla.mjs" 2>&1 | tee "${RUNNER_TEMP:-/tmp}/salida-$n.txt"
   r=${PIPESTATUS[0]}
   "$CARRIL" barrera-salir; DENTRO=0
   dur=$(( $(date +%s) - t0 ))
@@ -111,6 +123,8 @@ for f in "${FICHEROS[@]}"; do
   printf '%s\t%s\t%s\t%s\n' "$f" "$espera" "$dur" "$res" >> "$TSV"
   echo "::endgroup::"
   echo "[$i/${#FICHEROS[@]}] $f: $res en $dur s (esperó $espera s a la barrera)."
+  # Fuera del grupo: lo que había en pantalla en cada prueba que falló.
+  if [ -s "$TMP/pantalla-$n.txt" ]; then echo; cat "$TMP/pantalla-$n.txt"; fi
 done
 
 # El informe HTML del trozo, con todos los ficheros.
@@ -136,6 +150,19 @@ print('|---|---:|---:|---|')
 for f in filas:
     print(f"| {f['fichero']} | {f['espera_s']} | {f['duracion_s']} | {f['resultado']} |")
 PY
+
+# Lo que había en pantalla en cada prueba que falló, plegado, en el resumen del run.
+if [ -s "$PANTALLA_RESUMEN" ]; then
+  {
+    echo
+    echo "### Lo que había en pantalla cuando falló"
+    echo
+    echo "Cada prueba, con lo que esperaba; al abrirla, lo que había en pantalla, lo que contestó la base y los errores de la página. Entero, en el registro del job."
+    echo
+    cat "$PANTALLA_RESUMEN"
+    python3 -c 'import json,sys; e=json.load(open(sys.argv[1])); n=e.get("cortadas",0); print(f"… y {n} pruebas más sin su pantalla (tope del run); están en el artefacto «playwright-report».") if n else None' "$PANTALLA_ESTADO" 2>/dev/null || true
+  } >> "$RESUMEN"
+fi
 
 # Las esperas, también como aviso del run: se ven en su portada y por la API.
 python3 - "$TSV" <<'PY2'

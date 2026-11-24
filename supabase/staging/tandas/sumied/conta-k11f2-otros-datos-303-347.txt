@@ -1,0 +1,4 @@
+# K11f2 · El 303 lee «Otros datos» de la recibida y el contraasiento copia la plataforma. La 1815 cambia dos funciones y
+# desde la rama solo pasa en ROLLBACK.
+supabase/migrations/20261122T1815_k11f2_303_otros_datos.sql
+supabase/staging/sql/20261122_k11f2_303_otros_datos_prueba.sql

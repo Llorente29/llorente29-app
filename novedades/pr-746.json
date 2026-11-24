@@ -1,0 +1,20 @@
+[
+ {
+  "id": "746-1",
+  "pr": 746,
+  "fecha": "2026-11-19T21:46:58Z",
+  "producto": "sumied",
+  "apartado": "Libros",
+  "frase": "las direcciones del diario y del diario resumido abren su pantalla en el marco nuevo, no un asiento vacío.",
+  "ruta": null
+ },
+ {
+  "id": "746-2",
+  "pr": 746,
+  "fecha": "2026-11-19T21:46:58Z",
+  "producto": "sumied",
+  "apartado": "Bancos",
+  "frase": "descuenta todo lo pagado de una factura, también lo pagado a mano, como Pagos, y al casar el resto la da por pagada.",
+  "ruta": null
+ }
+]

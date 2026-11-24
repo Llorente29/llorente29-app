@@ -1,0 +1,21 @@
+{
+ "_que": "R15 · los días del TPV · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: esta sesión no lee producción. 1712 solo añade (una tabla, una columna que admite nulos en conta_tpv_dia y cuatro funciones nuevas). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-21T18:00Z",
+ "tanda": {
+  "supabase/migrations/20261121T1712_r15_dia_tpv_anade.sql": "d9df7332a0bf3e6ea10d860f150e0834"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_tpv_dia"
+  ],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

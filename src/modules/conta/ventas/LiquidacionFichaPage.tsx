@@ -12,9 +12,13 @@
 //   · De dónde salió: su correo, o «Sin periodo: vino de un fichero antiguo».
 // Si las cifras no suman, se dice con los números (regla 7). Para cuadrar con
 // tus cierres, la ficha del periodo y el local (la de siempre).
+// S01p·18 · 3: con el id de una liquidación del SOCIO de marca (licensed_settlement)
+// decía «Esa liquidación no está en tu cuenta»; ahora abre la suya
+// (compras/liquidacion/:id, con sus asientos y su cobro).
 
-import { Link, useParams } from 'react-router-dom'
-import { rutaAjustes, rutaLiquidacionPlataforma, rutaLiquidacionesVentas, rutaRevisarFactura } from '@/config/navegacion'
+import { Link, Navigate, useParams } from 'react-router-dom'
+import { rutaAjustes, rutaLiquidacion, rutaLiquidacionPlataforma, rutaLiquidacionesVentas, rutaRevisarFactura } from '@/config/navegacion'
+import { tabla } from '@/modules/conta/services/bd'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
@@ -30,7 +34,10 @@ const dm = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)
 export default function LiquidacionFichaPage() {
   const { id = '' } = useParams()
   const datos = useLeer(id ? () => leerFichaLiquidacion(id) : null, `${id}:ficha-liquidacion`)
+  const delSocio = useLeer(id ? () => esDelSocio(id) : null, `${id}:es-del-socio`)
   const volver = rutaLiquidacionesVentas('plataformas')
+  if (delSocio.datos) return <Navigate to={rutaLiquidacion(id)} replace />
+  if (datos.error && delSocio.datos === null && !delSocio.error) return <div className="s-pagina"><EncabezadoPagina titulo="Liquidación" /><p className="s-apoyo" aria-busy="true">Leyendo la liquidación…</p></div>
   if (datos.error) return <div className="s-pagina"><EncabezadoPagina titulo="Liquidación" /><p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido leer la liquidación: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p></div>
   const f = datos.datos
   if (!f) return <div className="s-pagina"><EncabezadoPagina titulo="Liquidación" /><p className="s-apoyo" aria-busy="true">Leyendo la liquidación…</p></div>
@@ -88,4 +95,10 @@ export default function LiquidacionFichaPage() {
       </BloqueFicha>
     </div>
   )
+}
+
+/** ¿Es el id de una liquidación del socio de marca? (las de plataforma tienen la suya: esta ficha). */
+async function esDelSocio(id: string): Promise<boolean> {
+  const { data } = await tabla('licensed_settlement').select('id').eq('id', id).maybeSingle()
+  return !!data
 }

@@ -1,0 +1,4 @@
+# X22 · Cada cuenta, con su nombre guardado (cambia ocho funciones y el texto de las reglas del banco).
+supabase/migrations/20261121T1600_x22_nombre_de_la_cuenta.sql
+supabase/migrations/20261121T1610_x22_reglas_con_nombre.sql
+supabase/staging/sql/20261121_x22_nombre_de_la_cuenta_prueba.sql

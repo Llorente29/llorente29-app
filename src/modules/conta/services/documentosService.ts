@@ -15,6 +15,7 @@
 //   · «Pedírselas»: la petición queda confirmada por la persona; el correo lo
 //     manda ella desde el suyo (mailto) mientras no haya dominio de correo.
 
+import { fraseDe, falloDeLlamada, FRASE_DOCUMENTO, type ClaseFallo } from '../../../../supabase/functions/_shared/lecturaFallo'
 import { supabase } from '@/lib/supabase'
 import { rpc, tabla, hayBase, mensaje } from '@/modules/conta/services/bd'
 import { validar } from '@/modules/conta/services/diarioService'
@@ -27,10 +28,13 @@ import { fotoAPdf } from '@/modules/conta/lib/fotoAPdf'
 import type { DatosDocumentos, PlazoFicha } from '@/modules/conta/documentos/documentos'
 import { leerFactura as comprobarLectura, type Lectura, type LecturaModelo } from '../../../../supabase/functions/_shared/lecturaFactura.ts'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
+import type { EstadoLineas } from '../../../../supabase/functions/_shared/lecturaPorPartes'
 import { textoParaPantalla } from '@/modules/conta/lib/errorBase'
 import { MAX_BYTES_EXPEDIDA, claseDeFichero, motivoExpedida, nombreExpedida, rutaExpedida, tamano } from '@/modules/conta/lib/expedidaPdf'
 import { papelDeLaLectura } from '@/modules/conta/documentos/fichaRecibida'
+import { releerCorreos } from '@/modules/conta/services/comprasService'
 import type { ProveedorLeido } from '@/modules/conta/lib/proveedorDesdeFactura'
+import { deLaBase as antesDeLaBase, type AntesDelInicio } from '@/modules/conta/documentos/antesDelInicio'
 
 type Fila = Record<string, unknown>
 const RECEPCIONES = 'receipt-uploads'
@@ -129,11 +133,39 @@ export async function plazoDeLaFicha(accountId: string, supplierId: string): Pro
 
 export interface Subida { archivo: string; bien: boolean; texto: string; factura: string | null }
 
+/** E02 · La clase del fallo de una llamada a ocr-albaran: lo que dice su cuerpo; sin cuerpo (red, la plataforma), una caída. */
+async function falloDeInvocar(error: unknown): Promise<{ clase: ClaseFallo }> {
+  const ctx = (error as { context?: unknown } | null)?.context
+  if (typeof Response !== 'undefined' && ctx instanceof Response) {
+    const cuerpo = await ctx.clone().json().catch(() => null)
+    return falloDeLlamada(ctx.status, cuerpo)
+  }
+  return falloDeLlamada(null, null)
+}
+
+/**
+ * E02 · Lo que dice la ventana de una llegada sin leer: la frase de su clase si
+ * la tiene (document_inbox.read_failure, de la 20261118T0600); si es de antes del
+ * E02 y su porqué es el texto técnico de la lectura («albarán», «non-2xx»), la de
+ * «este documento»; si no, su porqué tal cual. Regla 40: document_inbox.read_failure.
+ */
+export async function porqueDeLlegada(inboxId: string, porque: string | null): Promise<string | null> {
+  const { data } = await tabla('document_inbox').select('read_failure').eq('id', inboxId).maybeSingle()
+  const clase = (data as Fila | null)?.read_failure
+  if (clase === 'caida' || clase === 'documento') return fraseDe(clase)
+  return porqueSinTecnicismos(porque)
+}
+
+/** E02 · Un porqué de antes con el texto técnico de la lectura pasa a la frase de «este documento». */
+export const porqueSinTecnicismos = (porque: string | null): string | null =>
+  porque && /albar[aá]n legible|non-2xx|edge function|error del servicio de ia|fallo llamando a la ia/i.test(porque) ? FRASE_DOCUMENTO : porque
+
 /** Lee un fichero ya subido en modo factura. Devuelve la sesión de lectura. */
 async function leerEnModoFactura(accountId: string, ruta: string): Promise<string> {
   hayBase()
   const { data, error } = await supabase!.functions.invoke('ocr-albaran', { body: { account_id: accountId, file_paths: [ruta], modo: 'factura' } })
-  if (error) throw new Error(`no se ha podido leer (${error.message})`)
+  // E02 · Nunca «Edge Function returned a non-2xx status code»: la frase de su clase (la lectura está caída o este documento).
+  if (error) throw new Error(fraseDe((await falloDeInvocar(error)).clase))
   const id = (data as Fila | null)?.session_id
   if (typeof id !== 'string') throw new Error('la lectura no ha devuelto su sesión')
   return id
@@ -299,6 +331,33 @@ export async function guardarExpedidaPdf(accountId: string, entryId: string, fic
     p_entry: entryId, p_ruta: destino, p_nombre: nombreExpedida(fichero.name), p_sha256: huella, p_bytes: pdf.length, p_quien_nombre: quien,
   }).catch((e: unknown) => { throw new Error(motivoExpedida(motivo(e))) })
   return { nombre: typeof r.nombre === 'string' ? r.nombre : nombreExpedida(fichero.name), yaEstaba: r.ya_estaba === true }
+}
+
+/**
+ * N03 · Una factura de antes del día en que la empresa empezó en Sumied: si hay que
+ * preguntar «¿Ya estaba contabilizada?», con sus fechas y el programa
+ * (conta_recibida_antes_del_inicio, 0955). Null si la base aún no la tiene: entonces
+ * se sigue como antes y la base, cuando la tenga, para igual.
+ */
+export async function leerAntesDelInicio(invoiceId: string): Promise<AntesDelInicio | null> {
+  const x = await llamar<unknown>('conta_recibida_antes_del_inicio', { p_invoice: invoiceId })
+  if (x.falta) return null
+  if (x.error) throw new Error(x.error)
+  return antesDeLaBase(x.datos)
+}
+
+/** N03 · «Sí, ya estaba» / «No, es nueva», o null para deshacerlo («No estaba contabilizada»). Devuelve el texto de la base (regla 8). */
+export async function responderAntesDelInicio(invoiceId: string, respuesta: 'ya_estaba' | 'es_nueva' | null, quien: string | null): Promise<string> {
+  const r = await rpc<{ texto?: string } | null>('conta_recibida_responder_antes_del_inicio', { p_invoice: invoiceId, p_respuesta: respuesta, p_quien_nombre: quien })
+  return typeof r?.texto === 'string' ? r.texto : 'Hecho.'
+}
+
+/** N03 · La fecha de un asiento (para decir «Contabilizada el …»). */
+export async function fechaDelAsiento(entryId: string): Promise<string | null> {
+  const { data, error } = await tabla('journal_entry').select('entry_date').eq('id', entryId).maybeSingle()
+  if (error) throw new Error(mensaje('No he podido leer la fecha del asiento', error))
+  const f = (data as { entry_date?: string } | null)?.entry_date
+  return f ? String(f).slice(0, 10) : null
 }
 
 /**
@@ -546,6 +605,35 @@ function documentoAnterior(cambios: unknown): { anterior?: string | null; pdfSus
   return { anterior: texto(d.antes), pdfSustituye: d.motivo === 'pdf_sustituye_foto' }
 }
 
+/**
+ * E10 · Cómo están las líneas de una factura que se leyó por partes (la larga): lo que guarda su
+ * lectura en validation.lineas, y el id de esa lectura para «Leer las que faltan». Null en las
+ * que se leyeron enteras de una vez (casi todas) o sin lectura.
+ */
+export async function lineasDeLaLectura(accountId: string, invoiceId: string): Promise<{ sesion: string; estado: EstadoLineas } | null> {
+  const { data } = await tabla('supplier_invoice').select('ai_session_id').eq('account_id', accountId).eq('id', invoiceId).maybeSingle()
+  const sesion = texto((data as Fila | null)?.ai_session_id)
+  if (!sesion) return null
+  const { data: a, error } = await tabla('goods_receipt_ai_session').select('lineas:validation->lineas').eq('account_id', accountId).eq('id', sesion).maybeSingle()
+  if (error) throw new Error(mensaje('No se ha podido leer cómo están sus líneas', error))
+  const e = (a as Fila | null)?.lineas
+  return e && typeof e === 'object' ? { sesion, estado: e as EstadoLineas } : null
+}
+
+/** E10 · «Leer las que faltan»: lee otra vez las páginas cuyas líneas faltan (ocr-albaran) y dice cómo han quedado. */
+export async function leerLasLineasQueFaltan(accountId: string, sesion: string): Promise<EstadoLineas | null> {
+  hayBase()
+  const { data, error } = await supabase!.functions.invoke('ocr-albaran', { body: { account_id: accountId, modo: 'factura', releer_lineas: sesion } })
+  if (error) {
+    const ctx = (error as { context?: unknown }).context
+    const cuerpo = typeof Response !== 'undefined' && ctx instanceof Response ? await ctx.clone().json().catch(() => null) as Fila | null : null
+    if (cuerpo && typeof cuerpo.error === 'string' && /se están leyendo/.test(cuerpo.error)) throw new Error(cuerpo.error)
+    throw new Error(fraseDe((await falloDeInvocar(error)).clase))
+  }
+  const e = (data as Fila | null)?.lineas
+  return e && typeof e === 'object' ? e as EstadoLineas : null
+}
+
 /** El papel que guardó la lectura de una factura, si no tiene otro. */
 async function leerPapelDeLaLectura(accountId: string, invoiceId: string): Promise<string | null> {
   const { data } = await tabla('supplier_invoice').select('ai_session_id').eq('account_id', accountId).eq('id', invoiceId).maybeSingle()
@@ -698,7 +786,7 @@ export async function ponerPapelRecibida(f: Pick<FacturaRevisar, 'id' | 'account
   let ruta: string
   try { [ruta] = await uploadReceiptFiles(f.account_id, [fichero]) } catch (e) { return { hecho: false, falta: false, texto: `no se ha podido subir «${fichero.name}» (${motivo(e)})` } }
   const x = await llamar<{ texto?: string }>('conta_recibida_papel_poner', { p_invoice: f.id, p_ruta: ruta, p_nombre: fichero.name, p_quien_nombre: quien })
-  if (x.falta) return { hecho: false, falta: true, texto: 'la base aún no tiene con qué enlazar un PDF nuevo (la tanda D03, 0790): se ha subido, pero la factura sigue sin él' }
+  if (x.falta) return { hecho: false, falta: true, texto: 'la base de datos aún no está preparada para enlazar un PDF nuevo: se ha subido, pero la factura sigue sin él' }
   if (x.error) return { hecho: false, falta: false, texto: x.error }
   return { hecho: true, falta: false, texto: typeof x.datos?.texto === 'string' ? x.datos.texto : `PDF: «${fichero.name}»` }
 }
@@ -706,7 +794,7 @@ export async function ponerPapelRecibida(f: Pick<FacturaRevisar, 'id' | 'account
 /** «Sin PDF» con su motivo (o quitarlo). */
 export async function sinPapelRecibida(invoiceId: string, sin: boolean, motivoSin: string, quien: string | null): Promise<{ hecho: boolean; falta: boolean; texto: string }> {
   const x = await llamar<{ texto?: string }>('conta_recibida_sin_papel', { p_invoice: invoiceId, p_sin: sin, p_motivo: sin ? motivoSin.trim() : null, p_quien_nombre: quien })
-  if (x.falta) return { hecho: false, falta: true, texto: 'la base aún no tiene dónde guardar «Sin PDF» (la tanda D03, 0790)' }
+  if (x.falta) return { hecho: false, falta: true, texto: 'la base de datos aún no está preparada para guardar «Sin PDF»' }
   if (x.error) return { hecho: false, falta: false, texto: x.error }
   return { hecho: true, falta: false, texto: typeof x.datos?.texto === 'string' ? x.datos.texto : sin ? `Sin PDF: «${motivoSin.trim()}»` : 'Ya no está marcada «Sin PDF»' }
 }
@@ -739,10 +827,88 @@ export async function subirPdfDeLlegada(accountId: string, inboxId: string, f: F
   return `«${f.name}» subido. ${await leerLlegada(accountId, inboxId)}`
 }
 
-/** «No es una factura» de una llegada: pasa a «otra cosa» y sale de Facturas recibidas (la puerta, V02). */
-export async function llegadaNoEsFactura(inboxId: string, quien: string | null): Promise<string> {
-  const r = await rpc<{ texto?: string }>('conta_puerta_dime_que_es', { p_inbox: inboxId, p_tipo: 'otro', p_recordar: false, p_quien_nombre: quien })
-  return r.texto ?? 'Hecho: no es una factura. Sale de Facturas recibidas y lo tienes en Inicio › Documentos.'
+// ── S01p·20 · 1 · Un correo de plataforma del que no salió nada (regla 8) ───
+//
+// La función de entrada deja su fila en la bandeja (conta_entrada_sin_factura,
+// estado 'error', sin fichero ni enlace) y sale en «Por aclarar». Su asunto se lee
+// aquí, por ids y con su cuenta (regla 9): la lista de Documentos no cambia.
+// Columnas comprobadas contra la tabla (20261021T0200_d01_recibidas): id,
+// account_id, status, email_id, email_subject, file_path, link_url (regla 40).
+
+/** El correo de una fila de «Por aclarar» que no trae fichero: su id de correo y su asunto. */
+export interface CorreoDeLlegada { id: string; asunto: string | null }
+
+export async function leerCorreosDeLlegadas(accountId: string, ids: readonly string[]): Promise<Map<string, CorreoDeLlegada>> {
+  const fuera = new Map<string, CorreoDeLlegada>()
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await tabla('document_inbox').select('id, email_id, email_subject')
+      .eq('account_id', accountId).eq('status', 'error').is('file_path', null).is('link_url', null).not('email_id', 'is', null)
+      .in('id', ids.slice(i, i + 200))
+    if (error) throw new Error(mensaje('No se han podido leer los correos de «Por aclarar»', error))
+    for (const f of (data ?? []) as Fila[]) {
+      if (typeof f.id === 'string' && typeof f.email_id === 'string') fuera.set(f.id, { id: f.email_id, asunto: typeof f.email_subject === 'string' ? f.email_subject : null })
+    }
+  }
+  return fuera
+}
+
+/** «Subir el PDF a mano» de un correo sin factura: el fichero va a la misma fila y se lee en el momento. */
+export async function subirPdfDelCorreo(accountId: string, inboxId: string, f: File): Promise<string> {
+  hayBase()
+  const [ruta] = await uploadReceiptFiles(accountId, [f])
+  const bajado = await supabase!.storage.from(RECEPCIONES).download(ruta)
+  if (bajado.error || !bajado.data) throw new Error(`No se ha podido comprobar lo subido (${bajado.error?.message ?? 'vacío'}).`)
+  const bytes = await bajado.data.arrayBuffer()
+  await rpc('conta_correo_sin_factura_pdf', { p_inbox: inboxId, p_ruta: ruta, p_nombre: f.name, p_tipo: bajado.data.type || f.type, p_bytes: bytes.byteLength, p_sha256: await sha256(bytes) })
+  return `«${f.name}» subido. ${await leerLlegada(accountId, inboxId)}`
+}
+
+/**
+ * «Volver a leer» un correo de «Por aclarar»: lo pide otra vez a la entrada (la misma
+ * que «Volver a leer este correo» de Correo de facturas). Si entra, su fila sale sola.
+ * Lo que dice el servidor, tal cual (regla 8); si no se ha podido, falla en pantalla.
+ */
+export async function releerCorreoDeLlegada(companyId: string, emailId: string): Promise<string> {
+  const r = await releerCorreos(companyId, { emailIds: [emailId] })
+  const c = r.correos[0]
+  if (!c) throw new Error('Ese correo no se puede volver a leer desde esta empresa.')
+  if (c.estado !== 'leido') throw new Error(c.texto ?? r.texto)
+  return c.texto ?? r.texto
+}
+
+/**
+ * «No es una factura» de una llegada: pasa a «otra cosa» y sale de Facturas recibidas (la puerta, V02).
+ * S01p·18.2 · 3: la frase dice cuál (regla 8), no solo «Apuntado».
+ */
+export async function llegadaNoEsFactura(inboxId: string, quien: string | null, archivo?: string | null): Promise<string> {
+  await rpc<{ texto?: string }>('conta_puerta_dime_que_es', { p_inbox: inboxId, p_tipo: 'otro', p_recordar: false, p_quien_nombre: quien })
+  return `${archivo ? `«${archivo}»` : 'El documento'} no es una factura: sale de «Por aclarar» y de Facturas recibidas, y lo tienes en Inicio › Documentos, en «Otras».`
+}
+
+/** S01p·18.2 · 3 · Si un documento sin leer se puede borrar y, si no, por qué (no ha llegado a los libros: conta_llegada_eliminable). */
+export interface Eliminable { puede: boolean; porque: string | null; bucket: string | null; ruta: string | null }
+export async function llegadaEliminable(inboxId: string): Promise<Eliminable> {
+  const r = await rpc<{ puede: boolean; porque?: string | null; bucket?: string | null; ruta?: string | null }>('conta_llegada_eliminable', { p_inbox: inboxId })
+  return { puede: r.puede === true, porque: r.porque ?? null, bucket: r.bucket ?? null, ruta: r.ruta ?? null }
+}
+
+/**
+ * S01p·18.2 · 3 · «Eliminar» BORRA DE VERDAD (Julio, 13/11): primero el fichero, con la
+ * API del almacén (no SQL); después la fila, su actividad y su lectura (conta_llegada_eliminar,
+ * que vuelve a mirar que no haya llegado a los libros). Si el fichero no se puede borrar, no
+ * se toca nada más y se dice. Si ya no estaba en el almacén, se sigue y se dice.
+ */
+export async function llegadaEliminar(inboxId: string, quien: string | null): Promise<string> {
+  const e = await llegadaEliminable(inboxId)
+  if (!e.puede) throw new Error(e.porque ?? 'Este documento no se puede eliminar.')
+  let yaNoEstaba = false
+  if (e.ruta && e.bucket) {
+    const { data, error } = await supabase!.storage.from(e.bucket).remove([e.ruta])
+    if (error) throw new Error(`No he podido borrar el fichero del almacén (${error.message}): no he tocado nada más.`)
+    yaNoEstaba = (data ?? []).length === 0
+  }
+  const r = await rpc<{ texto: string }>('conta_llegada_eliminar', { p_inbox: inboxId, p_quien_nombre: quien })
+  return yaNoEstaba ? r.texto.replace(' y el fichero del almacén.', '; el fichero ya no estaba en el almacén.') : r.texto
 }
 
 /** «No es soporte»: la recepción vuelve a «Por aclarar». */

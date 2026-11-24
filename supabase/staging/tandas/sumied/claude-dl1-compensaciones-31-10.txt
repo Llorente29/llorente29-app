@@ -1,0 +1,5 @@
+# DL1 · compensaciones a 31/10 (1500: no añade objetos; en Foodint anula 11
+# compensaciones y las vuelve a proponer a 31/10). Su prueba (ROLLBACK, cuenta
+# A): sin Foodint no hace nada; un asiento validado se anula en su fecha.
+supabase/migrations/20261113T1500_dl1_compensaciones_a_31_10.sql
+supabase/staging/sql/20261113_dl1_compensaciones_a_31_10_prueba.sql

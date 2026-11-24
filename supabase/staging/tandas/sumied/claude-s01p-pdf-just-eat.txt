@@ -1,0 +1,5 @@
+# S01p·20 · 1b · El PDF de las facturas de Just Eat (1706: añade conta_factura_papel_del_correo y conta_correo_papeles_que_faltan).
+# Su prueba (ROLLBACK, cuenta A): la lista solo saca la que entró como liquidación y sigue sin papel; poner el papel y
+# decirlo, la segunda vez no lo cambia; una persona no lo pone; la vuelta atrás.
+supabase/migrations/20261113T1706_s01p_pdf_del_correo.sql
+supabase/staging/sql/20261113_s01p_pdf_del_correo_prueba.sql

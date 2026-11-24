@@ -1,0 +1,29 @@
+[
+ {
+  "id": "715-1",
+  "pr": 715,
+  "fecha": "2026-11-18T04:51:32Z",
+  "producto": "sumied",
+  "apartado": "Traer de otro programa",
+  "frase": "se da por bueno todo de una vez, con su n.º de ERP10 a la vista; se pueden traer solo cuentas y proveedores, y las facturas sin proveedor lo encuentran por NIF.",
+  "ruta": null
+ },
+ {
+  "id": "715-2",
+  "pr": 715,
+  "fecha": "2026-11-18T04:51:32Z",
+  "producto": "sumied",
+  "apartado": "Pagos y Bancos",
+  "frase": "lo traído en prueba no se paga ni se casa; en Facturas recibidas sale como «Traída · en prueba».",
+  "ruta": null
+ },
+ {
+  "id": "715-3",
+  "pr": 715,
+  "fecha": "2026-11-18T04:51:32Z",
+  "producto": "sumied",
+  "apartado": "Alta",
+  "frase": "«¿De qué programa vienes?» ya ofrece ERP10.",
+  "ruta": null
+ }
+]

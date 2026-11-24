@@ -1,0 +1,12 @@
+# X04a · El arreglo de conta_erp10_por_salir (PR aparte, antes del X04; Julio,
+# 17/11). Rama conta/x04a-por-salir-autorrepercusion. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   1550  Cambia en caliente conta_erp10_por_salir, con la misma firma: la
+#         autorrepercusión (477 sin libro) de una ISP o una intracomunitaria ya no
+#         se toma por IVA repercutido, y el importe del aviso lleva coma decimal.
+#         Declarado en la cabecera y con su prueba de staging.
+#
+# Nada en el camino del pedido; la función solo lee. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x04a-por-salir.sql
+supabase/migrations/20261117T1550_x04a_por_salir_autorrepercusion.sql

@@ -1,0 +1,5 @@
+# N03 · la vuelta atrás, en orden inverso: la 0956 (las tres funciones desde su respaldo)
+# y la 0955 (quita las cuatro funciones y la respuesta de la factura).
+cuenta: scripts/conta/produccion/cuentas/n03-antes-del-inicio.sql
+supabase/vuelta-atras/20261117T0956_n03_parar_y_preguntar.down.sql
+supabase/vuelta-atras/20261117T0955_n03_respuesta_antes_del_inicio.down.sql

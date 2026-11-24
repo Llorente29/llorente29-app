@@ -1,0 +1,3 @@
+# E10 · la vuelta atrás: la 0907 quita su función (las líneas ya guardadas se quedan: son lo leído).
+cuenta: scripts/conta/produccion/cuentas/e10-factura-larga.sql
+supabase/vuelta-atras/20261123T0907_e10_lineas_por_partes.down.sql

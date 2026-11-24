@@ -1,0 +1,10 @@
+# N09 · Pagos y Bancos leen lo pagado en el programa de antes (respuesta N09 · 1, decisión 1).
+# Rama conta/n09-pagadas-a-medias. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0800  Cambia en caliente (misma firma y mismas columnas): la vista de Pagos (conta_recibida_pago) y las
+#         dos de Bancos (bank_facturas_para_casar y bank_facturas_recibidas_pendientes) cuentan como pagado,
+#         en una recibida traída, lo que ya estaba pagado allí (total − import_pending). Las demás, igual.
+#
+# No cambia ni una fila. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/n09-pagadas-a-medias.sql
+supabase/migrations/20261119T0800_n09_pagos_lee_lo_traido.sql

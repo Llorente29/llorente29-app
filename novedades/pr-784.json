@@ -1,0 +1,20 @@
+[
+ {
+  "id": "784-1",
+  "pr": 784,
+  "fecha": "2026-11-22T17:22:32Z",
+  "producto": "sumied",
+  "apartado": "Importes",
+  "frase": "en el asiento general el decimal va con punto o con coma (el punto del teclado numérico, como en ERP10), y al salir se ve como 1.849,56.",
+  "ruta": null
+ },
+ {
+  "id": "784-2",
+  "pr": 784,
+  "fecha": "2026-11-22T17:22:32Z",
+  "producto": "sumied",
+  "apartado": "Importes dudosos",
+  "frase": "con más de dos cifras tras el punto o la coma («1.234»), la casilla queda en ámbar y no se guarda hasta corregirlo.",
+  "ruta": null
+ }
+]

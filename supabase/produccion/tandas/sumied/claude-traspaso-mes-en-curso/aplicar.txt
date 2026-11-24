@@ -1,0 +1,9 @@
+# SP · Traspasar a Diez el mes en curso (Julio, 15/11): Foodint ha dejado la actividad y la gestoría necesita noviembre en Diez el 16/11.
+# Rama claude/traspaso-mes-en-curso. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1954  cambia conta_traspaso_confirmar (el mes en curso se puede confirmar; uno futuro, no) y conta_traspaso_terminar
+#         (el mes en curso no se cierra en Sumied). Un solo trozo en cada una, con su respaldo. Reversible: vuelta-atras.txt.
+#
+# No toca ningún dato. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/sp-traspaso-mes-en-curso.sql
+supabase/migrations/20261115T1954_sp_traspaso_mes_en_curso.sql

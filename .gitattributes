@@ -21,3 +21,8 @@ supabase/migrations/20261101T0024_dm1_disparadores_restaurar.sql -text
 # de producción; cinco llevan CRLF. Normalizarlos las cambiaría más allá de la
 # dirección y la vuelta atrás no las dejaría como estaban. Como binario.
 supabase/migrations/20261102T0202_w10_funciones_leen_su_proyecto.sql -text
+
+# R04 (17/11): el ejemplo inventado de Revo, tal como lo exporta Revo (CRLF y
+# espacios delante de la primera columna). El lector se prueba contra esos
+# finales de línea: normalizarlos los convertiría en otro fichero.
+tests/conta/r04/revo_ejemplo/*.csv -text

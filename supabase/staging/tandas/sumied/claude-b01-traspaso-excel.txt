@@ -1,0 +1,5 @@
+# B01r26 · 1850: dónde queda cada subcuenta que Sumied crea en Diez antes del
+# traspaso. Solo añade. Su prueba (ROLLBACK): única por empresa, base y código; la
+# C0001 nunca; un usuario la lee y no escribe; la vuelta atrás la quita.
+supabase/migrations/20261113T1850_b01r26_subcuentas_creadas.sql
+supabase/staging/sql/20261113_b01r26_subcuentas_creadas_prueba.sql

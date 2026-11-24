@@ -1,0 +1,8 @@
+{
+ "_que": "S01p·18 · punto 1 · la línea desconocida del socio · contexto de producción, medido en SOLO LECTURA el 2026-11-12T16:54Z: la 1755 añade socio_linea_regla y cinco funciones (ninguna existe) y cambia conta_propuestas_socio por reemplazo exacto dentro de un DO, con respaldo (huella b716120913963dca46f9bda310a24fcc, la misma en staging). No mueve ninguna fila. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-12T16:54Z",
+ "tanda": {
+  "supabase/migrations/20261112T1755_s01p_linea_socio.sql": "31adf4cdfaedc52d4eb794dcaf7b15e6"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

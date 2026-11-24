@@ -1,0 +1,3 @@
+# SP · la vuelta atrás: conta_traspaso_confirmar y conta_traspaso_terminar desde su respaldo (como el 15/11 antes del cambio).
+cuenta: scripts/conta/produccion/cuentas/sp-traspaso-mes-en-curso.sql
+supabase/vuelta-atras/20261115T1954_sp_traspaso_mes_en_curso.down.sql

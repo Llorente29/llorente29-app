@@ -1,0 +1,8 @@
+# N05c · empezar a trabajar sin el histórico: 1655 añade la decisión y cinco funciones; 1656
+# cambia conta_motivos_para_validar con la misma firma. Su prueba (ROLLBACK, cuenta A, datos
+# inventados): sin decidir no valida; decidido valida de verdad un asiento y una recibida; lo
+# anterior al día de inicio y el cierre siguen sin poder; retirar con asientos se niega; las demás
+# empresas no cambian; y las dos vueltas atrás.
+supabase/migrations/20261117T1655_n05c_sin_historico_decision.sql
+supabase/migrations/20261117T1656_n05c_sin_historico_validar.sql
+supabase/staging/sql/20261117_n05c_sin_historico_prueba.sql

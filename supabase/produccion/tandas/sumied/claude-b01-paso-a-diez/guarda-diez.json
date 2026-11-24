@@ -1,0 +1,7 @@
+{
+  "_que": "B01r26 · El real de esta tanda solo sigue si la C0008 no tiene NINGÚN asiento con fecha desde el 01/10/2026 (Julio lo ha borrado). Lo lee guarda-desde.ts, solo con GET. En el ensayo, solo lo dice.",
+  "base": "C0008",
+  "ejercicio": "2026",
+  "desde": "20261001",
+  "esperado": 0
+}

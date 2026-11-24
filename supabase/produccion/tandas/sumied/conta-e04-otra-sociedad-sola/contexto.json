@@ -1,0 +1,37 @@
+{
+ "_que": "E04 · La factura de otra sociedad del grupo se pasa sola · contexto medido en la BASE LOCAL con la estructura de staging y el E03 puesto delante (como está producción desde el real #853), en SOLO LECTURA, el 18/11: no en producción (esta sesión no lee producción). conta_recibida_pasar_a existe y se cambia sobre su respaldo; lo demás es nuevo. Las filas de producción las mide el ensayo. Nada del camino del pedido.",
+ "medido": "2026-11-18T19:35Z",
+ "tanda": {
+  "supabase/migrations/20261118T1950_e04_pasar_sola.sql": "bed2b2bc60882f6582a8b0c05cd0d506",
+  "supabase/migrations/20261118T1951_e04_pasar_sola_al_leer.sql": "e25a0135d1e6ace6c5342e7e1421f437",
+  "supabase/migrations/20261118T1952_e04_las_que_esperan_se_pasan.sql": "abf211f2e96c6f29e0394e6de968b1a9"
+ },
+ "contexto": {
+  "tablas": [
+   "public.document_activity",
+   "public.document_inbox",
+   "public.journal_entry",
+   "public.supplier_invoice",
+   "public.supplier_invoice_auto",
+   "public.supplier_invoice_change"
+  ],
+  "funciones": [
+   "public.conta_recibida_pasar_a(uuid,uuid,text)"
+  ],
+  "filas": {
+   "public.document_activity": 0,
+   "public.document_inbox": 0,
+   "public.journal_entry": 0,
+   "public.supplier_invoice": 9,
+   "public.supplier_invoice_auto": 0,
+   "public.supplier_invoice_change": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -14,7 +14,8 @@ import { Calculator } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import { CONTA, rutaConta } from '@/config/navegacion'
 import '@/modules/conta/estilo'
-import { Marco } from '@/modules/conta/marco/Marco'
+import { MarcoSegun } from '@/modules/conta/nucleo/MarcoSegun'
+import { registrarRutasDelNucleo } from '@/modules/conta/nucleo/rutas'
 import { EmpresasProveedor } from '@/modules/conta/empresa/EmpresasProveedor'
 import AjustesPage from '@/modules/conta/pages/AjustesPage'
 import PlanContablePage from '@/modules/conta/pages/PlanContablePage'
@@ -27,10 +28,15 @@ import AltaPage from '@/modules/conta/pages/AltaPage'
 import TercerosPage from '@/modules/conta/terceros/TercerosPage'
 import FichaTerceroPage from '@/modules/conta/terceros/FichaTerceroPage'
 import LibrosPage from '@/modules/conta/libros/LibrosPage'
+import ListadoSegun from '@/modules/conta/nucleo/listado/ListadoSegun'
 import DocumentosPage from '@/modules/conta/documentos/DocumentosPage'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import LlevarACompras from '@/modules/conta/documentos/LlevarACompras'
 import RecibidaAMano from '@/modules/conta/documentos/RecibidaAMano'
+import RecibidaSegun from '@/modules/conta/nucleo/recibida/RecibidaSegun'
+import EmitidaSegun, { EmitidasPorRevisar, LlevarAlAsiento } from '@/modules/conta/nucleo/emitida/EmitidaSegun'
+import BancosSegun from '@/modules/conta/nucleo/bancos/BancosSegun'
+import ConciliarSegun from '@/modules/conta/nucleo/conciliar/ConciliarSegun'
 import FacturasPage from '@/modules/conta/ventas/FacturasPage'
 import FacturaVentaPage from '@/modules/conta/ventas/FacturaVentaPage'
 import LlevarAVentas from '@/modules/conta/ventas/LlevarAVentas'
@@ -38,12 +44,15 @@ import LoteCatcherPage from '@/modules/conta/documentos/LoteCatcherPage'
 import LiquidacionesPage from '@/modules/conta/compras/LiquidacionesPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
+import { AsientoSegun } from '@/modules/conta/nucleo/asiento/AsientoSegun'
+import { LibroDelDiarioSegun } from '@/modules/conta/nucleo/asiento/LibroDelDiarioSegun'
 import ComprasPage from '@/modules/conta/compras/ComprasPage'
 import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
 import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
 import VentasPage from '@/modules/conta/ventas/VentasPage'
 import CierresPage from '@/modules/conta/ventas/CierresPage'
 import CierrePage from '@/modules/conta/ventas/CierrePage'
+import DiaTpvPage from '@/modules/conta/ventas/DiaTpvPage'
 import LiquidacionesVentasPage from '@/modules/conta/ventas/LiquidacionesVentasPage'
 import NovedadesPage from '@/shell/version/NovedadesPage'
 import PagosPage from '@/modules/conta/compras/PagosPage'
@@ -70,6 +79,7 @@ import FichaPage from '@/modules/conta/laboral/ficha/FichaPage'
 import PuertaPage from '@/modules/conta/puerta/PuertaPage'
 import QueEsperasPage from '@/modules/conta/puerta/QueEsperasPage'
 import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
+import { ClienteSegun, ProveedorSegun } from '@/modules/conta/nucleo/terceros/TerceroSegun'
 import { Portada } from '@/modules/conta/marco/Portada'
 import { MARCA, CON_MARCA } from '@/modules/conta/cuenta/marca'
 import PatronPage from '@/modules/conta/muestra/PatronPage'
@@ -80,8 +90,10 @@ import { baseDeDatos } from '@/services/versionApp'
 // lleva. M01: lo que hacía va al buscador general (grupo «Preguntar»), y solo
 // en las rutas que la llevarían (sinPregunta = false). El ejemplo de cada ruta
 // se queda escrito para cuando la IA conteste de verdad.
+// K02 · El marco lo elige MarcoSegun: el del núcleo con `conta_nucleo` encendido
+// en la cuenta y en el ordenador; si no, el de hoy (marco/Marco.tsx), tal cual.
 const enMarco = (pagina: ReactNode, _ejemplo: string, sinPregunta = true) => (
-  <EmpresasProveedor><Marco sinPregunta={sinPregunta}>{pagina}</Marco></EmpresasProveedor>
+  <EmpresasProveedor><MarcoSegun sinPregunta={sinPregunta}>{pagina}</MarcoSegun></EmpresasProveedor>
 )
 
 export const contaModule: ModuleDefinition = {
@@ -104,8 +116,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.queEsperas, element: enMarco(<QueEsperasPage />, '¿Qué te tiene que llegar cada mes?') },
     // C06 · La ficha del proveedor dentro de contabilidad, sin las piezas de
     // Cocina (sin extensiones): la del producto vendido solo.
-    { path: CONTA.rutas.fichaProveedor, element: enMarco(<FichaProveedorPage />, '¿Cuánto le debo?') },
-    { path: CONTA.rutas.fichaProveedorApartado, element: enMarco(<FichaProveedorPage />, '¿Cuánto le debo?') },
+    { path: CONTA.rutas.fichaProveedor, element: enMarco(<ProveedorSegun hoy={<FichaProveedorPage />} />, '¿Cuánto le debo?') },
+    { path: CONTA.rutas.fichaProveedorApartado, element: enMarco(<ProveedorSegun hoy={<FichaProveedorPage />} />, '¿Cuánto le debo?') },
     // Ajustes como índice lateral (C02 §5a): cada entrada en ajustes/:entrada;
     // Plan contable y Tablas generales tienen su propia página dentro del marco.
     { path: CONTA.rutas.empresa, element: enMarco(<AjustesPage />, 'Añade a Pablo como apoderado') },
@@ -117,25 +129,32 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.planSitio, element: enMarco(<QueVaACadaSitioPage />, '¿Dónde va el alquiler?') },
     { path: CONTA.rutas.planCuenta, element: <AlMayor /> },
     // Una cuenta del plan (respuesta 5): su Mayor, o «Sumas y saldos» si tiene hijas.
-    { path: CONTA.rutas.mayor, element: enMarco(<MayorPage />, '¿Cuánto debo a mis proveedores?') },
+    // Q06 · Dentro del núcleo, el mayor de la cuenta en la ventana de listado (F5); fuera, la ficha de hoy (ListadoSegun).
+    { path: CONTA.rutas.mayor, element: enMarco(<ListadoSegun que="mayor" hoy={<MayorPage />} />, '¿Cuánto debo a mis proveedores?') },
     { path: CONTA.rutas.terceros, element: enMarco(<TercerosPage />, '¿Quién me debe dinero?') },
     // El de la ficha lo pone ella según el papel (ejemploDeFicha); éste es el de mientras carga.
     { path: CONTA.rutas.comoTeFactura, element: enMarco(<ComoTeFacturaPage />, '¿Cuándo me manda la factura?') },
-    { path: CONTA.rutas.tercero, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
-    { path: CONTA.rutas.terceroApartado, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
+    { path: CONTA.rutas.tercero, element: enMarco(<ClienteSegun hoy={<FichaTerceroPage />} />, '¿Cuánto me debe?') },
+    { path: CONTA.rutas.terceroApartado, element: enMarco(<ClienteSegun hoy={<FichaTerceroPage />} />, '¿Cuánto me debe?') },
     // C04 · Libros › Libro diario (N11), un asiento (N12) y el asiento a mano.
     // C05 · Libros en tres niveles (N13c): el diario del C04 vive dentro, en su ruta de siempre.
     // C06b · respuesta 5, punto 3: sin la barra «Pregunta o pide algo» mientras
     // solo diga «Muy pronto» (tapaba filas de los libros). Como Bancos en el B01.
     { path: CONTA.rutas.libros, element: enMarco(<LibrosPage />, '¿Qué facturas no deducen IVA?', true) },
     { path: CONTA.rutas.libroDiario, element: enMarco(<LibrosPage area="diario" accion="libro-diario" />, '¿Cuánto gané en el Local Norte este mes?', true) },
-    { path: CONTA.rutas.diarioResumido, element: enMarco(<LibrosPage area="diario" accion="diario-resumido" />, '¿Cuánto gasté en septiembre?', true) },
+    { path: CONTA.rutas.diarioResumido, element: enMarco(<ListadoSegun que="diario" hoy={<LibrosPage area="diario" accion="diario-resumido" />} />, '¿Cuánto gasté en septiembre?', true) },
     { path: CONTA.rutas.pendientesDiez, element: enMarco(<LibrosPage area="diario" accion="pendientes-diez" />, '¿Cuánto gasté en septiembre?', true) },
+    // N07 · «Traer de ERP10», con su ruta propia (libros/diario/<algo> es un asiento).
+    { path: CONTA.rutas.traerErp10, element: enMarco(<LibrosPage area="diario" accion="traer-erp10" />, '¿Cuánto gasté en septiembre?', true) },
     { path: CONTA.rutas.librosArea, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?', true) },
-    { path: CONTA.rutas.librosAccion, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?', true) },
+    // Q06 · Dentro del núcleo, el mayor, sumas y saldos y los libros de IVA en la ventana de listado; lo demás, como hoy.
+    { path: CONTA.rutas.librosAccion, element: enMarco(<ListadoSegun hoy={<LibrosPage />} />, '¿Por qué clientes sale en negativo?', true) },
     // B01 · Bancos en tres niveles (N17): Movimientos, Reglas, Cuentas y extractos, Cierre del mes.
     // Respuesta 4: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto».
-    { path: CONTA.rutas.bancos, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
+    // E05 · Bancos a secas: dentro del núcleo, la pantalla nueva; fuera, la de hoy (BancosSegun). Sus pestañas (bancos/…), las de hoy.
+    { path: CONTA.rutas.bancos, element: enMarco(<BancosSegun hoy={<BancosPage />} />, '¿Qué es la transferencia de 1.278,17?', true) },
+    // X29 · Conciliar (Gestión de extractos bancarios): dentro del núcleo, la pantalla nueva; fuera, la de hoy.
+    { path: CONTA.rutas.conciliar, element: enMarco(<ConciliarSegun hoy={<BancosPage />} />, '¿Qué es la transferencia de 1.278,17?', true) },
     { path: CONTA.rutas.bancosPestana, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
     // I01b · Impuestos (tableros 8, 9 y 10): el calendario, sus pestañas y el IVA de un periodo.
     // LS1 · Laboral (28/10): las pantallas de Folvy › Personal, dentro de Sumied.
@@ -159,7 +178,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.ventas, element: enMarco(<VentasPage />, '¿Cuánto vendí ayer?') },
     // D01 R5 · 10: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto» (como Bancos).
     { path: CONTA.rutas.documentos, element: enMarco(<DocumentosPage />, '¿Qué facturas me faltan este mes?', true) },
-    { path: CONTA.rutas.revisarFactura, element: enMarco(<RevisarFacturaPage />, '¿A qué cuenta va esta factura?', true) },
+    // K04 · Dentro del núcleo, la ficha nueva; fuera, la de hoy (RecibidaSegun).
+    { path: CONTA.rutas.revisarFactura, element: enMarco(<RecibidaSegun hoy={<RevisarFacturaPage />} />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.loteCatcher, element: enMarco(<LoteCatcherPage />, '¿Cuadra la quincena de Catcher?', true) },
     // S02 · PR 3: Compras y gastos › Liquidaciones, todas en una lista. PC01 · E2 (Julio, 26/10): se
     // llama «Repartidores» (la quincena de los riders); la dirección de antes lleva allí, con sus filtros.
@@ -178,20 +198,29 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.cobroGestoria, element: enMarco(<SoloGestoria><CobroG05Page /></SoloGestoria>, '¿Qué se cobra este mes y por qué cambia?', true) },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
-    { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },
+    { path: CONTA.rutas.nuevoAsiento, element: enMarco(<AsientoSegun nuevo hoy={<NuevoAsientoPage />} />, '¿A qué cuenta va el alquiler?', true) },
     // S01 · La factura recibida desde Contabilidad › Asientos (maqueta 3): el mismo componente que N23.
     // S02 · PR 2: las recibidas son de Compras y gastos; las direcciones de antes llevan allí.
     { path: CONTA.rutas.recibidasEnAsientos, element: <LlevarACompras /> },
     { path: CONTA.rutas.recibidaEnAsientos, element: <LlevarACompras /> },
-    { path: CONTA.rutas.recibidaAMano, element: enMarco(<RecibidaAMano />, '¿A qué cuenta va esta factura?', true) },
+    { path: CONTA.rutas.recibidaAMano, element: enMarco(<RecibidaSegun aMano hoy={<RecibidaAMano />} />, '¿A qué cuenta va esta factura?', true) },
     // S02 · PR 2: Facturación › Facturas emitidas, y una nueva (la hoja del asiento, tipo expedida).
     // V01 · Ventas › Facturas: la lista, una nueva y la ficha. Lo de antes (Facturación › Facturas emitidas) lleva aquí.
     { path: CONTA.rutas.facturasVenta, element: enMarco(<FacturasPage />, '¿Cuánto he facturado este mes?', true) },
     { path: CONTA.rutas.nuevaFacturaVenta, element: enMarco(<FacturaVentaPage />, '¿Qué IVA lleva esta factura?', true) },
-    { path: CONTA.rutas.facturaVenta, element: enMarco(<FacturaVentaPage />, '¿Cómo corrijo una factura emitida?', true) },
+    // K05 · Dentro del núcleo, la emitida de Facturación con su asiento sale en la ficha nueva («hecha sola»); la borrador y la
+    // rectificativa, y fuera del núcleo todas, con la de hoy (EmitidaSegun).
+    { path: CONTA.rutas.facturaVenta, element: enMarco(<EmitidaSegun de="factura" hoy={<FacturaVentaPage />} />, '¿Cómo corrijo una factura emitida?', true) },
+    // K05 · La emitida contable escrita a mano (fuera del núcleo, la «Nueva factura emitida» de Asientos de hoy), la de un asiento
+    // (fuera, su asiento) y Asientos › «Emitidas» (fuera, la lista).
+    { path: CONTA.rutas.emitidaAMano, element: enMarco(<EmitidaSegun de="nueva" hoy={<NuevoAsientoPage tipo="expedida" />} />, '¿A qué cuenta de venta va?', true) },
+    { path: CONTA.rutas.emitidaAsiento, element: enMarco(<EmitidaSegun de="asiento" hoy={<LlevarAlAsiento />} />, '¿A qué cuenta de venta va?', true) },
+    { path: CONTA.rutas.emitidasPorRevisar, element: enMarco(<EmitidasPorRevisar />, '¿A qué cuenta de venta va?', true) },
     // V01 · Entrega 2 · Ventas › Cierres del día (con «Vendo en hostelería») y la ficha de un cierre.
     { path: CONTA.rutas.cierres, element: enMarco(<CierresPage />, '¿Cuánto vendí ayer?', true) },
     { path: CONTA.rutas.cierre, element: enMarco(<CierrePage />, '¿Por qué este cierre no cuadra?', true) },
+    // R15 · La ficha de un día del TPV de fuera, con el diseño de la del cierre.
+    { path: CONTA.rutas.diaTpv, element: enMarco(<DiaTpvPage />, '¿Qué lleva este día del TPV?', true) },
     // V01 · Entrega 3 · Ventas › Liquidaciones (con «Vendo en hostelería»): plataformas y socios de marca, y la ficha de una fila de plataforma.
     { path: CONTA.rutas.liquidacionesVentas, element: enMarco(<LiquidacionesVentasPage />, '¿Me han pagado lo que vendí?', true) },
     // NV1 · Ayuda › Novedades: lo que cambia en cada versión.
@@ -201,7 +230,10 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.liquidacionFicha, element: enMarco(<LiquidacionFichaPage />, '¿Qué me paga esta liquidación?', true) },
     { path: CONTA.rutas.facturasEmitidas, element: <LlevarAVentas a={CONTA.rutas.facturasVenta} /> },
     { path: CONTA.rutas.nuevaEmitida, element: <LlevarAVentas a={CONTA.rutas.nuevaFacturaVenta} /> },
-    { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },
+    // N10 · Libros › Diario por su área y su acción: con el núcleo, a su pantalla; sin él, lo de hoy (la ruta del asiento).
+    { path: `${CONTA.rutas.libroDiario}/libro-diario`, element: enMarco(<LibroDelDiarioSegun a={CONTA.rutas.libroDiario} hoy={<AsientoSegun hoy={<AsientoPage />} />} />, '¿Por qué la comisión lleva IVA?', true) },
+    { path: `${CONTA.rutas.libroDiario}/diario-resumido`, element: enMarco(<LibroDelDiarioSegun a={CONTA.rutas.diarioResumido} hoy={<AsientoSegun hoy={<AsientoPage />} />} />, '¿Por qué la comisión lleva IVA?', true) },
+    { path: CONTA.rutas.asiento, element: enMarco(<AsientoSegun hoy={<AsientoPage />} />, '¿Por qué la comisión lleva IVA?', true) },
     // S02 · La muestra del patrón único: las seis plantillas (datos inventados), solo fuera de
     // producción. Sustituye a las dos de antes (las piezas del M01 y el sistema de diseño del S01).
     ...(baseDeDatos().tipo === 'produccion' ? [] : [
@@ -220,3 +252,6 @@ export const contaModule: ModuleDefinition = {
     items: [{ id: 'conta_ajustes', label: 'Ajustes', icon: Calculator, path: CONTA.rutas.empresa, requiredRole: 'admin' }],
   },
 }
+
+// K03 · Las mismas rutas, para que el marco del núcleo pinte cada pestaña de trabajo con su dirección.
+registrarRutasDelNucleo(contaModule.routes)

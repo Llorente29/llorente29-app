@@ -1,0 +1,4 @@
+# K12 · la vuelta atrás: el CHECK de antes (para si hay algún justificante guardado), fuera las funciones y la tabla, y las dos columnas solo si nadie las ha usado.
+cuenta: scripts/conta/produccion/cuentas/k12-asiento-general.sql
+supabase/vuelta-atras/20261122T1101_k12_justificante.down.sql
+supabase/vuelta-atras/20261122T1100_k12_asiento_general.down.sql

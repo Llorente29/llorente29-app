@@ -17,6 +17,7 @@ import { LO_HECHO } from '@/modules/conta/bancos/marca'
 import type { ConexionCuenta } from '@/modules/conta/lib/agregadorBanco'
 import type { LineaRegla } from '@/modules/conta/lib/reparto'
 import { estadoHueco, type EstadoHueco } from '@/modules/conta/lib/huecoBanco'
+import { avisoDeFila, type AvisoAnulado } from '@/modules/conta/lib/cargoAnulado'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -74,7 +75,7 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
     bancos.bancosDeLaEmpresa(accountId, companyId),
     leer(tabla('bank_card').select('id, treasury_account_id, last4, holder_name, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true).order('created_at', { ascending: true }), 'las tarjetas'),
     leer(tabla('bank_statement').select('id, treasury_account_id, file_name, format, period_from, period_to, opening_balance, closing_balance, movements_count, new_count, repeated_count, balanced, unchecked_reason, continuity, continuity_gap, imported_at, imported_by_name')
-      .eq('account_id', accountId).eq('company_id', companyId).order('period_to', { ascending: false }).limit(200), 'los extractos'),
+      .eq('account_id', accountId).eq('company_id', companyId).order('period_to', { ascending: false }).order('imported_at', { ascending: false }).limit(200), 'los extractos'),
     leer(tabla('locations').select('id, name').eq('account_id', accountId).order('name'), 'los locales'),
     leer(tabla('company_account').select('code, name, plain_name').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
     leer(tabla('bank_movement').select('op_date').eq('account_id', accountId).eq('company_id', companyId).order('op_date', { ascending: true }).limit(1), 'el primer movimiento'),
@@ -92,7 +93,7 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
       .catch((e: unknown) => { console.warn('[bancos] no se pudieron leer las cuentas conectadas', e); return [] as Fila[] }),
   ])
   const nombres: Record<string, string> = {}
-  for (const c of cuentas) nombres[String(c.code)] = String(c.plain_name ?? c.name).trim().replace(/[.\s]+$/, '')
+  for (const c of cuentas) nombres[String(c.code)] = String(c.name).trim().replace(/[.\s]+$/, '')
   const ext: Extracto[] = extractos.map((e) => ({
     id: String(e.id), cuentaId: String(e.treasury_account_id), fichero: s(e.file_name), formato: String(e.format), desde: String(e.period_from), hasta: String(e.period_to),
     saldoInicialCent: e.opening_balance === null ? null : cent(e.opening_balance), saldoFinalCent: e.closing_balance === null ? null : cent(e.closing_balance), movimientos: Number(e.movements_count), nuevos: Number(e.new_count), repetidos: Number(e.repeated_count),
@@ -139,10 +140,30 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
 /** Los movimientos de un banco en un mes, con su casado vivo o su propuesta. */
 export async function leerMovimientos(accountId: string, bancoId: string, mes: string): Promise<MovimientoBanco[]> {
   const { desde, hasta } = limitesMes(mes)
-  const filas = await leer(tabla('bank_movement')
-    .select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept, status))')
-    .eq('account_id', accountId).eq('treasury_account_id', bancoId).gte('op_date', desde).lte('op_date', hasta)
-    .order('op_date', { ascending: false }).order('created_at', { ascending: false }), 'los movimientos')
+  return leerMovimientosEntre(accountId, bancoId, desde, hasta)
+}
+
+/**
+ * X28 · Los movimientos de un banco entre dos fechas (X29: `conValidado`, también lo de antes del inicio y lo validado) (Tesorería lee el ejercicio entero, como ERP10), de mil en mil
+ * para no quedarse en el tope de una sola lectura. `subiendo`: del más antiguo al más nuevo, como la rejilla de ERP10.
+ */
+export async function leerMovimientosEntre(accountId: string, bancoId: string, desde: string, hasta: string, subiendo = false, conValidado = false): Promise<MovimientoBanco[]> {
+  const PAGINA = 1000
+  const filas: Fila[] = []
+  for (let i = 0; ; i += PAGINA) {
+    let q = tabla('bank_movement')
+      .select((conValidado ? 'id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, before_cutover, validated_at, validated_by_name, position, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, created_at, confidence_pct, rule_id, journal_entry_id, journal_entry(concept, status))'
+        : 'id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept, status))'))
+      .eq('account_id', accountId).eq('treasury_account_id', bancoId).gte('op_date', desde).lte('op_date', hasta)
+      .order('op_date', { ascending: subiendo })
+    // X30 · Dentro del mismo día: lo que entró antes y, de un mismo extracto (entra todo a la vez), el orden del banco
+    // (position, 2051). Lo importado antes del X30 no tiene orden: como siempre.
+    q = q.order('created_at', { ascending: subiendo })
+    if (conValidado) q = q.order('position', { ascending: subiendo, nullsFirst: subiendo })
+    const pagina = await leer(q.order('id').range(i, i + PAGINA - 1), 'los movimientos')
+    filas.push(...pagina)
+    if (pagina.length < PAGINA) break
+  }
   return filas.map((m) => {
     const vivo = ((m.bank_match as Fila[] | null) ?? []).find((x) => x.status === 'vivo') ?? null
     const tarjeta = m.bank_card as Fila | null
@@ -156,9 +177,13 @@ export async function leerMovimientos(accountId: string, bancoId: string, mes: s
         id: String(vivo.id), tipo: String(vivo.kind), porque: String(vivo.reason), porQuien: vivo.by_who === 'folvy' ? 'folvy' : 'persona',
         asientoId: s(vivo.journal_entry_id), asientoConcepto: s((vivo.journal_entry as Fila | null)?.concept),
         asientoEstado: (s((vivo.journal_entry as Fila | null)?.status) as NonNullable<MovimientoBanco['casado']>['asientoEstado']) ?? null,
+        // X30 · Cuándo y con qué porcentaje (Conciliar).
+        ...(conValidado ? { cuando: s(vivo.created_at), seguridad: vivo.confidence_pct === null || vivo.confidence_pct === undefined ? null : Number(vivo.confidence_pct), reglaId: s(vivo.rule_id) } : {}),
       } : null,
       tarjeta: tarjeta ? { ultimos4: String(tarjeta.last4), titular: String(tarjeta.holder_name) } : null,
       ticket: s(m.receipt_path), motivoIgnorado: s(m.ignored_reason),
+      // X29 · Solo cuando se piden (Conciliar): validated_at llega con la 1712.
+      ...(conValidado ? { antesDelInicio: m.before_cutover === true, validado: m.validated_at ? { cuando: String(m.validated_at), quien: s(m.validated_by_name) } : null } : {}),
     }
   })
 }
@@ -184,7 +209,7 @@ export async function cuentasPasarela(accountId: string, companyId: string, hoy:
   const saldos = await saldosContables(companyId, hoy, filas.map((f) => String(f.code)))
   return filas.map((f) => {
     const ca = f.company_account as Fila | null
-    return { proveedor: f.proveedor === 'redsys' ? 'redsys' as const : 'stripe' as const, codigo: String(f.code), nombre: String(ca?.plain_name ?? ca?.name ?? ''), saldoCent: saldos[String(f.code)] ?? 0 }
+    return { proveedor: f.proveedor === 'redsys' ? 'redsys' as const : 'stripe' as const, codigo: String(f.code), nombre: String(ca?.name ?? ''), saldoCent: saldos[String(f.code)] ?? 0 }
   }).sort((a, b) => a.codigo.localeCompare(b.codigo))
 }
 
@@ -302,6 +327,27 @@ export const corregirIban = (bancoId: string, iban: string) => rpc<void>('bank_c
 export const localDeCuenta = (bancoId: string, localId: string | null, comun: boolean) => rpc<void>('bank_cuenta_local', { p_treasury: bancoId, p_local: localId, p_comun: comun })
 export const ignorar = (movimientoId: string, motivo: string) => rpc<void>('bank_ignorar', { p_movement: movimientoId, p_motivo: motivo })
 
+/** B01·20 · Deshacer un «Apartar»: vuelve a pendiente, con su línea en el historial. */
+export const desapartar = (movimientoId: string) => rpc<void>('bank_desapartar', { p_movement: movimientoId })
+
+/** B01·20 · Los cargos que el banco anuló (la base decide cuándo hay aviso). */
+export async function cargosAnulados(companyId: string): Promise<AvisoAnulado[]> {
+  const filas = await rpc<Record<string, unknown>[] | null>('bank_cargos_anulados', { p_company: companyId })
+  return (filas ?? []).map(avisoDeFila)
+}
+
+/** B01·20 · «Quitarlo»: deshace el casado si lo hay y aparta los cargos del aviso con su motivo. */
+export async function quitarAnulado(companyId: string, extracto: string): Promise<{ n: number; sumaCent: number; dia: string; saldoBancoCent: number; deshechos: number }> {
+  const r = await rpc<Record<string, unknown>>('bank_anulado_quitar', { p_company: companyId, p_extracto: extracto })
+  return { n: Number(r.n), sumaCent: Math.round(Number(r.suma) * 100), dia: String(r.dia), saldoBancoCent: Math.round(Number(r.saldo_banco) * 100), deshechos: Number(r.deshechos) }
+}
+
+/** B01·20 · «No, es bueno»: el aviso no vuelve para esos cargos. */
+export async function anuladoEsBueno(companyId: string, extracto: string): Promise<{ n: number; sumaCent: number; dia: string }> {
+  const r = await rpc<Record<string, unknown>>('bank_anulado_es_bueno', { p_company: companyId, p_extracto: extracto })
+  return { n: Number(r.n), sumaCent: Math.round(Number(r.suma) * 100), dia: String(r.dia) }
+}
+
 export async function cuentasPorDarDeAlta(companyId: string): Promise<{ codigo: string; nombre: string; ibanEnNombre: string | null }[]> {
   const filas = await rpc<Fila[]>('bank_cuentas_por_dar_de_alta', { p_company: companyId })
   return (filas ?? []).map((f) => ({ codigo: String(f.code), nombre: String(f.name), ibanEnNombre: s(f.iban_en_nombre) }))
@@ -373,7 +419,7 @@ export async function leerBancosDelCierre(accountId: string, companyId: string):
   const codigos = [...new Set(bs.map((b) => b.cuenta).filter((c): c is string => !!c))]
   const cuentas = codigos.length === 0 ? [] : await leer(tabla('company_account').select('code, name, plain_name')
     .eq('account_id', accountId).eq('company_id', companyId).in('code', codigos), 'el plan')
-  const nombres = new Map(cuentas.map((c) => [String(c.code), String(c.plain_name ?? c.name).trim().replace(/[.\s]+$/, '')]))
+  const nombres = new Map(cuentas.map((c) => [String(c.code), String(c.name).trim().replace(/[.\s]+$/, '')]))
   return bs
     .map((b) => ({ id: b.id, nombre: b.nombre, iban: b.iban, cuenta: b.cuenta, cuentaNombre: b.cuenta ? nombres.get(b.cuenta) ?? null : null }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))

@@ -1,0 +1,4 @@
+# X27 · Las fichas de proveedor y de cliente (1315 añade las columnas, de verdad desde la rama; 1316, los dos disparadores, en ROLLBACK).
+supabase/migrations/20261122T1315_x27_fichas_terceros.sql
+supabase/migrations/20261122T1316_x27_la_factura_usa_su_ficha.sql
+supabase/staging/sql/20261122_x27_fichas_terceros_prueba.sql

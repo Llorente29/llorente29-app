@@ -1,0 +1,10 @@
+# X10e · Los días del TPV salen por la conexión (encargo del 20/11). Rama conta/x10e-dias-tpv-por-la-conexion.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1140  Añade a conta_erp10_envio tres columnas que admiten nulos: dia (el envío es de un día del
+#         TPV) y cobro_serie y cobro_documento (el número del cobro de un día de un solo asiento).
+#         No cambia ninguna tabla, índice ni función que exista.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x10e-erp10-envio-dia.sql
+supabase/migrations/20261120T1140_x10e_erp10_envio_dia.sql

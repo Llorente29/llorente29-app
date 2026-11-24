@@ -1,0 +1,4 @@
+# X27c · la vuelta atrás: quita el disparador del alta, las funciones y la web del cliente.
+cuenta: scripts/conta/produccion/cuentas/x27c-ficha-fiel.sql
+supabase/vuelta-atras/20261122T1921_x27c_alta_parte_el_domicilio.down.sql
+supabase/vuelta-atras/20261122T1920_x27c_web_y_domicilio.down.sql

@@ -1,0 +1,11 @@
+[
+ {
+  "id": "760-1",
+  "pr": 760,
+  "fecha": "2026-11-20T18:08:12Z",
+  "producto": "sumied",
+  "apartado": "Subir las ventas del TPV",
+  "frase": "los ficheros de Revo con importes de 3 decimales («28,909») ya se leen y se guardan; el día se redondea a céntimos al final y cuadra con las facturas y los pagos.",
+  "ruta": null
+ }
+]

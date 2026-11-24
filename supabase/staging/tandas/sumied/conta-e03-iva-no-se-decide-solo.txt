@@ -1,0 +1,12 @@
+# E03 · Sumied pregunta, no decide. La 1833 solo añade (va de verdad desde la rama,
+# W05: la e2e usa sus funciones); la 1835 cambia en caliente y la 1836 escribe (las
+# dos, solo en ROLLBACK hasta el real). Su prueba (ROLLBACK: dos cuentas, una con
+# dos sociedades; los cuatro casos, la respuesta que manda, no validar, la lista,
+# pasarla a la otra sociedad, lo marcado que vuelve a pregunta y la vuelta atrás).
+# La semilla de su e2e (una función que prepara sus datos en el carril, W07) va justo
+# detrás de la 1833: lo que va delante de una semilla tiene que ir de verdad también.
+supabase/migrations/20261118T1833_e03_de_quien_es.sql
+supabase/seeds/conta/seed_e03_de_quien_es_staging.sql
+supabase/migrations/20261118T1835_e03_no_decide_solo.sql
+supabase/migrations/20261118T1836_e03_lo_marcado_vuelve_a_pregunta.sql
+supabase/staging/sql/20261118_e03_de_quien_es_prueba.sql

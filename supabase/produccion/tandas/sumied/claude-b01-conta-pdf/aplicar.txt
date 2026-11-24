@@ -1,0 +1,12 @@
+# B01r·26 · El enlace permanente del PDF, con llave por documento (lo decidido
+# por Julio el 24/10, docs/conta/c12/traspaso-completo.md). Rama
+# claude/b01-conta-pdf. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   1805  SOLO AÑADE: conta_pdf_llave y conta_pdf_acceso (sin permisos para
+#         nadie más que el servidor) y cuatro funciones: dar las llaves de un
+#         traspaso confirmado, servir (con tope y el acceso apuntado) y retirar
+#         (un administrador, con motivo). Ninguna llave hasta que haya un
+#         traspaso. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/b01r26-conta-pdf.sql
+supabase/migrations/20261113T1805_b01r26_conta_pdf.sql

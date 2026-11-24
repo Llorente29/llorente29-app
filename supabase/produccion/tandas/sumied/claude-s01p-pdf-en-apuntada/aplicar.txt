@@ -1,0 +1,9 @@
+# S01p·22 · Subir el PDF a una recibida ya apuntada que no lo tiene (Julio, 14/11). Caso: GLOVOAPP I170326000585810 (2/3438).
+# Rama claude/s01p-pdf-en-apuntada. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0831  cambia conta_recibida_papel_poner (un solo trozo, con su respaldo): el guardia del asiento validado solo
+#         para si la factura ya tenía documento. Cambiar el PDF de una apuntada sigue sin dejarse.
+#
+# No toca ningún dato: los PDF se suben desde la ficha. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-pdf-en-apuntada.sql
+supabase/migrations/20261114T0831_s01p_pdf_en_apuntada.sql

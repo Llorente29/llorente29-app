@@ -1,0 +1,24 @@
+{
+ "_que": "R03 · la base de las ventas de un TPV de fuera · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging 0a3aff2, 15/11 19:25Z) y sus semillas, en SOLO LECTURA, el 17/11: no en producción (esta sesión no lee producción). Las filas son las de la base local, no las de producción: el contexto de verdad lo mide el workflow en el ensayo. company_tax_profile existe; las cinco tablas conta_tpv_* y las tres funciones, no. Nada en el camino del pedido.",
+ "medido": "2026-11-17T08:58Z",
+ "tanda": {
+  "supabase/migrations/20261117T0950_r03_ventas_tpv_tablas.sql": "4038a1a0a82bcda0c5967acb3bd7b3fd",
+  "supabase/migrations/20261117T0951_r03_ventas_tpv_funciones.sql": "01c5e132987a310cfd14e8e8ecdaa59d"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_tax_profile"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.company_tax_profile": 15
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

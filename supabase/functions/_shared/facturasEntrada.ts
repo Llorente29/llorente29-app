@@ -70,13 +70,13 @@
 //     riders) o sin saber.
 
 import { esResumenUber, leerResumenUber, NoEsResumenUber, paraRegistrar, trozos, type ResumenUber } from './liquidacionUber.ts'
-import { esLiquidacionJustEat, leerLiquidacionJustEat, paraRegistrarJustEat } from './liquidacionJustEat.ts'
+import { esLiquidacionJustEat, leerLiquidacionJustEat, NoEsLiquidacionJustEat, paraRegistrarJustEat } from './liquidacionJustEat.ts'
 import { esExcelGlovo, leerExcelGlovo, paraRegistrarGlovo } from './lectorGlovo.ts'
 import { queDiceElContenido, queDiceElNombre, type QueEs } from './queEs.ts'
 
 export { queDiceElContenido, queDiceElNombre, type QueEs }
 
-export const DOMINIO_ENTRADA = 'entrada.folvy.app'
+// E01 · Sin dominio de entrada fijo: cada empresa tiene el suyo y lo dice la base (_conta_dominio_entrada).
 export const DIRECCION = /^((?:facturas|liquidaciones)-[a-z0-9][a-z0-9-]{1,40})@([a-z0-9.-]+)$/
 /** La dirección única de la puerta: sin prefijo, y solo en un dominio de entrada (entrada.folvy.app, entrada.sumied.com…). */
 export const DIRECCION_UNICA = /^([a-z0-9][a-z0-9-]{1,40})@(entrada\.[a-z0-9.-]+)$/
@@ -113,6 +113,48 @@ export async function comprobarFirma(secreto: string, cab: { id: string | null; 
   // Comparación en tiempo constante.
   const igual = (a: string, b: string) => a.length === b.length && [...a].reduce((d, ch, i) => d | (ch.charCodeAt(0) ^ b.charCodeAt(i)), 0) === 0
   return dadas.some((f) => igual(f, esperada)) ? null : 'la firma no es la de Resend'
+}
+
+// ── E01 · Las dos cuentas de Resend ─────────────────────────────────────────
+//
+// Folvy y Sumied tienen cada una su cuenta de Resend (entrada.folvy.app y
+// entrada.sumied.com), y las dos avisan a esta misma función. Cada aviso es de
+// la cuenta cuyo secreto valida su firma, y todo lo que se pida después de ese
+// correo (adjuntos, cuerpo, el correo entero) se pide con la clave de ESA cuenta.
+// Nunca se elige por el dominio del destinatario: eso lo escribe quien manda.
+
+export type CuentaResend = 'folvy' | 'sumied'
+/** Una cuenta de Resend con su secreto del webhook y su clave de la API. */
+export type ParejaResend = { cuenta: CuentaResend; secreto: string; clave: string }
+
+/** Las cuentas configuradas: solo las parejas completas (secreto y clave). */
+export function parejasResend(x: Record<CuentaResend, { secreto?: string | null; clave?: string | null }>): ParejaResend[] {
+  return (['folvy', 'sumied'] as const)
+    .filter((c) => !!x[c]?.secreto && !!x[c]?.clave)
+    .map((c) => ({ cuenta: c, secreto: x[c].secreto!, clave: x[c].clave! }))
+}
+
+/** ¿De qué cuenta es este aviso? La primera cuyo secreto valida la firma; si ninguna, el porqué. */
+export async function cuentaDelAviso(parejas: readonly ParejaResend[], cab: { id: string | null; timestamp: string | null; firma: string | null }, cuerpo: string, ahoraS: number):
+  Promise<{ pareja: ParejaResend; mal?: undefined } | { pareja?: undefined; mal: string }> {
+  if (!parejas.length) return { mal: 'no hay ninguna cuenta de Resend configurada' }
+  let mal = 'la firma no es la de Resend'
+  for (const p of parejas) {
+    const m = await comprobarFirma(p.secreto, cab, cuerpo, ahoraS)
+    if (!m) return { pareja: p }
+    mal = m
+  }
+  return { mal }
+}
+
+/**
+ * La cuenta por la que entró un correo, para pedirlo otra vez («Volver a leer», «Poner el PDF»): la
+ * apuntada en el registro de entrada; si no hay (los de antes del E01), la de Folvy. Null si esa
+ * cuenta no está configurada.
+ */
+export function parejaDelCorreo(apuntada: string | null | undefined, parejas: readonly ParejaResend[]): ParejaResend | null {
+  const c: CuentaResend = apuntada === 'sumied' ? 'sumied' : 'folvy'
+  return parejas.find((p) => p.cuenta === c) ?? null
 }
 
 // ── El correo ──────────────────────────────────────────────────────────────
@@ -262,6 +304,15 @@ export interface PuertoEntrada {
   subirA?(bucket: string, ruta: string, bytes: Uint8Array, tipo: string): Promise<void>
   /** La puerta: apunta en la bandeja qué es (y por quién lo sabe) y, si va en otro almacén, cuál. */
   colocar?(inboxId: string, x: { tipo: QueEs | null; por: 'regla' | 'lectura'; bucket?: string }): Promise<void>
+  /** S01p·20 · 1 · La fila «por aclarar» de un correo de plataforma del que no salió nada (conta_entrada_sin_factura): una por correo. */
+  sinFactura?(x: { accountId: string; companyId: string; emailId: string; to: string; from: string | null; subject: string | null; recibido: string | null; porque: string }): Promise<{ id: string; yaEstaba: boolean }>
+  /**
+   * S01p·20 · 1b · El PDF de una factura que venía escrita en el cuerpo del correo (Just Eat): se hace del
+   * correo tal como llega, se guarda y queda como el papel de su factura (si aún no tenía). Dice qué ha hecho.
+   */
+  papelDelCorreo?(x: { accountId: string; companyId: string; facturaId: string; emailId: string; numero: string | null; asunto: string | null; de: string | null; recibido: string | null; html: string | null; text: string | null }): Promise<{ puesto: boolean; texto: string }>
+  /** S01p·20 · 1 · Al volver a leer el correo y entrar, su fila sale de «Por aclarar» (conta_entrada_sin_factura_resuelta). */
+  sinFacturaResuelta?(companyId: string, emailId: string): Promise<void>
   /** La puerta: una nómina, por el camino del buzón de nóminas (employee-documents y payroll-extract). */
   nomina?(x: { accountId: string; emailId: string; nombre: string; bytes: Uint8Array }): Promise<{ ok: boolean; texto: string }>
 }
@@ -407,13 +458,44 @@ export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): 
       llegadas.push({ id: l.id, estado: 'falta_pdf', texto: 'Falta el PDF: el correo trae un enlace. Bájalo y súbelo.' })
     }
   }
+  // S01p·20 · 1 · De una plataforma y sin nada: a «Por aclarar», nunca solo al registro (regla 8).
+  const aclarar = !llegadas.length && !liquidaciones.length && pareceDePlataforma(c) ? await dejarPorAclarar(c, dest, SIN_FACTURA_EN_EL_CORREO, p) : null
+  if (llegadas.length || liquidaciones.length) await yaNoPorAclarar(dest.companyId, c.email_id, p)
   await p.registrarCorreo({ ...base, companyId: dest.companyId, resultado: llegadas.length || liquidaciones.length ? 'recibido' : 'sin_facturas',
-    detalle: { tomados: llegadas.length, dejados: dejar, ...(liquidaciones.length ? { liquidaciones: liquidaciones.map((l) => ({ id: l.id, ya_estaba: l.yaEstaba, plataforma: 'glovo' })) } : {}) } })
+    detalle: { tomados: llegadas.length, dejados: dejar, ...(liquidaciones.length ? { liquidaciones: liquidaciones.map((l) => ({ id: l.id, ya_estaba: l.yaEstaba, plataforma: 'glovo' })) } : {}),
+               ...(aclarar ? { por_aclarar: aclarar.id, motivo: SIN_FACTURA_EN_EL_CORREO } : {}) } })
+  if (aclarar) return { resultado: 'recibido', texto: `No he encontrado la factura en el correo: queda en Documentos › «Por aclarar», con «Volver a leer» y «Subir el PDF a mano».`, llegadas: [aclarar] }
   const deLiq = liquidaciones.length ? `; ${liquidaciones.map((l) => l.texto.replace(/\.$/, '')).join('; ')}` : ''
   const texto = llegadas.length || liquidaciones.length
     ? `${llegadas.length} ${llegadas.length === 1 ? 'documento recibido' : 'documentos recibidos'}${deLiq}${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
     : `El correo no trae ninguna factura${dejar.length ? ` (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''} ni un enlace para bajarla.`
   return { resultado: 'recibido', texto, llegadas }
+}
+
+/** S01p·20 · 1 · ¿Es de una plataforma? Su correo sin nada que leer no se calla: va a «Por aclarar». */
+export const pareceDePlataforma = (c: Pick<CorreoResend, 'from' | 'subject'>) => /just-?eat|justeat|uber|glovo|deliveroo/i.test(`${c.from ?? ''} ${c.subject ?? ''}`)
+
+/** S01p·20 · 1 · El porqué de la fila, en una frase (Julio, 13/11). */
+export const SIN_FACTURA_EN_EL_CORREO = 'No he encontrado la factura en el correo.'
+
+/**
+ * S01p·20 · 1 · Regla 8: un correo de plataforma del que no ha salido ni una factura ni una
+ * liquidación deja su fila en «Por aclarar», con el porqué, «Volver a leer» y «Subir el PDF a
+ * mano». Antes solo quedaba «sin_facturas» en el registro de entrada, que no ve nadie (los 11
+ * de Just Eat del 01/11). Sin el puerto (pruebas viejas), no hace nada.
+ */
+export async function dejarPorAclarar(c: CorreoResend, dest: Destino & { direccion: string }, porque: string, p: PuertoEntrada):
+  Promise<{ id: string; estado: string; texto: string } | null> {
+  if (!p.sinFactura) return null
+  const r = await p.sinFactura({ accountId: dest.accountId, companyId: dest.companyId, emailId: c.email_id, to: dest.direccion,
+    from: c.from ?? null, subject: c.subject ?? null, recibido: c.created_at ?? null, porque })
+  return { id: r.id, estado: 'por_aclarar', texto: `Queda en Documentos › «Por aclarar»: ${porque.replace(/\.$/, '')}.` }
+}
+
+/** S01p·20 · 1 · El correo ha entrado: si tenía su fila en «Por aclarar», sale. Que falle no para la entrada. */
+async function yaNoPorAclarar(companyId: string, emailId: string, p: PuertoEntrada): Promise<void> {
+  if (!p.sinFacturaResuelta) return
+  await p.sinFacturaResuelta(companyId, emailId).catch(() => undefined)
 }
 
 /** ¿Puede ser un correo de Glovo? (S01j: su Excel solo se mira si lo es.) */
@@ -458,7 +540,16 @@ async function recibirLiquidacion(c: CorreoResend, destino: Destino & { direccio
   const cuerpo = cuerpoYa ?? (c.html || c.text ? { html: c.html ?? null, text: c.text ?? null } : p.cuerpo ? await p.cuerpo(c.email_id) : { html: null, text: null })
   // V02 · E2: una liquidación de Just Eat (factura, estado de cuenta y pedidos en el correo).
   if (esLiquidacionJustEat({ from: c.from, subject: c.subject }, trozos(cuerpo))) {
-    const je = leerLiquidacionJustEat({ from: c.from, subject: c.subject, html: cuerpo.html, text: cuerpo.text })
+    let je: ReturnType<typeof leerLiquidacionJustEat>
+    try {
+      je = leerLiquidacionJustEat({ from: c.from, subject: c.subject, html: cuerpo.html, text: cuerpo.text })
+    } catch (x) {
+      // S01p·20 · 1 · Parece la de Just Eat, pero no se lee entera: a «Por aclarar» con su porqué (antes, un 500 sin rastro).
+      if (!(x instanceof NoEsLiquidacionJustEat)) throw x
+      const aclarar = await dejarPorAclarar(c, destino, x.message, p)
+      await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'no_es_liquidacion', detalle: { motivo: x.message, plataforma: 'justeat', ...(aclarar ? { por_aclarar: aclarar.id } : {}) } })
+      return { resultado: 'no_es_liquidacion', texto: `${x.message} Queda en Documentos › «Por aclarar», con «Volver a leer» y «Subir el PDF a mano».`, llegadas: aclarar ? [aclarar] : [] }
+    }
     const datos = paraRegistrarJustEat(je, { emailId: c.email_id })
     // Si su factura no suma, la liquidación entra igual (sin factura: conta_liquidacion_registrar
     // pararía) y la factura va aparte, en revisión con el porqué. No se inventa nada.
@@ -466,19 +557,30 @@ async function recibirLiquidacion(c: CorreoResend, destino: Destino & { direccio
     const r = await p.liquidacion({ companyId: destino.companyId, datos: cuadra ? datos : { ...datos, factura: null } })
     // S01j · Su factura de comisión, como recibida (con su número): la liga el S01i. Si no suma, en revisión con el porqué.
     const f = p.facturaComision ? await p.facturaComision({ settlementId: r.id, datos, emailId: c.email_id }) : null
+    // S01p·20 · 1b · Su factura no trae PDF: el papel es el propio correo. Que falle no para la entrada, pero se dice.
+    const papel = f?.id && p.papelDelCorreo
+      ? await p.papelDelCorreo({ accountId: destino.accountId, companyId: destino.companyId, facturaId: f.id, emailId: c.email_id, numero: je.factura.numero,
+          asunto: c.subject ?? null, de: c.from ?? null, recibido: c.created_at ?? null, html: cuerpo.html, text: cuerpo.text })
+          .catch((x: unknown) => ({ puesto: false, texto: `No he podido guardar el PDF del correo: ${x instanceof Error ? x.message : String(x)}.` }))
+      : null
     await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'liquidacion',
       detalle: { liquidacion_id: r.id, ya_estaba: r.yaEstaba, factura: r.factura, avisos: je.avisos.length, plataforma: 'justeat',
-                 ...(f ? { factura_id: f.id, factura_estado: f.estado } : {}) } })
+                 ...(f ? { factura_id: f.id, factura_estado: f.estado } : {}), ...(papel ? { pdf: papel.puesto } : {}) } })
+    await yaNoPorAclarar(destino.companyId, c.email_id, p)
     const texto = cuadra ? r.texto : `La liquidación de Just Eat del ${je.desde.slice(8, 10)}/${je.desde.slice(5, 7)} al ${je.hasta.slice(8, 10)}/${je.hasta.slice(5, 7)} ha entrado.`
-    return { resultado: 'liquidacion', texto: f ? `${texto} ${f.texto}` : texto, llegadas: [] }
+    return { resultado: 'liquidacion', texto: [texto, f?.texto, papel?.texto].filter(Boolean).join(' '), llegadas: [] }
   }
   let resumen: ResumenUber
   try {
     resumen = leerResumenUber({ subject: c.subject, html: cuerpo.html, text: cuerpo.text })
   } catch (x) {
     if (!(x instanceof NoEsResumenUber)) throw x
-    await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'no_es_liquidacion', detalle: { motivo: x.message } })
-    return { resultado: 'no_es_liquidacion', texto: `${x.message} Queda apuntado y no se lee: por ahora se leen los resúmenes de pagos de Uber Eats y las liquidaciones de Just Eat.`, llegadas: [] }
+    // S01p·20 · 1 · Si es de una plataforma, a «Por aclarar» con su porqué; lo demás, como antes, al registro.
+    const aclarar = pareceDePlataforma(c) ? await dejarPorAclarar(c, destino, x.message, p) : null
+    await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'no_es_liquidacion', detalle: { motivo: x.message, ...(aclarar ? { por_aclarar: aclarar.id } : {}) } })
+    return { resultado: 'no_es_liquidacion', texto: aclarar
+      ? `${x.message} Queda en Documentos › «Por aclarar», con «Volver a leer» y «Subir el PDF a mano».`
+      : `${x.message} Queda apuntado y no se lee: por ahora se leen los resúmenes de pagos de Uber Eats y las liquidaciones de Just Eat.`, llegadas: aclarar ? [aclarar] : [] }
   }
   // El resumen del mes, si viene: se guarda con la liquidación.
   let adjunto: { ruta: string; nombre: string; sha256: string } | null = null
@@ -496,6 +598,7 @@ async function recibirLiquidacion(c: CorreoResend, destino: Destino & { direccio
   // Al registro, solo ids, recuentos y estados: nunca importes ni nombres.
   await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'liquidacion',
     detalle: { liquidacion_id: r.id, ya_estaba: r.yaEstaba, factura: r.factura, avisos: resumen.avisos.length, mensual: !!adjunto } })
+  await yaNoPorAclarar(destino.companyId, c.email_id, p)
   return { resultado: 'liquidacion', texto: r.texto, llegadas: [] }
 }
 
@@ -640,6 +743,11 @@ async function recibirDocumentos(c: CorreoResend, dest: Destino & { direccion: s
       llegadas.push({ id: l.id, estado: 'falta_pdf', texto: 'Falta el PDF: el correo trae un enlace. Bájalo y súbelo.' })
     }
   }
+  // S01p·20 · 1 · De una plataforma y sin nada: a «Por aclarar» (regla 8).
+  if (!llegadas.length && pareceDePlataforma(c)) {
+    const aclarar = await dejarPorAclarar(c, dest, SIN_FACTURA_EN_EL_CORREO, p)
+    if (aclarar) llegadas.push(aclarar)
+  } else if (llegadas.length) await yaNoPorAclarar(dest.companyId, c.email_id, p)
   // Al registro, solo recuentos y estados: nunca importes ni nombres de personas.
   const porEstado = llegadas.reduce<Record<string, number>>((m, l) => ({ ...m, [l.estado]: (m[l.estado] ?? 0) + 1 }), {})
   await p.registrarCorreo({ ...base, companyId: dest.companyId, resultado: llegadas.length ? 'recibido' : 'sin_facturas',
@@ -648,6 +756,52 @@ async function recibirDocumentos(c: CorreoResend, dest: Destino & { direccion: s
     ? `${llegadas.length} ${llegadas.length === 1 ? 'documento recibido' : 'documentos recibidos'}${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
     : `El correo no trae ningún documento${dejar.length ? ` (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''} ni un enlace para bajarlo.`
   return { resultado: 'documentos', texto, llegadas }
+}
+
+// ── S01p·20 · 1b · El PDF de las facturas de Just Eat que ya entraron sin él ─
+
+export type PapelPuesto = { emailId: string; facturaId: string; estado: 'puesto' | 'ya_tenia' | 'no_cuadra' | 'ya_no_esta' | 'error'; texto: string }
+
+/**
+ * Pone el PDF del correo a facturas de Just Eat que entraron sin él (la base dice cuáles:
+ * conta_correo_papeles_que_faltan). Cada correo se pide otra vez a la entrada, se lee, y
+ * solo si su número de factura es el de la factura se hace el PDF y se enlaza. No registra
+ * ni cambia nada más: ni la liquidación ni la factura.
+ */
+export async function ponerPapelesDelCorreo(lista: readonly { emailId: string; facturaId: string; numero: string | null }[], destino: { accountId: string; companyId: string },
+  p: PuertoEntrada, pedir: (emailId: string) => Promise<CorreoResend | null>): Promise<PapelPuesto[]> {
+  const fuera: PapelPuesto[] = []
+  for (const x of lista) {
+    try {
+      if (!p.papelDelCorreo) throw new Error('La función no sabe guardar el PDF del correo.')
+      const c = await pedir(x.emailId)
+      if (!c) { fuera.push({ ...x, estado: 'ya_no_esta', texto: YA_NO_ESTA }); continue }
+      const je = leerLiquidacionJustEat({ from: c.from, subject: c.subject, html: c.html, text: c.text })
+      if (x.numero && je.factura.numero !== x.numero) {
+        fuera.push({ ...x, estado: 'no_cuadra', texto: `El correo trae la factura ${je.factura.numero} y la de Sumied es la ${x.numero}: no la toco.` }); continue
+      }
+      const r = await p.papelDelCorreo({ accountId: destino.accountId, companyId: destino.companyId, facturaId: x.facturaId, emailId: x.emailId, numero: je.factura.numero,
+        asunto: c.subject ?? null, de: c.from ?? null, recibido: c.created_at ?? null, html: c.html ?? null, text: c.text ?? null })
+      fuera.push({ ...x, estado: r.puesto ? 'puesto' : 'ya_tenia', texto: r.texto })
+    } catch (e) {
+      fuera.push({ ...x, estado: 'error', texto: e instanceof Error ? e.message : String(e) })
+    }
+  }
+  return fuera
+}
+
+/** La frase de lo hecho (regla 8): cuántas tienen ya su PDF y por qué no las demás. */
+export function resumenPapeles(rs: readonly PapelPuesto[]): string {
+  if (!rs.length) return 'No hay ninguna factura de Just Eat sin su PDF: no he tocado nada.'
+  const n = (e: PapelPuesto['estado']) => rs.filter((r) => r.estado === e).length
+  const partes = [
+    n('puesto') ? `${n('puesto') === 1 ? 'Una factura de Just Eat tiene' : `${n('puesto')} facturas de Just Eat tienen`} ya su PDF, hecho de su correo` : 'Ninguna factura nueva con su PDF',
+    n('ya_tenia') ? `${n('ya_tenia')} ya lo tenía${n('ya_tenia') === 1 ? '' : 'n'}` : '',
+    n('no_cuadra') ? `${n('no_cuadra')} sin tocar porque su correo trae otra factura` : '',
+    n('ya_no_esta') ? `${n('ya_no_esta')} sin tocar porque su correo ya no está en el buzón (reenvíalo desde Gmail)` : '',
+    n('error') ? `${n('error')} con error: ${rs.filter((r) => r.estado === 'error').map((r) => r.texto).slice(0, 2).join('; ')}` : '',
+  ].filter(Boolean)
+  return `${partes.join('; ')}.`
 }
 
 // ── S01j · Volver a leer lo que ya llegó ─────────────────────────────────────

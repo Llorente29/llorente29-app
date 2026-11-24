@@ -1,0 +1,5 @@
+# S01p·18 · punto 6 · Las liquidaciones sin tienda (1136: añade conta_liquidaciones_sin_tienda y conta_liquidacion_asignar_tienda).
+# Su prueba (ROLLBACK, cuenta A): las del mes sin local o marca con lo que les da su tienda; asignar una, y otra vez;
+# la tienda sin local no se asigna; sin cuenta no; la vuelta atrás.
+supabase/migrations/20261113T1136_s01p_uber_sin_tienda.sql
+supabase/staging/sql/20261113_s01p_uber_sin_tienda_prueba.sql

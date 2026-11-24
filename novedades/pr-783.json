@@ -1,0 +1,29 @@
+[
+ {
+  "id": "783-1",
+  "pr": 783,
+  "fecha": "2026-11-22T11:55:55Z",
+  "producto": "sumied",
+  "apartado": "Asiento general",
+  "frase": "la pantalla de ERP10, con local, marca y plataforma en cada apunte, observaciones y el justificante a la derecha.",
+  "ruta": null
+ },
+ {
+  "id": "783-2",
+  "pr": 783,
+  "fecha": "2026-11-22T11:55:55Z",
+  "producto": "sumied",
+  "apartado": "Asientos a mano",
+  "frase": "se pueden cambiar ya validados mientras el IVA de su trimestre no esté presentado, con el mismo número.",
+  "ruta": null
+ },
+ {
+  "id": "783-3",
+  "pr": 783,
+  "fecha": "2026-11-22T11:55:55Z",
+  "producto": "sumied",
+  "apartado": "Pantallas",
+  "frase": "el reparto entre la pantalla y el documento se recuerda por persona en cualquier ordenador, y con «‹» se pliega la pantalla.",
+  "ruta": null
+ }
+]

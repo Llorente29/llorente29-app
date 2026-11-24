@@ -1,0 +1,3 @@
+# K10 · la vuelta atrás: quita los enlaces que puso la tanda (los apuntados), las dos funciones desde su respaldo y fuera lo nuevo.
+cuenta: scripts/conta/produccion/cuentas/k10-cuenta-de-pago.sql
+supabase/vuelta-atras/20261121T1650_k10_cuenta_de_pago.down.sql

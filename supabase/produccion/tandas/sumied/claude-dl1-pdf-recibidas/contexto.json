@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · PDF recibidas · contexto de producción, medido en SOLO LECTURA el 14/11 a las 17:05Z: la 1805 no crea ni cambia ningún objeto; llama a conta_recibida_papel_poner (en producción) para 44 facturas recibidas. Los 44 ficheros están en receipt-uploads/51ad1792-6629-4ef7-833a-b57b09a86710/dl1-glovo-39/, cada uno con una sola factura viva, sin PDF y con su asiento validado. Nada en el camino del pedido; la 1805 no está en el historial.",
+ "medido": "2026-11-14T17:05Z",
+ "tanda": {
+  "supabase/migrations/20261114T1805_dl1_pdf_recibidas.sql": "0b44994a75f32628d7cc33ca239cfd91"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

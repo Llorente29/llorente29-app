@@ -36,7 +36,7 @@ export type IdProducto = 'despacho' | 'inicio' | 'contabilidad' | 'clientesCuota
  * `gestoria` las enciende el sector de la empresa (G03, sectores/sectores.ts);
  * `asesoria` es la CUENTA que lleva clientes (Clientes del despacho).
  */
-export type Condicion = 'hosteleria' | 'gestoria' | 'diez' | 'asesoria' | 'demo'
+export type Condicion = 'hosteleria' | 'gestoria' | 'diez' | 'asesoria' | 'demo' | 'ventas_por_dia' | 'tpv' | 'erp10'
 
 export type Interruptor = 'conta_facturacion' | 'conta_laboral' | 'conta_impuestos'
 export const INTERRUPTORES: readonly Interruptor[] = ['conta_facturacion', 'conta_laboral', 'conta_impuestos']
@@ -55,6 +55,12 @@ export interface Pestana {
   /** Las direcciones que caen en esta página. */
   prefijos: string[]
   solo?: Condicion
+  /**
+   * R05 (decisión 9) · Sale también si se cumple esta otra condición, sin dejar
+   * de ser de su `solo` (el aviso al cambiar de sector la sigue contando como de
+   * hostelería): Cierres del día, con «ventas por día» encendido.
+   */
+  tambien?: Condicion
   /**
    * La página es una vista de la misma pantalla (`?ver=`): Contactos. Se marca
    * cuando la dirección la pide; la que no lleva `ver` es la de serie.
@@ -92,9 +98,13 @@ export interface Contexto {
   hosteleria: boolean
   /** G03 · El sector de la empresa es Gestoría: Clientes y cuotas, Tarifa y paquetes, CRM y GoCardless. */
   gestoria?: boolean
+  /** R05 · «Ventas por día» encendido en la empresa (company_tax_profile.ventas_por_dia): Cierres del día sale también sin ser de hostelería. */
+  ventasPorDia?: boolean
   /** G03 · El sector de la empresa activa; sin leer, no hay. No decide nada por sí solo: deciden hosteleria y gestoria. */
   sector?: Sector | null
   diez: boolean
+  /** X04 · La empresa tiene encendida la salida a ERP10 (conta_erp10_salida_empresa). Sin leer, no. */
+  erp10?: boolean
   interruptores: ReadonlySet<string>
   /** S01 · El logo de la empresa (URL firmada del bucket company-logos), o null. No decide qué sale. */
   logoEmpresa?: string | null
@@ -148,6 +158,7 @@ const PAGINAS_AJUSTES: Pestana[] = INDICE_AJUSTES.flatMap((g) => g.entradas)
     prefijos: e.id === 'empresa' ? [R.empresa, e.ruta] : [e.ruta],
     hueco: !!e.hueco,
     ...(e.soloDemo ? { solo: 'demo' as const } : {}),
+    ...(e.soloVentasPorDia ? { solo: 'tpv' as const } : {}),
   }))
 
 export const PRODUCTOS: Producto[] = [
@@ -172,7 +183,9 @@ export const PRODUCTOS: Producto[] = [
       { id: 'definiciones', etiqueta: 'Definiciones', icono: 'definiciones', ruta: R.plan, prefijos: [R.plan, R.tablas, R.analitica] },
       // S02 · PR 2: el cierre del mes del banco vive aquí, junto al de la contabilidad (bancos/cierre lleva aquí).
       { id: 'cierre', etiqueta: 'Cierre y Registro', icono: 'cierre', ruta: `${R.libros}/cierre/ejercicios`, prefijos: [`${R.libros}/cierre`, `${R.libros}/anuales`, `${R.bancos}/cierre`] },
-      { id: 'importar', etiqueta: 'Importar', icono: 'importar', ruta: R.pendientesDiez, prefijos: [R.pendientesDiez], solo: 'diez' },
+      // N07: Importar ya no es solo de Diez: abre «Traer de ERP10», que es para cualquier empresa que venga de
+      // otro programa. Con Diez, «Pendientes de adjuntar en Diez» sigue en su cinta, al lado.
+      { id: 'importar', etiqueta: 'Importar', icono: 'importar', ruta: R.traerErp10, prefijos: [R.traerErp10, R.pendientesDiez] },
     ],
   },
   {
@@ -208,7 +221,7 @@ export const PRODUCTOS: Producto[] = [
       },
       // V01 · Entrega 2: el bloque «Hostelería», solo con «Vendo en hostelería».
       // «Ventas» a secas (lo de antes) lleva aquí.
-      { id: 'cierres', etiqueta: 'Cierres del día', icono: 'cierre', ruta: R.cierres, prefijos: [R.cierres, R.ventas], solo: 'hosteleria', bloque: 'Hostelería' },
+      { id: 'cierres', etiqueta: 'Cierres del día', icono: 'cierre', ruta: R.cierres, prefijos: [R.cierres, R.ventas], solo: 'hosteleria', tambien: 'ventas_por_dia', bloque: 'Hostelería' },
     ],
   },
   {
@@ -300,6 +313,17 @@ export const PRODUCTOS: Producto[] = [
   { id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: R.empresa, prefijos: [R.alta], abajo: true, pestanas: PAGINAS_AJUSTES },
 ]
 
+/**
+ * R09 · ¿La empresa tiene las ventas del TPV (Cierres del día, «Subir las ventas del TPV» y
+ * Ajustes › Ventas por día)? Una de hostelería, siempre, sin interruptor; fuera de hostelería,
+ * si tiene «ventas por día» encendido (company_tax_profile.ventas_por_dia). La única regla: la
+ * usan la condición «tpv» y «ventas_por_dia» de abajo y useVentasPorDiaEncendido (el botón y
+ * el índice de Ajustes).
+ */
+export function conVentasTpv(ctx: { hosteleria?: boolean | null; ventasPorDia?: boolean | null }): boolean {
+  return ctx.hosteleria === true || ctx.ventasPorDia === true
+}
+
 /** ¿La empresa tiene lo que pide la condición? La única cuenta de este tipo: el menú, el buscador y Favoritos la usan. */
 export function cumple(c: Condicion | undefined, ctx: Contexto): boolean {
   if (!c) return true
@@ -309,6 +333,11 @@ export function cumple(c: Condicion | undefined, ctx: Contexto): boolean {
     case 'diez': return ctx.diez
     case 'asesoria': return ctx.asesoria === true
     case 'demo': return ctx.demo === true
+    // R05 (decisión 9): Cierres del día, si es de hostelería o tiene «ventas por día» encendido.
+    case 'ventas_por_dia': return conVentasTpv(ctx)
+    // R06 · Ajustes › Ventas por día. R09: también sin interruptor en hostelería (la misma regla).
+    case 'tpv': return conVentasTpv(ctx)
+    case 'erp10': return ctx.erp10 === true
   }
 }
 
@@ -325,7 +354,7 @@ export function pestanasSinPantalla(lista: readonly Producto[] = PRODUCTOS): str
 }
 
 export function pestanasVisibles(p: Producto, ctx: Contexto): Pestana[] {
-  return p.pestanas.filter((t) => t.ruta !== null && cumple(t.solo, ctx) && !(t.hueco && ctx.solo))
+  return p.pestanas.filter((t) => t.ruta !== null && (cumple(t.solo, ctx) || (!!t.tambien && cumple(t.tambien, ctx))) && !(t.hueco && ctx.solo))
 }
 
 /** ¿Sale el apartado? Con pantalla, si lleva interruptor encendido, y si pide algo de la cuenta, que lo tenga. */

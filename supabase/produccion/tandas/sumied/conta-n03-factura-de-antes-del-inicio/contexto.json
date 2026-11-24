@@ -1,0 +1,24 @@
+{
+ "_que": "N03 · una factura de antes del día de inicio · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging fb98374, 17/11 08:49Z), en SOLO LECTURA: no en producción (esta sesión no lee producción). Las filas son las de la base local; el contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-17T09:30Z",
+ "tanda": {
+  "supabase/migrations/20261117T0955_n03_respuesta_antes_del_inicio.sql": "86399855b890a23ebe00f3483780a236",
+  "supabase/migrations/20261117T0956_n03_parar_y_preguntar.sql": "818b3d35c8b8f8879339d00e159fc1c8"
+ },
+ "contexto": {
+  "tablas": [
+   "public.supplier_invoice"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.supplier_invoice": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

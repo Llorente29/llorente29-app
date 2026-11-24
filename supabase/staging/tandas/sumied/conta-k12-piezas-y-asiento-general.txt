@@ -1,0 +1,5 @@
+# K12 · El asiento general. La 1100 solo añade (va de verdad desde la rama, W05); la 1101 amplía un CHECK y desde la
+# rama solo pasa en ROLLBACK.
+supabase/migrations/20261122T1100_k12_asiento_general.sql
+supabase/migrations/20261122T1101_k12_justificante.sql
+supabase/staging/sql/20261122_k12_asiento_general_prueba.sql

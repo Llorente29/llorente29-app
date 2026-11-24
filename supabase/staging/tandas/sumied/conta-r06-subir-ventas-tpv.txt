@@ -1,0 +1,5 @@
+# R06 · las formas de pago del TPV. La migración (solo añade) y su prueba
+# (ROLLBACK: una empresa con tres días del TPV, uno con una forma de pago sin
+# cuenta; el asiento de ejemplo en vivo; guardar la cuenta y el día pasa a listo).
+supabase/migrations/20261117T2130_r06_formas_de_pago.sql
+supabase/staging/sql/20261117_r06_formas_de_pago_prueba.sql

@@ -1,0 +1,15 @@
+# X28 · Tesorería como ERP10: los movimientos del banco, uno por fila (encargo y respuesta X28 · 1, 23/11). Rama conta/x28-tesoreria.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0800  Añade: conta_tesoreria_modificada (respaldo e historial), conta_tesoreria_se_puede_modificar (si se puede y por
+#         qué no), conta_tesoreria_modificar (la subcuenta, el concepto y la analítica de un movimiento contabilizado, en
+#         el mismo asiento: el mismo número; la cadena de huellas vuelta a encadenar y comprobada) y conta_tesoreria_a_mano
+#         (⊕ otro movimiento, con local, marca y plataforma). No cambia nada.
+#   0801  Cambia public._bank_casar_nucleo (un trozo, la misma firma: marca y plataforma en las líneas si el destino las
+#         trae) y public.conta_banco_a_mano (la misma firma, sin lógica propia: llama a conta_tesoreria_a_mano, para que
+#         contabilizar a mano se haga en un solo sitio). Declarado, con su prueba.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x28-tesoreria.sql
+supabase/migrations/20261123T0800_x28_tesoreria_modificar.sql
+supabase/migrations/20261123T0801_x28_banco_con_marca.sql

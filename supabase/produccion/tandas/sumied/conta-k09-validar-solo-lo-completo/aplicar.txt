@@ -1,0 +1,12 @@
+# K09 · Nunca se valida una recibida incompleta ni repetida, y lo impide la base (21/11).
+# Rama conta/k09-validar-solo-lo-completo. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0945  Añade conta_recibida_motivos, conta_recibida_repetida, conta_recibida_no_es_la_misma,
+#         _conta_numero_clave y supplier_invoice_no_es_la_misma; amplía el CHECK de
+#         supplier_invoice_change.what («no_es_la_misma»); y añade un trozo a
+#         conta_motivos_para_validar: en una recibida, sus motivos. No toca ninguna fila: las
+#         validadas que incumplen se cuentan (k09-validar.sql), no se cambian.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k09-validar.sql
+supabase/migrations/20261121T0945_k09_validar_solo_lo_completo.sql

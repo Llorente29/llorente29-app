@@ -1,0 +1,3 @@
+# K10c · la vuelta atrás: quita las funciones; los pagos y asientos hechos con ellas se quedan.
+cuenta: scripts/conta/produccion/cuentas/k10c-varios-pagos.sql
+supabase/vuelta-atras/20261123T0920_k10c_varios_pagos.down.sql

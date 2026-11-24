@@ -1,0 +1,3 @@
+# B01r26 · el enlace del PDF: la vuelta atrás de la 1805 quita las dos tablas y las cuatro funciones.
+cuenta: scripts/conta/produccion/cuentas/b01r26-conta-pdf.sql
+supabase/vuelta-atras/20261113T1805_b01r26_conta_pdf.down.sql

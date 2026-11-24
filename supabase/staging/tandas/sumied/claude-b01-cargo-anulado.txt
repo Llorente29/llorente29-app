@@ -1,0 +1,7 @@
+# B01·20 · 0055: el cargo que el banco anula. Añade dos columnas y cinco
+# funciones. Su prueba (ROLLBACK, cuenta D): avisa en el hueco que explica un
+# cargo y en el casado, no en un retraso ni cuando hay dos formas de sumarlo;
+# «Quitarlo», «Deshacer», «No, es bueno», quién puede llamar a qué, y la vuelta
+# atrás.
+supabase/migrations/20261107T0055_b01s_cargo_anulado.sql
+supabase/staging/sql/20261107_b01s_cargo_anulado_prueba.sql

@@ -1,0 +1,4 @@
+# X27c · La ficha fiel a ERP10 (1920 añade, de verdad desde la rama; 1921, el disparador del alta, en ROLLBACK).
+supabase/migrations/20261122T1920_x27c_web_y_domicilio.sql
+supabase/migrations/20261122T1921_x27c_alta_parte_el_domicilio.sql
+supabase/staging/sql/20261122_x27c_domicilio_prueba.sql

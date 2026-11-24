@@ -178,3 +178,23 @@ export async function lineasDeRecepciones(accountId: string, codigo: ReadonlyMap
 export async function leerFichaLiquidacion(id: string): Promise<FichaLiquidacion> {
   return deLaBase(await rpc<Record<string, unknown>>('conta_liquidacion_ficha', { p_id: id }))
 }
+
+/** S01p·18 · 3 · El proveedor de cada socio de marca (su tercero → su rol de proveedor), para subir sus documentos del mes. */
+export async function proveedoresDeSocios(accountId: string, partyIds: readonly string[]): Promise<Map<string, string>> {
+  if (partyIds.length === 0) return new Map()
+  const { data, error } = await tabla('party_role').select('party_id, supplier_id')
+    .eq('account_id', accountId).eq('role', 'supplier').in('party_id', [...partyIds]).not('supplier_id', 'is', null)
+  if (error) throw new Error(mensaje('No se han podido leer los proveedores de los socios', error))
+  return new Map(((data ?? []) as Fila[]).map((r) => [String(r.party_id), String(r.supplier_id)]))
+}
+
+/**
+ * S01p·18 · 3 · Las liquidaciones del socio de un mes en todos sus locales (el cobro
+ * puede llegar junto: el factoring de octubre pagó Alcalá y Carabanchel en uno).
+ */
+export async function liquidacionesDelSocioEnElMes(accountId: string, partyId: string, desde: string): Promise<{ id: string; local: string | null; neto: number }[]> {
+  const { data, error } = await tabla('licensed_settlement').select('id, net_settlement, locations(name)')
+    .eq('account_id', accountId).eq('party_id', partyId).eq('period_from', desde).neq('status', 'borrador')
+  if (error) throw new Error(mensaje('No se han podido leer las liquidaciones del socio del mes', error))
+  return ((data ?? []) as Fila[]).map((r) => ({ id: String(r.id), local: ((r.locations ?? null) as { name?: string } | null)?.name ?? null, neto: Number(r.net_settlement ?? 0) }))
+}

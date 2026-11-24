@@ -13,6 +13,7 @@
 import { useState } from 'react'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { ResumenComoTeFactura } from '@/modules/conta/proveedor/ComoTeFactura'
+import { CuentaDePago } from '@/modules/conta/proveedor/CuentaDePago'
 import { Campo, OrigenDelDato, Pildoras, SeGuarda, type OpcionPildora } from '@/modules/conta/proveedor/piezas'
 import { origenDelCampo } from '@/modules/conta/lib/fichaDesdeDocumento'
 import { useGuardarAlSalir } from '@/modules/conta/proveedor/useGuardarAlSalir'
@@ -73,6 +74,7 @@ export default function Pago() {
       {g.fallo && <div className="cx-error" role="alert">{g.fallo}</div>}
       <Pildoras campo="paymentMethod" etiqueta="Forma de pago" opciones={formas} elegidas={f.paymentMethod ? [f.paymentMethod] : []}
         alCambiar={(v) => void g.guardar({ paymentMethod: v[0] ?? null }, 'forma de pago')} />
+      <CuentaDePago />
       <Pildoras campo="paymentTermsDays" etiqueta="Plazo" opciones={opcionesPlazo}
         elegidas={f.paymentTermsDays === null ? [] : [String(f.paymentTermsDays)]}
         ayuda="Los plazos de tus tablas generales. Si falta uno, se añade allí."

@@ -1,0 +1,22 @@
+{
+ "_origen": "La lista de ficheros en rojo de la entera de la noche del 16/11/2026 sobre main (175473d), copiada de la línea «ficheros=» del job «aviso» del run 43837135307 (fallos=33).",
+ "run": "43837135307",
+ "sha": "175473d80cfb0085986d2aa06d106ae121192eef",
+ "fecha": "2026-11-16",
+ "fallos": 33,
+ "ficheros": [
+  "tests/e2e/conta/b01/agregador.spec.ts",
+  "tests/e2e/conta/b01/conciliar.spec.ts",
+  "tests/e2e/conta/b01/pantallas.spec.ts",
+  "tests/e2e/conta/c01b/capturas.spec.ts",
+  "tests/e2e/conta/c01b/flujos.spec.ts",
+  "tests/e2e/conta/c02/ficha.spec.ts",
+  "tests/e2e/conta/c02/plan.spec.ts",
+  "tests/e2e/conta/d01/documentos.spec.ts",
+  "tests/e2e/conta/i01b/impuestos.spec.ts",
+  "tests/e2e/conta/i01e/ficha-libro.spec.ts",
+  "tests/e2e/conta/p01/despacho.spec.ts",
+  "tests/e2e/conta/s01/esqueleto.spec.ts",
+  "tests/e2e/conta/v03/corregir-y-cuadrar.spec.ts"
+ ]
+}

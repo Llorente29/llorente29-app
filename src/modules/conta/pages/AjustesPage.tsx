@@ -26,12 +26,14 @@ import { RegistroPlan } from '@/modules/conta/plan/RegistroPlan'
 import { DeshacerTraido } from '@/modules/conta/plan/DeshacerTraido'
 import { ApartadoCorte } from '@/modules/conta/empresa/ApartadoCorte'
 import { ApartadoEnviarDiez } from '@/modules/conta/empresa/ApartadoEnviarDiez'
+import { ApartadoSalidaErp10 } from '@/modules/conta/empresa/ApartadoSalidaErp10'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { ApartadoCierreDelDia } from '@/modules/conta/empresa/ApartadoCierreDelDia'
 import { VerifactuAjustes } from '@/modules/conta/verifactu/VerifactuAjustes'
 import { CobrosAjustes } from '@/modules/conta/ventas/CobrosAjustes'
 import { CorreoFacturasAjustes } from '@/modules/conta/compras/CorreoFacturas'
 import { ApuntarSoloAjustes } from '@/modules/conta/compras/ApuntarSoloAjustes'
+import { VentasPorDiaAjustes } from '@/modules/conta/ventas/tpv/VentasPorDiaAjustes'
 import { ApartadoRoi } from '@/modules/conta/empresa/ApartadoRoi'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
@@ -73,6 +75,8 @@ function Entrada({ id }: { id: string }) {
   if (id === 'correo-facturas') return <>{cabeza}<CorreoFacturasAjustes /></>
   // S01o · Apuntar solo lo seguro: el interruptor de la empresa; no necesita los datos de la empresa de Ajustes.
   if (id === 'apuntar-solo') return <>{cabeza}<ApuntarSoloAjustes /></>
+  // R06 · Ventas por día: a qué cuenta va cada forma de pago del TPV; no necesita los datos de la empresa de Ajustes.
+  if (id === 'ventas-por-dia') return <>{cabeza}<VentasPorDiaAjustes /></>
   // DM1 · PR 1 · Usuarios: quién entra e «Invitar a una persona»; no necesita los datos de la empresa de Ajustes.
   if (id === 'personas') return <>{cabeza}<Usuarios /></>
   // GD · Tu cuenta: solo en una cuenta de demostración, con «Volver a empezar».
@@ -118,7 +122,7 @@ function Entrada({ id }: { id: string }) {
     case 'socios': return <>{cabeza}<Socios {...p} /></>
     // La hora de cierre del día es de pedidos: solo en una empresa de hostelería (inventario del S01, §3).
     // C07: «Enviar a Diez», junto a «Desde cuándo asienta» (solo en una empresa que trabaja con Diez).
-    case 'ejercicio': return <>{cabeza}<EjercicioMeses {...p} /><ApartadoCorte quien={quien} movil={movil} alCambiar={datos.recargar} /><ApartadoEnviarDiez quien={quien} movil={movil} nombre={userName ?? null} />{hosteleria && <ApartadoCierreDelDia quien={quien} movil={movil} />}</>
+    case 'ejercicio': return <>{cabeza}<EjercicioMeses {...p} /><ApartadoCorte quien={quien} movil={movil} alCambiar={datos.recargar} /><ApartadoEnviarDiez quien={quien} movil={movil} nombre={userName ?? null} /><ApartadoSalidaErp10 quien={quien} movil={movil} nombre={userName ?? null} />{hosteleria && <ApartadoCierreDelDia quien={quien} movil={movil} />}</>
     case 'folvy':
       return (
         <>

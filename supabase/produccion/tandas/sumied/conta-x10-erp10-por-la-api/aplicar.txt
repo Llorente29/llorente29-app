@@ -1,0 +1,9 @@
+# X10 · ERP10 por la API, fase 1 (leer y comparar; 19/11). Rama conta/x10-erp10-por-la-api.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1250  Añade el conector «ERP10 (despacho)» al catálogo (una fila, insert … on conflict
+#         do nothing). No cambia ninguna tabla, columna ni función; Diez sigue igual.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x10-conector-erp10.sql
+supabase/migrations/20261119T1250_x10_conector_erp10.sql

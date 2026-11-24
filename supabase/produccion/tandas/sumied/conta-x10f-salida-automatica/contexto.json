@@ -1,0 +1,20 @@
+{
+ "_que": "X10f · lo validado sale solo a ERP10 · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción (esta sesión no lee producción). 2010 añade una columna que admite nulos a conta_erp10_envio, tres funciones nuevas y un cron; 2011 cambia la guarda de conta_erp10_lote_apuntar (misma firma), declarado en su cabecera con su prueba de staging. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-20T19:30Z",
+ "tanda": {
+  "supabase/migrations/20261120T2010_x10f_cola_erp10.sql": "18f70e0dc45d0e0f3a466cd54ac430cb",
+  "supabase/migrations/20261120T2011_x10f_lote_desde_el_servidor.sql": "26930e1c966cec4095507b1fe9eb36df"
+ },
+ "contexto": {
+  "tablas": ["public.conta_erp10_envio"],
+  "funciones": ["public.conta_erp10_lote_apuntar(uuid,date,jsonb,jsonb,text)"],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

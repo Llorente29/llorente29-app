@@ -102,6 +102,23 @@ while (pendientes.length) {
 const resto = Object.keys(defs).filter((k) => !hechos.has(k))
 l.push(`Otros modelos (${resto.length}): ${resto.map((k) => `\`${k}\``).join(', ')}`, '')
 
+// X10 (19/11) · ¿Dónde sale el NIF de la empresa abierta? Todos los modelos con un campo de
+// NIF o CIF (o de nombre o datos de la empresa), y las lecturas (GET) que los devuelven: para
+// comprobar al entrar en ERP10 que la empresa abierta es la de la sociedad de Sumied.
+const conNif = Object.entries(defs).flatMap(([k, s]) => Object.keys(s.properties ?? {})
+  .filter((c) => /^(nif|cif|nifempresa|cifempresa|razonsocial|nombreempresa|empresa|codempresa|cod_empresa)$/i.test(c) || /nif|cif/i.test(c))
+  .map((c) => ({ modelo: k, campo: c })))
+const devuelve = (modelo) => ops.filter((o) => o.m === 'GET' && o.resp.some((r) => new RegExp(`\\b${modelo}(\\[\\])?\\b`).test(r)))
+l.push('', '### X10 · Los campos de NIF, CIF o empresa, y las lecturas que los devuelven', '')
+if (!conNif.length) l.push('Ningún modelo tiene un campo de NIF, CIF o empresa.')
+for (const x of conNif) {
+  const g = devuelve(x.modelo)
+  l.push(`- \`${x.modelo}.${x.campo}\` ← ${g.length ? g.map((o) => `GET \`${o.ruta}\``).join(', ') : '(ninguna lectura lo devuelve directamente)'}`)
+}
+const deParametros = Object.entries(defs).filter(([k]) => /parametro|empresa|configur/i.test(k))
+for (const [k, s] of deParametros) l.push(`- Modelo \`${k}\`: ${Object.keys(s.properties ?? {}).join(', ') || '(sin campos)'}`)
+l.push('')
+
 // La escritura de apuntes, entera.
 const add = Object.entries(doc.paths ?? {}).filter(([r]) => /apuntes\/add/i.test(r))
 l.push('### POST /api/apuntes/add, tal cual', '', '```json', JSON.stringify(Object.fromEntries(add), null, 1), '```')

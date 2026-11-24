@@ -1,0 +1,334 @@
+/* src/modules/conta/nucleo/ficha/ficha.css
+ *
+ * K04 · Una ficha del núcleo, medida sobre las maquetas aprobadas (nucleo_1,
+ * nucleo_2 y nucleo_3, a 1456 × 816). La densidad es la de la maqueta: rótulo
+ * de 11 px encima, casilla de 24, cifras a la derecha, el total grande. Cabe
+ * sin rodar a 1456 × 816, y a 1366 × 768 con la cinta plegada. Los colores,
+ * los del núcleo (--k-*) más los de la ficha (--kf-*).
+ */
+
+.k-nucleo {
+  --kf-ambar-fondo: #fdf0d3;
+  --kf-ambar-borde: #e2a33b;
+  --kf-ambar-tinta: #6b4300;
+  --kf-ambar-boton: #8c4f05;
+  --kf-verde-fondo: #dcefe2;
+  --kf-verde-tinta: #1d6b3d;
+  --kf-casilla-borde: #c6cdd4;
+  --kf-panel: #e9ecef;
+}
+
+/* La zona de una pestaña con ficha no lleva el margen de abajo: la ficha ocupa el alto. */
+/* K04b · Sin «:not([hidden])» esta regla pesaba lo mismo que la que esconde una pestaña (nucleo.css) y, por ir
+   después, ganaba: la pestaña de una ficha no se escondía nunca, y salía debajo de la que se miraba. */
+.cx.cxm .k-zona.cx-principal:not([hidden]):has(.kf-ficha) { padding: 0 16px 0; overflow: hidden; display: flex; flex-direction: column; }
+
+.kf-ficha {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  background: var(--k-blanco); border: 1px solid var(--k-borde); border-top: 0; border-radius: 0 0 6px 6px;
+  font-size: 13px; color: var(--k-tinta);
+}
+.kf-ficha button { font: inherit; }
+.kf-ficha :focus-visible { outline: 2px solid var(--k-azul); outline-offset: 1px; }
+
+/* ── La cabecera ─────────────────────────────────────────────────────── */
+.kf-cabecera { flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 7px 12px 7px 16px; }
+.kf-cabecera h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
+.kf-cola { color: var(--k-apoyo); white-space: nowrap; }
+.kf-estado {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 3px 10px; border-radius: 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.kf-estado[data-tono='ambar'] { background: var(--kf-ambar-fondo); color: var(--kf-ambar-tinta); }
+.kf-estado[data-tono='gris'] { background: var(--k-gris); color: var(--k-tinta); }
+.kf-estado[data-tono='verde'] { background: var(--kf-verde-fondo); color: var(--kf-verde-tinta); }
+.kf-estado strong { font-weight: 700; }
+/* X10f · La línea de ERP10, pequeña, junto al estado: el texto se acorta (entero al pasar por encima) y «Volver a intentarlo» siempre se ve. */
+.kf-erp10 { font-size: 12px; padding: 2px 9px; flex-shrink: 1; display: inline-flex; align-items: center; gap: 6px; min-width: 0; border-radius: 12px; white-space: nowrap; overflow: hidden; }
+/* Con los colores del núcleo si los hay; en el marco de siempre, los mismos, escritos aquí. */
+.kf-erp10[data-tono='verde'] { background: var(--kf-verde-fondo, #dcefe2); color: var(--kf-verde-tinta, #1d6b3d); }
+.kf-erp10[data-tono='gris'] { background: var(--k-gris, #eef1f4); color: var(--k-tinta, #1f2933); }
+.kf-erp10[data-tono='ambar'] { background: var(--kf-ambar-fondo, #fdf0d3); color: var(--kf-ambar-tinta, #6b4300); }
+.kf-erp10 .kf-estado-punto { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.kf-erp10[data-tono='ambar'] .kf-estado-punto { background: var(--k-mira, #c27c0e); }
+.kf-erp10 .kf-enlace { padding: 0; background: none; border: 0; color: var(--k-azul, #0b5281); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.kf-erp10-texto { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.kf-erp10-otra { flex-shrink: 0; font-size: 12px; }
+.kf-estado-punto { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.kf-estado[data-tono='ambar'] .kf-estado-punto { background: var(--k-mira); }
+.kf-estado[data-tono='gris'] .kf-estado-punto { background: var(--k-apoyo); }
+.kf-cabecera-botones { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.kf-flecha, .kf-boton-hueco {
+  height: 32px; min-width: 32px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--k-blanco); border: 1px solid var(--k-raya); border-radius: 5px; color: var(--k-tinta); cursor: pointer;
+}
+.kf-flecha { padding: 0; width: 34px; font-size: 16px; }
+.kf-flecha:disabled, .kf-boton-hueco:disabled { color: var(--k-raya); cursor: default; }
+.kf-guardar {
+  height: 34px; padding: 0 22px; display: inline-flex; align-items: center; gap: 10px; border: 0; border-radius: 5px;
+  background: var(--k-azul); color: var(--k-blanco); font-weight: 700; font-size: 15px; cursor: pointer; white-space: nowrap;
+}
+.kf-guardar kbd { padding: 0 5px; border: 1px solid rgba(255, 255, 255, 0.55); border-radius: 4px; font: 400 12px var(--k-letra); }
+.kf-guardar:disabled { opacity: 0.55; cursor: default; }
+.kf-mas { position: relative; }
+.kf-mas-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 240px; padding: 4px; margin: 0; list-style: none;
+  background: var(--k-blanco); border: 1px solid var(--k-borde); border-radius: 6px; box-shadow: 0 6px 18px rgba(16, 24, 40, 0.14);
+}
+.kf-mas-menu a, .kf-mas-menu button { display: block; width: 100%; padding: 7px 10px; text-align: left; background: none; border: 0; border-radius: 4px; color: var(--k-tinta); text-decoration: none; cursor: pointer; }
+.kf-mas-menu a:hover, .kf-mas-menu button:hover { background: var(--k-gris); }
+
+/* El aviso de lo que ha pasado al guardar (regla 8), bajo la cabecera. */
+.kf-aviso { flex-shrink: 0; margin: 0 12px 6px 16px; padding: 6px 10px; border-radius: 5px; }
+.kf-aviso[data-tono='ok'] { background: var(--kf-verde-fondo); color: var(--kf-verde-tinta); }
+.kf-aviso[data-tono='falta'] { background: var(--kf-ambar-fondo); color: var(--kf-ambar-tinta); }
+.kf-aviso[data-tono='mal'] { background: #fde8e6; color: var(--k-rojo); }
+/* K09 · La repetida: «Ya está la …», «Abrirla» y «No es la misma: …», en una línea dentro de la franja ámbar. */
+.kf-repetida { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.kf-repetida .kf-no-es { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.kf-repetida input:not([type='checkbox']) { flex: 1 1 220px; min-width: 160px; padding: 2px 6px; border: 1px solid var(--k-raya); border-radius: 4px; font: inherit; }
+
+/* ── El cuerpo: la ficha a la izquierda, el documento a la derecha ───── */
+.kf-cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.29fr) minmax(0, 1fr); border-top: 1px solid var(--k-borde); }
+.kf-izquierda { min-height: 0; display: flex; flex-direction: column; }
+.kf-formulario { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 8px 16px; display: flex; flex-direction: column; gap: 6px; }
+
+.kf-fila { display: grid; gap: 10px; grid-template-columns: repeat(var(--kf-columnas, 5), minmax(0, 1fr)); }
+.kf-casilla { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.kf-rotulo { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-height: 15px; font-size: 11.5px; color: var(--k-apoyo); white-space: nowrap; }
+.kf-rotulo label { overflow: hidden; text-overflow: ellipsis; }
+.kf-origen { color: var(--k-azul); flex-shrink: 0; }
+.kf-ficha input:not([type='checkbox']):not([type='file']), .kf-ficha select {
+  width: 100%; min-width: 0; height: 25px; padding: 0 6px; box-sizing: border-box;
+  background: var(--k-blanco); border: 1px solid var(--kf-casilla-borde); border-radius: 3px; color: var(--k-tinta); font: 13px var(--k-letra);
+}
+.kf-ficha select { padding-right: 2px; }
+.kf-ficha input:focus, .kf-ficha select:focus { outline: 2px solid var(--k-azul); outline-offset: -1px; border-color: var(--k-azul); }
+.kf-casilla[data-duda='si'] input, .kf-ficha input[data-duda='si'] { border: 2px solid var(--kf-ambar-borde); background: #fffaf0; }
+.kf-cifra, .kf-ficha input.kf-cifra { text-align: right; font-variant-numeric: tabular-nums; }
+.kf-ficha input[readonly] { background: #fbfcfd; }
+
+.kf-saldo { display: flex; align-items: center; gap: 6px; padding: 3px 8px; background: var(--k-gris); border-radius: 3px; color: var(--k-apoyo); }
+.kf-saldo strong { color: var(--k-tinta); margin-right: 8px; font-variant-numeric: tabular-nums; }
+.kf-saldo .kf-enlace { margin-left: auto; }
+.kf-enlace { padding: 0; background: none; border: 0; color: var(--k-azul); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.kf-enlace-plano { color: var(--k-azul); text-decoration: none; font-weight: 600; background: none; border: 0; padding: 0; cursor: pointer; }
+
+.kf-comprobaciones { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 0; padding: 0 2px; list-style: none; }
+.kf-comprobaciones li { display: inline-flex; align-items: center; gap: 6px; }
+.kf-comprobaciones[data-nota='si'] { color: var(--k-apoyo); }
+.kf-visto { color: var(--k-bien); font-weight: 700; }
+.kf-comprobaciones li[data-tono='ambar'] { color: var(--kf-ambar-tinta); background: var(--kf-ambar-fondo); padding: 0 6px; border-radius: 3px; }
+.kf-comprobaciones li[data-tono='ambar'] .kf-visto { color: var(--k-mira); }
+.kf-comprobaciones li[data-tono='rojo'] { color: var(--k-rojo); background: #fde8e6; padding: 0 6px; border-radius: 3px; }
+.kf-comprobaciones li[data-tono='rojo'] .kf-visto { color: var(--k-rojo); }
+
+/* El IVA y el total, lado a lado. */
+.kf-importes { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.kf-titulo { display: flex; align-items: baseline; gap: 12px; margin: 0; font-size: 13px; font-weight: 700; }
+.kf-titulo .kf-enlace-plano { font-weight: 600; font-size: 12.5px; }
+.kf-titulo-derecha { margin-left: auto; display: flex; gap: 16px; }
+.kf-iva { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.kf-iva th { font-size: 11.5px; font-weight: 400; color: var(--k-apoyo); text-align: right; padding: 0 4px 1px; }
+.kf-iva th:first-child { text-align: left; }
+.kf-iva-cabeza { display: flex; align-items: baseline; justify-content: space-between; }
+.kf-iva-cabeza .kf-titulo { color: var(--k-tinta); }
+.kf-iva td { padding: 0 1px 2px 0; }
+.kf-iva col.kf-col-base { width: 40%; }
+.kf-iva col.kf-col-tipo { width: 22%; }
+.kf-iva-cabeza .kf-titulo { white-space: nowrap; }
+.kf-total { padding: 10px 12px; background: var(--k-gris); border-radius: 6px; display: grid; gap: 8px; }
+.kf-total-arriba { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.kf-total-arriba span { font-weight: 700; font-size: 14px; white-space: nowrap; }
+.kf-total-cifra { font-size: 23px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kf-total-arriba input.kf-total-cifra { width: 120px; height: 32px; font-size: 20px; text-align: right; }
+.kf-total-ayuda { display: block; margin-top: -8px; font-size: 11.5px; color: var(--k-apoyo); }
+.kf-total-retencion { display: flex; align-items: center; gap: 10px; color: var(--k-apoyo); }
+
+/* A qué cuenta de gasto va · Cómo se paga, lado a lado. */
+.kf-dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr); gap: 18px; }
+.kf-bloque { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.kf-gasto { display: grid; grid-template-columns: 92px minmax(0, 1fr) 84px 18px; gap: 6px; }
+.kf-gasto-ayuda { margin: 0; font-size: 11.5px; color: var(--k-apoyo); }
+/* R14 · «+ Nuevo proveedor» en la de a mano: un enlace pequeño bajo la casilla del proveedor. */
+.kf-nuevo-proveedor { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: -4px 0 8px; font-size: 12.5px; }
+button.kf-nuevo-proveedor { display: inline-block; }
+.kf-nuevo-proveedor .kf-error { flex-basis: 100%; margin: 0; color: var(--k-rojo, #b42318); font-size: 12px; }
+.kf-pareja { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.kf-quitar { width: 18px; padding: 0; background: none; border: 0; color: var(--k-apoyo); cursor: pointer; opacity: 0; }
+tr:hover .kf-quitar, .kf-gasto:hover .kf-quitar, .kf-quitar:focus-visible { opacity: 1; }
+.kf-gasto[data-una='si'] { grid-template-columns: 92px minmax(0, 1fr) 84px; }
+.kf-gasto[data-una='si'] > span:last-child { display: none; }
+/* El aspa de quitar una línea de IVA (18 px) en su columna, en todas las fichas (e2e 44570080751 y 44702392195: «td: «×», 18 en 14»). */
+.kf-iva .kf-iva-quitar { width: 20px; }
+.kf-sugerencias {
+  position: absolute; z-index: 25; max-height: 220px; overflow-y: auto; min-width: 280px; margin: 2px 0 0; padding: 4px; list-style: none;
+  background: var(--k-blanco); border: 1px solid var(--k-borde); border-radius: 6px; box-shadow: 0 6px 18px rgba(16, 24, 40, 0.14);
+}
+.kf-sugerencias li { padding: 4px 8px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+.kf-sugerencias li[aria-selected='true'] { background: var(--k-azul-claro); }
+.kf-con-sugerencias { position: relative; }
+
+/* La duda. */
+.kf-duda { display: flex; align-items: center; gap: 12px; padding: 7px 10px; background: var(--kf-ambar-fondo); border-radius: 5px; color: var(--kf-ambar-tinta); }
+.kf-duda p { margin: 0; flex: 1; min-width: 0; line-height: 1.35; }
+.kf-duda strong { color: #5a3600; }
+.kf-duda-botones { display: flex; gap: 8px; flex-shrink: 0; }
+.kf-boton-ambar { height: 32px; padding: 0 14px; border: 0; border-radius: 5px; background: var(--kf-ambar-boton); color: var(--k-blanco); font-weight: 700; cursor: pointer; white-space: nowrap; }
+.kf-duda .kf-boton-hueco { border-color: var(--kf-ambar-boton); color: #4a2c00; font-weight: 600; }
+
+/* El asiento que sale. */
+.kf-asiento { flex: 1 0 auto; border: 1px solid var(--k-borde); border-radius: 6px; padding: 6px 10px 6px; min-height: 92px; }
+.kf-asiento header { display: flex; align-items: center; gap: 10px; margin-bottom: 3px; }
+.kf-asiento h3 { margin: 0; font-size: 13px; font-weight: 700; }
+.kf-etiqueta { padding: 1px 10px; border-radius: 10px; font-weight: 600; }
+.kf-etiqueta[data-tono='bien'], .kf-etiqueta[data-tono='vacio'] { background: var(--kf-verde-fondo); color: var(--kf-verde-tinta); }
+.kf-etiqueta[data-tono='ambar'] { background: var(--kf-ambar-fondo); color: var(--kf-ambar-tinta); }
+.kf-apoyo { color: var(--k-apoyo); font-size: 12px; }
+.kf-asiento-editar { margin-left: auto; text-decoration: none; font-weight: 600; }
+.kf-asiento table { width: 100%; border-collapse: collapse; }
+.kf-asiento td { padding: 3px 6px; border-top: 1px solid var(--k-gris); }
+.kf-asiento tr:first-child td { border-top: 0; }
+.kf-asiento-cuenta { width: 108px; font-variant-numeric: tabular-nums; }
+.kf-asiento td.kf-cifra { width: 108px; }
+.kf-asiento tr[data-a-mano='si'] .kf-asiento-cuenta { color: var(--k-azul); font-weight: 600; }
+
+/* La ayuda de teclas: por debajo de 800 de alto no sale (decisión 13). */
+.kf-ayuda { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 3px 18px; padding: 5px 16px 6px; border-top: 1px solid var(--k-borde); font-size: 11.5px; color: var(--k-apoyo); }
+.kf-ayuda kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin-right: 2px; border: 1px solid var(--k-raya); border-radius: 3px; background: var(--k-blanco); color: var(--k-tinta); font: 600 11px var(--k-letra); text-align: center; }
+@media (max-height: 799px) { .kf-ayuda { display: none; } }
+
+/* ── El panel del documento ──────────────────────────────────────────── */
+.kf-panel { min-height: 0; display: flex; flex-direction: column; background: var(--kf-panel); border-left: 1px solid var(--k-borde); }
+.kf-panel-arriba { padding: 10px 14px 0; display: flex; align-items: center; gap: 12px; }
+/* Q06 · Lo de arriba a la derecha del panel (el listado: «Abrir el asiento»). */
+.kf-panel-accion { margin-left: auto; }
+.kf-segmentos { display: inline-flex; padding: 3px; background: #dfe3e7; border-radius: 7px; }
+.kf-segmentos button { height: 30px; padding: 0 14px; border: 0; border-radius: 5px; background: transparent; color: var(--k-apoyo); font-weight: 600; cursor: pointer; }
+.kf-segmentos button[aria-selected='true'] { background: var(--k-blanco); color: var(--k-tinta); box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12); }
+.kf-panel-lupa { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 14px; }
+.kf-panel-lupa > button:not(.kf-boton-hueco) { width: 22px; height: 22px; padding: 0; background: none; border: 0; font-size: 16px; color: var(--k-tinta); cursor: pointer; }
+.kf-panel-lupa > button:disabled:not(.kf-boton-hueco) { color: var(--k-raya); }
+.kf-panel-cuerpo { flex: 1; min-height: 0; overflow: auto; padding: 4px 20px 16px; }
+.kf-hoja { margin: 0 auto; background: var(--k-blanco); box-shadow: 0 1px 3px rgba(16, 24, 40, 0.14); }
+.kf-hoja img { display: block; width: 100%; }
+.kf-panel-nota { color: var(--k-apoyo); text-align: center; margin-top: 40px; }
+.kf-soltar {
+  width: 100%; max-width: 420px; height: 196px; margin: 120px auto 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  padding: 0 24px; background: transparent; border: 2px dashed #a9b2bb; border-radius: 10px; color: var(--k-apoyo); text-align: center; cursor: pointer;
+}
+.kf-soltar strong { color: var(--k-tinta); font-size: 15px; }
+.kf-soltar[data-encima='si'] { background: var(--k-azul-claro); border-color: var(--k-azul); }
+/* K07 · «Cambiar el documento»: un enlace pequeño junto a «Pantalla completa»; y el que hay, resaltado al soltar otro encima. */
+.kf-panel-lupa > button.kf-cambiar-doc { width: auto; height: auto; padding: 0; font-size: 12px; color: var(--k-azul); text-decoration: underline; cursor: pointer; }
+.kf-panel-lupa > button.kf-cambiar-doc:disabled { color: var(--k-raya); cursor: default; }
+.kf-hoja[data-encima='si'] { outline: 2px dashed var(--k-azul); outline-offset: 4px; }
+/* K07 · La contabilizada y la descartada: las mismas casillas, sin poder escribir (un fieldset desactivado que no pinta nada). */
+.kf-solo-lectura { border: 0; margin: 0; padding: 0; min-width: 0; display: contents; }
+/* K07 · El historial de la factura, encima de la ficha. */
+.kf-historial { position: absolute; right: 12px; top: 48px; z-index: 30; width: min(520px, calc(100% - 24px)); max-height: 60%; overflow: auto;
+  background: var(--k-blanco); border: 1px solid var(--k-borde, #d0d5dd); border-radius: 8px; box-shadow: 0 8px 24px rgba(16, 24, 40, 0.18); padding: 10px 14px; }
+.kf-historial header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.kf-historial h3 { margin: 0; font-size: 14px; }
+.kf-historial ol { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.kf-historial li { padding: 4px 0; border-top: 1px solid var(--k-borde, #eaecf0); }
+.kf-historial li small { color: var(--k-gris, #667085); display: block; }
+.kf-soltar-flecha { font-size: 28px; color: var(--k-azul); line-height: 1; }
+.kf-mayor { width: 100%; border-collapse: collapse; background: var(--k-blanco); border-radius: 6px; font-size: 12.5px; }
+.kf-mayor th { text-align: left; font-weight: 600; color: var(--k-apoyo); padding: 5px 8px; border-bottom: 1px solid var(--k-borde); }
+.kf-mayor td { padding: 4px 8px; border-bottom: 1px solid var(--k-gris); }
+.kf-mayor .kf-cifra { text-align: right; }
+
+/* «Guardarla sin documento», debajo de la zona de soltar. */
+.kf-sin-documento { max-width: 420px; margin: 14px auto 0; display: grid; gap: 6px; color: var(--k-tinta); }
+.kf-sin-documento label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+
+/* K05 · El mayor en el panel, como la maqueta de la emitida: en su tarjeta, con el saldo y esta factura en azul claro. */
+.kf-mayor-caja { background: var(--k-blanco); border-radius: 6px; padding: 14px 18px; box-shadow: 0 1px 2px rgb(0 0 0 / 6%); }
+.kf-mayor-titulo { margin: 0 0 10px; color: var(--k-apoyo); font-size: 13px; line-height: 1.5; }
+.kf-mayor-titulo strong { color: var(--k-tinta); }
+.kf-mayor tr[data-esta='si'] td { background: var(--k-azul-claro); font-weight: 600; }
+
+/* K05 · «Cómo se cobra»: la cuenta y su nombre, sin columna de importe al lado (el importe va debajo, con la fecha): el nombre entero. */
+.kf-cobro { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 6px; }
+.kf-titulo .kf-titulo-derecha.kf-origen { font-weight: 400; font-size: 11px; }
+
+/* K05 · En la emitida no se corta nada, a 1456 × 816 ni a 1366 × 768 (Julio, 19/11), medido en Chromium con este CSS y los
+   textos más largos de la e2e: la franja puede ir en dos líneas; el formulario se lleva más ancho que el documento; la venta
+   más que el cobro; y un poco menos de aire entre bloques, para que la fila del concepto quepa sin que el formulario ruede. */
+.kf-emitida .kf-estado { white-space: normal; }
+.kf-emitida .kf-cuerpo { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+.kf-emitida .kf-dos { grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr); }
+.kf-emitida .kf-formulario { gap: 3px; padding-top: 6px; padding-bottom: 6px; }
+
+/* K06 · «Cómo se paga» en la recibida: debajo de la cuenta, cuándo vence, el día del pago y el importe, cada uno con su rótulo. */
+.kf-pago-fechas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.kf-pago-asiento { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--k-apoyo); }
+.kf-rotulo-chico { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; min-width: 0; font-size: 11px; color: var(--k-apoyo); white-space: nowrap; }
+
+/* K06 · La raya entre el formulario y el documento: fina (la del borde del panel), con el cursor de arrastrar y sin adornos.
+   La parte del documento la pone la raya (--kf-doc); el formulario no baja de su mínimo (--kf-min-form: el ancho que tiene a
+   1366 × 768 con la cinta plegada, medido, sin cortar la cuenta con su nombre ni las columnas del IVA). */
+.kf-ficha { --kf-min-form: 680px; }
+.kf-ficha.kf-emitida { --kf-min-form: 740px; }
+.kf-ficha .kf-cuerpo[data-raya='si'] { grid-template-columns: minmax(0, 1fr) clamp(240px, var(--kf-doc), calc(100% - var(--kf-min-form))); }
+.kf-panel { position: relative; }
+.kf-raya { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; z-index: 2; cursor: col-resize; touch-action: none; }
+.kf-raya:hover, .kf-raya:focus-visible { outline: none; background: linear-gradient(to right, transparent 3px, var(--k-azul, #2f6fde) 3px, var(--k-azul, #2f6fde) 5px, transparent 5px); }
+
+/* K06 · En la recibida no se corta nada, a 1456 × 816 ni a 1366 × 768 (Julio, 20/11), como la emitida del K05: el concepto
+   va en su fila (FichaRecibida); la columna × del IVA, a 20 px en todas (arriba); un poco menos de aire entre bloques; la
+   franja puede ir en dos líneas; la cuenta de gasto se lleva algo más que la del pago; y por debajo de
+   1440 px de ventana el formulario se lleva más ancho que el documento («Serie / documento» y el nombre de la cuenta de
+   gasto). A 1456 el reparto sigue siendo el de la maqueta. El mínimo del formulario es el que tiene así a 1366. */
+.kf-recibida .kf-formulario { gap: 3px; padding-top: 6px; padding-bottom: 6px; }
+.kf-recibida .kf-estado { white-space: normal; }
+.kf-recibida .kf-dos { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); }
+.kf-ficha.kf-recibida { --kf-min-form: 740px; }
+@media (max-width: 1440px) {
+  .kf-recibida .kf-cuerpo { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+}
+
+/* K06 · El nombre de una cuenta (NombreDeCuenta) no se corta: si no cabe, en dos líneas (Julio, 20/11). Una línea mide lo
+   mismo que una casilla (25 px); dos, 41. */
+.kf-ficha textarea.kf-nombre-cuenta {
+  display: block; width: 100%; min-width: 0; box-sizing: border-box; min-height: 25px; max-height: 41px; padding: 4px 6px 3px;
+  resize: none; overflow: hidden; field-sizing: content; overflow-wrap: anywhere;
+  background: #fbfcfd; border: 1px solid var(--kf-casilla-borde); border-radius: 3px; color: var(--k-tinta); font: 13px/16px var(--k-letra);
+}
+.kf-ficha textarea.kf-nombre-cuenta:focus { outline: none; }
+.kf-ficha textarea.kf-nombre-cuenta[data-duda='si'] { border: 2px solid var(--kf-ambar-borde); background: #fffaf0; padding: 3px 5px 2px; }
+
+/* K06 · La recibida cabe entera sin rodar (Julio, 16/11), con el concepto en su fila, los rótulos del pago y el nombre de la
+   cuenta en dos líneas: menos aire entre el rótulo y su casilla y en las filas del asiento. Medido en el arnés: a 1366 cabe la
+   rellenada con duda y cuatro apuntes; a 1456, esa misma pasa 9 px (dicho en el #753, con su captura). */
+.kf-recibida .kf-casilla { gap: 1px; }
+.kf-recibida .kf-rotulo { min-height: 14px; }
+.kf-recibida .kf-asiento { padding: 4px 10px; }
+.kf-recibida .kf-asiento header { margin-bottom: 1px; }
+.kf-recibida .kf-asiento td { padding: 1px 6px; }
+
+/* X21 · «No está: crear la …» debajo de una casilla que busca cuentas: las dos casillas de «Añadir subcuenta». */
+.kf-crear { min-width: 420px; max-height: none; overflow: visible; padding: 8px 10px; white-space: normal; }
+.kf-crear .cx-subcuenta { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+
+/* K10 · «Cuenta de pago» en la ficha del proveedor: el código (con F4) y su nombre, en una fila, como cualquier casilla de cuenta. */
+.kf-cuenta-de-pago-fila { display: grid; grid-template-columns: minmax(110px, 160px) minmax(0, 1fr) auto; gap: 8px; align-items: start; max-width: 640px; }
+.kf-cuenta-de-pago-fila input { width: 100%; }
+.kf-cuenta-de-pago [data-tono='ok'] { color: var(--kf-verde-tinta, #027a48); }
+.kf-cuenta-de-pago [data-tono='mal'] { color: var(--k-rojo, #b42318); }
+/* K10 · Un aviso de una línea, en ámbar y pequeño (la contrapartida al inmovilizado). */
+.kf-aviso-linea { margin: 2px 0 0; font-size: 12px; color: var(--kf-ambar-tinta, #b54708); }
+/* X26 · «Modificar» una recibida contabilizada: la cuenta de cada gasto con su buscador, y su nombre al lado. */
+.kf-modificar-linea { display: grid; grid-template-columns: minmax(110px, 140px) minmax(0, 1fr); gap: 8px; align-items: center; }
+.kf-modificar-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kf-modificar-linea .kf-con-sugerencias, .kf-modificar-linea input { min-width: 0; width: 100%; box-sizing: border-box; }
+.kf-modificar { display: inline-flex; gap: 8px; align-items: center; margin-left: 8px; }
+.kf-modificar-porque { font-size: 12px; color: var(--k-apoyo); }
+
+/* K10b · «Observaciones +»: plegadas en una línea, al lado del concepto, para que la ficha siga cabiendo entera. */
+.kf-obs-boton { align-self: end; white-space: nowrap; padding-bottom: 6px; }
+.kf-recibida textarea#kf-observaciones { width: 100%; resize: vertical; font: inherit; }
+
+/* K10b · Sin propuesta: su porqué, debajo de la cabecera del asiento (regla 8). */
+.kf-asiento-nota { margin: 6px 0 0; font-size: 13px; color: var(--kf-ambar-tinta, #8a5a00); }

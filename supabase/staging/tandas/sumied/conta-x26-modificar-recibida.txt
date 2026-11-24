@@ -1,0 +1,3 @@
+# X26 · «Modificar» una recibida contabilizada (añade la tabla de respaldo y dos funciones).
+supabase/migrations/20261121T1900_x26_modificar_recibida.sql
+supabase/staging/sql/20261121_x26_modificar_recibida_prueba.sql

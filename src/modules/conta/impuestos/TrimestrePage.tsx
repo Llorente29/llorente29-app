@@ -50,6 +50,7 @@ import { TraerPorCsv } from './TraerPorCsv'
 import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
 import { diaPresentado, mesReabierto, textoReabierto, textosCandado, trimestrePresentado } from '@/modules/conta/lib/ivaPresentado'
 import { ReabrirTrimestre } from './ReabrirTrimestre'
+import { LiquidacionRepetida } from './LiquidacionRepetida'
 import { CandadoIva } from '@/modules/conta/diseno/CandadoIva'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -385,7 +386,8 @@ function Liquidacion({ casillas }: { casillas: CasillaTrimestre[] }) {
  * diario. Lo que no se puede leer se dice, no se esconde (regla 8).
  */
 function ColDerecha({ m, d, ejercicio, trimestre, alRecalcular }: { m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string; alRecalcular: () => void }) {
-  if (m.modelo === '303') return <><Cartera d={d} alRecalcular={alRecalcular} /><Comprobado303 m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} /></>
+  // S01p·21: si la liquidación del trimestre está apuntada dos veces, arriba, con «Dejar solo esta».
+  if (m.modelo === '303') return <>{m.declaracion && <LiquidacionRepetida declaracion={m.declaracion.id} puede={d.puede_gestionar} quien={null} />}<Cartera d={d} alRecalcular={alRecalcular} /><Comprobado303 m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} /></>
   if (m.modelo === '111' || m.modelo === '115') return <ComprobadoRetenciones m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} />
   return (
     <section className="s-tarjeta s-trimestre-comprobado" aria-labelledby="comp-titulo">
