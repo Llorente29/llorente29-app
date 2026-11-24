@@ -199,7 +199,8 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     await expect(ficha(page).locator('#kf-cuenta-0')).toHaveValue('62800001', { timeout: 30_000 })
     await ficha(page).getByRole('button', { name: 'Otra línea' }).click()
     await ficha(page).getByRole('button', { name: 'Otra línea' }).click()
-    await expect(ficha(page).getByRole('button', { name: 'Otra línea' })).toContainText('3 líneas')
+    // K13 (17b) · «N líneas» a la derecha del título, junto al ⊕ de otra línea.
+    await expect(ficha(page).locator('[data-prueba="n-lineas"]')).toHaveText('3 líneas')
     for (const [i, cuenta] of [[1, '60000001'], [2, '62900001']] as const) {
       await ficha(page).locator(`#kf-cuenta-${i}`).fill(cuenta)
       await page.getByRole('option', { name: new RegExp(`^${cuenta} · `) }).click()
@@ -211,13 +212,16 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     }
     await expect(ficha(page).locator('[data-prueba="suma-contrapartidas"]')).toHaveText('Suma 300,00 · cuadra con la base')
     // Local, marca y plataforma con su lupa (Respuesta K11b · 4): el nombre e Intro. La marca y la plataforma se guardan al
-    // momento; mientras se guardan, sus casillas se apagan (solo lectura).
+    // momento; mientras se guardan, sus casillas se apagan (solo lectura). K13 (17b): la casilla enseña el código corto y
+    // el nombre va en la gris de al lado.
+    const nombreDe: Record<string, string> = { Local: 'Nombre del local', Marca: 'Nombre de la marca', Plataforma: 'Nombre de la plataforma' }
     const poner = async (nombre: string, valor: string) => {
       const c = ficha(page).getByRole('textbox', { name: nombre, exact: true })
       await expect(c).toBeEditable({ timeout: 30_000 })
       await c.fill(valor)
       await c.press('Enter')
-      await expect(c).toHaveValue(valor, { timeout: 30_000 })
+      const [que, n = ''] = nombre.split(' ')
+      await expect(ficha(page).getByRole('textbox', { name: `${nombreDe[que]}${n ? ` ${n}` : ''}`, exact: true })).toHaveValue(valor, { timeout: 30_000 })
     }
     for (const i of [0, 1, 2]) {
       const n = i + 1
@@ -361,7 +365,8 @@ for (const [t, ancho, alto] of [[1, 1366, 768], [2, 1920, 1080]] as const) {
     expect(medida.alto, 'sin desplazar la página a lo alto').toBeLessThanOrEqual(alto)
     const bloques = await ficha(page).locator('.kr-pantalla [data-pieza="bloque"]').evaluateAll((x) => x.map((b) => Math.round(b.getBoundingClientRect().width)))
     expect(bloques.length).toBeGreaterThanOrEqual(5)
-    expect(Math.max(...bloques), `a ${ancho}, ningún bloque pasa de 760 px`).toBeLessThanOrEqual(760)
+    // K13 (17b): los bloques van de lado a lado de la ficha (840 a 1366, 868 a 1920), y la ficha no se estira.
+    expect(Math.max(...bloques), `a ${ancho}, ningún bloque pasa del ancho de la ficha`).toBeLessThanOrEqual(ancho >= 1600 ? 868 : 840)
     expect(await loQueSeCorta(page, FICHA), `lo que se corta, con los pagos, a ${ancho}`).toEqual([])
     await cargada(page, 'los pagos')
     await page.screenshot({ path: `${DIR}/pagos-${ancho}.png` })

@@ -89,5 +89,12 @@ paso '10/10 · capturas: solo las de tu frente (C06b, 15/10)'
 # Las de otro frente en tu rama son las que chocan con su PR: cada run las deja
 # en el artefacto, y a la rama solo van las tuyas, fijadas a mano antes del informe.
 node scripts/conta/capturas.mjs comprobar
+# K13 (24/11): las maquetas aprobadas son el contrato y no se tocan. Cada carpeta de
+# maquetas/ con su md5_maquetas.txt tiene que seguir dando lo mismo.
+for m in maquetas/*/md5_maquetas.txt; do
+  [ -f "$m" ] || continue
+  ( cd "$(dirname "$m")" && md5sum --quiet -c md5_maquetas.txt ) \
+    || { printf '✗ %s: una maqueta ha cambiado. Las maquetas no se tocan: devuélvela a la de main (git checkout origin/main -- %s).\n' "$m" "$(dirname "$m")"; exit 1; }
+done
 printf '\nTodo en verde: se puede subir.\n'
 printf 'Capturas: artefacto en cada push; las de tu frente, en capturas/<rama> y en el comentario del PR (W08b).\n'

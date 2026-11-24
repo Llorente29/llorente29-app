@@ -1,10 +1,13 @@
 // src/modules/conta/nucleo/Cinta.tsx
 //
 // K02 · La cinta del núcleo (maqueta nucleo_1 y nucleo_3): las pestañas en una
-// línea, sobre el azul, con la elegida en blanco; a la derecha, «Plegar los
-// botones ▴» o «Ver los botones ▾». Debajo, en blanco, los botones de la
-// pestaña elegida, en grupos separados por una raya, cada uno con su icono y,
-// si lo lleva, su contador. El botón de la pantalla abierta, marcado.
+// línea, sobre el azul, con la elegida en claro. Debajo, en blanco, los botones
+// de la pestaña elegida, en grupos, cada uno con su contador si lo lleva. El
+// botón de la pantalla abierta, marcado.
+//
+// K13 (maqueta 17b, 24/11): la fila del menú mide 32 px y la del submenú 30, y
+// el submenú se ve SIEMPRE, también a 1366: ya no hay «Ver los botones» ni
+// «Plegar los botones». Los botones, solo con su nombre, como en ERP10.
 //
 // Cambiar de pestaña no cambia de pantalla (como en ERP10): solo enseña otros
 // botones. Pulsar un botón abre su pantalla.
@@ -13,7 +16,7 @@
 // con el título de su grupo. Se mide al pintar y cada vez que cambia el ancho.
 
 import { useLayoutEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import type { ContadoresPestanas } from '@/modules/conta/esqueleto/contadoresPestanas'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { ICONOS_NUCLEO } from './iconos'
@@ -50,12 +53,10 @@ function BotonCinta({ x, actual, contadores, pulsar, enMenu = false }: {
   )
 }
 
-export function Cinta({ pestanas, elegida, elegir, plegada, alternarPlegada, actual, contadores, pulsar }: {
+export function Cinta({ pestanas, elegida, elegir, actual, contadores, pulsar }: {
   pestanas: PestanaCinta[]
   elegida: string
   elegir: (id: string) => void
-  plegada: boolean
-  alternarPlegada: () => void
   /** El id del botón de la pantalla abierta. */
   actual: string | null
   contadores: ContadoresPestanas
@@ -66,7 +67,7 @@ export function Cinta({ pestanas, elegida, elegir, plegada, alternarPlegada, act
   // Cuántos botones caben en la fila (null: todos, sin medir todavía).
   const [caben, setCaben] = useState<number | null>(null)
   const { abierto: masAbierto, setAbierto: setMasAbierto, alternar: alternarMas, caja: masCaja, boton: masBoton } = useDesplegable()
-  const clave = `${pestana?.id}|${pestana?.grupos.map((g) => g.botones.map((b) => b.id).join(',')).join('|')}|${plegada}`
+  const clave = `${pestana?.id}|${pestana?.grupos.map((g) => g.botones.map((b) => b.id).join(',')).join('|')}`
   const [medida, setMedida] = useState(clave)
   if (medida !== clave) { setMedida(clave); setCaben(null) }
 
@@ -93,7 +94,7 @@ export function Cinta({ pestanas, elegida, elegir, plegada, alternarPlegada, act
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [plegada, pestana?.id])
+  }, [pestana?.id])
 
   // Los grupos, partidos entre la fila y «Más ▾».
   let i = 0
@@ -108,7 +109,7 @@ export function Cinta({ pestanas, elegida, elegir, plegada, alternarPlegada, act
   }
 
   return (
-    <div className="k-cinta" data-plegada={plegada ? 'si' : 'no'}>
+    <div className="k-cinta">
       <div className="k-cinta-pestanas">
         <div role="tablist" aria-label="La cinta" className="k-cinta-lista">
           {pestanas.map((p) => (
@@ -116,11 +117,8 @@ export function Cinta({ pestanas, elegida, elegir, plegada, alternarPlegada, act
               aria-controls="k-cinta-botones" className="k-cinta-pestana" onClick={() => elegir(p.id)}>{p.etiqueta}</button>
           ))}
         </div>
-        <button type="button" className="k-cinta-plegar" aria-expanded={!plegada} onClick={alternarPlegada}>
-          {plegada ? <>Ver los botones <ChevronDown size={14} aria-hidden="true" /></> : <>Plegar los botones <ChevronUp size={14} aria-hidden="true" /></>}
-        </button>
       </div>
-      {!plegada && pestana && (
+      {pestana && (
         <div id="k-cinta-botones" role="tabpanel" aria-labelledby={`k-cinta-${pestana.id}`} className="k-cinta-botones" ref={fila}>
           {enFila.map((g) => (
             <div key={g.titulo} role="group" aria-label={g.titulo} className="k-cinta-grupo">

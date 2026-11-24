@@ -33,7 +33,7 @@
 // y «Es uno que ya tengo» (el foco al proveedor, con su lista abierta). Hasta
 // que tenga proveedor no se valida, y si se intenta, lo dice.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as KE } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as KE, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaDocumentos, rutaFichaProveedor, rutaMayor, rutaRecibidaAMano, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -62,14 +62,16 @@ import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioS
 import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { CasillaFecha, Duda, EstadoFicha, NombreDeCuenta } from '../ficha/piezas'
-import { Barra, Bloque, BotonMas, Casilla as KCasilla, OtrosDatos, Ventana } from '../piezas/Ventana'
+import { Barra, BotonMas, Casilla as KCasilla, OtrosDatos, Ventana } from '../piezas/Ventana'
 import { CasillaLupa } from '../piezas/Lupa'
 import { CasillaImporte } from '../piezas/Importe'
 import { MOTIVO_IMPORTE_DUDOSO, importeDudoso, leerImporte } from '../piezas/logica'
-import { aVisual, cambioDeLinea, conIvaDeducible, cuadriculaIva, filasDePago, letrasDeLaColumna, otraLinea, otroPago, pagoPorHacer, rotuloDeLaSuma, sumaDeContrapartidas, vistaAnalitica } from './fichaErp10'
+import { aVisual, cambioDeLinea, conIvaDeducible, filasDePago, otroPago, pagoPorHacer, rotuloDeLaSuma, sumaDeContrapartidas } from './fichaErp10'
+import { cuadreDeTramos, filasDeIva } from './k13'
 import { apuntarUnPago, borrarPago, cambiarPago, leerPagos, sePuedeCambiarPago } from './pagosServicio'
 import { plataformasDeLaCuenta } from '@/modules/conta/services/asientoGeneralService'
 import './fichaErp10.css'
+import './ficha17b.css'
 import { accionDocumento, etiquetaValidado, franjaContabilizada, franjaDescartada, claveSePuedeModificar, franjaModificando, lineasQueCambian, porqueNoModificar, laAnterior, lineasDelHistorial, opcionesDeMas, textoCasillaProveedor, queFichaSeAbre, textoCambioAlGuardar, type ModoRecibida, type OpcionMas } from './contabilizada'
 import { cambiarDocumentoContabilizada, leerHistorial, salioAErp10 } from './documentoServicio'
 import { PanelDocumento } from '../ficha/PanelDocumento'
@@ -84,12 +86,12 @@ import { crearProveedor, NifRepetidoError } from '@/modules/conta/services/prove
 import { revisarAlta, textoNifRepetido, type ProveedorExistente } from '@/modules/conta/lib/altaProveedor'
 import { tipoEntidadPorNif } from '@/modules/conta/lib/nif'
 import { casillasVacias, comprobacionesDe, dondeVaElFoco, dudaDelGasto, emisorDesconocido, estadoDeLaFicha, etiquetaDelAsiento, franjaProveedorSolo, gastoEnAmbar, nombreDePestana, puedeGuardar, trimestreDe } from './estado'
-import { calendarioDe, cuentasAMano, delProveedor, deshacerProveedorSolo, gastoAprendido, gastoPropuesto as leerGastoPropuesto, cabeceraDeLaFactura, guardarCabecera, marcasParaPoner, catalogosDeLaRecibida, guardarOtrosDatos, otrosDatosDeLaFactura, trimestresPresentados, mayorDelProveedor, noEsLaMisma, otrasDelProveedor, proveedorSolo, subcuentasDeProveedores, textoOperacion, cuentasDeContrapartida, codigosDeProveedores } from './servicio'
+import { calendarioDe, cuentasAMano, delProveedor, deshacerProveedorSolo, gastoAprendido, gastoPropuesto as leerGastoPropuesto, cabeceraDeLaFactura, guardarCabecera, marcasParaPoner, catalogosDeLaRecibida, guardarOtrosDatos, otrosDatosDeLaFactura, trimestresPresentados, mayorDelProveedor, noEsLaMisma, otrasDelProveedor, proveedorSolo, subcuentasDeProveedores, textoOperacion, cuentasDeContrapartida, codigosDeProveedores, guardarTramos, leerCodigosCortos, leerTramos, type TramoFicha } from './servicio'
 import { cuentaDelProveedorEnElAsiento } from './proveedorEnAsiento'
 import { faltasParaValidar, laRepetida, textoNoSeValida, textoRepetida } from './validarSoloLoCompleto'
 import { avisoInmovilizado } from './contrapartida'
 import { proveedoresQueEncajan } from './buscarProveedor'
-import { OPERACIONES, cortoDeOperacion, esOperacion, origenOperacion, textoDeOperacion, trimestrePropuesto, trimestresParaElegir } from './cabecera'
+import { OPERACIONES, esOperacion, origenOperacion, textoDeOperacion, trimestrePropuesto, trimestresParaElegir } from './cabecera'
 import { PAGO_VACIO, cuentaDeLaCasilla, fechaDelPago, primerasDeLaLupa, propuestaDelPago, queHaceElPago, textoAsientoDelPago, textoDudaPago, textoPendiente, type QueHaceElPago } from './pago'
 import { apuntarPago, cuentasDePago, hayLiquidacion, pagoDelProveedor } from './pagoServicio'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
@@ -194,6 +196,11 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const plataformas = useLeer(accountId && hosteleria ? () => plataformasDeLaCuenta(accountId) : null, `${accountId}:plataformas:${hosteleria ? 'si' : 'no'}`).datos ?? null
   const [otrosAbierto, setOtrosAbierto] = useState<string | null>(null)
   const [guardandoOtros, setGuardandoOtros] = useState(false)
+  // K13 · El código corto de cada local, marca y plataforma (2347) y el reparto de cada línea en tramos (0001).
+  const codigos = useLeer(accountId ? () => leerCodigosCortos(accountId) : null, `${accountId}:codigos-cortos`).datos ?? null
+  const tramosL = useUltimo(useLeer(accountId && id && !aMano ? () => leerTramos(accountId, id) : null, `${accountId}:${id}:tramos:${vuelta}`).datos, id)
+  const [tramosEdit, setTramosEdit] = useState<{ de: string; linea: number; tramos: TramoFicha[] } | null>(null)
+  const [guardandoTramos, setGuardandoTramos] = useState(false)
 
   // ── El borrador: lo guardado, como en la ficha de hoy ──
   const vistaDatos = useUltimo(vista.datos, `${id}:${fac?.proveedor?.id ?? ''}`)
@@ -540,6 +547,13 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     if (soloLectura) {
       setAviso({ tono: 'falta', texto: modo === 'contabilizada' ? 'Ya está contabilizada: no hay nada que guardar. Pasa a la siguiente con ›.' : 'Está descartada: no se guarda. Si es una factura, «Más › Recuperarla».' }); return
     }
+    // K13 · Un reparto que no suma su línea no se valida, y se dice cuánto falta (Julio, 24/11).
+    const repartoAbierto = tramosEdit?.de === invoiceId ? tramosEdit : null
+    if (repartoAbierto) {
+      const deLaLinea = b.gastos.length === 1 ? totales.base + (totales.recargo ?? 0) : num(b.gastos[repartoAbierto.linea]?.importe ?? '') ?? 0
+      const c = cuadreDeTramos(repartoAbierto.linea + 1, deLaLinea, repartoAbierto.tramos)
+      if (!c.cuadra) { setAviso({ tono: 'falta', texto: `${c.texto} No se valida hasta que sume.` }); return }
+    }
     if (guardandoCab) { setAviso({ tono: 'falta', texto: 'Aún estoy guardando la cabecera (el tipo, el trimestre, el concepto…): vuelve a pulsar en un momento. No he validado nada.' }); return }
     if (leyendoPago) { setAviso({ tono: 'falta', texto: 'Aún estoy leyendo cómo se paga (la cuenta del pago que propongo): vuelve a pulsar en un momento. No he guardado nada.' }); return }
     if (textoPago !== null && textoPago.trim() !== '' && textoPago.trim() !== pagoCuenta) {
@@ -850,21 +864,54 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
     nombreCuenta: cuentasPago?.nombres.get(pagoSinHacer.cuenta.trim()) ?? '', importe: pagoSinHacer.importe }) : []
   const enEdicion = pagoEdit?.de === invoiceId ? pagoEdit : null
   const registrosPago = (cuentasPago?.lista ?? []).map((c) => ({ id: c.codigo, codigo: c.codigo, descripcion: c.nombre }))
-  const marcasLupa = marcas.map((m) => ({ id: m.id, codigo: m.codigo, descripcion: m.nombre }))
-  const plataformasLupa = plataformas ?? []
-  const localesLupa = locales.map((l) => ({ id: l.id, codigo: l.nombre, descripcion: l.nombre }))
+  // K13 · Local, marca y plataforma por su código corto (003, MIL, GLO; 2347): con Intro, el código elige; la lupa busca
+  // por código y por nombre. Sin código (la base aún sin la 2347), el nombre, como hasta ahora.
+  const codigoDe = (tabla: 'locations' | 'brand' | 'sales_channel', id: string) => codigos?.find((c) => c.tabla === tabla && c.id === id)?.codigo ?? null
+  const marcasLupa = marcas.map((m) => ({ id: m.id, codigo: codigoDe('brand', m.id) ?? m.codigo, descripcion: m.nombre }))
+  const plataformasLupa = (plataformas ?? []).map((x) => ({ ...x, codigo: codigoDe('sales_channel', x.id) ?? x.codigo }))
+  const localesLupa = locales.map((l) => ({ id: l.id, codigo: codigoDe('locations', l.id) ?? l.nombre, descripcion: l.nombre }))
   // K11b · 4 · El local de cada línea, con su lupa: «Común» (o «Sin locales», en gris) y los locales de la cuenta.
-  const comunLocal = { id: aMano && ejeLocal ? LOCAL_COMUN : '', codigo: ejeLocal ? 'Común' : 'Sin locales', descripcion: ejeLocal ? 'Común a todos los locales' : 'Sin locales' }
+  // K13 · «Común» va sin código (vacío e Intro, como en ERP10); su nombre, en la casilla gris de al lado.
+  const comunLocal = { id: aMano && ejeLocal ? LOCAL_COMUN : '', codigo: '', descripcion: ejeLocal ? 'Común a todos los locales' : 'Sin locales' }
   const registrosLocal = [comunLocal, ...localesLupa]
   const tituloLocal = (v: string | null | undefined) => {
     const r = localesLupa.find((l) => l.id === v)
     if (r) return r.id === localPropuesto ? `${r.descripcion} (su ficha)` : r.descripcion
     return !ejeLocal ? 'Sin locales' : v === LOCAL_COMUN || (!aMano && !v) ? 'Común a todos los locales' : 'Elige el local (F4 abre la lista)'
   }
-  // Cada columna de la analítica mide lo que pide su nombre más largo (en letras, con su tope; si no cabe, su código).
-  const anchos = {
-    '--kr-local': letrasDeLaColumna(registrosLocal), '--kr-marca': letrasDeLaColumna(marcasLupa), '--kr-plat': letrasDeLaColumna(plataformasLupa),
-  } as CSSProperties
+  const nombreDelLocal = (v: string | null | undefined) => (!ejeLocal ? 'Sin locales' : localesLupa.find((l) => l.id === v)?.descripcion ?? (v === LOCAL_COMUN || (!aMano && !v) ? 'Común' : ''))
+  // K13 · Los tramos de cada línea (0001): los que se están escribiendo, los guardados (dos o más) o, sin reparto, uno solo
+  // con la analítica de la línea y su importe.
+  const tramosEnEdicion = tramosEdit?.de === invoiceId ? tramosEdit : null
+  const tramosDe = (i: number): { tramos: TramoFicha[]; reparto: boolean } => {
+    if (tramosEnEdicion?.linea === i) return { tramos: tramosEnEdicion.tramos, reparto: true }
+    const g = tramosL?.get(i)
+    if (g && g.length > 1) return { tramos: g, reparto: true }
+    return { tramos: [{ localId: b.gastos[i]?.local || null, marcaId: marcaDe(i), canalId: datoDe(i)?.canalId ?? null, importe: importeLinea(i) ?? 0 }], reparto: false }
+  }
+  const cuadreEdicion = tramosEnEdicion ? cuadreDeTramos(tramosEnEdicion.linea + 1, importeLinea(tramosEnEdicion.linea) ?? 0, tramosEnEdicion.tramos) : null
+  // K13 · El I.V.A.: dos grupos por fila; dos filas al principio y, al usar el último hueco libre, otra vacía (sin ⊕).
+  const filasIva = soloLectura ? Math.max(2, Math.ceil(b.iva.length / 2)) : filasDeIva(b.iva.length)
+  const tipoLibre = () => String(tiposIva.find((t) => !b.iva.some((l) => l.tipo === String(t))) ?? 21)
+  async function guardarLosTramos(linea: number, tramos: TramoFicha[]) {
+    if (!fac || guardandoTramos) return
+    setGuardandoTramos(true)
+    try { const r = await guardarTramos(fac.id, linea, tramos, userName ?? null); setTramosEdit(null); setAviso({ tono: 'ok', texto: r.texto }); setVuelta((v) => v + 1) }
+    catch (e) { setAviso({ tono: 'mal', texto: `No se ha guardado el reparto: ${msg(e)}.` }) }
+    finally { setGuardandoTramos(false) }
+  }
+  /** Un cambio en los tramos de una línea: se guarda en cuanto suman su importe; si no, se queda escrito y lo dice. */
+  function cambiarTramos(linea: number, tramos: TramoFicha[]) {
+    const habia = (tramosL?.get(linea)?.length ?? 0) > 1
+    if (tramos.length < 2) {
+      if (habia) void guardarLosTramos(linea, [])
+      setTramosEdit(null)
+      return
+    }
+    const c = cuadreDeTramos(linea + 1, importeLinea(linea) ?? 0, tramos)
+    if (c.cuadra && tramos.every((t) => t.importe > 0)) { setTramosEdit({ de: invoiceId, linea, tramos }); void guardarLosTramos(linea, tramos); return }
+    setTramosEdit({ de: invoiceId, linea, tramos })
+  }
   const ejercicio = (b.fecha || hoy).slice(0, 4)
   const comprobacion = (id: string) => comprobaciones.find((c) => c.id === id && c.tono !== 'bien') ?? null
   /** El ámbar de una comprobación: su motivo en el `title` (sin frases) y `data-comprobacion`; si no, de dónde sale el dato. */
@@ -875,10 +922,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const fechaCorta = (iso: string | null | undefined) => (iso ? iso.split('-').reverse().join('/') : '')
   const otrosAbiertos = otrosAbierto === invoiceId
   const visualFactura = aVisual(modo === 'contabilizada' ? lineasValidado : previa && totales.total !== 0 ? conIvaDeducible(previa.lineas, pct) : [])
-  const filasVisual = (l: ReturnType<typeof aVisual>) => {
-    const d = l.filter((x) => x.lado === 'debe'); const h = l.filter((x) => x.lado === 'haber')
-    return Array.from({ length: Math.max(d.length, h.length) }, (_, i) => ({ d: d[i] ?? null, h: h[i] ?? null }))
-  }
+
 
   return (
     <div className="kf-ficha kf-recibida kr" ref={raiz} onKeyDown={(e) => { marcarTocada(); alPulsar(e) }} onPointerDown={marcarTocada} data-prueba="ficha-recibida-nucleo" aria-busy={cargando || leyendoPago || leyendoPropuesta || undefined}>
@@ -925,91 +969,374 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
               </section>
             )}
             <div className="kr-pantalla">
-              {cargando ? <p className="kf-panel-nota" aria-busy="true">Abriendo la factura…</p> : <>
+              {cargando ? <p className="kf-panel-nota" aria-busy="true">Abriendo la factura…</p> : (
+              <div className="kr-lienzo" style={{ ['--kr-iva-mas' as string]: String(filasIva - 2) } as CSSProperties}>
               <fieldset className="kf-solo-lectura kr-campos" disabled={soloLectura} data-solo-lectura={soloLectura ? 'si' : undefined}>
-                {/* ── Datos factura ── */}
-                <Bloque titulo="Datos factura" className="kr-datos">
-                  <div className="kr-fila kr-fila-1">
-                    <KCasilla rotulo="Tipo de introducción" htmlFor="kr-tipo" gris><input id="kr-tipo" readOnly tabIndex={-1} value="Factura recibida" /></KCasilla>
-                    <KCasilla rotulo="Periodo contable" htmlFor="kf-deduce" className="kr-periodo" ambar={!!comprobacion('periodo')} {...marcaComprobacion('periodo')}>
-                      {/* K11b · 6 · Como la 17a: el código (el ejercicio) con su lupa, que elige el trimestre en que se deduce (los
-                          presentados no salen), y su descripción en gris. */}
-                      <CasillaLupa id="kr-ejercicio" etiqueta="Ejercicio" registros={trimestres.filter((t) => !t.presentado).map((t) => ({ id: t.inicio, codigo: ejercicio, descripcion: t.texto }))}
-                        valor={trim?.trimestre?.inicio ?? null} vista={() => ejercicio} gris={!cabEscribible || trimestres.length === 0 || guardandoCab}
-                        titulo={trim?.elegido ? 'Elegido en esta factura (F4 abre los trimestres)' : 'El de su fecha (F4 abre los trimestres)'}
-                        poner={(r) => { if (r) void ponerCabecera({ deduce_en: r.id }) }} />
-                      <input id="kf-deduce" aria-label="Se deduce en" readOnly tabIndex={-1} value={trim?.trimestre?.texto ?? trimestreDe(b.fecha)} />
-                    </KCasilla>
-                    <KCasilla rotulo="Documento" htmlFor="kf-serie" gris><input id="kf-serie" readOnly tabIndex={-1} value={fac?.asiento?.numero ? String(fac.asiento.numero) : ''} title={fac?.asiento?.numero ? `Serie 2 · asiento ${fac.asiento.numero}` : 'Lo pone el programa al validarla'} /></KCasilla>
-                    <KCasilla rotulo="Fecha introducción" htmlFor="kr-contable" gris={!otrosL?.fechaContable}>
-                      <input id="kr-contable" readOnly tabIndex={-1} value={fechaCorta(otrosL?.fechaContable ?? b.fecha)} title={otrosL?.fechaContable ? 'La fecha contable escrita en «Otros datos»' : 'La de la factura; otra, en «Otros datos»'} />
-                    </KCasilla>
-                    <KCasilla rotulo="Fecha factura" htmlFor="kf-fecha" title={origen.fecha ?? undefined}><CasillaFecha id="kf-fecha" etiqueta="Fecha factura" iso={b.fecha} hoy={hoy} poner={(x) => ed.poner('fecha', x)} /></KCasilla>
-                  </div>
-                  <div className="kr-fila kr-fila-2">
-                    <KCasilla rotulo="Proveedor" htmlFor="kf-proveedor" ambar={!!emisor} title={emisor ? `No conozco al que la emite${emisor.nombre ? `: ${emisor.nombre}` : ''}` : origen.proveedor ?? undefined}>
-                      <Buscador id="kf-proveedor" lupa etiqueta="Proveedor" cargando={proveedoresL === null} enfocar={abrirProveedor} duda={!!emisor} valor={textoProv ?? (provId ? textoCasillaProveedor({ subcuenta, futura: cuentasAsiento?.proveedor?.codigo ?? '', nombre: prov?.nombre ?? null }) : '')} cuenta={subcuenta || null}
-                        placeholder={aMano ? 'Código o NIF' : undefined}
-                        ponerTexto={setTextoProv} lista={(t) => proveedoresQueEncajan(t, proveedores, codigosProv ?? new Map())}
-                        texto={(p) => `${p.nombre}${codigosProv?.get(p.id) ? ` · ${codigosProv.get(p.id)}` : ''}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { if (emisor) void elegirYGuardar(p.id, p.nombre, `Elegido ${p.nombre}.`); else { ed.poner('proveedorId', p.id); setTextoProv(null) } }} />
-                    </KCasilla>
-                    <KCasilla rotulo="Saldo a la fecha" htmlFor="kr-saldo" gris>
-                      <input id="kr-saldo" className="kp-num" readOnly tabIndex={-1} data-prueba="saldo-proveedor" value={mayor ? cifra(mayor.saldo) : ''}
-                        title={conEstaFactura !== null ? `Con esta factura: ${cifra(conEstaFactura)}` : undefined} />
-                    </KCasilla>
-                    {nuevo ? (<>
-                      <KCasilla rotulo="N.I.F." htmlFor="kf-nif"><input id="kf-nif" data-casilla autoCapitalize="characters" autoFocus value={nuevo.nif}
-                        onChange={(e) => setNuevo({ ...nuevo, nif: e.target.value, fallo: null, repetido: null })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); void crearNuevo() } }} /></KCasilla>
-                      <KCasilla rotulo="Nombre" htmlFor="kf-nombre"><input id="kf-nombre" data-casilla value={nuevo.nombre}
-                        onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value, fallo: null })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); void crearNuevo() } }} /></KCasilla>
-                    </>) : (<>
-                      <KCasilla rotulo="N.I.F." htmlFor="kf-nif" ambar={!!comprobacion('nif')} {...marcaComprobacion('nif', origen.nif)}><input id="kf-nif" readOnly tabIndex={-1} value={prov?.nif ?? emisor?.nif ?? ''} /></KCasilla>
-                      <KCasilla rotulo="Nombre" htmlFor="kf-nombre" gris><input id="kf-nombre" readOnly tabIndex={-1} value={prov?.nombre ?? emisor?.nombre ?? ''} title={prov?.nombre ?? emisor?.nombre ?? undefined} /></KCasilla>
-                    </>)}
-                  </div>
-                  <div className="kr-fila kr-fila-3">
-                    <KCasilla rotulo="Nº Factura" htmlFor="kf-numero" ambar={!!comprobacion('repetida')} {...marcaComprobacion('repetida', origen.numero)}>
-                      <input id="kf-numero" data-casilla value={b.numero} onChange={(e) => ed.poner('numero', e.target.value)} />
-                    </KCasilla>
-                    <KCasilla rotulo="Concepto asiento" htmlFor="kf-concepto" title={cab?.concepto ? 'Escrito en esta factura' : origen.concepto ?? undefined}>
-                      {cabEscribible ? (
-                        <input id="kf-concepto" data-casilla maxLength={200} value={textoConcepto?.k === invoiceId ? textoConcepto.v : conceptoTexto} title={conceptoTexto}
-                          onChange={(e) => setTextoConcepto({ k: invoiceId ?? '', v: e.target.value })}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur() } }}
-                          onBlur={() => {
-                            if (textoConcepto?.k !== invoiceId) return
-                            const v = textoConcepto.v.trim(); setTextoConcepto(null)
-                            if (v !== conceptoTexto.trim()) void ponerCabecera({ concepto: v || null })
-                          }} />
-                      ) : <input id="kf-concepto" readOnly tabIndex={-1} value={conceptoTexto} title={conceptoTexto} />}
-                    </KCasilla>
-                    <KCasilla rotulo="Tipo de operación" htmlFor="kf-operacion" ambar={origenOp === 'Cambiado en esta factura'}
-                      mas={!aMano && otrosL ? <BotonMas etiqueta="Otros datos" abierto={otrosAbiertos} hacer={() => setOtrosAbierto((x) => (x === invoiceId ? null : invoiceId))} /> : undefined}>
-                      {cabEscribible ? (
-                        <CasillaLupa id="kf-operacion" etiqueta="Tipo de operación" registros={OPERACIONES.map((o) => ({ id: o.valor, codigo: o.corto, descripcion: o.texto }))}
-                          valor={opFactura ?? opFicha ?? null} gris={guardandoCab} titulo={`${textoDeOperacion(opFactura ?? opFicha)}${origenOp ? ` · ${origenOp}` : ''}` || undefined}
-                          poner={(r) => { const v = r && esOperacion(r.id) ? r.id : null; void ponerCabecera({ operacion: v === opFicha ? null : v }) }} />
-                      ) : <input id="kf-operacion" readOnly tabIndex={-1} value={cortoDeOperacion(opFactura ?? opFicha) || (textoOperacion(delProv?.regimen ?? null) ?? '')} title={textoDeOperacion(opFactura ?? opFicha) || undefined} />}
-                      {/* De dónde sale, sin frase: en el `title` de la casilla; aquí, la marca corta que leen las pruebas. */}
-                      {origenOp && <span className="kf-origen kr-oculto" data-prueba="origen-operacion" title={origenOp}>{origenOp === 'De su ficha' ? 'De su ficha' : 'Cambiado'}</span>}
-                    </KCasilla>
-                  </div>
-                  {aMano && !provId && !nuevo && (
-                    <button type="button" className="kp-mas kr-nuevo-proveedor" data-prueba="nuevo-proveedor" onClick={() => setNuevo({ nif: '', nombre: textoProv?.trim() ?? '', fallo: null, ocupado: false })}>+ Nuevo proveedor</button>
-                  )}
-                  {nuevo && (
-                    <div className="kf-nuevo-proveedor" role="group" aria-label="Nuevo proveedor" data-prueba="nuevo-proveedor-abierto">
-                      <button type="button" className="kf-enlace-plano" disabled={nuevo.ocupado} onClick={() => void crearNuevo()}>{nuevo.ocupado ? 'Dando de alta…' : 'Darlo de alta y elegirlo'}</button>
-                      <button type="button" className="kf-enlace-plano" disabled={nuevo.ocupado} onClick={() => setNuevo(null)}>Cancelar</button>
-                      {nuevo.repetido ? (
-                        <p className="kf-aviso kf-repetida" data-tono="falta" role="alert" data-prueba="nif-repetido">
-                          <strong>Mira esto ·</strong> {nuevo.fallo ?? textoNifRepetido(nuevo.repetido.name)}{nuevo.repetido.id && <> <Link className="kf-enlace" to={rutaFichaProveedor(nuevo.repetido.id)}>Abrirlo</Link></>}
-                        </p>
-                      ) : nuevo.fallo && <p className="kf-error" role="alert">{nuevo.fallo}</p>}
+                {/* ── Datos factura (17b: tres filas) ── */}
+                <h2 className="kr-hd" style={{ top: 0 }} data-pieza="bloque"><span>Datos factura</span></h2>
+                <Caja sitio="f1-1" rotulo="Tipo de introducción" para="kr-tipo" rotuloGris gris><input id="kr-tipo" readOnly tabIndex={-1} value="Factura recibida" /></Caja>
+                {/* El periodo: el ejercicio con su lupa (elige el trimestre en que se deduce; los presentados no salen) y su descripción. */}
+                <Caja sitio="f1-2" rotulo="Periodo contable" para="kr-ejercicio" ambar={!!comprobacion('periodo')} {...marcaComprobacion('periodo')}>
+                  <CasillaLupa id="kr-ejercicio" etiqueta="Ejercicio" registros={trimestres.filter((t) => !t.presentado).map((t) => ({ id: t.inicio, codigo: ejercicio, descripcion: t.texto }))}
+                    valor={trim?.trimestre?.inicio ?? null} vista={() => ejercicio} gris={!cabEscribible || trimestres.length === 0 || guardandoCab}
+                    titulo={trim?.elegido ? 'Elegido en esta factura (F4 abre los trimestres)' : 'El de su fecha (F4 abre los trimestres)'}
+                    poner={(r) => { if (r) void ponerCabecera({ deduce_en: r.id }) }} />
+                </Caja>
+                <Caja sitio="f1-3" gris><input id="kf-deduce" aria-label="Se deduce en" readOnly tabIndex={-1} value={trim?.trimestre?.texto ?? trimestreDe(b.fecha)} /></Caja>
+                {/* El documento: el número del asiento (lo pone el programa al validarla); su lupa, las otras facturas del proveedor. */}
+                <Caja sitio="f1-4" rotulo="Documento" para="kf-serie" gris>
+                  <input id="kf-serie" readOnly tabIndex={-1} value={fac?.asiento?.numero ? String(fac.asiento.numero) : ''} title={fac?.asiento?.numero ? `Serie 2 · asiento ${fac.asiento.numero}` : 'Lo pone el programa al validarla'} />
+                  <LupaSola etiqueta="Las facturas del proveedor" puede={!!provId} hacer={() => provId && navegar(`${rutaDocumentos('todas')}${rutaDocumentos('todas').includes('?') ? '&' : '?'}proveedor=${encodeURIComponent(provId)}`)} />
+                </Caja>
+                <Caja sitio="f1-5" rotulo="Fecha introducción" para="kr-contable" gris={!cabEscribible} title={otrosL?.fechaContable ? 'La fecha contable escrita en «Otros datos»' : 'La de la factura'}>
+                  {cabEscribible && otrosL
+                    ? <CasillaFecha id="kr-contable" etiqueta="Fecha introducción" iso={otrosL.fechaContable ?? b.fecha} hoy={hoy} casilla={false}
+                        poner={(x) => { if (x !== (otrosL.fechaContable ?? b.fecha)) void ponerOtros({ fecha_contable: x && x !== b.fecha ? x : null }) }} />
+                    : <input id="kr-contable" readOnly tabIndex={-1} value={fechaCorta(otrosL?.fechaContable ?? b.fecha)} />}
+                  <Calendario para="kr-contable" />
+                </Caja>
+                <Caja sitio="f1-6" rotulo="Fecha factura" para="kf-fecha" title={origen.fecha ?? undefined}>
+                  <CasillaFecha id="kf-fecha" etiqueta="Fecha factura" iso={b.fecha} hoy={hoy} poner={(x) => ed.poner('fecha', x)} />
+                  <Calendario para="kf-fecha" />
+                </Caja>
+
+                <Caja sitio="f2-1" rotulo="Proveedor" para="kf-proveedor" ambar={!!emisor} title={emisor ? `No conozco al que la emite${emisor.nombre ? `: ${emisor.nombre}` : ''}` : origen.proveedor ?? undefined}>
+                  <Buscador id="kf-proveedor" lupa etiqueta="Proveedor" cargando={proveedoresL === null} enfocar={abrirProveedor} duda={!!emisor} valor={textoProv ?? (provId ? textoCasillaProveedor({ subcuenta, futura: cuentasAsiento?.proveedor?.codigo ?? '', nombre: prov?.nombre ?? null }) : '')} cuenta={subcuenta || null}
+                    placeholder={aMano ? 'Código o NIF' : undefined}
+                    ponerTexto={setTextoProv} lista={(t) => proveedoresQueEncajan(t, proveedores, codigosProv ?? new Map())}
+                    texto={(p) => `${p.nombre}${codigosProv?.get(p.id) ? ` · ${codigosProv.get(p.id)}` : ''}${p.nif ? ` · ${p.nif}` : ''}`} elegir={(p) => { if (emisor) void elegirYGuardar(p.id, p.nombre, `Elegido ${p.nombre}.`); else { ed.poner('proveedorId', p.id); setTextoProv(null) } }} />
+                </Caja>
+                {aMano && !provId && !nuevo && (
+                  <button type="button" className="kr-nuevo-proveedor" data-prueba="nuevo-proveedor" aria-label="Nuevo proveedor" title="Nuevo proveedor" onClick={() => setNuevo({ nif: '', nombre: textoProv?.trim() ?? '', fallo: null, ocupado: false })}>+ Nuevo</button>
+                )}
+                {/* El saldo a la fecha; su lupa, el mayor del proveedor. */}
+                <Caja sitio="f2-2" rotulo="Saldo a la fecha" para="kr-saldo" gris num>
+                  <input id="kr-saldo" readOnly tabIndex={-1} data-prueba="saldo-proveedor" value={mayor ? cifra(mayor.saldo) : ''}
+                    title={conEstaFactura !== null ? `Con esta factura: ${cifra(conEstaFactura)}` : undefined} />
+                  <LupaSola etiqueta="El mayor del proveedor" puede={!!subcuenta} hacer={() => subcuenta && navegar(rutaMayor(subcuenta))} />
+                </Caja>
+                {nuevo ? (<>
+                  <Caja sitio="f2-3" rotulo="N.I.F." para="kf-nif"><input id="kf-nif" data-casilla autoCapitalize="characters" autoFocus value={nuevo.nif}
+                    onChange={(e) => setNuevo({ ...nuevo, nif: e.target.value, fallo: null, repetido: null })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); void crearNuevo() } }} /></Caja>
+                  <Caja sitio="f2-4" rotulo="Nombre" para="kf-nombre"><input id="kf-nombre" data-casilla value={nuevo.nombre}
+                    onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value, fallo: null })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); void crearNuevo() } }} /></Caja>
+                </>) : (<>
+                  {/* El NIF; su lupa busca el proveedor por su NIF. */}
+                  <Caja sitio="f2-3" rotulo="N.I.F." para="kf-nif" ambar={!!comprobacion('nif')} {...marcaComprobacion('nif', origen.nif)}>
+                    <input id="kf-nif" readOnly tabIndex={-1} value={prov?.nif ?? emisor?.nif ?? ''} />
+                    <LupaSola etiqueta="Buscar el proveedor por su NIF" puede={!soloLectura} hacer={() => { setTextoProv(prov?.nif ?? emisor?.nif ?? ''); setAbrirProveedor((n) => n + 1) }} />
+                  </Caja>
+                  <Caja sitio="f2-4" rotulo="Nombre" para="kf-nombre"><input id="kf-nombre" readOnly tabIndex={-1} value={prov?.nombre ?? emisor?.nombre ?? ''} title={prov?.nombre ?? emisor?.nombre ?? undefined} /></Caja>
+                </>)}
+
+                <Caja sitio="f3-1" rotulo="Nº Factura" para="kf-numero" ambar={!!comprobacion('repetida')} {...marcaComprobacion('repetida', origen.numero)}>
+                  <input id="kf-numero" data-casilla value={b.numero} onChange={(e) => ed.poner('numero', e.target.value)} />
+                </Caja>
+                <Caja sitio="f3-2" rotulo="Concepto asiento" para="kf-concepto" title={cab?.concepto ? 'Escrito en esta factura' : origen.concepto ?? undefined}>
+                  {cabEscribible ? (
+                    <input id="kf-concepto" data-casilla maxLength={200} value={textoConcepto?.k === invoiceId ? textoConcepto.v : conceptoTexto} title={conceptoTexto}
+                      onChange={(e) => setTextoConcepto({ k: invoiceId ?? '', v: e.target.value })}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur() } }}
+                      onBlur={() => {
+                        if (textoConcepto?.k !== invoiceId) return
+                        const v = textoConcepto.v.trim(); setTextoConcepto(null)
+                        if (v !== conceptoTexto.trim()) void ponerCabecera({ concepto: v || null })
+                      }} />
+                  ) : <input id="kf-concepto" readOnly tabIndex={-1} value={conceptoTexto} title={conceptoTexto} />}
+                </Caja>
+                {/* El tipo de operación: la lupa delante y el ⊕ («Otros datos») detrás, como la 17b. */}
+                <Caja sitio="f3-3" rotulo="Tipo de operación" para="kf-operacion" lupa="antes" gris ambar={origenOp === 'Cambiado en esta factura'}
+                  mas={!aMano && otrosL ? <BotonMas17 etiqueta="Otros datos" abierto={otrosAbiertos} hacer={() => setOtrosAbierto((x) => (x === invoiceId ? null : invoiceId))} /> : undefined}>
+                  {cabEscribible ? (
+                    <CasillaLupa id="kf-operacion" etiqueta="Tipo de operación" registros={OPERACIONES.map((o) => ({ id: o.valor, codigo: o.corto, descripcion: o.texto }))}
+                      valor={opFactura ?? opFicha ?? null} vista={(r) => r.descripcion} gris={guardandoCab} titulo={`${textoDeOperacion(opFactura ?? opFicha)}${origenOp ? ` · ${origenOp}` : ''}` || undefined}
+                      poner={(r) => { const v = r && esOperacion(r.id) ? r.id : null; void ponerCabecera({ operacion: v === opFicha ? null : v }) }} />
+                  ) : <input id="kf-operacion" readOnly tabIndex={-1} value={textoDeOperacion(opFactura ?? opFicha) || (textoOperacion(delProv?.regimen ?? null) ?? '')} title={textoDeOperacion(opFactura ?? opFicha) || undefined} />}
+                  {origenOp && <span className="kf-origen kr-oculto" data-prueba="origen-operacion" title={origenOp}>{origenOp === 'De su ficha' ? 'De su ficha' : 'Cambiado'}</span>}
+                </Caja>
+
+                {/* ── I.V.A. · Retención · Total factura: tres títulos; el IVA, dos grupos por fila, y crece sin ⊕ ── */}
+                <h2 className="kr-hd3" style={{ left: '0.59%', width: '46.96%' }} data-pieza="bloque"><span>I.V.A.</span></h2>
+                <h2 className="kr-hd3" style={{ left: '48.48%', width: '38.88%' }}><span>Retención</span></h2>
+                <h2 className="kr-hd3" style={{ left: '88.06%', width: '9.37%' }} data-subrayado="si"><span>Total factura</span></h2>
+                {Array.from({ length: filasIva * 2 }, (_, idx) => {
+                  const l = b.iva[idx] ?? null
+                  const fila = Math.floor(idx / 2)
+                  const g = idx % 2
+                  const libre = !l && idx === b.iva.length && !soloLectura
+                  const campo = (k: number) => (fila < 2 ? `iva${fila + 1}-${g * 3 + k}` : undefined)
+                  const estilo = { ['--kr-iva-fila' as string]: String(fila) } as CSSProperties
+                  const rot = (t: string) => (fila === 0 ? t : undefined)
+                  const tocar = (c: Partial<LineaIva>) => {
+                    if (l) ponerIva(idx, c)
+                    else if (libre) ed.poner('iva', [...b.iva, rehacerCuota({ base: '', tipo: tipoLibre(), cuota: '', ...c })])
+                  }
+                  return (
+                    <div key={`iva-${idx}`} style={{ display: 'contents' }}>
+                      <Caja sitio={`iva-${g * 3 + 1}`} campo={campo(1)} rotulo={rot('Base')} para={`kr-base-${idx}`} centro num estilo={estilo}>
+                        <input id={`kr-base-${idx}`} data-casilla={l || libre ? '' : undefined} aria-label={`Base ${idx + 1}`} value={l?.base ?? ''} readOnly={!l && !libre} tabIndex={l || libre ? undefined : -1}
+                          onChange={(e) => tocar({ base: e.target.value })}
+                          data-ambar={l && importeDudoso(l.base) ? 'si' : undefined} title={l && importeDudoso(l.base) ? MOTIVO_IMPORTE_DUDOSO : undefined}
+                          onBlur={() => { if (!l) return; const n = num(l.base); if (n !== null && !importeDudoso(l.base)) ponerIva(idx, { base: importeEs(n) }) }} />
+                      </Caja>
+                      <Caja sitio={`iva-${g * 3 + 2}`} campo={campo(2)} rotulo={rot('%')} para={`kr-tipo-${idx}`} centro estilo={estilo}>
+                        <select id={`kr-tipo-${idx}`} data-casilla={l || libre ? '' : undefined} aria-label={`Tipo de IVA ${idx + 1}`} value={l?.tipo ?? ''} disabled={!l && !libre} tabIndex={l || libre ? undefined : -1}
+                          onChange={(e) => { if (e.target.value) tocar({ tipo: e.target.value }) }}>
+                          {!l && <option value="" />}
+                          {[...new Set([...tiposIva.map(String), ...(l ? [l.tipo] : [])])].filter(Boolean).map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </Caja>
+                      <Caja sitio={`iva-${g * 3 + 3}`} campo={campo(3)} rotulo={rot('Cuota')} para={`kr-cuota-${idx}`} centro num estilo={estilo}>
+                        <input id={`kr-cuota-${idx}`} aria-label={`Cuota ${idx + 1}`} value={l?.cuota ?? ''} tabIndex={-1} readOnly={!l} onChange={(e) => l && ponerIva(idx, { cuota: e.target.value }, false)} />
+                        {l && b.iva.length > 1 && !soloLectura && <button type="button" className="kr-quitar" aria-label={`Quitar el tipo ${l.tipo} %`} tabIndex={-1} onClick={() => ed.poner('iva', b.iva.filter((_, j) => j !== idx))}>×</button>}
+                      </Caja>
                     </div>
-                  )}
-                </Bloque>
+                  )
+                })}
+                <Caja sitio="iva-7" campo="iva1-7" rotulo="Tipo de retención" para="kr-retencion">
+                  <CasillaLupa id="kr-retencion" etiqueta="Retención" registros={TIPOS_RETENCION.map((t) => ({ id: String(t), codigo: String(t), descripcion: `${t} %` }))}
+                    valor={b.retencion?.tipo ?? null} vista={(r) => r.descripcion} datos={{ 'data-casilla': '' }} alIntro={() => pasarDe('kr-retencion')}
+                    titulo={b.retencion ? `Retención del ${b.retencion.tipo} %` : 'Sin retención (F4 abre los tipos)'}
+                    poner={(r) => ed.poner('retencion', r ? rehacerRetencion({ tipo: r.id, importe: '' }, totales.base) : null)} />
+                </Caja>
+                <Caja sitio="iva-8" campo="iva1-8" rotulo="Base" para="kr-ret-base" centro num gris><input id="kr-ret-base" readOnly tabIndex={-1} value={b.retencion ? cifra(totales.base) : ''} /></Caja>
+                <Caja sitio="iva-9" campo="iva1-9" rotulo="%" para="kr-ret-tipo" centro gris><input id="kr-ret-tipo" readOnly tabIndex={-1} value={b.retencion?.tipo ?? ''} /></Caja>
+                <Caja sitio="iva-10" campo="iva1-10" rotulo="Cuota" para="kr-ret-cuota" centro num gris><input id="kr-ret-cuota" readOnly tabIndex={-1} value={b.retencion?.importe ?? ''} /></Caja>
+                <Caja sitio="iva-11" campo="iva1-11" num total ambar={!!comprobacion('suma')} {...marcaComprobacion('suma')}>
+                  {aMano
+                    ? <input id="kr-total" data-casilla aria-label="Total factura" placeholder="0,00"
+                        value={textoTotal ?? (totales.total ? importeEs(totales.total) : '')}
+                        title="Escríbelo y sale la base, con un solo tipo de IVA y la retención de su ficha"
+                        onFocus={(e) => { setTextoTotal(totales.total ? importeEs(totales.total) : ''); e.target.select() }}
+                        onChange={(e) => setTextoTotal(e.target.value)}
+                        onBlur={() => {
+                          const n = textoTotal !== null && !importeDudoso(textoTotal) ? leerImporte(textoTotal) : null
+                          if (n !== null && Number.isFinite(n) && Math.round(n * 100) !== Math.round(totales.total * 100)) { const r = desdeElTotal(b, n); if (r) { ed.poner('iva', r.iva); ed.poner('retencion', r.retencion) } }
+                          setTextoTotal(null)
+                        }} />
+                    : <input id="kr-total" readOnly tabIndex={-1} aria-label="Total factura" data-prueba="total" value={cifra(totales.total)} />}
+                </Caja>
               </fieldset>
+
+              {/* ── Contrapartida/s: fila 1, la subcuenta y su nombre, el concepto y el importe; fila 2, el reparto ── */}
+              <h2 className="kr-hd" style={{ top: 'calc(var(--kr-hd-contra) + var(--kr-extra))' }} data-pieza="bloque">
+                <span>Contrapartida/s</span>
+                <span className="kr-hd-der" data-ambar={cuadreEdicion?.texto || rotuloSuma.motivo ? 'si' : undefined} title={cuadreEdicion?.texto ?? rotuloSuma.motivo ?? undefined}>
+                  {cuadreEdicion?.texto ? <span data-prueba="reparto-no-suma">{cuadreEdicion.texto}</span>
+                    : !unaLinea ? <span data-prueba="suma-contrapartidas">{rotuloSuma.texto}</span> : null}
+                  <span data-prueba="n-lineas">{b.gastos.length} {b.gastos.length === 1 ? 'línea' : 'líneas'}</span>
+                  {!soloLectura && <BotonMas etiqueta="Otra línea" hacer={() => ed.poner('gastos', [...b.gastos, { cuenta: b.gastos[0]?.cuenta ?? '', local: '', importe: '' }])} />}
+                </span>
+              </h2>
+              <fieldset className="kf-solo-lectura kr-campos" disabled={soloLectura} data-solo-lectura={soloLectura ? 'si' : undefined}>
+              <div className="kr-lineas" role="table" aria-label="Las contrapartidas" data-hosteleria={hosteleria ? 'si' : undefined}>
+                {b.gastos.map((g, i) => {
+                  const d = datoDe(i)
+                  const { tramos, reparto } = tramosDe(i)
+                  const primera = i === 0
+                  const c = (x: string) => (primera ? x : undefined)
+                  const durante = guardandoCab || guardandoOtros || guardandoTramos
+                  return (
+                    <div className="kr-linea" role="row" key={i} data-linea={i} style={{ ['--kr-tramos-mas' as string]: String(tramos.length - 1) } as CSSProperties}>
+                      <Caja sitio="c1-1" campo={c('c1-1')} rotulo={primera ? 'Subcuenta gasto' : undefined} para={`kf-cuenta-${i}`}
+                        ambar={(!!duda && primera) || (primera && !!comprobacion('gasto-propuesto'))} title={primera ? (duda?.texto ?? comprobacion('gasto-propuesto')?.texto) : undefined}>
+                        <Buscador id={`kf-cuenta-${i}`} lupa etiqueta={`Cuenta de gasto ${i + 1}`} cargando={cuentasGastoL === null} valor={textoCuenta[i] ?? g.cuenta} cuenta={g.cuenta || null} duda={!!duda && primera}
+                          ponerTexto={(t) => { setTextoCuenta((x) => ({ ...x, [i]: t })); if (!t.trim()) ponerGasto(i, { cuenta: '' }) }} lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8)}
+                          texto={(x) => `${x.codigo} · ${x.nombre}`} elegir={(x) => { ponerGasto(i, { cuenta: x.codigo }); setTextoCuenta((y) => { const z = { ...y }; delete z[i]; return z }) }}
+                          crear={crearCuenta((x) => { ponerGasto(i, { cuenta: x.codigo }); setTextoCuenta((y) => { const z = { ...y }; delete z[i]; return z }) })} />
+                      </Caja>
+                      <Caja sitio="c1-2" campo={c('c1-2')} gris><NombreDeCuenta etiqueta={`Nombre de la cuenta ${i + 1}`} valor={g.cuenta ? nombreGasto(g.cuenta) : ''} /></Caja>
+                      <Caja sitio="c1-3" campo={c('c1-3')} rotulo={primera ? 'Concepto de gastos' : undefined} para={`kr-concepto-${i}`}>
+                        <input id={`kr-concepto-${i}`} aria-label={`Concepto de gastos ${i + 1}`} maxLength={200} disabled={aMano || !cabEscribible} key={`${invoiceId}:c:${i}:${d?.concepto ?? ''}`} defaultValue={d?.concepto ?? ''}
+                          placeholder={conceptoTexto} title={d?.concepto || conceptoTexto || undefined}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur() } }}
+                          onBlur={(e) => { const v = e.currentTarget.value.trim() || null; if (v !== (d?.concepto ?? null)) ponerDatoLinea(i, { concepto: v }) }} />
+                      </Caja>
+                      <Caja sitio="c1-4" campo={c('c1-4')} rotulo={primera ? 'Importe' : undefined} para={`kr-importe-${i}`} num>
+                        {unaLinea
+                          ? <input id={`kr-importe-${i}`} aria-label={`Importe del gasto ${i + 1}`} readOnly tabIndex={-1} value={importeEs(baseGasto + noDeducible)} title={pct < 100 ? `La base y el ${100 - pct} % del IVA que no se deduce` : undefined} />
+                          : <CasillaImporte id={`kr-importe-${i}`} etiqueta={`Importe del gasto ${i + 1}`} valor={g.importe} poner={(t) => ponerGasto(i, { importe: t })} />}
+                        {!unaLinea && !soloLectura && <button type="button" className="kr-quitar" aria-label={`Quitar la cuenta ${i + 1}`} tabIndex={-1} onClick={() => ed.poner('gastos', b.gastos.filter((_, j) => j !== i))}>×</button>}
+                      </Caja>
+                      {tramos.map((t, k) => {
+                        const uno = !reparto
+                        const cc = (x: string) => (primera && k === 0 ? x : undefined)
+                        const estilo = { ['--kr-tramo-n' as string]: String(k) } as CSSProperties
+                        const sufijo = k === 0 ? (primera ? '' : ` ${i + 1}`) : ` ${i + 1}.${k + 1}`
+                        const cambiar = (x: Partial<TramoFicha>) => cambiarTramos(i, tramos.map((y, j) => (j === k ? { ...y, ...x } : y)))
+                        const idLocal = uno ? `kr-local-${i}` : `kr-local-${i}-${k}`
+                        const idMarca = uno ? (primera ? 'kf-marca' : `kr-marca-${i}`) : `kr-marca-${i}-${k}`
+                        const idCanal = uno ? `kr-plataforma-${i}` : `kr-plataforma-${i}-${k}`
+                        return (
+                          <div key={k} style={{ display: 'contents' }} data-tramo={k}>
+                            <Caja sitio="c2-1" campo={cc('c2-1')} rotulo={k === 0 ? 'Local' : undefined} para={idLocal} estilo={estilo}>
+                              <CasillaLupa id={idLocal} etiqueta={`Local${sufijo}`} registros={registrosLocal} valor={ejeLocal ? t.localId ?? (uno ? g.local ?? '' : '') : ''}
+                                gris={!ejeLocal || (!uno && durante)} datos={ejeLocal ? { 'data-casilla': '' } : undefined}
+                                titulo={tituloLocal(t.localId)} alIntro={() => pasarDe(idLocal)}
+                                poner={(r) => (uno ? ponerGasto(i, { local: r ? r.id : '' }) : cambiar({ localId: r?.id || null }))} />
+                            </Caja>
+                            <Caja sitio="c2-2" campo={cc('c2-2')} gris estilo={estilo}><input aria-label={`Nombre del local${sufijo}`} readOnly tabIndex={-1} value={nombreDelLocal(t.localId)} title={nombreDelLocal(t.localId) || undefined} /></Caja>
+                            <Caja sitio="c2-3" campo={cc('c2-3')} rotulo={k === 0 ? 'Marca' : undefined} para={idMarca} estilo={estilo}>
+                              <CasillaLupa id={idMarca} etiqueta={`Marca${sufijo}`} registros={marcasLupa} valor={t.marcaId ?? null}
+                                gris={!cabEscribible || durante} datos={cabEscribible ? { 'data-casilla': '' } : undefined} alIntro={() => pasarDe(idMarca)}
+                                titulo={marcasLupa.find((m) => m.id === t.marcaId)?.descripcion ?? 'Sin marca'}
+                                poner={(r) => (uno ? ponerDatoLinea(i, { marca: r?.id ?? null }) : cambiar({ marcaId: r?.id ?? null }))} />
+                            </Caja>
+                            <Caja sitio="c2-4" campo={cc('c2-4')} gris estilo={estilo}><input aria-label={`Nombre de la marca${sufijo}`} readOnly tabIndex={-1} value={marcasLupa.find((m) => m.id === t.marcaId)?.descripcion ?? ''} title={marcasLupa.find((m) => m.id === t.marcaId)?.descripcion} /></Caja>
+                            <Caja sitio="c2-5" campo={cc('c2-5')} rotulo={k === 0 ? 'Plataforma' : undefined} para={idCanal} estilo={estilo}>
+                              <CasillaLupa id={idCanal} etiqueta={`Plataforma${sufijo}`} registros={plataformasLupa} valor={t.canalId ?? null}
+                                gris={!cabEscribible || durante} datos={cabEscribible ? { 'data-casilla': '' } : undefined} alIntro={() => pasarDe(idCanal)}
+                                titulo={plataformasLupa.find((x) => x.id === t.canalId)?.descripcion ?? 'Sin plataforma'}
+                                poner={(r) => (uno ? ponerDatoLinea(i, { plataforma: r?.id ?? null }) : cambiar({ canalId: r?.id ?? null }))} />
+                            </Caja>
+                            <Caja sitio="c2-6" campo={cc('c2-6')} gris estilo={estilo}><input aria-label={`Nombre de la plataforma${sufijo}`} readOnly tabIndex={-1} value={plataformasLupa.find((x) => x.id === t.canalId)?.descripcion ?? ''} title={plataformasLupa.find((x) => x.id === t.canalId)?.descripcion} /></Caja>
+                            <Caja sitio="c2-7" campo={cc('c2-7')} rotulo={k === 0 ? 'Importe' : undefined} para={`kr-tramo-${i}-${k}`} num estilo={estilo}
+                              mas={k === tramos.length - 1 ? <BotonMas17 etiqueta={`Otro tramo del reparto de la línea ${i + 1}`} puede={cabEscribible && !durante}
+                                titulo={cabEscribible ? 'Repartir la línea: otro local, marca o plataforma con su importe' : 'El reparto se escribe en una factura guardada'}
+                                hacer={() => setTramosEdit({ de: invoiceId, linea: i, tramos: [...tramos, { localId: null, marcaId: null, canalId: null, importe: 0 }] })} /> : undefined}>
+                              {uno
+                                ? <input id={`kr-tramo-${i}-${k}`} aria-label={`Importe del reparto${sufijo}`} readOnly tabIndex={-1} value={importeEs(t.importe)} />
+                                : <CasillaImporte id={`kr-tramo-${i}-${k}`} etiqueta={`Importe del tramo${sufijo}`} valor={t.importe ? importeEs(t.importe) : ''}
+                                    poner={(x) => { const n = leerImporte(x); if (!x.trim() || !(n > 0)) cambiarTramos(i, tramos.filter((_, j) => j !== k)); else cambiar({ importe: n }) }} />}
+                            </Caja>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+              </fieldset>
+              {!soloLectura && avisoInmovilizado(b.gastos.map((g) => g.cuenta)) && (
+                <p className="kf-aviso-linea kr-oculto" data-prueba="aviso-inmovilizado">{avisoInmovilizado(b.gastos.map((g) => g.cuenta))}</p>
+              )}
+
+              {/* ── Pago factura: una fila por pago (K10c); el ⊕, apagado hasta validar ── */}
+              <h2 className="kr-hd" style={{ top: 'calc(var(--kr-hd-pago) + var(--kr-extra))' }} data-pieza="bloque">
+                <span>Pago factura</span>
+                {modo === 'contabilizada' && (
+                  <span className="kr-hd-der" data-ambar={pagos.ambar ? 'si' : undefined} title={pagos.motivo ?? undefined}>
+                    <span data-prueba="pendiente">{pagos.pendiente > 0.005 ? `Pendiente ${cifra(pagos.pendiente)}` : 'Pagada'}</span>
+                    {/* Validada, el ⊕ de otro pago va aquí: detrás del importe están el ✎ y la 🗑 de cada pago (K10c). */}
+                    <BotonMas etiqueta="Otro pago" texto={otroPago(pagosHechos.length).replace(/^otro pago · /, '')}
+                      hacer={() => { if (enEdicion) return; setBorrarArmado(null); setPagoEdit({ de: invoiceId, id: null, cuenta: '', fecha: hoy, concepto: `PAGO ${b.numero} ${prov?.nombre ?? ''}`.trim(), importe: pagos.pendiente > 0 ? importeEs(pagos.pendiente) : '' }) }} />
+                  </span>
+                )}
+              </h2>
+              <div className="kr-pagos" role="table" aria-label="Los pagos de la factura">
+                {pagos.filas.map((f, i) => {
+                  const cnd = f.id ? candados?.[pagosHechos.findIndex((p) => p.id === f.id)] ?? null : null
+                  const editando = enEdicion && enEdicion.id === f.id && f.id !== null
+                  const primera = i === 0
+                  const c = (x: string) => (primera ? x : undefined)
+                  const r = (x: string) => (primera ? x : undefined)
+                  // Sin validar, el ⊕ de otro pago detrás del importe, apagado (17b; se apunta una vez validada, K10c).
+                  const masPago = f.id === null ? <BotonMas17 etiqueta="Otro pago" puede={false} titulo="Otro pago: se apunta una vez validada la factura" hacer={() => undefined} /> : undefined
+                  if (f.id === null) {
+                    // La propuesta del K06: se apunta al validar.
+                    return (
+                      <div className="kr-pago-fila" role="row" key="propuesta" data-propuesta="si">
+                        <Caja sitio="p1-1" campo={c('p1-1')} rotulo={r('Periodo')} para="kr-pago-periodo" gris><input id="kr-pago-periodo" aria-label="Periodo del pago" readOnly tabIndex={-1} value={f.ejercicio} /></Caja>
+                        <Caja sitio="p1-2" campo={c('p1-2')} gris><input aria-label="Descripción del periodo del pago" readOnly tabIndex={-1} value={trimestreDe(pagoFecha || b.fecha)} /></Caja>
+                        <Caja sitio="p1-3" campo={c('p1-3')} rotulo={r('Docum.')} para="kr-pago-doc" gris><input id="kr-pago-doc" aria-label="Documento del pago" readOnly tabIndex={-1} value="" title="Lo pone el programa al apuntarlo" /></Caja>
+                        <Caja sitio="p1-4" campo={c('p1-4')} rotulo={r('Subcuenta pago')} para="kf-pago" ambar={!!dudaPago} datos={{ 'data-prueba': 'pago-cuenta' }}
+                          title={dudaPago ? textoDudaPago(dudaPago, (x) => cuentasPago?.nombres.get(x) ?? '').texto : [nombrePago, origenPago].filter(Boolean).join(' · ') || undefined}>
+                          <Buscador id="kf-pago" lupa etiqueta="La cuenta del pago" cargando={!cuentasPago} valor={textoPago ?? pagoCuenta} cuenta={pagoCuenta || null} duda={!!dudaPago}
+                            ponerTexto={(t) => { setTextoPago(t); if (!t.trim()) ed.poner('pagoCuenta', PAGO_VACIO) }} lista={(t) => cuentasQueEncajan(t, [...(cuentasPago?.lista ?? []), ...creadas], 8)}
+                            inicial={() => ultimasDelPago.map((x) => [...(cuentasPago?.lista ?? []), ...creadas].find((y) => y.codigo === x) ?? { codigo: x, nombre: cuentasPago?.nombres.get(x) ?? 'La de su último pago' })}
+                            texto={(x) => `${x.codigo} · ${x.nombre}`} elegir={(x) => { ed.poner('pagoCuenta', x.codigo); setTextoPago(null) }}
+                            crear={crearCuenta((x) => { ed.poner('pagoCuenta', x.codigo); setTextoPago(null) })} />
+                        </Caja>
+                        <Caja sitio="p1-5" campo={c('p1-5')} rotulo={r('Fecha')} para="kf-pago-fecha"><CasillaFecha id="kf-pago-fecha" etiqueta="La fecha del pago" iso={pagoCuenta ? pagoFecha : ''} hoy={hoy} poner={(x) => ed.poner('pagoFecha', x)} /></Caja>
+                        <Caja sitio="p1-6" campo={c('p1-6')} rotulo={r('Concepto')} para="kr-pago-concepto" gris>
+                          <input id="kr-pago-concepto" aria-label="Concepto del pago" readOnly tabIndex={-1} value={pagoCuenta ? f.concepto : ''} title={[pagoCuenta ? f.concepto : '', asientoDelPago].filter(Boolean).join(' · ') || undefined} data-prueba="pago-asiento" />
+                        </Caja>
+                        <Caja sitio="p1-7" campo={c('p1-7')} rotulo={r('Importe')} para="kr-pago-importe" num gris mas={masPago}>
+                          <input id="kr-pago-importe" readOnly tabIndex={-1} aria-label="Importe del pago" value={cifra(importePago)} />
+                          {origenPago && <span className="kf-origen kr-oculto" data-prueba="origen-pago" title={origenPago}>{origenPago}</span>}
+                        </Caja>
+                      </div>
+                    )
+                  }
+                  if (editando && enEdicion) {
+                    return (
+                      <div className="kr-pago-fila" role="row" key={f.id} data-editando="si">
+                        <Caja sitio="p1-1" campo={c('p1-1')} rotulo={r('Periodo')} gris><input aria-label="Periodo del pago" readOnly tabIndex={-1} value={enEdicion.fecha.slice(0, 4)} /></Caja>
+                        <Caja sitio="p1-2" campo={c('p1-2')} gris><input aria-label="Descripción del periodo del pago" readOnly tabIndex={-1} value={trimestreDe(enEdicion.fecha)} /></Caja>
+                        <Caja sitio="p1-3" campo={c('p1-3')} rotulo={r('Docum.')} gris><input aria-label="Documento del pago" readOnly tabIndex={-1} value={f.documento} /></Caja>
+                        <Caja sitio="p1-4" campo={c('p1-4')} rotulo={r('Subcuenta pago')} para={`kr-pago-cuenta-${i}`}>
+                          <CasillaLupa id={`kr-pago-cuenta-${i}`} etiqueta="Subcuenta pago" registros={registrosPago} valor={enEdicion.cuenta || null} poner={(x) => setPagoEdit({ ...enEdicion, cuenta: x?.codigo ?? '' })} />
+                        </Caja>
+                        <Caja sitio="p1-5" campo={c('p1-5')} rotulo={r('Fecha')} para={`kr-pago-fecha-${i}`}><CasillaFecha id={`kr-pago-fecha-${i}`} etiqueta="Fecha del pago" iso={enEdicion.fecha} hoy={hoy} poner={(x) => setPagoEdit({ ...enEdicion, fecha: x })} /></Caja>
+                        <Caja sitio="p1-6" campo={c('p1-6')} rotulo={r('Concepto')}><input aria-label="Concepto del pago" value={enEdicion.concepto} onChange={(e) => setPagoEdit({ ...enEdicion, concepto: e.target.value })} /></Caja>
+                        <Caja sitio="p1-7" campo={c('p1-7')} rotulo={r('Importe')} para={`kr-pago-importe-${i}`} num>
+                          <CasillaImporte id={`kr-pago-importe-${i}`} etiqueta="Importe del pago" valor={enEdicion.importe} poner={(t) => setPagoEdit({ ...enEdicion, importe: t })}
+                            teclas={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); void guardarPago() } }} />
+                          <span className="kr-pago-botones">
+                            <button type="button" className="kr-boton" disabled={haciendoPago} title="Guardar el pago (Intro)" aria-label="Guardar el pago" onClick={() => void guardarPago()}>✓</button>
+                            <button type="button" className="kr-boton" disabled={haciendoPago} title="Dejarlo como estaba (Esc)" aria-label="Dejar el pago como estaba" onClick={() => setPagoEdit(null)}>✕</button>
+                          </span>
+                        </Caja>
+                      </div>
+                    )
+                  }
+                  const bloqueado = cnd ? !cnd.puede : true
+                  return (
+                    <div className="kr-pago-fila" role="row" key={f.id} data-pago={f.id}>
+                      <Caja sitio="p1-1" campo={c('p1-1')} rotulo={r('Periodo')} gris><input aria-label="Periodo del pago" readOnly tabIndex={-1} value={f.ejercicio} /></Caja>
+                      <Caja sitio="p1-2" campo={c('p1-2')} gris><input aria-label="Descripción del periodo del pago" readOnly tabIndex={-1} value={trimestreDe(f.fecha)} /></Caja>
+                      <Caja sitio="p1-3" campo={c('p1-3')} rotulo={r('Docum.')} gris><input aria-label="Documento del pago" readOnly tabIndex={-1} value={f.documento} /></Caja>
+                      <Caja sitio="p1-4" campo={c('p1-4')} rotulo={r('Subcuenta pago')} gris><input aria-label="Subcuenta pago" readOnly tabIndex={-1} value={f.cuenta} title={pagosHechos.find((p) => p.id === f.id)?.nombreCuenta ?? undefined} /></Caja>
+                      <Caja sitio="p1-5" campo={c('p1-5')} rotulo={r('Fecha')} gris><input aria-label="Fecha del pago" readOnly tabIndex={-1} value={fechaCorta(f.fecha)} /></Caja>
+                      <Caja sitio="p1-6" campo={c('p1-6')} rotulo={r('Concepto')} gris><input aria-label="Concepto del pago" readOnly tabIndex={-1} value={f.concepto} title={f.concepto} /></Caja>
+                      <Caja sitio="p1-7" campo={c('p1-7')} rotulo={r('Importe')} num gris>
+                        <input aria-label="Importe del pago" readOnly tabIndex={-1} value={cifra(f.importe)} />
+                        <span className="kr-pago-botones">
+                          <button type="button" className="kr-boton" aria-label={`Cambiar el pago ${f.documento}`} disabled={bloqueado || haciendoPago || !!enEdicion}
+                            title={bloqueado ? (cnd?.porque ?? 'Comprobando si se puede cambiar…') : 'Cambiar el pago (el asiento conserva su número)'}
+                            onClick={() => { setBorrarArmado(null); setPagoEdit({ de: invoiceId, id: f.id, cuenta: f.cuenta, fecha: f.fecha, concepto: f.concepto, importe: importeEs(f.importe) }) }}>✎</button>
+                          <button type="button" className="kr-boton" data-armado={borrarArmado === f.id ? 'si' : undefined} aria-label={`Borrar el pago ${f.documento}`} disabled={bloqueado || haciendoPago || !!enEdicion}
+                            title={bloqueado ? (cnd?.porque ?? 'Comprobando si se puede borrar…') : borrarArmado === f.id ? 'Pulsa otra vez para borrarlo: la serie se renumera' : 'Borrar el pago y su asiento'}
+                            onClick={() => f.id && void borrarUnPago(f.id)}>{borrarArmado === f.id ? '¿?' : '🗑'}</button>
+                        </span>
+                      </Caja>
+                    </div>
+                  )
+                })}
+                {enEdicion && enEdicion.id === null && (
+                  <div className="kr-pago-fila" role="row" data-editando="si" data-nuevo="si">
+                    <Caja sitio="p1-1" gris><input aria-label="Periodo del pago" readOnly tabIndex={-1} value={enEdicion.fecha.slice(0, 4)} /></Caja>
+                    <Caja sitio="p1-2" gris><input aria-label="Descripción del periodo del pago" readOnly tabIndex={-1} value={trimestreDe(enEdicion.fecha)} /></Caja>
+                    <Caja sitio="p1-3" gris><input aria-label="Documento del pago" readOnly tabIndex={-1} value="" /></Caja>
+                    <Caja sitio="p1-4" para="kr-pago-cuenta-nuevo"><CasillaLupa id="kr-pago-cuenta-nuevo" etiqueta="Subcuenta pago" registros={registrosPago} valor={enEdicion.cuenta || null} poner={(x) => setPagoEdit({ ...enEdicion, cuenta: x?.codigo ?? '' })} /></Caja>
+                    <Caja sitio="p1-5"><CasillaFecha id="kr-pago-fecha-nuevo" etiqueta="Fecha del pago" iso={enEdicion.fecha} hoy={hoy} poner={(x) => setPagoEdit({ ...enEdicion, fecha: x })} /></Caja>
+                    <Caja sitio="p1-6"><input aria-label="Concepto del pago" value={enEdicion.concepto} onChange={(e) => setPagoEdit({ ...enEdicion, concepto: e.target.value })} /></Caja>
+                    <Caja sitio="p1-7" num>
+                      <CasillaImporte id="kr-pago-importe-nuevo" etiqueta="Importe del pago" valor={enEdicion.importe} poner={(t) => setPagoEdit({ ...enEdicion, importe: t })}
+                        teclas={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); void guardarPago() } }} />
+                      <span className="kr-pago-botones">
+                        <button type="button" className="kr-boton" disabled={haciendoPago} title="Apuntar el pago (Intro)" aria-label="Apuntar el pago" onClick={() => void guardarPago()}>✓</button>
+                        <button type="button" className="kr-boton" disabled={haciendoPago} title="No apuntarlo (Esc)" aria-label="No apuntar el pago" onClick={() => setPagoEdit(null)}>✕</button>
+                      </span>
+                    </Caja>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Observaciones, de todo el ancho: con la factura, no van al asiento ── */}
+              <h2 className="kr-hd" style={{ top: 'calc(var(--kr-hd-obs) + var(--kr-extra))' }} data-pieza="bloque"><span>Observaciones</span></h2>
+              <Caja sitio="obs-1" campo="obs-1">
+                <input id="kf-observaciones" aria-label="Observaciones" maxLength={2000} readOnly={!cabEscribible} title="Se guardan con la factura; no van al asiento"
+                  value={textoObs?.k === invoiceId ? textoObs.v : cab?.observaciones ?? ''}
+                  onChange={(e) => setTextoObs({ k: invoiceId ?? '', v: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur() } }}
+                  onBlur={() => {
+                    if (textoObs?.k !== invoiceId) return
+                    const v = textoObs.v.trim(); setTextoObs(null)
+                    if (v !== (cab?.observaciones ?? '')) void ponerCabecera({ observaciones: v || null })
+                  }} />
+              </Caja>
+
               {otrosAbiertos && otrosL && (
                 <OtrosDatos alCerrar={() => setOtrosAbierto(null)}>
                   <h3 className="kp-ancha kr-otros-titulo">Otros datos de la factura</h3>
@@ -1022,12 +1349,12 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                       poner={(x) => { if (x !== (otrosL.fechaFiscal ?? b.fecha)) void ponerOtros({ fecha_fiscal: x && x !== b.fecha ? x : null }) }} />
                   </KCasilla>
                   <KCasilla rotulo="Tipo de factura" htmlFor="kr-tipo-factura" className="kp-ancha" ambar={!otrosL.tipoElegido && otrosL.tipoFactura !== 'F1'}>
-                    <CasillaLupa id="kr-tipo-factura" etiqueta="Tipo de factura" registros={(catalogos?.tiposFactura ?? []).map((c) => ({ id: c.codigo, codigo: c.codigo, descripcion: c.nombre }))}
-                      valor={otrosL.tipoFactura} poner={(r) => { if (r && r.id !== otrosL.tipoFactura) void ponerOtros({ tipo_factura: r.id }) }} />
+                    <CasillaLupa id="kr-tipo-factura" etiqueta="Tipo de factura" registros={(catalogos?.tiposFactura ?? []).map((x) => ({ id: x.codigo, codigo: x.codigo, descripcion: x.nombre }))}
+                      valor={otrosL.tipoFactura} poner={(x) => { if (x && x.id !== otrosL.tipoFactura) void ponerOtros({ tipo_factura: x.id }) }} />
                   </KCasilla>
                   <KCasilla rotulo="Clave de régimen especial" htmlFor="kr-clave" className="kp-ancha" ambar={!otrosL.claveElegida && otrosL.claveRegimen !== '01'}>
-                    <CasillaLupa id="kr-clave" etiqueta="Clave de régimen especial" registros={(catalogos?.clavesRegimen ?? []).map((c) => ({ id: c.codigo, codigo: c.codigo, descripcion: c.nombre }))}
-                      valor={otrosL.claveRegimen} poner={(r) => { if (r && r.id !== otrosL.claveRegimen) void ponerOtros({ clave_regimen: r.id }) }} />
+                    <CasillaLupa id="kr-clave" etiqueta="Clave de régimen especial" registros={(catalogos?.clavesRegimen ?? []).map((x) => ({ id: x.codigo, codigo: x.codigo, descripcion: x.nombre }))}
+                      valor={otrosL.claveRegimen} poner={(x) => { if (x && x.id !== otrosL.claveRegimen) void ponerOtros({ clave_regimen: x.id }) }} />
                   </KCasilla>
                   <label className="kr-marca"><input type="checkbox" checked={otrosL.noIva} disabled={guardandoOtros} onChange={(e) => void ponerOtros({ no_iva: e.target.checked })} /> No incluir en declaración de IVA</label>
                   <label className="kr-marca"><input type="checkbox" checked={otrosL.rectificacion} disabled={guardandoOtros} onChange={(e) => void ponerOtros({ rectificacion: e.target.checked })} /> Rectificación de deducciones</label>
@@ -1040,365 +1367,102 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                   <label className="kr-marca kp-ancha"><input type="checkbox" checked={otrosL.no347} disabled={guardandoOtros} onChange={(e) => void ponerOtros({ no_347: e.target.checked })} /> No incluir en modelo 347</label>
                 </OtrosDatos>
               )}
-              <fieldset className="kf-solo-lectura kr-campos" disabled={soloLectura} data-solo-lectura={soloLectura ? 'si' : undefined}>
-                {/* ── I.V.A. · Retención · Total factura ── */}
-                <Bloque titulo="I.V.A. · Retención · Total factura" className="kr-iva">
-                  <div className="kr-iva-rejilla">
-                    <div className="kr-iva-tipos">
-                      {cuadriculaIva(b.iva.map((l, i) => ({ l, i })), !soloLectura).map((fila, f) => (
-                        <div className="kr-iva-fila" key={f}>
-                          {fila.map((x, k) => x && x !== 'mas' ? (
-                            <div className="kr-iva-tipo" key={k}>
-                              <KCasilla rotulo={f === 0 ? 'Base' : ''} htmlFor={`kr-base-${x.i}`}>
-                                <input id={`kr-base-${x.i}`} className="kp-num" data-casilla aria-label={`Base ${x.i + 1}`} value={x.l.base} onChange={(e) => ponerIva(x.i, { base: e.target.value })}
-                                  data-ambar={importeDudoso(x.l.base) ? 'si' : undefined} title={importeDudoso(x.l.base) ? MOTIVO_IMPORTE_DUDOSO : undefined}
-                                  onBlur={() => { const n = num(x.l.base); if (n !== null && !importeDudoso(x.l.base)) ponerIva(x.i, { base: importeEs(n) }) }} />
-                              </KCasilla>
-                              <KCasilla rotulo={f === 0 ? '%' : ''} htmlFor={`kr-tipo-${x.i}`}>
-                                <select id={`kr-tipo-${x.i}`} data-casilla aria-label={`Tipo de IVA ${x.i + 1}`} className="kp-num" value={x.l.tipo} onChange={(e) => ponerIva(x.i, { tipo: e.target.value })}>
-                                  {[...new Set([...tiposIva.map(String), x.l.tipo])].filter(Boolean).map((t) => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                              </KCasilla>
-                              <KCasilla rotulo={f === 0 ? 'Cuota' : ''} htmlFor={`kr-cuota-${x.i}`}>
-                                <input id={`kr-cuota-${x.i}`} className="kp-num" aria-label={`Cuota ${x.i + 1}`} value={x.l.cuota} tabIndex={-1} onChange={(e) => ponerIva(x.i, { cuota: e.target.value }, false)} />
-                                {b.iva.length > 1 && <button type="button" className="kr-quitar" aria-label={`Quitar el tipo ${x.l.tipo} %`} tabIndex={-1} onClick={() => ed.poner('iva', b.iva.filter((_, j) => j !== x.i))}>×</button>}
-                              </KCasilla>
-                            </div>
-                          ) : x === 'mas' ? (
-                            <div className="kr-iva-tipo kr-iva-vacio" key={k}>
-                              <button type="button" className="kr-iva-otro" tabIndex={-1} title="Otro tipo de IVA" aria-label="Otro tipo de IVA"
-                                onClick={() => ed.poner('iva', [...b.iva, { base: '', tipo: String(tiposIva.find((t) => !b.iva.some((l) => l.tipo === String(t))) ?? 21), cuota: '' }])}>
-                                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M10 5.5v9M5.5 10h9" stroke="currentColor" strokeWidth="1.6" /></svg>
-                              </button>
-                            </div>
-                          ) : <div className="kr-iva-tipo kr-iva-vacio" key={k} />)}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="kr-retencion">
-                      <KCasilla rotulo="Tipo retención" htmlFor="kr-retencion">
-                        <CasillaLupa id="kr-retencion" etiqueta="Retención" registros={TIPOS_RETENCION.map((t) => ({ id: String(t), codigo: String(t), descripcion: `${t} %` }))}
-                          valor={b.retencion?.tipo ?? null} vista={(r) => r.descripcion} datos={{ 'data-casilla': '' }} alIntro={() => pasarDe('kr-retencion')}
-                          titulo={b.retencion ? `Retención del ${b.retencion.tipo} %` : 'Sin retención (F4 abre los tipos)'}
-                          poner={(r) => ed.poner('retencion', r ? rehacerRetencion({ tipo: r.id, importe: '' }, totales.base) : null)} />
-                      </KCasilla>
-                      <KCasilla rotulo="Base" htmlFor="kr-ret-base" gris><input id="kr-ret-base" className="kp-num" readOnly tabIndex={-1} value={b.retencion ? cifra(totales.base) : ''} /></KCasilla>
-                      <KCasilla rotulo="%" htmlFor="kr-ret-tipo" gris><input id="kr-ret-tipo" className="kp-num" readOnly tabIndex={-1} value={b.retencion?.tipo ?? ''} /></KCasilla>
-                      <KCasilla rotulo="Cuota" htmlFor="kr-ret-cuota" gris><input id="kr-ret-cuota" className="kp-num" readOnly tabIndex={-1} value={b.retencion?.importe ?? ''} /></KCasilla>
-                    </div>
-                    <KCasilla rotulo="Total factura" htmlFor="kr-total" className="kr-total" ambar={!!comprobacion('suma')} {...marcaComprobacion('suma')}>
-                      {aMano
-                        ? <input id="kr-total" className="kp-num kr-total-cifra" data-casilla aria-label="Total factura" placeholder="0,00"
-                            value={textoTotal ?? (totales.total ? importeEs(totales.total) : '')}
-                            title="Escríbelo y sale la base, con un solo tipo de IVA y la retención de su ficha"
-                            onFocus={(e) => { setTextoTotal(totales.total ? importeEs(totales.total) : ''); e.target.select() }}
-                            onChange={(e) => setTextoTotal(e.target.value)}
-                            onBlur={() => {
-                              const n = textoTotal !== null && !importeDudoso(textoTotal) ? leerImporte(textoTotal) : null
-                              if (n !== null && Number.isFinite(n) && Math.round(n * 100) !== Math.round(totales.total * 100)) { const r = desdeElTotal(b, n); if (r) { ed.poner('iva', r.iva); ed.poner('retencion', r.retencion) } }
-                              setTextoTotal(null)
-                            }} />
-                        : <input id="kr-total" className="kp-num kr-total-cifra" readOnly tabIndex={-1} aria-label="Total factura" data-prueba="total" value={cifra(totales.total)} />}
-                    </KCasilla>
-                  </div>
-                </Bloque>
 
-                {/* ── Contrapartida/s: una fila por línea (pieza 12) ── */}
-                <Bloque titulo="Contrapartida/s" className="kr-contra" >
-                  <div className="kr-contra-rejilla" data-hosteleria={hosteleria ? 'si' : undefined} data-desplaza={b.gastos.length > 1 ? 'si' : undefined}
-                    role="table" aria-label="Las contrapartidas" style={anchos}>
-                    {/* K11b · 6 · Dos filas por línea, como la 17a: la subcuenta, su nombre, el concepto y el importe; debajo, la analítica. */}
-                    <div className="kr-contra-cabeza" role="row">
-                      <span role="columnheader" title="Subcuenta gasto">Subcuenta gasto</span><span role="columnheader" />
-                      <span role="columnheader" title="Concepto de gastos">Concepto de gastos</span>
-                      <span role="columnheader" className="kp-num">Importe</span><span role="columnheader" />
-                    </div>
-                    <div className="kr-contra-cabeza kr-contra-cabeza-2" role="row">
-                      <span role="columnheader" title="Local">Local</span>
-                      {hosteleria && <><span role="columnheader" title="Marca">Marca</span><span role="columnheader" title="Plataforma">Plataforma</span></>}
-                    </div>
-                    <div className="kr-contra-lineas" role="rowgroup">
-                    {b.gastos.map((g, i) => {
-                      const d = datoDe(i)
-                      return (
-                        <div className="kr-contra-linea" role="row" key={i} data-una={unaLinea ? 'si' : undefined}>
-                        <div className="kr-contra-fila">
-                          <span className="kr-celda" data-ambar={(!!duda && i === 0) || (i === 0 && !!comprobacion('gasto-propuesto')) ? 'si' : undefined} title={i === 0 ? (duda?.texto ?? comprobacion('gasto-propuesto')?.texto) : undefined}>
-                            <Buscador id={`kf-cuenta-${i}`} lupa etiqueta={`Cuenta de gasto ${i + 1}`} cargando={cuentasGastoL === null} valor={textoCuenta[i] ?? g.cuenta} cuenta={g.cuenta || null} duda={!!duda && i === 0}
-                              ponerTexto={(t) => { setTextoCuenta((x) => ({ ...x, [i]: t })); if (!t.trim()) ponerGasto(i, { cuenta: '' }) }} lista={(t) => cuentasQueEncajan(t, cuentasPlan, 8)}
-                              texto={(c) => `${c.codigo} · ${c.nombre}`} elegir={(c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) }}
-                              crear={crearCuenta((c) => { ponerGasto(i, { cuenta: c.codigo }); setTextoCuenta((x) => { const y = { ...x }; delete y[i]; return y }) })} />
-                          </span>
-                          <span className="kr-celda"><NombreDeCuenta etiqueta={`Nombre de la cuenta ${i + 1}`} valor={g.cuenta ? nombreGasto(g.cuenta) : ''} duda={!!duda && i === 0} /></span>
-                          <span className="kr-celda">
-                            <input aria-label={`Concepto de gastos ${i + 1}`} maxLength={200} disabled={aMano || !cabEscribible} key={`${invoiceId}:c:${i}:${d?.concepto ?? ''}`} defaultValue={d?.concepto ?? ''}
-                              placeholder={conceptoTexto} title={d?.concepto || conceptoTexto || undefined}
-                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur() } }}
-                              onBlur={(e) => { const v = e.currentTarget.value.trim() || null; if (v !== (d?.concepto ?? null)) ponerDatoLinea(i, { concepto: v }) }} />
-                          </span>
-                          <span className="kr-celda">
-                            {unaLinea
-                              ? <input className="kp-num" aria-label={`Importe del gasto ${i + 1}`} readOnly tabIndex={-1} value={importeEs(baseGasto + noDeducible)} title={pct < 100 ? `La base y el ${100 - pct} % del IVA que no se deduce` : undefined} />
-                              : <CasillaImporte id={`kr-importe-${i}`} etiqueta={`Importe del gasto ${i + 1}`} valor={g.importe} poner={(t) => ponerGasto(i, { importe: t })} />}
-                          </span>
-                          <span className="kr-celda">{!unaLinea && <button type="button" className="kr-quitar" aria-label={`Quitar la cuenta ${i + 1}`} tabIndex={-1} onClick={() => ed.poner('gastos', b.gastos.filter((_, j) => j !== i))}>×</button>}</span>
-                        </div>
-                        <div className="kr-contra-fila-2">
-                          <span className="kr-celda">
-                            {/* K11b · 4 · Local, marca y plataforma con su lupa (pieza 5), con el nombre que cabe y entero en el `title`. */}
-                            <CasillaLupa id={`kr-local-${i}`} etiqueta={i === 0 ? 'Local' : `Local ${i + 1}`} registros={registrosLocal} valor={ejeLocal ? g.local ?? '' : ''}
-                              gris={!ejeLocal} vista={vistaAnalitica} datos={ejeLocal ? { 'data-casilla': '' } : undefined}
-                              titulo={tituloLocal(g.local)} poner={(r) => ponerGasto(i, { local: r ? r.id : '' })} alIntro={() => pasarDe(`kr-local-${i}`)} />
-                          </span>
-                          {hosteleria && <>
-                            <span className="kr-celda">
-                              <CasillaLupa id={i === 0 ? 'kf-marca' : `kr-marca-${i}`} etiqueta={i === 0 ? 'Marca' : `Marca ${i + 1}`} registros={marcasLupa} valor={marcaDe(i) ?? null}
-                                gris={!cabEscribible || guardandoCab || guardandoOtros} vista={vistaAnalitica}
-                                titulo={marcasLupa.find((m) => m.id === marcaDe(i))?.descripcion ?? 'Sin marca'} poner={(r) => ponerDatoLinea(i, { marca: r?.id ?? null })} />
-                            </span>
-                            <span className="kr-celda">
-                              <CasillaLupa id={`kr-plataforma-${i}`} etiqueta={i === 0 ? 'Plataforma' : `Plataforma ${i + 1}`} registros={plataformasLupa} valor={d?.canalId ?? null}
-                                gris={!cabEscribible || guardandoOtros} vista={vistaAnalitica}
-                                titulo={plataformasLupa.find((x) => x.id === d?.canalId)?.descripcion ?? 'Sin plataforma'} poner={(r) => ponerDatoLinea(i, { plataforma: r?.id ?? null })} />
-                            </span>
-                          </>}
-                        </div>
-                        </div>
-                      )
-                    })}
-                    </div>
-                  </div>
-                  <div className="kr-pie">
-                    {!soloLectura && <BotonMas etiqueta="Otra línea" texto={otraLinea(b.gastos.length)} hacer={() => ed.poner('gastos', [...b.gastos, { cuenta: b.gastos[0]?.cuenta ?? '', local: '', importe: '' }])} />}
-                    {!unaLinea && <span className="kr-suma" data-ambar={rotuloSuma.motivo ? 'si' : undefined} title={rotuloSuma.motivo ?? undefined} data-prueba="suma-contrapartidas">{rotuloSuma.texto}</span>}
-                  </div>
-                  {!soloLectura && avisoInmovilizado(b.gastos.map((g) => g.cuenta)) && (
-                    <p className="kf-aviso-linea" data-prueba="aviso-inmovilizado">{avisoInmovilizado(b.gastos.map((g) => g.cuenta))}</p>
-                  )}
-                </Bloque>
-              </fieldset>
-
-              {/* ── Pago factura: una fila por pago (K10c) ── */}
-              <Bloque titulo="Pago factura" className="kr-pago">
-                <div className="kr-pago-rejilla" role="table" aria-label="Los pagos de la factura">
-                  <div className="kr-pago-cabeza" role="row">
-                    <span role="columnheader">Periodo</span><span role="columnheader">Docum.</span><span role="columnheader">Subcuenta pago</span>
-                    <span role="columnheader">Fecha</span><span role="columnheader">Concepto</span><span role="columnheader" className="kp-num">Importe</span><span role="columnheader" />
-                  </div>
-                  {pagos.filas.map((f, i) => {
-                    const c = f.id ? candados?.[pagosHechos.findIndex((p) => p.id === f.id)] ?? null : null
-                    const editando = enEdicion && enEdicion.id === f.id && f.id !== null
-                    if (f.id === null) {
-                      // La propuesta del K06: se apunta al validar.
-                      return (
-                        <div className="kr-pago-fila" role="row" key="propuesta" data-propuesta="si">
-                          <input aria-label="Periodo del pago" readOnly tabIndex={-1} value={f.ejercicio} />
-                          <input aria-label="Documento del pago" readOnly tabIndex={-1} value="" title="Lo pone el programa al apuntarlo" />
-                          <span className="kr-celda" data-prueba="pago-cuenta" data-ambar={dudaPago ? 'si' : undefined} title={dudaPago ? textoDudaPago(dudaPago, (x) => cuentasPago?.nombres.get(x) ?? '').texto : [nombrePago, origenPago].filter(Boolean).join(' · ') || undefined}>
-                            <Buscador id="kf-pago" lupa etiqueta="La cuenta del pago" cargando={!cuentasPago} valor={textoPago ?? pagoCuenta} cuenta={pagoCuenta || null} duda={!!dudaPago}
-                              ponerTexto={(t) => { setTextoPago(t); if (!t.trim()) ed.poner('pagoCuenta', PAGO_VACIO) }} lista={(t) => cuentasQueEncajan(t, [...(cuentasPago?.lista ?? []), ...creadas], 8)}
-                              inicial={() => ultimasDelPago.map((c) => [...(cuentasPago?.lista ?? []), ...creadas].find((x) => x.codigo === c) ?? { codigo: c, nombre: cuentasPago?.nombres.get(c) ?? 'La de su último pago' })}
-                              texto={(x) => `${x.codigo} · ${x.nombre}`} elegir={(x) => { ed.poner('pagoCuenta', x.codigo); setTextoPago(null) }}
-                              crear={crearCuenta((x) => { ed.poner('pagoCuenta', x.codigo); setTextoPago(null) })} />
-                          </span>
-                          <CasillaFecha id="kf-pago-fecha" etiqueta="La fecha del pago" iso={pagoCuenta ? pagoFecha : ''} hoy={hoy} poner={(x) => ed.poner('pagoFecha', x)} />
-                          <input aria-label="Concepto del pago" readOnly tabIndex={-1} value={pagoCuenta ? f.concepto : ''} title={[pagoCuenta ? f.concepto : '', asientoDelPago].filter(Boolean).join(' · ') || undefined} data-prueba="pago-asiento" />
-                          <input className="kp-num" readOnly tabIndex={-1} aria-label="Importe del pago" value={cifra(importePago)} />
-                          {/* K11b · 6 · El ⊕ detrás del importe, como la 17a: otro pago se apunta una vez validada (K10c). */}
-                          <span className="kr-pago-botones">
-                            <button type="button" className="kr-pago-mas" disabled title="Otro pago: se apunta una vez validada la factura" aria-label="Otro pago">
-                              <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M10 5.5v9M5.5 10h9" stroke="currentColor" strokeWidth="1.6" /></svg>
-                            </button>
-                            {origenPago && <span className="kf-origen kr-oculto" data-prueba="origen-pago" title={origenPago}>{origenPago}</span>}
-                          </span>
-                        </div>
-                      )
-                    }
-                    if (editando && enEdicion) {
-                      return (
-                        <div className="kr-pago-fila" role="row" key={f.id} data-editando="si">
-                          <input aria-label="Periodo del pago" readOnly tabIndex={-1} value={enEdicion.fecha.slice(0, 4)} />
-                          <input aria-label="Documento del pago" readOnly tabIndex={-1} value={f.documento} />
-                          <CasillaLupa id={`kr-pago-cuenta-${i}`} etiqueta="Subcuenta pago" registros={registrosPago} valor={enEdicion.cuenta || null} poner={(r) => setPagoEdit({ ...enEdicion, cuenta: r?.codigo ?? '' })} />
-                          <CasillaFecha id={`kr-pago-fecha-${i}`} etiqueta="Fecha del pago" iso={enEdicion.fecha} hoy={hoy} poner={(x) => setPagoEdit({ ...enEdicion, fecha: x })} />
-                          <input aria-label="Concepto del pago" value={enEdicion.concepto} onChange={(e) => setPagoEdit({ ...enEdicion, concepto: e.target.value })} />
-                          <CasillaImporte id={`kr-pago-importe-${i}`} etiqueta="Importe del pago" valor={enEdicion.importe} poner={(t) => setPagoEdit({ ...enEdicion, importe: t })}
-                            teclas={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); void guardarPago() } }} />
-                          <span className="kr-pago-botones">
-                            <button type="button" className="kr-boton" disabled={haciendoPago} title="Guardar el pago (Intro)" aria-label="Guardar el pago" onClick={() => void guardarPago()}>✓</button>
-                            <button type="button" className="kr-boton" disabled={haciendoPago} title="Dejarlo como estaba (Esc)" aria-label="Dejar el pago como estaba" onClick={() => setPagoEdit(null)}>✕</button>
-                          </span>
-                        </div>
-                      )
-                    }
-                    const bloqueado = c ? !c.puede : true
-                    return (
-                      <div className="kr-pago-fila" role="row" key={f.id} data-pago={f.id}>
-                        <input aria-label="Periodo del pago" readOnly tabIndex={-1} value={f.ejercicio} />
-                        <input aria-label="Documento del pago" readOnly tabIndex={-1} value={f.documento} />
-                        <input aria-label="Subcuenta pago" readOnly tabIndex={-1} value={f.cuenta} title={pagosHechos.find((p) => p.id === f.id)?.nombreCuenta ?? undefined} />
-                        <input aria-label="Fecha del pago" readOnly tabIndex={-1} value={fechaCorta(f.fecha)} />
-                        <input aria-label="Concepto del pago" readOnly tabIndex={-1} value={f.concepto} title={f.concepto} />
-                        <input className="kp-num" aria-label="Importe del pago" readOnly tabIndex={-1} value={cifra(f.importe)} />
-                        <span className="kr-pago-botones">
-                          <button type="button" className="kr-boton" aria-label={`Cambiar el pago ${f.documento}`} disabled={bloqueado || haciendoPago || !!enEdicion}
-                            title={bloqueado ? (c?.porque ?? 'Comprobando si se puede cambiar…') : 'Cambiar el pago (el asiento conserva su número)'}
-                            onClick={() => { setBorrarArmado(null); setPagoEdit({ de: invoiceId, id: f.id, cuenta: f.cuenta, fecha: f.fecha, concepto: f.concepto, importe: importeEs(f.importe) }) }}>✎</button>
-                          <button type="button" className="kr-boton" data-armado={borrarArmado === f.id ? 'si' : undefined} aria-label={`Borrar el pago ${f.documento}`} disabled={bloqueado || haciendoPago || !!enEdicion}
-                            title={bloqueado ? (c?.porque ?? 'Comprobando si se puede borrar…') : borrarArmado === f.id ? 'Pulsa otra vez para borrarlo: la serie se renumera' : 'Borrar el pago y su asiento'}
-                            onClick={() => f.id && void borrarUnPago(f.id)}>{borrarArmado === f.id ? '¿?' : '🗑'}</button>
-                        </span>
+              {/* ── Abajo: la duda (solo si la hay, en una línea) y la visualización del asiento, hasta abajo ── */}
+              <div className="kr-abajo">
+                <div className="kr-dudas">
+                  {nuevo && (
+                    <div className="kf-duda" role="group" aria-label="Nuevo proveedor" data-prueba="nuevo-proveedor-abierto">
+                      <p>{nuevo.repetido ? <span data-prueba="nif-repetido" role="alert"><strong>Mira esto ·</strong> {nuevo.fallo ?? textoNifRepetido(nuevo.repetido.name)}{nuevo.repetido.id && <> <Link className="kf-enlace" to={rutaFichaProveedor(nuevo.repetido.id)}>Abrirlo</Link></>}</span>
+                        : nuevo.fallo ? <span className="kf-error" role="alert">{nuevo.fallo}</span> : 'Nuevo proveedor: su NIF y su nombre, arriba.'}</p>
+                      <div>
+                        <button type="button" className="kf-boton-ambar" disabled={nuevo.ocupado} onClick={() => void crearNuevo()}>{nuevo.ocupado ? 'Dando de alta…' : 'Darlo de alta y elegirlo'}</button>
+                        <button type="button" className="kf-boton-hueco" disabled={nuevo.ocupado} onClick={() => setNuevo(null)}>Cancelar</button>
                       </div>
-                    )
-                  })}
-                  {enEdicion && enEdicion.id === null && (
-                    <div className="kr-pago-fila" role="row" data-editando="si" data-nuevo="si">
-                      <input aria-label="Periodo del pago" readOnly tabIndex={-1} value={enEdicion.fecha.slice(0, 4)} />
-                      <input aria-label="Documento del pago" readOnly tabIndex={-1} value="" />
-                      <CasillaLupa id="kr-pago-cuenta-nuevo" etiqueta="Subcuenta pago" registros={registrosPago} valor={enEdicion.cuenta || null} poner={(r) => setPagoEdit({ ...enEdicion, cuenta: r?.codigo ?? '' })} />
-                      <CasillaFecha id="kr-pago-fecha-nuevo" etiqueta="Fecha del pago" iso={enEdicion.fecha} hoy={hoy} poner={(x) => setPagoEdit({ ...enEdicion, fecha: x })} />
-                      <input aria-label="Concepto del pago" value={enEdicion.concepto} onChange={(e) => setPagoEdit({ ...enEdicion, concepto: e.target.value })} />
-                      <CasillaImporte id="kr-pago-importe-nuevo" etiqueta="Importe del pago" valor={enEdicion.importe} poner={(t) => setPagoEdit({ ...enEdicion, importe: t })}
-                        teclas={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); void guardarPago() } }} />
-                      <span className="kr-pago-botones">
-                        <button type="button" className="kr-boton" disabled={haciendoPago} title="Apuntar el pago (Intro)" aria-label="Apuntar el pago" onClick={() => void guardarPago()}>✓</button>
-                        <button type="button" className="kr-boton" disabled={haciendoPago} title="No apuntarlo (Esc)" aria-label="No apuntar el pago" onClick={() => setPagoEdit(null)}>✕</button>
-                      </span>
                     </div>
                   )}
-                </div>
-                <div className="kr-pie">
-                  {modo === 'contabilizada' && (
-                    <BotonMas etiqueta="Otro pago" texto={otroPago(pagosHechos.length)}
-                      hacer={() => { setBorrarArmado(null); setPagoEdit({ de: invoiceId, id: null, cuenta: '', fecha: hoy, concepto: `PAGO ${b.numero} ${prov?.nombre ?? ''}`.trim(), importe: pagos.pendiente > 0 ? importeEs(pagos.pendiente) : '' }) }} />
+                  {repetida && (
+                    <p className="kf-aviso kf-repetida" data-tono="falta" data-prueba="repetida">
+                      <strong>Mira esto ·</strong> {textoRepetida(repetida)} <Link className="kf-enlace" to={rutaRevisarFactura(repetida.id)}>Abrirla</Link>
+                      <label className="kf-no-es"><input type="checkbox" checked={noEs?.de === invoiceId} onChange={(e) => setNoEs(e.target.checked ? { de: invoiceId, motivo: '' } : null)} /> No es la misma:</label>
+                      {noEs?.de === invoiceId && <>
+                        <input aria-label="Por qué no es la misma" placeholder="por qué (otro ejercicio…)" value={noEs.motivo} onChange={(e) => setNoEs({ de: invoiceId, motivo: e.target.value })} />
+                        <button type="button" className="kf-enlace" disabled={anotando || !noEs.motivo.trim()} onClick={() => void anotarNoEsLaMisma(repetida.id, noEs.motivo)}>{anotando ? 'Anotando…' : 'Anotarlo'}</button>
+                      </>}
+                    </p>
                   )}
-                  {modo === 'contabilizada' && (
-                    <span className="kr-suma" data-ambar={pagos.ambar ? 'si' : undefined} title={pagos.motivo ?? undefined} data-prueba="pendiente">
-                      {pagos.pendiente > 0.005 ? `Pendiente ${cifra(pagos.pendiente)}` : 'Pagada'}
-                    </span>
+                  {franjaSolo && (
+                    <Duda fuerte={franjaSolo.fuerte} texto={franjaSolo.texto}
+                      secundario={franjaSolo.deshacer ? { texto: deshaciendo ? 'Deshaciendo…' : 'Deshacer', hacer: () => void deshacerSolo() } : undefined} />
+                  )}
+                  {emisor?.que === 'alta' && altaAbierta !== invoiceId && (
+                    <Duda texto={`No conozco al que la emite${emisor.nombre ? `: ${emisor.nombre}` : ''}${emisor.nif ? ` · NIF ${emisor.nif}` : ''}. ${solo?.que === 'no' && solo.motivo ? `${solo.motivo} ` : ''}Hasta que tenga proveedor no se valida.`}
+                      principal={{ texto: 'Darlo de alta', hacer: () => setAltaAbierta(invoiceId) }}
+                      secundario={{ texto: 'Es uno que ya tengo', hacer: () => setAbrirProveedor((n) => n + 1) }} />
+                  )}
+                  {emisor?.que === 'es_uno_tuyo' && (
+                    <Duda texto={`El NIF de la factura${emisor.nif ? ` (${emisor.nif})` : ''} es el de ${emisor.nombre}.`}
+                      principal={{ texto: `Es ${emisor.nombre}: elegirlo`, hacer: () => void elegirYGuardar(emisor.proveedorId, emisor.nombre, `Elegido ${emisor.nombre}: el NIF de la factura es el suyo.`) }}
+                      secundario={{ texto: 'Es uno que ya tengo', hacer: () => setAbrirProveedor((n) => n + 1) }} />
+                  )}
+                  {duda && !soloLectura && (
+                    <Duda texto={duda.texto}
+                      principal={{ texto: `Dejar ${duda.dejar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.dejar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }}
+                      secundario={{ texto: `Cambiar a ${duda.cambiar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.cambiar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }} />
+                  )}
+                  {dudaPago && !soloLectura && (
+                    <Duda texto={textoDudaPago(dudaPago, (x) => cuentasPago?.nombres.get(x) ?? '').texto}
+                      principal={{ texto: `Dejar ${dudaPago.cuentas[0]}`, hacer: () => ed.poner('pagoCuenta', dudaPago.cuentas[0]) }}
+                      secundario={{ texto: `Cambiar a ${dudaPago.cuentas[1]}`, hacer: () => ed.poner('pagoCuenta', dudaPago.cuentas[1]) }} />
                   )}
                 </div>
-              </Bloque>
-
-              {/* ── Observaciones: con la factura, no van al asiento ── */}
-              <Bloque titulo="Observaciones" className="kr-obs">
-                <input id="kf-observaciones" aria-label="Observaciones" maxLength={2000} readOnly={!cabEscribible} title="Se guardan con la factura; no van al asiento"
-                  value={textoObs?.k === invoiceId ? textoObs.v : cab?.observaciones ?? ''}
-                  onChange={(e) => setTextoObs({ k: invoiceId ?? '', v: e.target.value })}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur() } }}
-                  onBlur={() => {
-                    if (textoObs?.k !== invoiceId) return
-                    const v = textoObs.v.trim(); setTextoObs(null)
-                    if (v !== (cab?.observaciones ?? '')) void ponerCabecera({ observaciones: v || null })
-                  }} />
-              </Bloque>
-
-              {/* Lo que aún se decide con un botón (la repetida, el emisor, la cuenta que duda, el pago que duda). */}
-              <div className="kr-dudas">
-                {repetida && (
-                  <p className="kf-aviso kf-repetida" data-tono="falta" data-prueba="repetida">
-                    <strong>Mira esto ·</strong> {textoRepetida(repetida)} <Link className="kf-enlace" to={rutaRevisarFactura(repetida.id)}>Abrirla</Link>
-                    <label className="kf-no-es"><input type="checkbox" checked={noEs?.de === invoiceId} onChange={(e) => setNoEs(e.target.checked ? { de: invoiceId, motivo: '' } : null)} /> No es la misma:</label>
-                    {noEs?.de === invoiceId && <>
-                      <input aria-label="Por qué no es la misma" placeholder="por qué (otro ejercicio…)" value={noEs.motivo} onChange={(e) => setNoEs({ de: invoiceId, motivo: e.target.value })} />
-                      <button type="button" className="kf-enlace" disabled={anotando || !noEs.motivo.trim()} onClick={() => void anotarNoEsLaMisma(repetida.id, noEs.motivo)}>{anotando ? 'Anotando…' : 'Anotarlo'}</button>
-                    </>}
-                  </p>
-                )}
-                {franjaSolo && (
-                  <Duda fuerte={franjaSolo.fuerte} texto={franjaSolo.texto}
-                    secundario={franjaSolo.deshacer ? { texto: deshaciendo ? 'Deshaciendo…' : 'Deshacer', hacer: () => void deshacerSolo() } : undefined} />
-                )}
-                {emisor?.que === 'alta' && altaAbierta !== invoiceId && (
-                  <Duda texto={`No conozco al que la emite${emisor.nombre ? `: ${emisor.nombre}` : ''}${emisor.nif ? ` · NIF ${emisor.nif}` : ''}. ${solo?.que === 'no' && solo.motivo ? `${solo.motivo} ` : ''}Hasta que tenga proveedor no se valida.`}
-                    principal={{ texto: 'Darlo de alta', hacer: () => setAltaAbierta(invoiceId) }}
-                    secundario={{ texto: 'Es uno que ya tengo', hacer: () => setAbrirProveedor((n) => n + 1) }} />
-                )}
                 {emisor?.que === 'alta' && altaAbierta === invoiceId && accountId && fac && (
-                  <AltaDesdeFactura accountId={accountId} otros={proveedores.map((p) => ({ id: p.id, name: p.nombre, taxId: p.nif }))}
-                    leido={{ nombre: emisor.nombre, nif: emisor.nif, direccion: leido?.proveedor.direccion ?? null, correo: leido?.proveedor.email ?? null, telefono: leido?.proveedor.telefono ?? null, web: leido?.proveedor.web ?? null }}
-                    factura={{ id: fac.id, numero: fac.numero ?? null }} alCancelar={() => setAltaAbierta(null)}
-                    alCrear={(p) => { setAltaAbierta(null); void elegirYGuardar(p.id, p.name, fraseAltaEnFactura(p.name)) }} />
+                  <div className="kr-alta">
+                    <AltaDesdeFactura accountId={accountId} otros={proveedores.map((p) => ({ id: p.id, name: p.nombre, taxId: p.nif }))}
+                      leido={{ nombre: emisor.nombre, nif: emisor.nif, direccion: leido?.proveedor.direccion ?? null, correo: leido?.proveedor.email ?? null, telefono: leido?.proveedor.telefono ?? null, web: leido?.proveedor.web ?? null }}
+                      factura={{ id: fac.id, numero: fac.numero ?? null }} alCancelar={() => setAltaAbierta(null)}
+                      alCrear={(p) => { setAltaAbierta(null); void elegirYGuardar(p.id, p.name, fraseAltaEnFactura(p.name)) }} />
+                  </div>
                 )}
-                {emisor?.que === 'es_uno_tuyo' && (
-                  <Duda texto={`El NIF de la factura${emisor.nif ? ` (${emisor.nif})` : ''} es el de ${emisor.nombre}.`}
-                    principal={{ texto: `Es ${emisor.nombre}: elegirlo`, hacer: () => void elegirYGuardar(emisor.proveedorId, emisor.nombre, `Elegido ${emisor.nombre}: el NIF de la factura es el suyo.`) }}
-                    secundario={{ texto: 'Es uno que ya tengo', hacer: () => setAbrirProveedor((n) => n + 1) }} />
-                )}
-                {duda && !soloLectura && (
-                  <Duda texto={duda.texto}
-                    principal={{ texto: `Dejar ${duda.dejar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.dejar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }}
-                    secundario={{ texto: `Cambiar a ${duda.cambiar.cuenta}`, hacer: () => { ponerGasto(0, { cuenta: duda.cambiar.cuenta }); setDecidida(`${invoiceId}:${provId}`) } }} />
-                )}
-                {dudaPago && !soloLectura && (
-                  <Duda texto={textoDudaPago(dudaPago, (c) => cuentasPago?.nombres.get(c) ?? '').texto}
-                    principal={{ texto: `Dejar ${dudaPago.cuentas[0]}`, hacer: () => ed.poner('pagoCuenta', dudaPago.cuentas[0]) }}
-                    secundario={{ texto: `Cambiar a ${dudaPago.cuentas[1]}`, hacer: () => ed.poner('pagoCuenta', dudaPago.cuentas[1]) }} />
-                )}
-              </div>
 
-              {/* ── Visualización del asiento (pieza 7): el de la factura y, debajo, el de cada pago, con su número ── */}
-              {!(modo === 'contabilizada' && enModificar && asientoReal) && (
-                <Bloque titulo="Visualización del asiento" className="kr-visual">
+                {/* ── Visualización del asiento (17b): recuadro rojo hasta abajo; la cabecera fija y las líneas que se desplazan ── */}
+                {!(modo === 'contabilizada' && enModificar && asientoReal) && (<>
+                  <h2 className="kr-hd" data-pieza="bloque" data-prueba="titulo-visual"><span>Visualización del asiento</span></h2>
                   <div className="kf-asiento kr-visual-marco" aria-label="El asiento que sale">
-                    <table>
-                      {/* K11b · 6 · Los nombres, más anchos que las cifras: «Distribuciones Ejemplo, S.L.» entero a 1366 si cabe. */}
-                      <colgroup><col className="kr-col-cifra" /><col className="kr-col-nombre" /><col className="kr-col-nombre" /><col className="kr-col-cifra" /></colgroup>
-                      <tbody className="kr-visual-cabeza"><tr>
-                        <th colSpan={2}>Factura{modo === 'contabilizada' && fac?.asiento?.numero ? ` · asiento 2 / ${fac.asiento.numero}` : ''}</th>
-                        <th colSpan={2} className="kp-num">
-                          <span className="kf-etiqueta" data-tono={modo === 'contabilizada' ? 'bien' : etiqueta.tono} data-prueba="cuadra" title={porqueSinPropuesta ?? undefined}>
-                            {modo === 'contabilizada' ? etiquetaValidado(fac?.asiento?.numero ?? null) : etiqueta.texto}
-                          </span> {fechaCorta(otrosL?.fechaContable ?? b.fecha)}
-                        </th>
-                      </tr></tbody>
-                      {porqueSinPropuesta && <tbody><tr><td colSpan={4} className="kr-visual-nota" data-prueba="sin-propuesta">{porqueSinPropuesta}</td></tr></tbody>}
-                      <tbody>
-                        {filasVisual(visualFactura).map((r, i) => (
-                          <tr key={i}>
-                            <td className="kr-visual-debe">{r.d && <><span className="kp-num">{cifra(r.d.importe)}</span> <span className="kp-visual-cuenta">({r.d.cuenta})</span></>}</td>
-                            <td className="kr-visual-nombre" title={r.d?.nombre}>{r.d?.nombre}</td>
-                            <td className="kr-visual-nombre kr-visual-haber-nombre" title={r.h?.nombre}>{r.h?.nombre}</td>
-                            <td className="kr-visual-haber">{r.h && <><span className="kp-visual-cuenta">({r.h.cuenta})</span> <span className="kp-num">{cifra(r.h.importe)}</span></>}</td>
-                          </tr>
-                        ))}
-                      </tbody>
+                    <div className="kr-visual-cabeza">
+                      <span>Factura{modo === 'contabilizada' && fac?.asiento?.numero ? ` · asiento 2 / ${fac.asiento.numero}` : ''}</span>
+                      <span className="kf-etiqueta" data-tono={modo === 'contabilizada' ? 'bien' : etiqueta.tono} data-prueba="cuadra" title={porqueSinPropuesta ?? undefined}>
+                        {modo === 'contabilizada' ? etiquetaValidado(fac?.asiento?.numero ?? null) : etiqueta.texto}
+                      </span>
+                      <span>{fechaCorta(otrosL?.fechaContable ?? b.fecha)}</span>
+                      <span className="kr-visual-ed" aria-hidden="true" title="Ver y retocar el asiento: llega con la ventana del asiento (K13, PR 2)">✎</span>
+                    </div>
+                    <div className="kr-visual-cuerpo">
+                      {porqueSinPropuesta && <p className="kr-visual-nota" data-prueba="sin-propuesta">{porqueSinPropuesta}</p>}
+                      <AsientoVisto lineas={visualFactura} cifra={cifra} />
                       {pagoSinHacer && visualPago.length > 0 && (
-                        <tbody data-asiento-pago="por-hacer">
-                          <tr className="kr-visual-cabeza"><th colSpan={2} title="Se apunta al validar la factura">Pago</th><th colSpan={2} className="kp-num">{fechaCorta(pagoSinHacer.fecha)}</th></tr>
-                          {filasVisual(visualPago).map((r, i) => (
-                            <tr key={i}>
-                              <td className="kr-visual-debe">{r.d && <><span className="kp-num">{cifra(r.d.importe)}</span> <span className="kp-visual-cuenta">({r.d.cuenta})</span></>}</td>
-                              <td className="kr-visual-nombre" title={r.d?.nombre}>{r.d?.nombre}</td>
-                              <td className="kr-visual-nombre kr-visual-haber-nombre" title={r.h?.nombre}>{r.h?.nombre}</td>
-                              <td className="kr-visual-haber">{r.h && <><span className="kp-visual-cuenta">({r.h.cuenta})</span> <span className="kp-num">{cifra(r.h.importe)}</span></>}</td>
-                            </tr>
-                          ))}
-                        </tbody>
+                        <div className="kr-visual-asiento" data-asiento-pago="por-hacer">
+                          <div className="kr-visual-cabeza"><span title="Se apunta al validar la factura">Pago</span><span className="kr-visual-fecha" style={{ marginLeft: 'auto' }}>{fechaCorta(pagoSinHacer.fecha)}</span></div>
+                          <AsientoVisto lineas={visualPago} cifra={cifra} />
+                        </div>
                       )}
                       {pagosHechos.map((p) => (
-                        <tbody key={p.id} data-asiento-pago={p.id}>
-                          <tr className="kr-visual-cabeza"><th colSpan={2}>Pago{p.numero !== null ? ` · asiento ${p.serie ?? 4} / ${p.numero}` : ''}</th><th colSpan={2} className="kp-num">{fechaCorta(p.fecha)}</th></tr>
-                          {filasVisual(aVisual(p.apuntes.map((a) => ({ codigo: a.cuenta, nombre: a.nombre, debe: a.debe || null, haber: a.haber || null })))).map((r, i) => (
-                            <tr key={i}>
-                              <td className="kr-visual-debe">{r.d && <><span className="kp-num">{cifra(r.d.importe)}</span> <span className="kp-visual-cuenta">({r.d.cuenta})</span></>}</td>
-                              <td className="kr-visual-nombre" title={r.d?.nombre}>{r.d?.nombre}</td>
-                              <td className="kr-visual-nombre kr-visual-haber-nombre" title={r.h?.nombre}>{r.h?.nombre}</td>
-                              <td className="kr-visual-haber">{r.h && <><span className="kp-visual-cuenta">({r.h.cuenta})</span> <span className="kp-num">{cifra(r.h.importe)}</span></>}</td>
-                            </tr>
-                          ))}
-                        </tbody>
+                        <div className="kr-visual-asiento" key={p.id} data-asiento-pago={p.id}>
+                          <div className="kr-visual-cabeza"><span>Pago{p.numero !== null ? ` · asiento ${p.serie ?? 4} / ${p.numero}` : ''}</span><span style={{ marginLeft: 'auto' }}>{fechaCorta(p.fecha)}</span></div>
+                          <AsientoVisto lineas={aVisual(p.apuntes.map((a) => ({ codigo: a.cuenta, nombre: a.nombre, debe: a.debe || null, haber: a.haber || null })))} cifra={cifra} />
+                        </div>
                       ))}
-                    </table>
+                    </div>
                   </div>
-                </Bloque>
+                </>)}
+                {modo === 'contabilizada' && enModificar && asientoReal && (
+                  <ModificarAsiento apuntes={asientoReal.apuntes.map((a) => ({ posicion: a.posicion, cuenta: a.cuenta, nombre: a.nombreCuenta, debe: a.debe, haber: a.haber }))}
+                    plan={cuentasPago?.lista ?? []} nombre={(x) => cuentasPago?.nombres.get(x) ?? asientoReal.apuntes.find((a) => a.cuenta === x)?.nombreCuenta ?? ''}
+                    elegidas={modificando?.elegidas ?? {}} elegir={(pos, x) => setModificando((m) => (m ? { ...m, elegidas: { ...m.elegidas, [pos]: x } } : m))} />
+                )}
+              </div>
+              </div>
               )}
-              {modo === 'contabilizada' && enModificar && asientoReal && (
-                <ModificarAsiento apuntes={asientoReal.apuntes.map((a) => ({ posicion: a.posicion, cuenta: a.cuenta, nombre: a.nombreCuenta, debe: a.debe, haber: a.haber }))}
-                  plan={cuentasPago?.lista ?? []} nombre={(c) => cuentasPago?.nombres.get(c) ?? asientoReal.apuntes.find((a) => a.cuenta === c)?.nombreCuenta ?? ''}
-                  elegidas={modificando?.elegidas ?? {}} elegir={(pos, c) => setModificando((m) => (m ? { ...m, elegidas: { ...m.elegidas, [pos]: c } } : m))} />
-              )}
-              </>}
             </div>
           </Ventana>
         </div>
@@ -1441,5 +1505,60 @@ function MayorDelProveedor({ apuntes, subcuenta, hay }: { apuntes: { fecha: stri
       </table>
       {subcuenta && <p className="kf-panel-nota"><Link to={rutaMayor(subcuenta)}>Ver el mayor entero de la {subcuenta}</Link></p>}
     </>
+  )
+}
+
+// ── K13 · Las piezas de la 17b ──
+
+/**
+ * Una casilla de la maqueta 17b: su caja en su sitio (`data-sitio`; las medidas, en ficha17b.css) y, en la primera línea,
+ * su `data-campo`, el de la maqueta (lo compara la e2e k13/calco). El rótulo encima, en azul; la caja, blanca; en gris el
+ * texto de las que no se escriben; en ámbar, la que conviene mirar. La lupa, detrás (o delante, `lupa="antes"`); el ⊕, `mas`.
+ */
+function Caja({ sitio, campo, rotulo, para, centro = false, rotuloGris = false, gris = false, ambar = false, num = false, total = false, lupa, mas, title, datos, estilo, children }: {
+  sitio: string; campo?: string; rotulo?: string; para?: string; centro?: boolean; rotuloGris?: boolean; gris?: boolean; ambar?: boolean; num?: boolean; total?: boolean
+  lupa?: 'antes'; mas?: ReactNode; title?: string; datos?: Readonly<Record<`data-${string}`, string>>; estilo?: CSSProperties; children: ReactNode
+}) {
+  return (
+    <div className="kr-c" data-sitio={sitio} data-campo={campo ?? (sitio.startsWith('f') || sitio === 'obs-1' ? sitio : undefined)} data-gris={gris ? 'si' : undefined} data-ambar={ambar ? 'si' : undefined}
+      data-num={num ? 'si' : undefined} data-total={total ? 'si' : undefined} data-lupa={lupa} title={title} style={estilo} {...datos}>
+      {rotulo !== undefined && <label className="kr-rot" htmlFor={para} data-centro={centro ? 'si' : undefined} data-gris={rotuloGris ? 'si' : undefined}>{rotulo}</label>}
+      {children}
+      {mas}
+    </div>
+  )
+}
+
+const LUPA = <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" strokeWidth="2.4" /><path d="M15.5 15.5l5 5" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" /></svg>
+
+/** La lupa de una casilla que no se escribe (el documento, el saldo, el NIF): abre lo que se busca desde ella. */
+function LupaSola({ etiqueta, hacer, puede = true }: { etiqueta: string; hacer: () => void; puede?: boolean }) {
+  return <button type="button" className="kr-lupa-sola" tabIndex={-1} aria-label={etiqueta} title={etiqueta} disabled={!puede} onClick={hacer}>{LUPA}</button>
+}
+
+/** El calendario detrás de una fecha, como ERP10: lleva a su casilla, que se escribe como en ERP10 (01/07/2026). */
+function Calendario({ para }: { para: string }) {
+  return <button type="button" className="kr-cal" tabIndex={-1} aria-label="Ir a la fecha" title="Escribe la fecha: 01/07/2026, 1/7/26 o 01072026" onClick={() => document.getElementById(para)?.focus()} />
+}
+
+/** El ⊕ de la 17b detrás de su casilla: otro tramo, otro pago u «Otros datos». Apagado, dice por qué. */
+function BotonMas17({ etiqueta, hacer, puede = true, abierto, titulo }: { etiqueta: string; hacer: () => void; puede?: boolean; abierto?: boolean; titulo?: string }) {
+  return (
+    <button type="button" className="kr-mas" aria-label={etiqueta} title={titulo ?? etiqueta} aria-expanded={abierto} disabled={!puede} onClick={hacer} data-pieza="mas">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M12 7v10M7 12h10" stroke="currentColor" strokeWidth="2.2" /></svg>
+    </button>
+  )
+}
+
+/** Un asiento visto como en la 17b: el debe a la izquierda («importe (cuenta) nombre») y el haber a la derecha. */
+function AsientoVisto({ lineas, cifra: c }: { lineas: ReturnType<typeof aVisual>; cifra: (n: number) => string }) {
+  const debe = lineas.filter((l) => l.lado === 'debe')
+  const haber = lineas.filter((l) => l.lado === 'haber')
+  if (!debe.length && !haber.length) return null
+  return (
+    <div className="kr-visual-cols">
+      <div aria-label="Debe">{debe.map((l, i) => <div className="kr-al" key={i} title={`${l.cuenta} · ${l.nombre}`}><b className="kp-num">{c(l.importe)}</b> <i className="kp-visual-cuenta">({l.cuenta})</i><span>{l.nombre}</span></div>)}</div>
+      <div aria-label="Haber">{haber.map((l, i) => <div className="kr-ar" key={i} title={`${l.cuenta} · ${l.nombre}`}><span>{l.nombre}</span><span><i className="kp-visual-cuenta">({l.cuenta})</i> <span className="kp-num">{c(l.importe)}</span></span></div>)}</div>
+    </div>
   )
 }

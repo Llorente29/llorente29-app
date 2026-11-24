@@ -125,3 +125,37 @@ export function aplicarDatosDeLineas(p: Propuesta, datos: readonly DatoDeLinea[]
   })
   return { ...p, lineas }
 }
+
+/** K13 · Un tramo del reparto analítico de una línea de gasto: su local, su marca, su plataforma y su importe. */
+export interface TramoGuardado { posicion: number; tramo: number; localId: string | null; marcaId: string | null; canalId: string | null; importe: number }
+
+/**
+ * K13 · El reparto analítico (Julio, 24/11; maqueta 17b, fila 2 de cada contrapartida): una línea de gasto con dos o más
+ * tramos sale en el asiento como una línea por tramo, con la misma cuenta y concepto, su importe y su analítica. Las
+ * líneas de gasto se cuentan por su orden, como en el reparto y en los datos de cada línea. Si los tramos no suman lo
+ * que la línea, no se toca y se avisa (la ficha tampoco la valida). Una línea con un solo tramo se queda como está.
+ */
+export function aplicarTramos(p: Propuesta, tramos: readonly TramoGuardado[]): Propuesta {
+  const porLinea = new Map<number, TramoGuardado[]>()
+  for (const t of tramos) porLinea.set(t.posicion, [...(porLinea.get(t.posicion) ?? []), t])
+  if (![...porLinea.values()].some((x) => x.length > 1)) return p
+  let i = -1
+  const avisos: string[] = []
+  const lineas: LineaConCanal[] = []
+  for (const l of p.lineas as LineaConCanal[]) {
+    if (!esGasto(l)) { lineas.push(l); continue }
+    i += 1
+    const ts = (porLinea.get(i) ?? []).sort((a, b) => a.tramo - b.tramo)
+    if (ts.length < 2) { lineas.push(l); continue }
+    const suma = ts.reduce((t, x) => t + cent(x.importe), 0)
+    if (suma !== cent(l.debe)) {
+      avisos.push(`El reparto de la línea ${i + 1} suma ${eurosExactos(deCent(suma))} y la línea es ${eurosExactos(l.debe)}: corrígelo en la ficha.`)
+      lineas.push(l); continue
+    }
+    for (const t of ts) {
+      // Cada tramo lleva SU analítica (vacía es vacía: no hereda la de la línea).
+      lineas.push({ ...l, debe: deCent(cent(t.importe)), haber: 0, localId: t.localId, comun: !t.localId, marcaId: t.marcaId, canalId: t.canalId })
+    }
+  }
+  return avisos.length ? { ...p, lineas, confianza: 'duda', avisos: [...p.avisos, ...avisos] } : { ...p, lineas }
+}

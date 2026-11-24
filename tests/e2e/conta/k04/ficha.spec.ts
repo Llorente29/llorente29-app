@@ -108,7 +108,7 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await abrirFicha(page, factura(t, 1))
     await expect(page.getByRole('tab', { name: new RegExp(`^Factura recibida · ${PROVEEDOR(t).replace(/\./g, '\\.')}`) })).toBeVisible()
     // K11b · De dónde sale el proveedor, sin frase: al pasar el ratón por su casilla.
-    await expect(ficha(page).locator('.kp-casilla', { has: page.locator('#kf-proveedor') })).toHaveAttribute('title', /por NIF/)
+    await expect(ficha(page).locator('.kr-c', { has: page.locator('#kf-proveedor') })).toHaveAttribute('title', /por NIF/)
     if (grande) {
       await page.locator('body').press('Enter')
     } else {
@@ -146,13 +146,6 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await expect(ficha(page).getByRole('button', { name: 'Dejar 60000000' })).toBeFocused()
     await cargada(page, 'la rellenada con su duda')
     await page.screenshot({ path: `${DIR}/rellenada-duda-${ancho}.png` })
-    if (grande) {
-      // Con la cinta plegada (la maqueta nucleo_3).
-      await page.getByRole('button', { name: /Plegar los botones/ }).click()
-      await page.screenshot({ path: `${DIR}/cinta-plegada-${ancho}.png` })
-      await page.getByRole('button', { name: /Ver los botones/ }).click()
-      await ficha(page).getByRole('button', { name: 'Dejar 60000000' }).focus()
-    }
     await page.keyboard.press('Tab')
     await expect(ficha(page).getByRole('button', { name: 'Cambiar a 60200000' })).toBeFocused()
     await page.keyboard.press('Enter')

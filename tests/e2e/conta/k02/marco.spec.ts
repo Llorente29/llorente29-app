@@ -5,10 +5,10 @@
 // persona inventada, el interruptor `conta_nucleo` encendido y dos empresas):
 //   · en el ordenador, a 1456 × 816 (la maqueta) y a 1366 × 768 (el mínimo,
 //     decisión 13): se ve la cinta con las palabras de la maqueta, se cambia de
-//     pestaña, se pliegan los botones (y se recuerda), se cambia de ejercicio
+//     pestaña, se miden las tres barras de arriba (K13), se cambia de ejercicio
 //     y de empresa, se abre una pantalla de cada módulo y LA PÁGINA NO RUEDA
 //     (el alto del documento es el de la ventana);
-//   · por debajo de 800 de alto, los botones nacen plegados;
+//   · los botones de la cinta, siempre a la vista (K13, 17b: antes nacían plegados por debajo de 800 de alto);
 //   · en el móvil sale el marco de hoy.
 // Las capturas, con la pantalla cargada y la empresa de gestoría abierta (la
 // que tiene datos): a 1456 × 816, Inicio, una lista (Recibidas), los botones
@@ -71,8 +71,8 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(modulos.locator('.k-modulo')).toHaveText(['Contabilidad', 'Facturación', 'Impuestos', 'Personal', 'Despacho'], { timeout: 30_000 })
     await cargada(page, 'Inicio')
 
-    // Por debajo de 800 de alto, los botones nacen plegados (decisión 13).
-    if (alto < 800) await expect(page.getByRole('button', { name: 'Ver los botones' })).toBeVisible()
+    // K13 (17b): los botones se ven siempre, también por debajo de 800 de alto; ya no hay «Ver los botones».
+    await expect(page.getByRole('button', { name: /Ver los botones|Plegar los botones/ })).toHaveCount(0)
     await verBotones(page)
 
     // Los contadores de la cinta y la línea de estado, con número (arreglos 2 y 3).
@@ -99,17 +99,14 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await cargada(page, 'Recibidas')
     if (alto >= 800) await page.screenshot({ path: `${DIR}/marco-recibidas-${ancho}.png` })
 
-    // Plegar los botones, y se recuerda (a 816 de alto; por debajo de 800 nacen plegados siempre).
-    await page.getByRole('button', { name: 'Plegar los botones' }).click()
-    await expect(page.locator('#k-cinta-botones')).toHaveCount(0)
-    await noRueda(page, 'con los botones plegados')
-    if (alto >= 800) {
-      await page.screenshot({ path: `${DIR}/marco-plegado-${ancho}.png` })
-      await page.reload()
-      await expect(page.locator('.k-nucleo')).toBeVisible({ timeout: 30_000 })
-      await expect(page.getByRole('button', { name: 'Ver los botones' })).toBeVisible({ timeout: 30_000 })
-      await cargada(page, 'Recibidas, recargada')
-    }
+    // K13 (17b): la barra de arriba mide 36, la del menú 32 y la del submenú 30, y la página no rueda.
+    const alturas = await page.evaluate(() => ['.k-arriba', '.k-cinta-pestanas', '#k-cinta-botones', '.k-trabajo-fila']
+      .map((q) => Math.round(document.querySelector(q)?.getBoundingClientRect().height ?? -1)))
+    expect(alturas[0], 'la barra oscura').toBe(36)
+    expect(alturas[1], 'la fila del menú').toBe(32)
+    expect(alturas[2], 'la fila del submenú').toBe(30)
+    expect(alturas[3], 'la fila de las pestañas').toBeLessThanOrEqual(28)
+    await noRueda(page, 'con los botones a la vista')
     await verBotones(page)
 
     // Arreglo 5 · lo diseñado sin maqueta, a 1456 × 816: los dos menús de arriba, los módulos plegados y «Más ▾».

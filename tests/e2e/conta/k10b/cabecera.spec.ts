@@ -147,8 +147,8 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await page.goto(`/conta/documentos/recibidas/${factura(t, 4)}?ver=por-revisar`, { timeout: 30_000 })
     await fichaLista(page)
     const origen = ficha(page).locator('[data-prueba="origen-operacion"]')
-    // K11b · 6 · El tipo de operación con su lupa: se ve su nombre corto.
-    await expect(ficha(page).locator('#kf-operacion')).toHaveValue('Interiores', { timeout: 30_000 })
+    // K11b · 6 · El tipo de operación con su lupa. K13 (17b): se ve su nombre, como en ERP10.
+    await expect(ficha(page).locator('#kf-operacion')).toHaveValue('Operaciones interiores', { timeout: 30_000 })
     await expect(origen).toHaveText('De su ficha')
     await ficha(page).locator('#kf-operacion').fill('Intracom. servicios')
     await ficha(page).locator('#kf-operacion').press('Enter')
