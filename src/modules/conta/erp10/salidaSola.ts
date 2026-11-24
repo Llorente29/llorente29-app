@@ -7,8 +7,6 @@
 //   · la lista de hoy de «Salida a ERP10», con lo que no ha salido arriba y «Cómo salió».
 // Palabras de la calle (encargo X10f · 5): ni «API» ni «token» ni «cola».
 
-import { MOTIVO_SALIDA_PARADA } from './parada'
-
 export type EnvioDeUnAsiento = {
   estado: 'enviando' | 'en_erp10' | 'no_pudo' | 'duda'
   serie: string | null
@@ -112,10 +110,8 @@ export function listaDeHoy(xs: readonly SalidoHoy[]): FilaHoy[] {
  * espera a que alguien mande su primera salida (X10f), en gris: «Esperando la primera salida a ERP10 ·
  * Mandarla». Con la salida apagada, en gris también: no ha fallado nada.
  */
-export function fraseErp10Barra(o: { atascados: number; salida: { encendida: boolean } | null; pruebaHecha: boolean; parada?: boolean }): { tono: 'mira' | 'gris'; fuerte: string; resto: string; title?: string } | null {
+export function fraseErp10Barra(o: { atascados: number; salida: { encendida: boolean } | null; pruebaHecha: boolean }): { tono: 'mira' | 'gris'; fuerte: string; resto: string } | null {
   if (o.atascados <= 0) return null
-  // X31 · 0 · Con la salida parada, ni «Mandarla» ni ámbar: en gris, y el motivo al pasar el ratón.
-  if (o.parada) return { tono: 'gris', fuerte: 'La salida a ERP10 está parada', resto: '· falta comprobar lo que ya hay en ERP10', title: `${MOTIVO_SALIDA_PARADA}.` }
   if (o.salida && !o.salida.encendida) return { tono: 'gris', fuerte: 'La salida a ERP10 está apagada', resto: '· sale cuando se encienda' }
   if (o.salida && !o.pruebaHecha) return { tono: 'gris', fuerte: 'Esperando la primera salida a ERP10', resto: '· Mandarla' }
   const f = fraseAtascados(o.atascados)

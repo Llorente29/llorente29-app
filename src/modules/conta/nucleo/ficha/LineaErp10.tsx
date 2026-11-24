@@ -10,7 +10,6 @@ import { useState } from 'react'
 import './ficha.css'
 import type { Linea } from '@/modules/conta/erp10/salidaSola'
 import { sacarAErp10 } from '@/modules/conta/services/erp10ApiService'
-import { MOTIVO_SALIDA_PARADA, SALIDA_ERP10_PARADA } from '@/modules/conta/erp10/parada'
 
 export function LineaErp10({ linea, companyId, entryId, fecha, quien, releer }: {
   linea: Linea | null; companyId: string | null; entryId: string | null; fecha: string | null; quien: string | null; releer: () => void
@@ -33,7 +32,7 @@ export function LineaErp10({ linea, companyId, entryId, fecha, quien, releer }: 
     <span className="kf-estado kf-erp10" data-tono={tono} role="status" aria-label="ERP10" data-prueba="linea-erp10">
       <span className="kf-estado-punto" aria-hidden="true" />
       <span className="kf-erp10-texto" title={texto}>{texto}</span>
-      {(linea.reintentar || fallo) && !sacando && <> <button type="button" className="kf-enlace kf-erp10-otra" disabled={SALIDA_ERP10_PARADA} title={SALIDA_ERP10_PARADA ? `${MOTIVO_SALIDA_PARADA}.` : undefined} onClick={() => void otraVez()}>Volver a intentarlo</button></>}
+      {(linea.reintentar || fallo) && !sacando && <> <button type="button" className="kf-enlace kf-erp10-otra" onClick={() => void otraVez()}>Volver a intentarlo</button></>}
     </span>
   )
 }
