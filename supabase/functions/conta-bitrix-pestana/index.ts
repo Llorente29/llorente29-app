@@ -27,10 +27,15 @@
 //
 // Lee, y con «hacer» escribe en Sumied (con las funciones de la ficha) y la
 // cuota en Bitrix24. Engancha la pestaña al instalar. No guarda ningún token. Solo en los portales de puro.ts · PORTALES.
+//
+// R18 (24/11) · El portal es el de QBO (crm.asesoriaqbo.es); el de pruebas de antes deja de usarse. Cada
+// llamada a Bitrix24 pasa por puro.ts · puedeLlamar: leer, sí; escribir, solo con el interruptor «Actualizar
+// Bitrix24» encendido y solo en la ficha de prueba (FICHAS_ESCRIBIBLES: la 1495). Hoy el interruptor está
+// apagado siempre: Sumied no escribe en ninguna ficha de QBO.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import {
-  direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, porqueApp, porqueUsuario, TITULO_PESTANA, usuarioDeBitrix,
+  direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, porqueApp, porqueUsuario, puedeLlamar, TITULO_PESTANA, usuarioDeBitrix,
   type TipoFicha,
 } from './puro.ts'
 import { camposDeSumied, ponerSeccionSumied, seccionEnEstePortal } from './seccion.ts'
@@ -53,13 +58,28 @@ const clientId = () => (Deno.env.get('BITRIX_PESTANA_CLIENT_ID') ?? '').trim()
 
 /** Una llamada a la API de Bitrix24 del portal, con el token del usuario. Solo a portales permitidos. */
 async function bitrix(portal: string, metodo: string, auth: string, cuerpo: Record<string, unknown> = {}): Promise<unknown> {
-  if (!portalPermitido(portal)) throw new Error('portal no permitido')
+  // R18 · Todo pasa por la guarda: en un portal permitido, leer sí; escribir, solo con el interruptor y en la ficha de prueba.
+  const puede = puedeLlamar({ portal, metodo, cuerpo, actualizar: await actualizarBitrix(portal) })
+  if (!puede.ok) {
+    if (puede.porque === 'portal no permitido') throw new Error('portal no permitido')
+    console.warn(JSON.stringify({ r18: 'no_escribe', metodo, porque: puede.porque }))
+    return { error: 'NO_SE_ESCRIBE', error_description: puede.porque }
+  }
   // El token va en la dirección (?auth=), como lo documenta Bitrix24; el resto, en el cuerpo.
   const r = await fetch(`https://${portal}/rest/${metodo}.json?auth=${encodeURIComponent(auth)}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo),
     signal: AbortSignal.timeout(4000),
   })
   return await r.json().catch(() => null)
+}
+
+/**
+ * R18 · El interruptor «Actualizar Bitrix24» (Ajustes, lo enciende Julio; apagado de serie). Llega en el PR
+ * siguiente con su ajuste en la base: hasta entonces está apagado siempre y Sumied no escribe en ninguna ficha.
+ */
+async function actualizarBitrix(portal: string): Promise<boolean> {
+  void portal
+  return false
 }
 
 async function formulario(req: Request): Promise<URLSearchParams> {
@@ -160,6 +180,9 @@ async function red(cuerpo: Record<string, unknown>, req: Request): Promise<Respo
   const url = ((sec ?? []) as { url?: string }[])[0]?.url
   if (!url) return json(200, { estado: 'ok', hecho: 'nada', porque: 'sin conexión con Bitrix24' })
   const llamar = async (metodo: string, c: Record<string, unknown>) => {
+    // R18 · La misma guarda que el resto (la red solo actúa en el portal de pruebas de antes, que ya no está permitido).
+    const puede = puedeLlamar({ portal, metodo, cuerpo: c, actualizar: await actualizarBitrix(portal) })
+    if (!puede.ok) return { error: 'NO_SE_ESCRIBE', error_description: puede.porque } as { result?: unknown; error?: string }
     const r = await fetch(`${url.trim().replace(/\/?$/, '/')}${metodo}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) })
     return await r.json().catch(() => null) as { result?: unknown; error?: string } | null
   }
