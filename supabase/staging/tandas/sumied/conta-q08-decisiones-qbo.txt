@@ -1,0 +1,5 @@
+# Q08 · Paso 2 · Cargar las decisiones de QBO. La 1220 solo añade. Su prueba (ROLLBACK), por el camino de atar: atar
+# como dice QBO con quién lo decidió, lo que no se entiende pendiente con su texto, no pisa lo decidido, sin origen no,
+# otra cuenta no, y la vuelta atrás.
+supabase/migrations/20261124T1220_q08_decisiones_externas.sql
+supabase/staging/sql/20261124_q08_decisiones_externas_prueba.sql

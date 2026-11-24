@@ -172,3 +172,8 @@
 .cxg-lista-contactos-cabeza .s-control { max-width: 260px; }
 .cxg-lista-contactos ul { list-style: none; margin: 8px 0 0; padding: 0; max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .cxg-personas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+
+/* Q08 · Lo que no se ató al cargar las decisiones de QBO: en ámbar, con su porqué. */
+.cxg-decisiones { margin: 8px 0; padding: 8px 12px; background: var(--cx-ambar-suave); border-radius: var(--cx-radio-caja); color: var(--cx-ambar); font-size: 13px; }
+.cxg-decisiones summary { cursor: pointer; font-weight: 600; }
+.cxg-decisiones ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }

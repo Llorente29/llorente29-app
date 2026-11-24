@@ -1,0 +1,2 @@
+# Q08 · Paso 2 · vuelta atrás: quita las dos funciones que añade la 1220.
+supabase/vuelta-atras/20261124T1220_q08_decisiones_externas.down.sql
