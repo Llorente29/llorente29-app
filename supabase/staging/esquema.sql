@@ -54115,9 +54115,9 @@ begin
   end if;
 
   -- E03 · Una recibida que va a nombre de otro: no se valida hasta que una persona conteste.
-  if v_e.source_type = 'supplier_invoice' and coalesce((public._conta_de_quien(v_e.source_id)->>'pregunta')::boolean, false) then
+  if v_e.source_type = 'supplier_invoice' and coalesce((public.conta_de_quien_es(v_e.source_id)->>'pregunta')::boolean, false) then
     orden := 12; codigo := 'de_quien_es';
-    motivo := (public._conta_de_quien(v_e.source_id)->>'frase') || ' Contesta en su ficha antes de validar.'; return next;
+    motivo := (public.conta_de_quien_es(v_e.source_id)->>'frase') || ' Contesta en su ficha antes de validar.'; return next;
   end if;
 
   -- K09: una recibida, completa y no repetida (conta_recibida_motivos).
