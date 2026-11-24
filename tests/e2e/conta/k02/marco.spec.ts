@@ -52,7 +52,8 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(cinta.getByRole('tab')).toHaveText(['Definiciones', 'Asientos', 'Tesorería', 'Importaciones', 'Listados', 'Utilidades', 'Impuestos'])
     // exact: «Inicio» está dentro de «Definiciones», y Playwright busca por trozo.
     await expect(page.getByRole('tab', { name: 'Inicio', exact: true })).toHaveAttribute('aria-selected', 'true')
-    await expect(page.locator('.k-marca')).toHaveText('Sumied')
+    // El logo (K10, #773): una imagen; se comprueba por su nombre.
+    await expect(page.getByRole('link', { name: 'Sumied: al inicio' })).toBeVisible()
     await expect(page.getByRole('button', { name: new RegExp(`^${EMPRESA}, ejercicio 2026`) })).toBeVisible()
     await abierta(page, 'Inicio')
     const modulos = page.getByRole('navigation', { name: 'Módulos' })
@@ -77,12 +78,18 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await verBotones(page)
 
     // Los contadores de la cinta y la línea de estado, con número (arreglos 2 y 3).
-    await expect(page.locator('[data-boton="recibidas"] .k-contador')).toHaveText('9', { timeout: 30_000 })
-    await expect(page.locator('[data-boton="bancos"] .k-contador')).toHaveText('14', { timeout: 30_000 })
+    // K13: el número, el que haya (desde el K02, las semillas K04, K04b, K07 y K11b añadieron facturas a la gestoría);
+    // lo que se prueba es que el contador lleva número y que la línea de estado dice el mismo.
+    const recibidas = page.locator('[data-boton="recibidas"] .k-contador').first()
+    const bancos = page.locator('[data-boton="bancos"] .k-contador').first()
+    await expect(recibidas).toHaveText(/^\d+$/, { timeout: 30_000 })
+    await expect(bancos).toHaveText(/^\d+$/, { timeout: 30_000 })
+    const nRecibidas = Number(await recibidas.textContent())
+    const nBancos = Number(await bancos.textContent())
     const estado = page.getByRole('contentinfo', { name: 'Cómo va la empresa' })
-    await expect(estado).toContainText('14 movimientos del banco por revisar')
+    await expect(estado).toContainText(`${nBancos} movimiento${nBancos === 1 ? '' : 's'} del banco por revisar`)
     await expect(estado).toContainText('Asientos al día')
-    await expect(estado).toContainText('9 facturas por revisar')
+    await expect(estado).toContainText(`${nRecibidas} factura${nRecibidas === 1 ? '' : 's'} por revisar`)
     // A 1366 × 768, además, es la del marco con los botones desplegados (arreglo 5).
     await page.screenshot({ path: `${DIR}/marco-inicio-${ancho}.png` })
 

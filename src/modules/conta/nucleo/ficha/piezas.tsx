@@ -145,11 +145,15 @@ export function AyudaTeclas({ teclas = TECLAS_DE_LA_FICHA }: { teclas?: readonly
  * escribe sin ratón. Se entiende al salir de la casilla; si no es una fecha, lo
  * dice y no la cambia.
  */
-export function CasillaFecha({ id, iso, poner, hoy, etiqueta, casilla = true }: { id: string; iso: string; poner: (iso: string) => void; hoy: string; etiqueta: string; casilla?: boolean }) {
+export function CasillaFecha({ id, iso, poner, hoy, etiqueta, casilla = true, ayuda = 'dd/mm/aaaa' }: {
+  id: string; iso: string; poner: (iso: string) => void; hoy: string; etiqueta: string; casilla?: boolean
+  /** El texto de ayuda de la casilla vacía. K13: la ficha 17b, como ERP10, la enseña vacía (''). */
+  ayuda?: string
+}) {
   const [texto, setTexto] = useState<string | null>(null)
   const mal = texto !== null && texto.trim() !== '' && fechaEscrita(texto, hoy) === null
   return (
-    <input id={id} aria-label={etiqueta} data-casilla={casilla ? '' : undefined} inputMode="numeric" placeholder="dd/mm/aaaa"
+    <input id={id} aria-label={etiqueta} data-casilla={casilla ? '' : undefined} inputMode="numeric" placeholder={ayuda || undefined}
       value={texto ?? fechaVista(iso)} aria-invalid={mal || undefined} title={mal ? 'No es una fecha: escríbela como 01/07/2026.' : undefined}
       onFocus={(e) => { setTexto(fechaVista(iso)); e.target.select() }}
       onChange={(e) => setTexto(e.target.value)}

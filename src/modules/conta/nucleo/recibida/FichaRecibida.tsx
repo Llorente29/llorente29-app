@@ -990,13 +990,13 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 </Caja>
                 <Caja sitio="f1-5" rotulo="Fecha introducción" para="kr-contable" gris={!cabEscribible} title={otrosL?.fechaContable ? 'La fecha contable escrita en «Otros datos»' : 'La de la factura'}>
                   {cabEscribible && otrosL
-                    ? <CasillaFecha id="kr-contable" etiqueta="Fecha introducción" iso={otrosL.fechaContable ?? b.fecha} hoy={hoy} casilla={false}
+                    ? <CasillaFecha id="kr-contable" ayuda="" etiqueta="Fecha introducción" iso={otrosL.fechaContable ?? b.fecha} hoy={hoy} casilla={false}
                         poner={(x) => { if (x !== (otrosL.fechaContable ?? b.fecha)) void ponerOtros({ fecha_contable: x && x !== b.fecha ? x : null }) }} />
                     : <input id="kr-contable" readOnly tabIndex={-1} value={fechaCorta(otrosL?.fechaContable ?? b.fecha)} />}
                   <Calendario para="kr-contable" />
                 </Caja>
                 <Caja sitio="f1-6" rotulo="Fecha factura" para="kf-fecha" title={origen.fecha ?? undefined}>
-                  <CasillaFecha id="kf-fecha" etiqueta="Fecha factura" iso={b.fecha} hoy={hoy} poner={(x) => ed.poner('fecha', x)} />
+                  <CasillaFecha id="kf-fecha" ayuda="" etiqueta="Fecha factura" iso={b.fecha} hoy={hoy} poner={(x) => ed.poner('fecha', x)} />
                   <Calendario para="kf-fecha" />
                 </Caja>
 
@@ -1074,20 +1074,20 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                   return (
                     <div key={`iva-${idx}`} style={{ display: 'contents' }}>
                       <Caja sitio={`iva-${g * 3 + 1}`} campo={campo(1)} rotulo={rot('Base')} para={`kr-base-${idx}`} centro num estilo={estilo}>
-                        <input id={`kr-base-${idx}`} data-casilla={l ? '' : undefined} aria-label={`Base ${idx + 1}`} value={l?.base ?? ''} readOnly={!l && !libre} tabIndex={l || libre ? undefined : -1}
+                        <input id={`kr-base-${idx}`} data-casilla={l ? '' : undefined} aria-label={l ? `Base ${idx + 1}` : libre ? 'Otro tipo de IVA: base' : 'Hueco del IVA'} value={l?.base ?? ''} readOnly={!l && !libre} tabIndex={l || libre ? undefined : -1}
                           onChange={(e) => tocar({ base: e.target.value })}
                           data-ambar={l && importeDudoso(l.base) ? 'si' : undefined} title={l && importeDudoso(l.base) ? MOTIVO_IMPORTE_DUDOSO : undefined}
                           onBlur={() => { if (!l) return; const n = num(l.base); if (n !== null && !importeDudoso(l.base)) ponerIva(idx, { base: importeEs(n) }) }} />
                       </Caja>
                       <Caja sitio={`iva-${g * 3 + 2}`} campo={campo(2)} rotulo={rot('%')} para={`kr-tipo-${idx}`} centro estilo={estilo}>
-                        <select id={`kr-tipo-${idx}`} data-casilla={l ? '' : undefined} aria-label={`Tipo de IVA ${idx + 1}`} value={l?.tipo ?? ''} disabled={!l && !libre} tabIndex={l || libre ? undefined : -1}
+                        <select id={`kr-tipo-${idx}`} data-casilla={l ? '' : undefined} aria-label={l ? `Tipo de IVA ${idx + 1}` : libre ? 'Otro tipo de IVA: %' : 'Hueco del IVA: %'} value={l?.tipo ?? ''} disabled={!l && !libre} tabIndex={l || libre ? undefined : -1}
                           onChange={(e) => { if (e.target.value) tocar({ tipo: e.target.value }) }}>
                           {!l && <option value="" />}
                           {[...new Set([...tiposIva.map(String), ...(l ? [l.tipo] : [])])].filter(Boolean).map((t) => <option key={t} value={t}>{t}</option>)}
                         </select>
                       </Caja>
                       <Caja sitio={`iva-${g * 3 + 3}`} campo={campo(3)} rotulo={rot('Cuota')} para={`kr-cuota-${idx}`} centro num estilo={estilo}>
-                        <input id={`kr-cuota-${idx}`} aria-label={`Cuota ${idx + 1}`} value={l?.cuota ?? ''} tabIndex={-1} readOnly={!l} onChange={(e) => l && ponerIva(idx, { cuota: e.target.value }, false)} />
+                        <input id={`kr-cuota-${idx}`} aria-label={l ? `Cuota ${idx + 1}` : libre ? 'Otro tipo de IVA: cuota' : 'Hueco del IVA: cuota'} value={l?.cuota ?? ''} tabIndex={-1} readOnly={!l} onChange={(e) => l && ponerIva(idx, { cuota: e.target.value }, false)} />
                         {l && b.iva.length > 1 && !soloLectura && <button type="button" className="kr-quitar" aria-label={`Quitar el tipo ${l.tipo} %`} tabIndex={-1} onClick={() => ed.poner('iva', b.iva.filter((_, j) => j !== idx))}>×</button>}
                       </Caja>
                     </div>
@@ -1250,7 +1250,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                             texto={(x) => `${x.codigo} · ${x.nombre}`} elegir={(x) => { ed.poner('pagoCuenta', x.codigo); setTextoPago(null) }}
                             crear={crearCuenta((x) => { ed.poner('pagoCuenta', x.codigo); setTextoPago(null) })} />
                         </Caja>
-                        <Caja sitio="p1-5" campo={c('p1-5')} rotulo={r('Fecha')} para="kf-pago-fecha"><CasillaFecha id="kf-pago-fecha" etiqueta="La fecha del pago" iso={pagoCuenta ? pagoFecha : ''} hoy={hoy} poner={(x) => ed.poner('pagoFecha', x)} /></Caja>
+                        <Caja sitio="p1-5" campo={c('p1-5')} rotulo={r('Fecha')} para="kf-pago-fecha"><CasillaFecha id="kf-pago-fecha" ayuda="" etiqueta="La fecha del pago" iso={pagoCuenta ? pagoFecha : ''} hoy={hoy} poner={(x) => ed.poner('pagoFecha', x)} /></Caja>
                         <Caja sitio="p1-6" campo={c('p1-6')} rotulo={r('Concepto')} para="kr-pago-concepto" gris>
                           <input id="kr-pago-concepto" aria-label="Concepto del pago" readOnly tabIndex={-1} value={pagoCuenta ? f.concepto : ''} title={[pagoCuenta ? f.concepto : '', asientoDelPago].filter(Boolean).join(' · ') || undefined} data-prueba="pago-asiento" />
                         </Caja>
@@ -1270,7 +1270,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                         <Caja sitio="p1-4" campo={c('p1-4')} rotulo={r('Subcuenta pago')} para={`kr-pago-cuenta-${i}`}>
                           <CasillaLupa id={`kr-pago-cuenta-${i}`} etiqueta="Subcuenta pago" registros={registrosPago} valor={enEdicion.cuenta || null} poner={(x) => setPagoEdit({ ...enEdicion, cuenta: x?.codigo ?? '' })} />
                         </Caja>
-                        <Caja sitio="p1-5" campo={c('p1-5')} rotulo={r('Fecha')} para={`kr-pago-fecha-${i}`}><CasillaFecha id={`kr-pago-fecha-${i}`} etiqueta="Fecha del pago" iso={enEdicion.fecha} hoy={hoy} poner={(x) => setPagoEdit({ ...enEdicion, fecha: x })} /></Caja>
+                        <Caja sitio="p1-5" campo={c('p1-5')} rotulo={r('Fecha')} para={`kr-pago-fecha-${i}`}><CasillaFecha id={`kr-pago-fecha-${i}`} ayuda="" etiqueta="Fecha del pago" iso={enEdicion.fecha} hoy={hoy} poner={(x) => setPagoEdit({ ...enEdicion, fecha: x })} /></Caja>
                         <Caja sitio="p1-6" campo={c('p1-6')} rotulo={r('Concepto')}><input aria-label="Concepto del pago" value={enEdicion.concepto} onChange={(e) => setPagoEdit({ ...enEdicion, concepto: e.target.value })} /></Caja>
                         <Caja sitio="p1-7" campo={c('p1-7')} rotulo={r('Importe')} para={`kr-pago-importe-${i}`} num>
                           <CasillaImporte id={`kr-pago-importe-${i}`} etiqueta="Importe del pago" valor={enEdicion.importe} poner={(t) => setPagoEdit({ ...enEdicion, importe: t })}
@@ -1312,7 +1312,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                     <Caja sitio="p1-2" gris><input aria-label="Descripción del periodo del pago" readOnly tabIndex={-1} value={trimestreDe(enEdicion.fecha)} /></Caja>
                     <Caja sitio="p1-3" gris><input aria-label="Documento del pago" readOnly tabIndex={-1} value="" /></Caja>
                     <Caja sitio="p1-4" para="kr-pago-cuenta-nuevo"><CasillaLupa id="kr-pago-cuenta-nuevo" etiqueta="Subcuenta pago" registros={registrosPago} valor={enEdicion.cuenta || null} poner={(x) => setPagoEdit({ ...enEdicion, cuenta: x?.codigo ?? '' })} /></Caja>
-                    <Caja sitio="p1-5"><CasillaFecha id="kr-pago-fecha-nuevo" etiqueta="Fecha del pago" iso={enEdicion.fecha} hoy={hoy} poner={(x) => setPagoEdit({ ...enEdicion, fecha: x })} /></Caja>
+                    <Caja sitio="p1-5"><CasillaFecha id="kr-pago-fecha-nuevo" ayuda="" etiqueta="Fecha del pago" iso={enEdicion.fecha} hoy={hoy} poner={(x) => setPagoEdit({ ...enEdicion, fecha: x })} /></Caja>
                     <Caja sitio="p1-6"><input aria-label="Concepto del pago" value={enEdicion.concepto} onChange={(e) => setPagoEdit({ ...enEdicion, concepto: e.target.value })} /></Caja>
                     <Caja sitio="p1-7" num>
                       <CasillaImporte id="kr-pago-importe-nuevo" etiqueta="Importe del pago" valor={enEdicion.importe} poner={(t) => setPagoEdit({ ...enEdicion, importe: t })}

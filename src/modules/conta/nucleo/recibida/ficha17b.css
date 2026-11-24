@@ -37,7 +37,9 @@
 }
 
 /* ── La ficha: su ancho, con el documento al lado (la raya, K06, no la deja por debajo de él) ── */
-.kf-ficha.kf-recibida.kr { --kf-min-form: calc(var(--kr-ficha) + 2px); }
+/* En px, no en calc(): PanelDocumento lo lee con parseFloat para la raya. */
+.kf-ficha.kf-recibida.kr { --kf-min-form: 862px; }
+@media (min-width: 1600px) { .kf-ficha.kf-recibida.kr { --kf-min-form: 890px; } }
 .kf-ficha.kr .kf-cuerpo:not([data-raya='si']) { grid-template-columns: calc(var(--kr-ficha) + 2px) minmax(0, 1fr); }
 .kr .kr-izquierda > .kp-ventana { width: calc(var(--kr-ficha) + 2px); max-width: none; flex: 1; font-size: var(--kr-letra); background: #f5f9fd; }
 .kr .kp-ventana-titulo { height: 22px; background: #dfe8f5; border-bottom-color: #9fb4d6; }
@@ -101,8 +103,8 @@
 .kr-c > .kr-mas { position: absolute; top: 0; left: calc(100% + 22px); width: 20px; height: 20px; padding: 0; border: 0; background: none; color: #1f5fbf; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .kr-c > .kr-mas:disabled { color: #b7c0ca; cursor: default; }
 .kr-c > .kr-mas svg { width: 20px; height: 20px; }
-.kr-c .kr-quitar { position: absolute; right: -11px; top: 2px; visibility: hidden; }
-.kr-c:hover .kr-quitar { visibility: visible; }
+.kr-c .kr-quitar { position: absolute; right: -11px; top: 2px; visibility: visible; opacity: 0; }
+.kr-c:hover .kr-quitar, .kr-c .kr-quitar:focus-visible { opacity: 1; }
 .kr-c .kf-sugerencias { z-index: 30; }
 .kr-c .kf-origen.kr-oculto, .kr-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
