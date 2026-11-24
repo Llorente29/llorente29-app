@@ -45,7 +45,8 @@ export function CobroG05Page() {
   const frente = fr.datos ? frenteAGocardless(mes, fr.datos.recibos, fr.datos.suscripciones, fr.datos.clientes, fr.datos.enlaces) : null
   const descargar = () => {
     if (!frente) return 'Aún se está leyendo lo de GoCardless.'
-    const nombre = `Cobro de ${nombreDelMes(mes)} frente a GoCardless · ${empresa.nombre}`
+    // Solo letras, números, espacios y guiones: con «·», comas o «S.L..xlsx», el navegador lo baja como «download» (e2e 45403458600).
+    const nombre = `Cobro de ${nombreDelMes(mes)} frente a GoCardless - ${empresa.nombre}`.replace(/[^\p{L}\p{N} -]+/gu, ' ').replace(/\s+/g, ' ').trim()
     const ok = excelTabla(`${nombre}.xlsx`, 'Frente a GoCardless', CABECERA_EXCEL, filasExcel(frente))
     return ok ? `Bajado: ${nombre}.xlsx, ${frente.filas.length} clientes (${frente.diferencias.length} con diferencias).` : 'No había nada que bajar.'
   }

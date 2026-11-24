@@ -117,7 +117,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
 
     // 4. El Excel, y lo dice.
     const [bajada] = await Promise.all([page.waitForEvent('download'), frente.getByRole('button', { name: 'Descargar en Excel' }).click()])
-    expect(bajada.suggestedFilename()).toBe(`Cobro de diciembre frente a GoCardless · ${NOMBRE}.xlsx`)
+    expect(bajada.suggestedFilename()).toBe('Cobro de diciembre frente a GoCardless - Gestoría de Prueba Norte S L.xlsx')
     await expect(frente.getByRole('status')).toHaveText(/^Bajado: .*\.xlsx, 5 clientes \(4 con diferencias\)\.$/)
 
     expect(errores).toEqual([])
