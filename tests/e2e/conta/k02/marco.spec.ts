@@ -80,14 +80,12 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     // Los contadores de la cinta y la línea de estado, con número (arreglos 2 y 3).
     // K13: el número, el que haya (desde el K02, las semillas K04, K04b, K07 y K11b añadieron facturas a la gestoría);
     // lo que se prueba es que el contador lleva número y que la línea de estado dice el mismo.
+    // Los movimientos del banco, desde el X28, en la pestaña Tesorería («Conciliar»): aquí, su frase en la línea de estado.
     const recibidas = page.locator('[data-boton="recibidas"] .k-contador').first()
-    const bancos = page.locator('[data-boton="bancos"] .k-contador').first()
     await expect(recibidas).toHaveText(/^\d+$/, { timeout: 30_000 })
-    await expect(bancos).toHaveText(/^\d+$/, { timeout: 30_000 })
     const nRecibidas = Number(await recibidas.textContent())
-    const nBancos = Number(await bancos.textContent())
     const estado = page.getByRole('contentinfo', { name: 'Cómo va la empresa' })
-    await expect(estado).toContainText(`${nBancos} movimiento${nBancos === 1 ? '' : 's'} del banco por revisar`)
+    await expect(estado).toContainText(/\d+ movimientos? del banco por revisar|Bancos al día/)
     await expect(estado).toContainText('Asientos al día')
     await expect(estado).toContainText(`${nRecibidas} factura${nRecibidas === 1 ? '' : 's'} por revisar`)
     // A 1366 × 768, además, es la del marco con los botones desplegados (arreglo 5).

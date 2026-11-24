@@ -1219,7 +1219,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 <span>Pago factura</span>
                 {modo === 'contabilizada' && (
                   <span className="kr-hd-der" data-ambar={pagos.ambar ? 'si' : undefined} title={pagos.motivo ?? undefined}>
-                    <span data-prueba="pendiente">{pagos.pendiente > 0.005 ? `Pendiente ${cifra(pagos.pendiente)}` : 'Pagada'}</span>
+                    <span data-prueba="pendiente" data-ambar={pagos.ambar ? 'si' : undefined} title={pagos.motivo ?? undefined}>{pagos.pendiente > 0.005 ? `Pendiente ${cifra(pagos.pendiente)}` : 'Pagada'}</span>
                     {/* Validada, el ⊕ de otro pago va aquí: detrás del importe están el ✎ y la 🗑 de cada pago (K10c). */}
                     <BotonMas etiqueta="Otro pago" texto={otroPago(pagosHechos.length).replace(/^otro pago · /, '')}
                       hacer={() => { if (enEdicion) return; setBorrarArmado(null); setPagoEdit({ de: invoiceId, id: null, cuenta: '', fecha: hoy, concepto: `PAGO ${b.numero} ${prov?.nombre ?? ''}`.trim(), importe: pagos.pendiente > 0 ? importeEs(pagos.pendiente) : '' }) }} />
