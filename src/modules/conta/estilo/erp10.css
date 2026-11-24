@@ -179,3 +179,14 @@
 .cxe-hoy-estado { overflow-wrap: anywhere; }
 .cxe-hoy-tabla tr[data-tono='ambar'] td { background: var(--cx-ambar-suave); }
 .cxe-hoy-tabla tr[data-tono='verde'] .cxe-hoy-estado { color: var(--cx-verde-oscuro); }
+
+/* X31 · 2 · «Ya está en ERP10»: lo que la salida encontró ya escrito y no ha mandado; los dos totales y la diferencia en rojo. */
+.cxe-ya-esta { margin-bottom: 10px; }
+.cxe-ya-esta-una { padding: 8px 0; border-top: 1px solid var(--cx-linea); }
+.cxe-ya-esta-una p { margin: 0 0 4px; }
+.cxe-ya-esta-totales { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 4px 0 6px; }
+.cxe-ya-esta-totales div { display: flex; gap: 6px; align-items: baseline; }
+.cxe-ya-esta-totales dt { color: var(--cx-apoyo); font-size: .85rem; }
+.cxe-ya-esta-totales dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cxe-ya-esta-dif dt, .cxe-ya-esta-dif dd { color: var(--cx-rojo); font-weight: 700; }
+.cxe-ya-esta-mirada { display: flex; gap: 6px; align-items: center; margin: 0 0 6px; font-size: .85rem; }

@@ -1,0 +1,10 @@
+# X31 · ERP10 y Sumied escribiendo en la misma empresa · 2: antes de enviar, mirar (encargo X31 y respuesta de Julio, 24/11).
+# Rama conta/x31-erp10-antes-de-enviar. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0835  conta_erp10_envio: el estado «duda» (amplía su CHECK) y sus columnas (duda, decision, decision_por, decision_en,
+#         alta_pedida_en); conta_erp10_cola (trozo exacto, misma firma, con respaldo) deja fuera lo que está en duda;
+#         conta_erp10_envio_es_la_misma y conta_erp10_envio_es_otro (las decisiones de una persona). Declarado, con su prueba.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x31-erp10.sql
+supabase/migrations/20261124T0835_x31_antes_de_enviar_mirar.sql

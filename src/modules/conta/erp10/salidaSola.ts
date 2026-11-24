@@ -10,7 +10,7 @@
 import { MOTIVO_SALIDA_PARADA } from './parada'
 
 export type EnvioDeUnAsiento = {
-  estado: 'enviando' | 'en_erp10' | 'no_pudo'
+  estado: 'enviando' | 'en_erp10' | 'no_pudo' | 'duda'
   serie: string | null
   documento: number | null
   motivo: string | null
@@ -42,6 +42,8 @@ export function lineaErp10(d: DatosLinea): Linea | null {
   if (v?.estado === 'en_erp10') return { tono: 'verde', texto: `En ERP10 · asiento ${v.documento}`, reintentar: false, vigilar: false }
   if (d.conElExcel) return { tono: 'verde', texto: d.conElExcel.documento ? `En ERP10 · asiento ${d.conElExcel.documento}` : 'En ERP10 · salió con el Excel', reintentar: false, vigilar: false }
   if (v?.estado === 'enviando') return { tono: 'gris', texto: 'Saliendo a ERP10…', reintentar: false, vigilar: true }
+  // X31 · 2 · Ya está en ERP10 y encaja: no sale hasta que una persona lo diga, desde «Salida a ERP10».
+  if (v?.estado === 'duda') return { tono: 'ambar', texto: `No ha salido a ERP10: ${sinPunto(v.motivo ?? 'ya está en ERP10')}. Dilo en «Salida a ERP10»: si es la misma, no se manda.`, reintentar: false, vigilar: false }
   if (v?.estado === 'no_pudo') {
     const otraVez = v.como !== 'excel' && v.intentos < 3
     return { tono: 'ambar', texto: `No ha salido a ERP10: ${sinPunto(v.motivo ?? 'sin motivo')}.${otraVez ? ' Se vuelve a intentar sola en unos minutos.' : ''}`, reintentar: true, vigilar: otraVez }
@@ -63,7 +65,7 @@ export function avisoYaEnErp10(d: Pick<DatosLinea, 'envio' | 'conElExcel'>): str
 
 export type SalidoHoy = {
   entryId: string; numero: string; concepto: string
-  estado: 'enviando' | 'en_erp10' | 'no_pudo'
+  estado: 'enviando' | 'en_erp10' | 'no_pudo' | 'duda'
   documento: number | null; motivo: string | null; intentos: number
   como: 'sola' | 'a_mano' | 'excel' | null
   /** Cuándo cambió por última vez (ISO). */
@@ -94,11 +96,12 @@ const hora = (iso: string | null | undefined) => {
 
 /** Lo que no ha salido, arriba (lo más reciente primero); después lo de hoy, de lo más reciente a lo más antiguo. Nada se esconde (regla 7). */
 export function listaDeHoy(xs: readonly SalidoHoy[]): FilaHoy[] {
-  const orden = (x: SalidoHoy) => (x.estado === 'no_pudo' ? 0 : x.estado === 'enviando' ? 1 : 2)
+  const orden = (x: SalidoHoy) => (x.estado === 'no_pudo' || x.estado === 'duda' ? 0 : x.estado === 'enviando' ? 1 : 2)
   return [...xs].sort((a, b) => orden(a) - orden(b) || String(b.cuando ?? '').localeCompare(String(a.cuando ?? ''))).map((x) => ({
     entryId: x.entryId, hora: hora(x.cuando), numero: x.numero, concepto: x.concepto,
-    tono: x.estado === 'en_erp10' ? 'verde' : x.estado === 'no_pudo' ? 'ambar' : 'gris',
-    estado: x.estado === 'en_erp10' ? `En ERP10 · asiento ${x.documento}` : x.estado === 'enviando' ? 'Saliendo a ERP10…' : `No ha salido: ${sinPunto(x.motivo ?? 'sin motivo')}`,
+    tono: x.estado === 'en_erp10' ? 'verde' : x.estado === 'no_pudo' || x.estado === 'duda' ? 'ambar' : 'gris',
+    estado: x.estado === 'en_erp10' ? `En ERP10 · asiento ${x.documento}` : x.estado === 'enviando' ? 'Saliendo a ERP10…'
+      : x.estado === 'duda' ? sinPunto(x.motivo ?? 'Ya está en ERP10') : `No ha salido: ${sinPunto(x.motivo ?? 'sin motivo')}`,
     como: x.como === 'sola' ? 'Sola' : x.como === 'a_mano' ? 'A mano' : x.como === 'excel' ? 'Con el Excel' : '—',
   }))
 }

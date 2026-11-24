@@ -1,0 +1,23 @@
+{
+ "_que": "X31 · 2 · Antes de enviar a ERP10, mirar · contexto medido en la BASE LOCAL con la estructura de staging (main f91a27c), en SOLO LECTURA: no en producción. 0835 añade columnas opcionales a conta_erp10_envio, amplía el CHECK de su estado con «duda», cambia conta_erp10_cola (trozo exacto, misma firma, con respaldo) y añade dos funciones; con su prueba de staging. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-24T07:50Z",
+ "tanda": {
+  "supabase/migrations/20261124T0835_x31_antes_de_enviar_mirar.sql": "f22a31f560d45251603e3e2d7c09df06"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_erp10_envio"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_erp10_envio": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

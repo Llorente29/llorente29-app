@@ -130,9 +130,14 @@ describe('nada sale dos veces', () => {
     expect(await sacarRecibida(recibida(), [], PDF, m.p)).toMatchObject({ estado: 'en_erp10', documento: 100 })
     expect([m.erp.intentosAlta, m.erp.altas]).toEqual([2, 1])
   })
-  it('alguien ya la metió a mano: se enlaza, no se escribe otra; si hay dos, no se toca nada', async () => {
+  it('alguien ya la metió a mano: X31 · no se enlaza sola ni se escribe otra; queda en duda, con su número y los dos totales; si hay dos, no se toca nada', async () => {
     const m1 = mundo({ yaEnErp10: 1 })
-    expect(await sacarRecibida(recibida(), [], null, m1.p)).toMatchObject({ estado: 'en_erp10', documento: 50, enlazada: true })
+    expect(await sacarRecibida(recibida(), [], PDF, m1.p)).toMatchObject({ estado: 'duda', porque: 'Ya está en ERP10 (asiento 50).',
+      duda: { que: 'factura', documento: 50, cuantos: 1, numero: 'F-0001' } })
+    expect(m1.filas.get('asiento-1')).toMatchObject({ estado: 'duda', motivo: 'Ya está en ERP10 (asiento 50).' })
+    expect(m1.erp.altas).toBe(0)
+    // Otra vez: sigue en duda, sin volver a buscar ni escribir (espera a una persona).
+    expect(await sacarRecibida(recibida(), [], PDF, m1.p)).toMatchObject({ estado: 'duda' })
     expect(m1.erp.altas).toBe(0)
     const m2 = mundo({ yaEnErp10: 2 })
     expect(await sacarRecibida(recibida(), [], null, m2.p)).toMatchObject({ estado: 'no_pudo', porque: 'Hay 2 facturas F-0001 de este proveedor en ERP10: no se toca nada. Míralo en ERP10.' })
@@ -193,10 +198,14 @@ describe('el cliente escribe solo si se le pide, y solo tres rutas', () => {
     expect(empresa.facturas).toHaveLength(1)
     expect(empresa.pdfs).toEqual([{ Ejercicio: '2026', Serie: '2', Documento: r.documento, NombreArchivo: 'f-0001.pdf', bytes: 8 }])
     expect(sumarPorCuenta(empresa.apuntes).map((x) => [x.subcuenta, x.debe, x.haber])).toEqual([['40000009', 0, 12100], ['47200000', 2100, 0], ['62300000', 10000, 0]])
-    // Otra vez, con otra fila (como si Sumied la hubiera perdido): ERP10 la tiene y se enlaza, no se escribe otra.
+    // Otra vez, con otra fila (como si Sumied la hubiera perdido): ERP10 la tiene; X31 · como Sumied no sabe que la
+    // escribió él, no se enlaza sola ni se escribe otra: en duda, con los dos totales (iguales).
     filas.clear()
-    expect(await sacarRecibida(recibida(), [], null, p)).toMatchObject({ estado: 'en_erp10', enlazada: true, documento: r.documento })
+    expect(await sacarRecibida(recibida(), [], PDF, p)).toMatchObject({ estado: 'duda', duda: { que: 'factura', documento: r.documento } })
+    const d = (await sacarRecibida(recibida(), [], PDF, p)).duda!
+    expect(d.totalErp10Cent).toBe(d.totalSumiedCent)
     expect(empresa.facturas).toHaveLength(1)
+    expect(empresa.pdfs, 'a la que ya estaba no se le sube el PDF').toHaveLength(1)
   })
   it('sin almacén de documentos en ERP10 (como Diez): la factura entra y el PDF se dice que no', async () => {
     const empresa: EmpresaSimulada = { cif: 'B00000000', apuntes: [], subcuentas: ['62300000', '40000009'], sinAlmacen: true }

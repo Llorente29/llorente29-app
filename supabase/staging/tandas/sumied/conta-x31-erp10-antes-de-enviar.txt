@@ -1,0 +1,3 @@
+# X31 · 2 · Antes de enviar, mirar: la 0835 (cambia conta_erp10_envio y conta_erp10_cola) y su prueba en ROLLBACK.
+supabase/migrations/20261124T0835_x31_antes_de_enviar_mirar.sql
+supabase/staging/sql/20261124_x31_antes_de_enviar_prueba.sql

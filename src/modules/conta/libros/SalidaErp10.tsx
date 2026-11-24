@@ -35,11 +35,12 @@ import { abrirExcel, leerSumasYSaldos, reconocer, texto as textoDe, type FilaSum
 import { ComprobarErp10, type Subido } from '@/modules/conta/libros/ComprobarErp10'
 import { casarFacturas, documentosACasar, type DocumentoErp10, type EnvioErp10 } from '@/modules/conta/erp10/casar'
 import { MOTIVO_SALIDA_PARADA, SALIDA_ERP10_PARADA } from '@/modules/conta/erp10/parada'
-import { leerConexionErp10, leerEnviosErp10, leerEstadoEscribir, leerSaldosErp10, leerSalidoHoy, loQueFalta, sacarAErp10, type ClaseConexion } from '@/modules/conta/services/erp10ApiService'
+import { leerConexionErp10, leerDudasErp10, leerEnviosErp10, leerEstadoEscribir, leerIntercalados, leerSaldosErp10, leerSalidoHoy, loQueFalta, sacarAErp10, type ClaseConexion } from '@/modules/conta/services/erp10ApiService'
 import { listaDeHoy } from '@/modules/conta/erp10/salidaSola'
 import { loQueHaEntrado, queVaAEntrar } from '@/modules/conta/erp10/conexion'
 import { salePorLaConexion } from '@/modules/conta/erp10/ficheros'
 import { ConexionErp10Tarjeta } from '@/modules/conta/libros/ConexionErp10'
+import { YaEstaEnErp10 } from '@/modules/conta/libros/YaEstaEnErp10'
 import {
   apuntarLote, bajarPdf, carpetaDeLaSalida, leerAsientosPorSalir, leerCambiadas, leerComprobar, leerDiasTpvPorSalir, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
   ponerAMano, ponerIgualado, volverASacar,
@@ -132,7 +133,11 @@ export function SalidaErp10() {
   // X10f · Lo de hoy por la conexión (lo que no ha salido, arriba), con «Cómo salió»: sola o a mano.
   const hoyErp10 = useLeer(() => leerSalidoHoy(L.accountId, L.companyId), `${L.companyId}:hoy:${vueltaEsc}:${L.vuelta}`)
   const filasHoy = listaDeHoy(hoyErp10.datos ?? [])
+  // X31 · 2 · Lo que ya estaba en ERP10 y espera a una persona.
+  const dudas = useLeer(() => leerDudasErp10(L.accountId, L.companyId), `${L.companyId}:dudas:${vueltaEsc}:${L.vuelta}`)
   const [confirmar, setConfirmar] = useState(false)
+  // X31 · 2 · Al ir a mandar: si en la serie de ERP10 hay asientos del mes metidos a mano, se avisa antes.
+  const intercalados = useLeer(confirmar && mes ? () => leerIntercalados(L.companyId, mes) : null, `${L.companyId}:inter:${mes}:${confirmar}`)
   const [primeraVez, setPrimeraVez] = useState(false)
   const [marcados, setMarcados] = useState<Set<number>>(new Set())
   // La página no se mueve: la pantalla ocupa lo que queda debajo de su borde de arriba, y lo que no cabe rueda dentro.
@@ -372,7 +377,7 @@ export function SalidaErp10() {
 
   const ultima = datos.datos?.lotes[0] ?? null
   const nCambiadas = (datos.datos?.cambiadas.length ?? 0) + (s?.corregidas.length ?? 0)
-  const nMirar = s ? CLASES.reduce((t, k) => t + (s.sinPdf.some((x) => x.clase === k) && !sinPdfAceptadas ? 1 : 0) + (s.noPuedenSalir.some((x) => x.clase === k) ? 1 : 0), 0) + (nCambiadas ? 1 : 0) : 0
+  const nMirar = s ? CLASES.reduce((t, k) => t + (s.sinPdf.some((x) => x.clase === k) && !sinPdfAceptadas ? 1 : 0) + (s.noPuedenSalir.some((x) => x.clase === k) ? 1 : 0), 0) + (nCambiadas ? 1 : 0) + (dudas.datos?.length ? 1 : 0) : 0
 
   const irALaConexion = () => {
     setConexionAbierta(true)
@@ -426,6 +431,8 @@ export function SalidaErp10() {
             asientos: aSacar.filter((x) => x.clase === 'asiento').length, dias: aSacar.filter((x) => x.clase === 'dia').length, mes: mesEnPalabras(mes),
             prueba: pruebaPrimero && aSacar[0] ? { clase: aSacar[0].clase, numero: aSacar[0].numero, tercero: aSacar[0].tercero, total: aSacar[0].total } : null,
           })}</p>
+          {intercalados.datos && <p className="cxe-aviso-linea" data-prueba="intercalados-erp10">{intercalados.datos}</p>}
+          {intercalados.error && <p className="cx-ayuda">No se ha podido mirar si en ERP10 hay asientos de este mes metidos a mano: {intercalados.error}. Lo que ya esté en ERP10 se mira igual, una a una, antes de escribir.</p>}
           {nPorExcel > 0 && <p className="cx-ayuda">{nPorExcel === 1 ? 'Una factura sale con el Excel' : `${nPorExcel} facturas salen con el Excel`} (retención, inversión del sujeto pasivo, intracomunitaria o más de tres tipos de IVA).</p>}
           {nDiasPorExcel > 0 && <p className="cx-ayuda">{nDiasPorExcel === 1 ? 'Un día del TPV sale con el Excel' : `${nDiasPorExcel} días del TPV salen con el Excel`}: no se ha podido armar su factura o su cobro.</p>}
           {diasQueNoSalen.length > 0 && <p className="cx-ayuda">{diasQueNoSalen.length === 1 ? 'Un día del TPV no sale' : `${diasQueNoSalen.length} días del TPV no salen`}, ni por la conexión ni con el Excel: {diasQueNoSalen.slice(0, 3).map((x) => `${x.quien}, ${x.fecha.slice(8, 10)}/${x.fecha.slice(5, 7)} (${x.porque.replace(/\.$/, '')})`).join('; ')}{diasQueNoSalen.length > 3 ? `; y ${diasQueNoSalen.length - 3} más, en «Lo que hay que mirar»` : ''}.</p>}
@@ -491,6 +498,7 @@ export function SalidaErp10() {
           <aside className="cxe-der" aria-labelledby="cxe-mirar">
             <h2 className="cxe-der-titulo" id="cxe-mirar">Qué mirar antes de sacarlo · {nMirar}</h2>
             <div className="cxe-der-cuerpo">
+              <YaEstaEnErp10 dudas={dudas.datos ?? []} quien={L.quien} decidido={() => setVueltaEsc((v) => v + 1)} />
               {filasHoy.length > 0 && (
                 <div className="cxe-nota cxe-hoy">
                   <p><strong>Hoy en ERP10 · {filasHoy.length}</strong></p>
