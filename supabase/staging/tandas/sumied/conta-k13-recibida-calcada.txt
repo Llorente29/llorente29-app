@@ -6,3 +6,6 @@ supabase/migrations/20261123T2347_k13_codigo_corto.sql
 supabase/migrations/20261124T0001_k13_reparto_en_tramos.sql
 # Su prueba, por los caminos (regla 10), en ROLLBACK: el relleno, el alta, a mano, y los tramos con sus puertas.
 supabase/staging/sql/20261124_k13_codigo_corto_y_tramos_prueba.sql
+# Las recibidas de la e2e de calco (tests/e2e/conta/k13/calco.spec.ts), en el restaurante de la semilla K11b: una sin duda
+# y otra de un emisor que no se conoce (su duda). Solo añade, con ids fijos (W07), de verdad desde la rama (W05).
+supabase/seeds/conta/seed_k13_calco_staging.sql
