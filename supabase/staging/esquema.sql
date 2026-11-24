@@ -2052,6 +2052,31 @@ $$;
 
 
 --
+-- Name: _bank_match_seguridad(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._bank_match_seguridad() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+begin
+  if new.confidence_pct is null then
+    new.confidence_pct := case when new.confidence = 'seguro' then 99
+      else (select case when m.proposal->>'seguridad' ~ '^\d{1,3}$' then least((m.proposal->>'seguridad')::int, 100) end
+              from public.bank_movement m where m.id = new.movement_id) end;
+  end if;
+  return new;
+end $_$;
+
+
+--
+-- Name: FUNCTION _bank_match_seguridad(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._bank_match_seguridad() IS 'X30 · El porcentaje con el que se concilia: 99 lo seguro; si no, el de la propuesta del movimiento.';
+
+
+--
 -- Name: _bank_mes_estado(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2315,6 +2340,30 @@ end $$;
 --
 
 COMMENT ON FUNCTION public._bank_reglas_de_partida(p_company uuid, p_desde timestamp with time zone) IS 'X30 · Las reglas de partida de una empresa (las que tienen su cuenta en el plan y cuyo texto aún no usa), activas, sin confirmar y desde p_desde.';
+
+
+--
+-- Name: _bank_reglas_de_partida_al_dar_de_alta(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._bank_reglas_de_partida_al_dar_de_alta() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if new.kind = 'bank' and new.company_id is not null
+     and not exists (select 1 from public.bank_rule r where r.company_id = new.company_id and r.seed = 'partida') then
+    perform public._bank_reglas_de_partida(new.company_id, now());
+  end if;
+  return null;
+end $$;
+
+
+--
+-- Name: FUNCTION _bank_reglas_de_partida_al_dar_de_alta(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._bank_reglas_de_partida_al_dar_de_alta() IS 'X30 · Al dar de alta el primer banco de una empresa, sus reglas de partida, desde ese momento.';
 
 
 --
@@ -4921,6 +4970,78 @@ CREATE FUNCTION public._conta_cobro_stripe_no_vale(p_company uuid, p_code text) 
     when exists (select 1 from public.company_account x where x.company_id = p_company and x.code = p_code and x.name is distinct from 'Plataforma Stripe') then 'otro_nombre'
   end
 $$;
+
+
+--
+-- Name: _conta_codigo_corto_propuesto(text, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_codigo_corto_propuesto(p_tabla text, p_cuenta uuid, p_nombre text) RETURNS text
+    LANGUAGE plpgsql STABLE
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_usados text[];
+  v_letras text;
+  v_cand text;
+  i int;
+begin
+  if p_tabla not in ('locations', 'brand', 'sales_channel') then raise exception 'K13: no sé la tabla «%».', p_tabla; end if;
+  select coalesce(array_agg(code), '{}') into v_usados from public.conta_codigo_corto where account_id = p_cuenta and tabla = p_tabla;
+  if p_tabla = 'locations' then
+    for i in 1 .. 999 loop
+      v_cand := lpad(i::text, 3, '0');
+      if not (v_cand = any (v_usados)) then return v_cand; end if;
+    end loop;
+    return null;
+  end if;
+  -- Las letras del nombre, sin acentos ni lo que no es letra o cifra.
+  v_letras := upper(regexp_replace(translate(coalesce(p_nombre, ''), 'áéíóúüñçÁÉÍÓÚÜÑÇàèìòùÀÈÌÒÙ', 'aeiouuncAEIOUUNCaeiouAEIOU'), '[^A-Za-z0-9]', '', 'g'));
+  if v_letras = '' then v_letras := 'X'; end if;
+  v_cand := left(v_letras || 'XX', 3);
+  if not (v_cand = any (v_usados)) then return v_cand; end if;
+  for i in 2 .. 9 loop
+    v_cand := left(v_letras || 'XX', 2) || i::text;
+    if not (v_cand = any (v_usados)) then return v_cand; end if;
+  end loop;
+  for i in 10 .. 99 loop
+    v_cand := left(v_letras, 1) || i::text;
+    if not (v_cand = any (v_usados)) then return v_cand; end if;
+  end loop;
+  return null;
+end $$;
+
+
+--
+-- Name: _conta_codigo_corto_rellenar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_codigo_corto_rellenar(p_cuenta uuid) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare r record; v text; n int := 0;
+begin
+  for r in
+    select 'locations' t, l.id, l.name, l.created_at from public.locations l
+     where l.account_id = p_cuenta and not exists (select 1 from public.conta_codigo_corto k where k.tabla = 'locations' and k.entity_id = l.id)
+    union all
+    select 'brand', b.id, b.name, b.created_at from public.brand b
+     where b.account_id = p_cuenta and not exists (select 1 from public.conta_codigo_corto k where k.tabla = 'brand' and k.entity_id = b.id)
+    union all
+    select 'sales_channel', c.id, c.name, c.created_at from public.sales_channel c
+     where c.account_id = p_cuenta and not exists (select 1 from public.conta_codigo_corto k where k.tabla = 'sales_channel' and k.entity_id = c.id)
+    order by 1, 4, 2
+  loop
+    v := public._conta_codigo_corto_propuesto(r.t, p_cuenta, r.name);
+    if v is not null then
+      insert into public.conta_codigo_corto (account_id, tabla, entity_id, code, origen) values (p_cuenta, r.t, r.id, v, 'propuesto')
+      on conflict do nothing;
+      n := n + 1;
+    end if;
+  end loop;
+  return n;
+end $$;
 
 
 --
@@ -28014,7 +28135,11 @@ CREATE FUNCTION public.bank_importar(p_treasury uuid, p_fuente text, p_formato t
     AS $$
 declare
   v_t public.treasury_account; v_cuenta uuid; v_aj public.bank_settings; v_ext uuid; v_suma numeric := 0; v_m jsonb;
-  v_nuevos int := 0; v_rep int := 0; v_borr int := 0; v_pos int := 0; v_prev public.bank_statement; v_cont text; v_hueco numeric;
+  v_nuevos int := 0; v_rep int := 0; v_borr int := 0;
+  -- X30 · El orden del banco: cuántas líneas trae y si vienen de la más nueva a la más antigua.
+  v_total int := jsonb_array_length(coalesce(p_movs, '[]'::jsonb));
+  v_al_reves boolean := coalesce(jsonb_array_length(coalesce(p_movs, '[]'::jsonb)) > 1
+    and (p_movs->0->>'fecha')::date > (p_movs->(jsonb_array_length(p_movs) - 1)->>'fecha')::date, false); v_pos int := 0; v_prev public.bank_statement; v_cont text; v_hueco numeric;
   v_id uuid; v_estado text; v_n int := coalesce(jsonb_array_length(p_movs), 0);
 begin
   select * into v_t from public.treasury_account where id = p_treasury;
@@ -28084,7 +28209,7 @@ begin
                      then 'posible_repetido' else 'pendiente' end;
     insert into public.bank_movement (account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount, bank_concept, clean_concept,
                                       common_code, own_code, document_no, reference_1, reference_2, fx, fingerprint, soft_fingerprint,
-                                      before_cutover, status, reason, counterparty, movement_type)
+                                      before_cutover, status, reason, counterparty, movement_type, position)
     values (v_cuenta, v_t.company_id, p_treasury, v_ext, (v_m->>'fecha')::date, coalesce((v_m->>'fecha_valor')::date, (v_m->>'fecha')::date),
             (v_m->>'importe')::numeric, coalesce(v_m->>'concepto_banco', ''), coalesce(v_m->>'concepto_limpio', ''),
             nullif(v_m->>'comun', ''), nullif(v_m->>'propio', ''), nullif(v_m->>'documento', ''), nullif(v_m->>'ref1', ''), nullif(v_m->>'ref2', ''),
@@ -28093,7 +28218,9 @@ begin
             v_aj.cutover_date is not null and (v_m->>'fecha')::date < v_aj.cutover_date, v_estado,
             case when v_estado = 'posible_repetido' then 'Mismo día, importe y orden que uno traído por otro camino: ¿es el mismo?' end,
             -- B02: a quién pagas o quién te paga (limpia, sin tarjeta) y el tipo de movimiento, aparte.
-            public._bank_contraparte_limpia(nullif(v_m->>'contraparte', '')), nullif(trim(v_m->>'tipo'), ''))
+            public._bank_contraparte_limpia(nullif(v_m->>'contraparte', '')), nullif(trim(v_m->>'tipo'), ''),
+            -- X30 · Su orden en el extracto, de la más antigua a la más nueva.
+            case when v_al_reves then v_total + 1 - v_pos else v_pos end)
     on conflict (treasury_account_id, fingerprint) do nothing
     returning id into v_id;
     if v_id is null then v_rep := v_rep + 1; else v_nuevos := v_nuevos + 1; end if;
@@ -39635,6 +39762,78 @@ CREATE FUNCTION public.conta_cobros_para_casar(p_company uuid) RETURNS jsonb
       join public.customer_invoice ci on ci.id = l.invoice_id left join public.party p on p.id = l.party_id
      where r.company_id = p_company and l.estado = 'cobrado' and l.abonado_el >= public.conta_hoy() - 56), '[]'::jsonb))
 $$;
+
+
+--
+-- Name: conta_codigo_corto_poner(text, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_codigo_corto_poner(p_tabla text, p_id uuid, p_codigo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_cuenta uuid;
+  v_nombre text;
+  v_codigo text := nullif(upper(trim(p_codigo)), '');
+  v_otro text;
+begin
+  if p_tabla not in ('locations', 'brand', 'sales_channel') then raise exception 'No sé qué es «%».', p_tabla using errcode = '22023'; end if;
+  if p_tabla = 'locations' then select account_id, name into v_cuenta, v_nombre from public.locations where id = p_id;
+  elsif p_tabla = 'brand' then select account_id, name into v_cuenta, v_nombre from public.brand where id = p_id;
+  else select account_id, name into v_cuenta, v_nombre from public.sales_channel where id = p_id;
+  end if;
+  if v_cuenta is null or not public.belongs_to_account(v_cuenta) then
+    raise exception 'No es de tu cuenta.' using errcode = '42501';
+  end if;
+  if v_codigo is not null and v_codigo !~ '^[A-Z0-9]{1,8}$' then
+    raise exception 'El código corto, de 1 a 8 letras o cifras (es «%»).', v_codigo using errcode = '22023';
+  end if;
+  delete from public.conta_codigo_corto where tabla = p_tabla and entity_id = p_id;
+  if v_codigo is null then
+    perform public._conta_codigo_corto_rellenar(v_cuenta);
+    select code into v_codigo from public.conta_codigo_corto where tabla = p_tabla and entity_id = p_id;
+    return jsonb_build_object('codigo', v_codigo, 'origen', 'propuesto', 'texto', format('Código corto de «%s»: %s (el propuesto).', v_nombre, coalesce(v_codigo, 'ninguno')));
+  end if;
+  select case k.tabla when 'locations' then (select name from public.locations where id = k.entity_id)
+                      when 'brand' then (select name from public.brand where id = k.entity_id)
+                      else (select name from public.sales_channel where id = k.entity_id) end
+    into v_otro from public.conta_codigo_corto k where k.account_id = v_cuenta and k.tabla = p_tabla and k.code = v_codigo;
+  if found then raise exception 'El código % ya es de «%».', v_codigo, v_otro using errcode = '23505'; end if;
+  insert into public.conta_codigo_corto (account_id, tabla, entity_id, code, origen) values (v_cuenta, p_tabla, p_id, v_codigo, 'a_mano');
+  return jsonb_build_object('codigo', v_codigo, 'origen', 'a_mano', 'texto', format('Código corto de «%s»: %s.', v_nombre, v_codigo));
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_codigo_corto_poner(p_tabla text, p_id uuid, p_codigo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_codigo_corto_poner(p_tabla text, p_id uuid, p_codigo text) IS 'K13 · Cambia a mano el código corto de un local, una marca o una plataforma de tu cuenta (sin repetir en la cuenta; queda «a_mano»). Vacío: vuelve al propuesto.';
+
+
+--
+-- Name: conta_codigos_cortos(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_codigos_cortos(p_cuenta uuid) RETURNS TABLE(tabla text, id uuid, codigo text, origen text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if p_cuenta is null or not public.belongs_to_account(p_cuenta) then
+    raise exception 'No es de tu cuenta.' using errcode = '42501';
+  end if;
+  perform public._conta_codigo_corto_rellenar(p_cuenta);
+  return query select k.tabla, k.entity_id, k.code, k.origen from public.conta_codigo_corto k where k.account_id = p_cuenta order by k.tabla, k.code;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_codigos_cortos(p_cuenta uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_codigos_cortos(p_cuenta uuid) IS 'K13 · Los códigos cortos de los locales, marcas y plataformas de tu cuenta; antes pone el propuesto (del nombre) a lo que aún no lo tiene.';
 
 
 --
@@ -61299,6 +61498,95 @@ $$;
 --
 
 COMMENT ON FUNCTION public.conta_recibida_por_defecto(p_invoice uuid) IS 'K11a · El tipo de factura y la clave de régimen que da una recibida si no se eligieron en ella: F1 (R4 si es un abono) y 01 (09 si su tipo de operación es intracomunitario, 12 si su retención es del 115).';
+
+
+--
+-- Name: conta_recibida_reparto_linea(uuid, integer, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_reparto_linea(p_invoice uuid, p_posicion integer, p_tramos jsonb, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_f public.supplier_invoice;
+  v_quien text := coalesce(nullif(trim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
+  v_t jsonb;
+  v_i int := 0;
+  v_antes jsonb;
+  v_ahora jsonb := '[]'::jsonb;
+  v_uuid uuid;
+  v_imp numeric;
+  v_quitados int := 0;
+begin
+  if p_posicion is null or p_posicion < 0 then raise exception 'La línea lleva su posición (desde 0).' using errcode = '22023'; end if;
+  if jsonb_typeof(coalesce(p_tramos, '[]'::jsonb)) <> 'array' then raise exception 'Los tramos van en una lista.' using errcode = '22023'; end if;
+  select * into v_f from public.supplier_invoice where id = p_invoice for update;
+  if v_f.id is null or not public.belongs_to_account(v_f.account_id) then
+    raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501';
+  end if;
+  if v_f.status in ('anulada', 'descartada') then
+    raise exception 'Está %: no se cambia.', v_f.status using errcode = '22023';
+  end if;
+  if exists (select 1 from public.journal_entry e where e.account_id = v_f.account_id and e.source_type = 'supplier_invoice'
+                and e.source_id = v_f.id and e.status = 'validado') then
+    raise exception 'Ya está contabilizada: para cambiarla, anula su asiento.' using errcode = '22023';
+  end if;
+
+  -- Los tramos que vienen, comprobados; con menos de dos no hay reparto.
+  for v_t in select x from jsonb_array_elements(coalesce(p_tramos, '[]'::jsonb)) x loop
+    v_imp := nullif(v_t ->> 'importe', '')::numeric;
+    if v_imp is null or v_imp <= 0 then raise exception 'Cada tramo lleva su importe, mayor que cero.' using errcode = '22023'; end if;
+    v_uuid := nullif(v_t ->> 'local', '')::uuid;
+    if v_uuid is not null and not exists (select 1 from public.locations l where l.id = v_uuid and l.account_id = v_f.account_id) then
+      raise exception 'Ese local no es de esta cuenta.' using errcode = '42501';
+    end if;
+    v_uuid := nullif(v_t ->> 'marca', '')::uuid;
+    if v_uuid is not null and not exists (select 1 from public.brand b where b.id = v_uuid and b.account_id = v_f.account_id) then
+      raise exception 'Esa marca no es de esta cuenta.' using errcode = '42501';
+    end if;
+    v_uuid := nullif(v_t ->> 'plataforma', '')::uuid;
+    if v_uuid is not null and not exists (select 1 from public.sales_channel c where c.id = v_uuid and c.account_id = v_f.account_id) then
+      raise exception 'Esa plataforma no es de esta cuenta.' using errcode = '42501';
+    end if;
+    v_ahora := v_ahora || jsonb_build_object('tramo', v_i, 'local', nullif(v_t ->> 'local', '')::uuid, 'marca', nullif(v_t ->> 'marca', '')::uuid,
+                                             'plataforma', nullif(v_t ->> 'plataforma', '')::uuid, 'importe', round(v_imp, 2));
+    v_i := v_i + 1;
+  end loop;
+  if jsonb_array_length(v_ahora) < 2 then v_ahora := '[]'::jsonb; end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object('tramo', t.tramo, 'local', t.location_id, 'marca', t.brand_id, 'plataforma', t.channel_id, 'importe', t.amount) order by t.tramo), '[]'::jsonb)
+    into v_antes
+    from public.supplier_invoice_expense_tramo t where t.supplier_invoice_id = v_f.id and t.position = p_posicion;
+  if v_antes = v_ahora then
+    return jsonb_build_object('guardado', false, 'texto', 'No había nada que guardar: el reparto estaba como está.', 'asiento_quitado', false);
+  end if;
+
+  delete from public.supplier_invoice_expense_tramo where supplier_invoice_id = v_f.id and position = p_posicion;
+  insert into public.supplier_invoice_expense_tramo (account_id, supplier_invoice_id, position, tramo, location_id, brand_id, channel_id, amount)
+  select v_f.account_id, v_f.id, p_posicion, (x ->> 'tramo')::int, (x ->> 'local')::uuid, (x ->> 'marca')::uuid, (x ->> 'plataforma')::uuid, (x ->> 'importe')::numeric
+    from jsonb_array_elements(v_ahora) x;
+  delete from public.journal_entry e
+   where e.account_id = v_f.account_id and e.source_type = 'supplier_invoice' and e.source_id = v_f.id and e.status in ('propuesto', 'borrador');
+  get diagnostics v_quitados = row_count;
+  insert into public.supplier_invoice_change (account_id, supplier_invoice_id, by_name, what, cambios)
+  values (v_f.account_id, v_f.id, v_quien, 'guardar',
+          jsonb_build_array(jsonb_build_object('campo', 'reparto', 'posicion', p_posicion, 'antes', v_antes, 'ahora', v_ahora)));
+  return jsonb_build_object(
+    'guardado', true,
+    'texto', case when jsonb_array_length(v_ahora) = 0 then format('Línea %s: sin reparto.', p_posicion + 1)
+                  else format('Línea %s: repartida en %s tramos (%s €).', p_posicion + 1, jsonb_array_length(v_ahora),
+                              replace(to_char((select sum((x ->> 'importe')::numeric) from jsonb_array_elements(v_ahora) x), 'FM999999990.00'), '.', ',')) end
+             || case when v_quitados > 0 then ' Su asiento propuesto se ha quitado para proponerlo otra vez con lo nuevo.' else '' end,
+    'asiento_quitado', v_quitados > 0);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_reparto_linea(p_invoice uuid, p_posicion integer, p_tramos jsonb, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_reparto_linea(p_invoice uuid, p_posicion integer, p_tramos jsonb, p_quien_nombre text) IS 'K13 · Pone el reparto analítico de una línea de gasto de una recibida sin contabilizar (tramos con local, marca, plataforma e importe; con menos de dos, sin reparto). Deja su rastro en supplier_invoice_change y quita el asiento propuesto.';
 
 
 --
@@ -119236,6 +119524,30 @@ COMMENT ON TABLE public.conta_cobro_stripe IS 'PC01 · E4 · La cuenta de Stripe
 
 
 --
+-- Name: conta_codigo_corto; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_codigo_corto (
+    account_id uuid NOT NULL,
+    tabla text NOT NULL,
+    entity_id uuid NOT NULL,
+    code text NOT NULL,
+    origen text DEFAULT 'propuesto'::text NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_codigo_corto_code_check CHECK ((code ~ '^[A-Z0-9]{1,8}$'::text)),
+    CONSTRAINT conta_codigo_corto_origen_check CHECK ((origen = ANY (ARRAY['propuesto'::text, 'a_mano'::text, 'erp10'::text]))),
+    CONSTRAINT conta_codigo_corto_tabla_check CHECK ((tabla = ANY (ARRAY['locations'::text, 'brand'::text, 'sales_channel'::text])))
+);
+
+
+--
+-- Name: TABLE conta_codigo_corto; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_codigo_corto IS 'K13 · El código corto de cada local, marca y plataforma (003, MIL, GLO), único en la cuenta: se escribe en la analítica de la recibida. Origen: propuesto (del nombre), a_mano o erp10.';
+
+
+--
 -- Name: conta_linea; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -134297,6 +134609,33 @@ COMMENT ON TABLE public.supplier_invoice_expense_dato IS 'K11a · El concepto, l
 
 
 --
+-- Name: supplier_invoice_expense_tramo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.supplier_invoice_expense_tramo (
+    account_id uuid NOT NULL,
+    supplier_invoice_id uuid NOT NULL,
+    "position" integer NOT NULL,
+    tramo integer NOT NULL,
+    location_id uuid,
+    brand_id uuid,
+    channel_id uuid,
+    amount numeric(14,2) NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT supplier_invoice_expense_tramo_amount_check CHECK ((amount > (0)::numeric)),
+    CONSTRAINT supplier_invoice_expense_tramo_position_check CHECK (("position" >= 0)),
+    CONSTRAINT supplier_invoice_expense_tramo_tramo_check CHECK ((tramo >= 0))
+);
+
+
+--
+-- Name: TABLE supplier_invoice_expense_tramo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.supplier_invoice_expense_tramo IS 'K13 · El reparto analítico de una línea de gasto de una recibida: un tramo por local, marca o plataforma con su importe. Los tramos de una línea suman su importe.';
+
+
+--
 -- Name: supplier_invoice_line; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -138700,6 +139039,22 @@ ALTER TABLE ONLY public.conta_cobro_stripe
 
 ALTER TABLE ONLY public.conta_cobro_stripe
     ADD CONSTRAINT conta_cobro_stripe_stripe_account_id_key UNIQUE (stripe_account_id);
+
+
+--
+-- Name: conta_codigo_corto conta_codigo_corto_account_id_tabla_code_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_codigo_corto
+    ADD CONSTRAINT conta_codigo_corto_account_id_tabla_code_key UNIQUE (account_id, tabla, code);
+
+
+--
+-- Name: conta_codigo_corto conta_codigo_corto_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_codigo_corto
+    ADD CONSTRAINT conta_codigo_corto_pkey PRIMARY KEY (tabla, entity_id);
 
 
 --
@@ -143220,6 +143575,14 @@ ALTER TABLE ONLY public.supplier_invoice_expense_dato
 
 ALTER TABLE ONLY public.supplier_invoice_expense
     ADD CONSTRAINT supplier_invoice_expense_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: supplier_invoice_expense_tramo supplier_invoice_expense_tramo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_invoice_expense_tramo
+    ADD CONSTRAINT supplier_invoice_expense_tramo_pkey PRIMARY KEY (supplier_invoice_id, "position", tramo);
 
 
 --
@@ -151022,10 +151385,24 @@ CREATE TRIGGER trg_auto_print_on_insert AFTER INSERT ON public.sale FOR EACH ROW
 
 
 --
+-- Name: bank_match trg_bank_match_seguridad; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_bank_match_seguridad BEFORE INSERT ON public.bank_match FOR EACH ROW EXECUTE FUNCTION public._bank_match_seguridad();
+
+
+--
 -- Name: bank_movement trg_bank_movimiento_no_borrado; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_bank_movimiento_no_borrado BEFORE INSERT ON public.bank_movement FOR EACH ROW EXECUTE FUNCTION public._bank_movimiento_no_borrado();
+
+
+--
+-- Name: treasury_account trg_bank_reglas_de_partida; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_bank_reglas_de_partida AFTER INSERT ON public.treasury_account FOR EACH ROW EXECUTE FUNCTION public._bank_reglas_de_partida_al_dar_de_alta();
 
 
 --
@@ -155310,6 +155687,14 @@ ALTER TABLE ONLY public.conta_cobro_stripe
 
 ALTER TABLE ONLY public.conta_cobro_stripe
     ADD CONSTRAINT conta_cobro_stripe_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_codigo_corto conta_codigo_corto_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_codigo_corto
+    ADD CONSTRAINT conta_codigo_corto_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
 
 
 --
@@ -163576,6 +163961,46 @@ ALTER TABLE ONLY public.supplier_invoice_expense
 
 
 --
+-- Name: supplier_invoice_expense_tramo supplier_invoice_expense_tramo_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_invoice_expense_tramo
+    ADD CONSTRAINT supplier_invoice_expense_tramo_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: supplier_invoice_expense_tramo supplier_invoice_expense_tramo_brand_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_invoice_expense_tramo
+    ADD CONSTRAINT supplier_invoice_expense_tramo_brand_id_fkey FOREIGN KEY (brand_id) REFERENCES public.brand(id) ON DELETE SET NULL;
+
+
+--
+-- Name: supplier_invoice_expense_tramo supplier_invoice_expense_tramo_channel_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_invoice_expense_tramo
+    ADD CONSTRAINT supplier_invoice_expense_tramo_channel_id_fkey FOREIGN KEY (channel_id) REFERENCES public.sales_channel(id) ON DELETE SET NULL;
+
+
+--
+-- Name: supplier_invoice_expense_tramo supplier_invoice_expense_tramo_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_invoice_expense_tramo
+    ADD CONSTRAINT supplier_invoice_expense_tramo_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id) ON DELETE SET NULL;
+
+
+--
+-- Name: supplier_invoice_expense_tramo supplier_invoice_expense_tramo_supplier_invoice_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_invoice_expense_tramo
+    ADD CONSTRAINT supplier_invoice_expense_tramo_supplier_invoice_id_fkey FOREIGN KEY (supplier_invoice_id) REFERENCES public.supplier_invoice(id) ON DELETE CASCADE;
+
+
+--
 -- Name: supplier_invoice supplier_invoice_import_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -167903,6 +168328,19 @@ ALTER TABLE public.conta_cobro_stripe ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_cobro_stripe_leer ON public.conta_cobro_stripe FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_codigo_corto; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_codigo_corto ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_codigo_corto conta_codigo_corto_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_codigo_corto_leer ON public.conta_codigo_corto FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -175125,6 +175563,19 @@ CREATE POLICY supplier_invoice_expense_leer ON public.supplier_invoice_expense F
 
 
 --
+-- Name: supplier_invoice_expense_tramo; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.supplier_invoice_expense_tramo ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: supplier_invoice_expense_tramo supplier_invoice_expense_tramo_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY supplier_invoice_expense_tramo_leer ON public.supplier_invoice_expense_tramo FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: supplier_invoice_line; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -176617,6 +177068,14 @@ GRANT ALL ON FUNCTION public._bank_log(p_account uuid, p_company uuid, p_mov uui
 
 
 --
+-- Name: FUNCTION _bank_match_seguridad(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._bank_match_seguridad() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._bank_match_seguridad() TO service_role;
+
+
+--
 -- Name: FUNCTION _bank_mes_estado(p_treasury uuid, p_mes date); Type: ACL; Schema: public; Owner: -
 --
 
@@ -176687,6 +177146,14 @@ GRANT ALL ON FUNCTION public._bank_regla_corregida(p_rule uuid, p_movement uuid)
 
 REVOKE ALL ON FUNCTION public._bank_reglas_de_partida(p_company uuid, p_desde timestamp with time zone) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._bank_reglas_de_partida(p_company uuid, p_desde timestamp with time zone) TO service_role;
+
+
+--
+-- Name: FUNCTION _bank_reglas_de_partida_al_dar_de_alta(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._bank_reglas_de_partida_al_dar_de_alta() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._bank_reglas_de_partida_al_dar_de_alta() TO service_role;
 
 
 --
@@ -177204,6 +177671,22 @@ GRANT ALL ON FUNCTION public._conta_cobro_puente(p_company uuid, p_code text, p_
 
 REVOKE ALL ON FUNCTION public._conta_cobro_stripe_no_vale(p_company uuid, p_code text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_cobro_stripe_no_vale(p_company uuid, p_code text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_codigo_corto_propuesto(p_tabla text, p_cuenta uuid, p_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_codigo_corto_propuesto(p_tabla text, p_cuenta uuid, p_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_codigo_corto_propuesto(p_tabla text, p_cuenta uuid, p_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_codigo_corto_rellenar(p_cuenta uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_codigo_corto_rellenar(p_cuenta uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_codigo_corto_rellenar(p_cuenta uuid) TO service_role;
 
 
 --
@@ -184238,6 +184721,24 @@ GRANT ALL ON FUNCTION public.conta_cobros_para_casar(p_company uuid) TO service_
 
 
 --
+-- Name: FUNCTION conta_codigo_corto_poner(p_tabla text, p_id uuid, p_codigo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_codigo_corto_poner(p_tabla text, p_id uuid, p_codigo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_codigo_corto_poner(p_tabla text, p_id uuid, p_codigo text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_codigo_corto_poner(p_tabla text, p_id uuid, p_codigo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_codigos_cortos(p_cuenta uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_codigos_cortos(p_cuenta uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_codigos_cortos(p_cuenta uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_codigos_cortos(p_cuenta uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_comision_de_la_factura(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -188142,6 +188643,15 @@ GRANT ALL ON FUNCTION public.conta_recibida_pdf_reclamar(p_limite integer) TO se
 REVOKE ALL ON FUNCTION public.conta_recibida_por_defecto(p_invoice uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_recibida_por_defecto(p_invoice uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_recibida_por_defecto(p_invoice uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibida_reparto_linea(p_invoice uuid, p_posicion integer, p_tramos jsonb, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_reparto_linea(p_invoice uuid, p_posicion integer, p_tramos jsonb, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_reparto_linea(p_invoice uuid, p_posicion integer, p_tramos jsonb, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_reparto_linea(p_invoice uuid, p_posicion integer, p_tramos jsonb, p_quien_nombre text) TO service_role;
 
 
 --
@@ -198125,6 +198635,14 @@ GRANT SELECT ON TABLE public.conta_cobro_stripe TO authenticated;
 
 
 --
+-- Name: TABLE conta_codigo_corto; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_codigo_corto TO service_role;
+GRANT SELECT ON TABLE public.conta_codigo_corto TO authenticated;
+
+
+--
 -- Name: TABLE conta_linea; Type: ACL; Schema: public; Owner: -
 --
 
@@ -202425,6 +202943,14 @@ GRANT SELECT ON TABLE public.supplier_invoice_expense TO authenticated;
 
 GRANT ALL ON TABLE public.supplier_invoice_expense_dato TO service_role;
 GRANT SELECT ON TABLE public.supplier_invoice_expense_dato TO authenticated;
+
+
+--
+-- Name: TABLE supplier_invoice_expense_tramo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.supplier_invoice_expense_tramo TO service_role;
+GRANT SELECT ON TABLE public.supplier_invoice_expense_tramo TO authenticated;
 
 
 --
