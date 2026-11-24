@@ -13,7 +13,11 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer as useLeerDeLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { aprobarIguales, decidir, enviarCobro, leerCobro, prepararCobro, reanudar } from './datos'
+import { aprobarIguales, decidir, enviarCobro, leerCobro, leerFrente, prepararCobro, reanudar } from './datos'
+import { CABECERA_EXCEL, filasExcel, frenteAGocardless } from './frenteAGocardless'
+import { FrenteAGocardless } from './FrenteAGocardless'
+import { excelTabla } from '@/modules/conta/libros/exportar'
+import { nombreDelMes } from '../../../../../supabase/functions/_shared/cobro/recibo'
 import { modeloCobro, type DatosCobro } from './modeloCobro'
 import { Cobro } from './Cobro'
 
@@ -33,9 +37,23 @@ export function CobroG05Page() {
   const empresa = empresas.find((e) => e.id === params.get('empresa')) ?? activa
   const mes = /^\d{4}-(0[1-9]|1[0-2])$/.test(params.get('mes') ?? '') ? params.get('mes')! : hoyEnMadrid().slice(0, 7)
   const d = useLeer<DatosCobro>(!cargando && accountId && empresa ? () => leerCobro(accountId, empresa.id, mes) : null, `${accountId}:${empresa?.id}:${mes}:g05-cobro`)
+  // Q08 · Frente a GoCardless: cuatro lecturas en paralelo (solo lee). Se vuelve a leer con el cobro.
+  const fr = useLeer(!cargando && accountId && empresa ? () => leerFrente(accountId, empresa.id, mes) : null, `${accountId}:${empresa?.id}:${mes}:g05-frente:${d.datos?.mes?.preparado_at ?? ''}`)
   if (d.error) return <ErrorConReintento mensaje={`No se ha podido leer el cobro: ${d.error}`} reintentar={d.recargar} />
   if (!d.datos || !empresa) return <TarjetaCargando />
   const modelo = modeloCobro(d.datos, { id: empresa.id, nombre: empresa.nombre }, mes)
+  const frente = fr.datos ? frenteAGocardless(mes, fr.datos.recibos, fr.datos.suscripciones, fr.datos.clientes, fr.datos.enlaces) : null
+  const descargar = () => {
+    if (!frente) return 'Aún se está leyendo lo de GoCardless.'
+    const nombre = `Cobro de ${nombreDelMes(mes)} frente a GoCardless · ${empresa.nombre}`
+    const ok = excelTabla(`${nombre}.xlsx`, 'Frente a GoCardless', CABECERA_EXCEL, filasExcel(frente))
+    return ok ? `Bajado: ${nombre}.xlsx, ${frente.filas.length} clientes (${frente.diferencias.length} con diferencias).` : 'No había nada que bajar.'
+  }
+  const bloqueFrente = fr.error
+    ? <p className="g5-frase" data-tono="mal" role="alert">No se ha podido leer lo de GoCardless: {fr.error}</p>
+    : frente && (frente.filas.length > 0 || d.datos.conexion)
+      ? <FrenteAGocardless frente={frente} rutaFicha={(c) => rutaClienteGestoria(c, empresa.id)} alDescargar={descargar} preparado={!!d.datos.mes?.preparado_at} />
+      : null
   const yRecargar = (fn: () => Promise<string>) => async () => { const f = await fn(); d.recargar(); return f }
   return (
     <Cobro modelo={modelo} empresa={empresa.nombre} rutaVolver={rutaClientesCuotas()}
@@ -45,6 +63,6 @@ export function CobroG05Page() {
       alDecidir={(id, decision) => yRecargar(() => decidir(id, decision))()}
       alAprobarIguales={yRecargar(() => aprobarIguales(empresa.id, mes))}
       alReanudar={(id) => yRecargar(() => reanudar(id))()}
-      alEnviar={yRecargar(() => enviarCobro(empresa.id, mes))} />
+      alEnviar={yRecargar(() => enviarCobro(empresa.id, mes))} frente={bloqueFrente} />
   )
 }
