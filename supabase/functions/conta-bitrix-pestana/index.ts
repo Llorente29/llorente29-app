@@ -35,7 +35,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import {
-  direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, porqueApp, porqueUsuario, puedeLlamar, TITULO_PESTANA, usuarioDeBitrix,
+  direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, personaDeBitrix, porqueApp, porqueUsuario, puedeLlamar, TITULO_PESTANA, usuarioDeBitrix,
   type TipoFicha,
 } from './puro.ts'
 import { camposDeSumied, ponerSeccionSumied, seccionEnEstePortal } from './seccion.ts'
@@ -106,10 +106,15 @@ async function engancharPestana(portal: string, auth: string, aqui: string): Pro
   return fallos
 }
 
-type Mira = { ok: false; respuesta: Response } | { ok: true; auth: string; portal: string; tipo: TipoFicha; id: string; correo: string }
+type Mira = { ok: false; respuesta: Response } | { ok: true; auth: string; portal: string; tipo: TipoFicha; id: string; correo: string; usuario: string; nombre: string }
 
-/** Quién mira y qué ficha: lo comprueba con Bitrix24 (app.info y user.current). Lo usan leer y hacer: nunca se lee ni se cambia nada sin esto. */
-async function quienMira(cuerpo: Record<string, unknown>): Promise<Mira> {
+/**
+ * Quién mira y qué ficha: lo comprueba con Bitrix24 (app.info y user.current). Lo usan leer y hacer: nunca se lee
+ * ni se cambia nada sin esto. R18d · Para LEER basta con que Bitrix24 diga quién es (su número y su nombre): sin
+ * usuario de Sumied, se lee como el portal (paraLeer). Para todo lo demás hace falta su correo, como siempre; sin
+ * él, «Desde aquí solo se puede mirar».
+ */
+async function quienMira(cuerpo: Record<string, unknown>, paraLeer = false): Promise<Mira> {
   const auth = typeof cuerpo.a === 'string' && /^[A-Za-z0-9._-]{8,200}$/.test(cuerpo.a) ? cuerpo.a : null
   const portal = portalLimpio(cuerpo.p)
   const tipo = cuerpo.t === 'empresa' || cuerpo.t === 'contacto' ? (cuerpo.t as TipoFicha) : null
@@ -126,21 +131,29 @@ async function quienMira(cuerpo: Record<string, unknown>): Promise<Mira> {
     console.warn(JSON.stringify({ gb: 'no_es_sumied', porque: `Bitrix24 no contesta: ${e instanceof Error ? e.name : 'error'}` }))
     return { ok: false, respuesta: json(200, { estado: 'no_es_sumied', frase: FRASES.no_es_sumied }) }
   }
+  const persona = personaDeBitrix(yo)
   const usuario = usuarioDeBitrix(yo)
-  const porque = [porqueApp(app, clientId()), porqueUsuario(yo)].filter(Boolean)
-  if (porque.length || !usuario) {
+  const porque = [porqueApp(app, clientId()), persona ? null : porqueUsuario(yo)].filter(Boolean)
+  if (porque.length || !persona) {
     // Sin datos personales ni secretos (puro.ts): solo códigos y nombres de campo.
     console.warn(JSON.stringify({ gb: 'no_es_sumied', porque }))
     return { ok: false, respuesta: json(200, { estado: 'no_es_sumied', frase: FRASES.no_es_sumied }) }
   }
-  return { ok: true, auth, portal, tipo, id, correo: usuario.correo }
+  if (!usuario && !paraLeer) return { ok: false, respuesta: json(200, { estado: 'solo_lectura', frase: FRASES.solo_lectura }) }
+  return { ok: true, auth, portal, tipo, id, correo: usuario?.correo ?? '', usuario: persona.id, nombre: persona.nombre }
 }
 
 const baseDeDatos = () => createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
 
 /** La lectura de la pestaña (conta_bitrix_pestana_leer), ya comprobado quién mira. */
 async function lectura(db: ReturnType<typeof baseDeDatos>, m: Extract<Mira, { ok: true }>): Promise<{ ok: true; d: Record<string, unknown> } | { ok: false; respuesta: Response }> {
-  const { data, error } = await db.rpc('conta_bitrix_pestana_leer', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id })
+  // Con usuario de Sumied (su correo), como siempre; si no lo tiene, R18d: como el portal, solo leyendo.
+  let { data, error } = m.correo
+    ? await db.rpc('conta_bitrix_pestana_leer', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id })
+    : { data: { estado: 'sin_acceso' }, error: null }
+  if (!error && (data as Record<string, unknown> | null)?.estado === 'sin_acceso') {
+    ;({ data, error } = await db.rpc('conta_bitrix_pestana_leer_portal', { p_portal: m.portal, p_usuario: m.usuario, p_nombre: m.nombre, p_tipo: m.tipo, p_id: m.id }))
+  }
   if (error) return { ok: false, respuesta: json(500, { estado: 'error', frase: 'No se ha podido leer Sumied. Vuelve a abrir la pestaña en un momento.' }) }
   const d = (data ?? {}) as Record<string, unknown>
   const estado = String(d.estado ?? 'error')
@@ -149,7 +162,7 @@ async function lectura(db: ReturnType<typeof baseDeDatos>, m: Extract<Mira, { ok
 }
 
 async function leer(cuerpo: Record<string, unknown>): Promise<Response> {
-  const m = await quienMira(cuerpo)
+  const m = await quienMira(cuerpo, true)
   if (!m.ok) return m.respuesta
   const l = await lectura(baseDeDatos(), m)
   return l.ok ? json(200, l.d) : l.respuesta
@@ -602,6 +615,12 @@ Deno.serve(async (req) => {
         if (l.auth && l.portal && portalPermitido(l.portal)) {
           const aqui = `${Deno.env.get('SUPABASE_URL')}/functions/v1/conta-bitrix-pestana`
           const fallos = await engancharPestana(l.portal, l.auth, aqui)
+          // R18d · El portal queda unido a su cuenta de Sumied (una sola vez): todas sus personas ven la pestaña, solo leyendo.
+          if (!fallos.length) {
+            const yo = usuarioDeBitrix(await bitrix(l.portal, 'user.current', l.auth).catch(() => null))
+            const { data: u } = await baseDeDatos().rpc('conta_bitrix_portal_unir', { p_portal: l.portal, p_quien: yo?.nombre ?? null })
+            console.log(JSON.stringify({ r18d: 'portal_unido', estado: (u as { estado?: string } | null)?.estado ?? 'error' }))
+          }
           // GBd · El plan B, en pruebas: la ficha común con la sección «Cuota y facturación (la pone Sumied)» (seccion.ts).
           if (seccionEnEstePortal(l.portal)) {
             const portal = l.portal, auth = l.auth
