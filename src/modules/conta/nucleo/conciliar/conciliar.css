@@ -5,14 +5,16 @@
  * Colores: verde lo contabilizado, amarillo lo pendiente, ámbar lo que propone Sumied, gris lo de antes del inicio.
  */
 
-.cn { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* X30 · Una lista usa todo el ancho de la pantalla (las fichas no se estiran: nucleo_reglas_comunes.md). Lo que sobra va a
+ * las columnas de texto (concepto bancario, concepto del asiento, nombre y documento); los bancos y el panel no cambian. */
+.cn { flex: 1; min-height: 0; display: flex; flex-direction: column; --kp-ventana-max: 100%; }
 .cn .kp-ventana-pestanas:empty { display: none; }
 .cn-cargando { padding: 12px; color: var(--kp-gris-tinta); }
 .cn-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .cn-corto { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* La barra: los botones con texto de la maqueta 23; el principal, azul. */
-.cn-barra { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+.cn-barra { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; row-gap: 2px; height: auto; min-height: 32px; padding-top: 2px; padding-bottom: 2px; }
 .cn-barra > button { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border: 0; background: none; color: var(--kp-tinta, #1f2a37); white-space: nowrap; cursor: pointer; }
 .cn-barra > button:hover:not(:disabled) { background: var(--kp-elegida); }
 .cn-barra > button:disabled { color: var(--kp-gris-tinta); cursor: default; }
@@ -21,7 +23,9 @@
 .cn-principal { background: #1f5fbf !important; color: #fff !important; border-radius: 3px; font-weight: 600; padding: 0 10px; }
 .cn-principal:disabled { opacity: .5; }
 .cn-sep { width: 1px; height: 18px; background: var(--kp-raya); margin: 0 4px; flex-shrink: 0; }
-.cn-barra .kp-barra-aviso { min-width: 0; flex: 1; }
+.cn-barra .kp-barra-aviso { min-width: 0; flex: 1 1 220px; }
+.cn-umbral { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 6px; white-space: nowrap; color: var(--kp-tinta, #1f2a37); }
+.cn-umbral select { height: 22px; font: inherit; font-size: 12px; padding: 0 2px; border: 1px solid var(--kp-raya); border-radius: 3px; background: #fff; }
 
 /* Las franjas: lo que Sumied ha conciliado solo hoy (verde) y los avisos (ámbar). */
 .cn-franja { display: flex; align-items: center; gap: 14px; margin: 0; padding: 3px 10px; font-size: 12.5px; white-space: nowrap; overflow: hidden; }
@@ -68,6 +72,7 @@
 .cn-porque[data-tono='falta'] { background: #fde8e8; color: #b42318; }
 .cn-porque[data-tono='otro'] { background: #eef0f3; color: #444; }
 .cn-porque[data-tono='hecho'] { background: transparent; color: #1d6b34; font-weight: 600; padding: 0; }
+.cn-porque[data-tono='solo'] { background: #dff3e4; color: #1d5b2c; font-weight: 600; }
 .cn-pie { flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; color: var(--kp-gris-tinta); }
 .cn-pie-cuenta { display: flex; gap: 0; flex-wrap: wrap; }
 .cn-pie-cuenta > span + span::before { content: ' · '; white-space: pre; }
@@ -103,3 +108,37 @@
 .cn .kp-lineas-cuantas { display: none; }
 .cn-enlace { border: 0; background: none; padding: 0; color: #1f5fbf; font-weight: 600; cursor: pointer; flex-shrink: 0; }
 .cn-enlace[aria-pressed='true'] { text-decoration: underline; }
+
+/* X30 · «＋ Crear regla con este», junto al título de «Datos del movimiento». */
+.cn-datos-titulo { display: flex; align-items: center; gap: 10px; }
+.cn-datos-titulo .cn-enlace { margin-left: auto; font-size: 12px; }
+.cn-enlace:disabled { color: var(--kp-gris-tinta); cursor: default; }
+
+/* X30 · Las ventanas de las reglas: una frase que se lee y, debajo, las casillas. */
+.kp-lupa.cn-dlg { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); display: flex; flex-direction: column; font-size: 13px; }
+.kp-lupa.cn-dlg-lista { width: min(900px, calc(100vw - 32px)); }
+.cn-frase { margin: 10px 12px 6px; padding: 8px 10px; background: #f3f7ff; border: 1px solid #cfdcf5; border-radius: 4px; font-size: 14px; font-weight: 600; color: #1f3f78; }
+.cn-dlg-casillas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 10px; padding: 4px 12px; }
+.cn-dlg-casillas > label { display: flex; flex-direction: column; gap: 2px; color: var(--kp-rotulo, #4b5563); font-size: 11.5px; min-width: 0; }
+.cn-dlg-casillas input, .cn-dlg-casillas select { height: 24px; font: inherit; font-size: 13px; }
+.cn-dlg-ancha { grid-column: span 2; }
+.cn-dlg-sub { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px; align-items: center; color: var(--kp-tinta, #1f2a37); }
+.cn-dlg-sub > :first-child { min-width: 0; width: 120px; }
+.cn-dlg-sub > :first-child input { width: 100%; box-sizing: border-box; }
+.cn-dlg-casillas .kp-con-lupa { min-width: 0; }
+.cn-dlg-casillas .kp-con-lupa input { width: 100%; box-sizing: border-box; }
+.cn-dlg-cuantos { margin: 8px 12px 2px; font-weight: 600; }
+.cn-dlg-atras { display: flex; align-items: center; gap: 6px; margin: 2px 12px; }
+.cn-dlg-pie { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--kp-raya); margin-top: 8px; }
+.cn-dlg-pie .kp-aviso { margin-right: auto; }
+.cn-dlg-pie > button { height: 28px; padding: 0 12px; }
+.cn-dlg-lista .kp-lupa-lista { margin: 10px; max-height: calc(100vh - 160px); }
+.cn-dlg-lista td { padding: 3px 6px; border-bottom: 1px solid var(--kp-raya); vertical-align: middle; }
+.cn-dlg-lista td:first-child { max-width: 480px; }
+.cn-dlg-lista th { text-align: left; padding: 3px 6px; }
+.cn-dlg-acciones { white-space: nowrap; }
+.cn-dlg-acciones .cn-enlace + .cn-enlace { margin-left: 10px; }
+.cn-etiqueta { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 9px; background: #eef0f3; color: #444; font-size: 11px; }
+
+/* X30 · Con la lista estrecha (a 1366), la pastilla de «Por qué» entera: una palabra, con poco relleno. */
+.cn-porque[data-corta='si'] { padding: 0 3px; overflow: visible; text-overflow: clip; }

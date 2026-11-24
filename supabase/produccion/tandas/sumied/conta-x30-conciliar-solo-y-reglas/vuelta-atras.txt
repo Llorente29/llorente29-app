@@ -1,0 +1,6 @@
+# X30 · la vuelta atrás: sin las reglas de partida que no han conciliado nada, sin los disparadores, bank_importar de su
+# respaldo, y sin lo nuevo.
+cuenta: scripts/conta/produccion/cuentas/x30-conciliar.sql
+supabase/vuelta-atras/20261123T2052_x30_reglas_de_partida.down.sql
+supabase/vuelta-atras/20261123T2051_x30_orden_y_seguridad.down.sql
+supabase/vuelta-atras/20261123T2050_x30_conciliar_solo_anade.down.sql

@@ -66,6 +66,8 @@ export interface Movimiento {
   contraparte?: string | null
   /** El tipo de movimiento del banco, aparte (B02: `bank_movement.movement_type`). */
   tipo?: string | null
+  /** X30 · Cuándo entró en Sumied (`bank_movement.created_at`): una regla con fecha solo mira lo que entró desde entonces. */
+  creado?: string | null
 }
 
 /** Una cuenta del banco de la empresa: su 572 y sus 4 últimos («···0133»). */
@@ -148,6 +150,19 @@ export interface Regla {
   confirmaciones?: number
   /** S01d · «Recordar este reparto»: las cuentas entre las que se reparte (importe fijo, o null = lo que falte). */
   lineas?: LineaRegla[] | null
+  /** X30 · Las veces que la persona casó otra cosa con lo que proponía (bank_rule.corrections). */
+  correcciones?: number
+  /** X30 · El importe: exacto, o entre dos (en céntimos, sin signo). */
+  importe?: { exactoCent?: number | null; desdeCent?: number | null; hastaCent?: number | null } | null
+  /** X30 · Solo en este banco (treasury_account). */
+  bancoId?: string | null
+  /** X30 · Solo lo que entró desde entonces (bank_rule.applies_from); sin valor, todo. */
+  desde?: string | null
+  /** X30 · El concepto del asiento y la analítica que pone la regla. */
+  concepto?: string | null
+  analitica?: { local_id?: string; marca_id?: string; canal_id?: string } | null
+  /** X30 · De partida (la pone Sumied en toda empresa): propone en ámbar hasta que la empresa la confirme. */
+  partida?: boolean
 }
 /** Lo confirmado antes (por la persona, o traído del libro de Diez) por contraparte. */
 export interface Aprendido { contraparte: string; cuenta: string; terceroId: string | null; veces: number }
@@ -193,6 +208,8 @@ export interface Contexto {
   abonosGocardless?: AbonoGocardless[]
   /** S01c · Los albaranes que esperan factura: dicen qué albarán espera una factura que falta. */
   albaranesEsperando?: AlbaranQueEspera[]
+  /** X30 · El umbral de la empresa (bank_settings.auto_threshold): desde él, lo de una regla o lo de antes se casa solo. */
+  umbral?: number
 }
 
 /** S01c · Un albarán que espera su factura, para decir cuál espera la que falta. */
@@ -222,7 +239,7 @@ export function facturasEnConcepto(texto: string): string[] {
  * anulada). Cada cambio de este fichero sube la versión: lo vigila
  * tests/unit/modules/conta/motorBancosVersion.test.ts.
  */
-export const MOTOR_BANCOS = '2026-11-12.1'
+export const MOTOR_BANCOS = '2026-11-23.1'
 
 /** De dónde sale la propuesta: la píldora de la fila (N17b). */
 export type Origen = 'factura' | 'traspaso' | 'regla' | 'liquidacion' | 'historial' | 'libro' | 'contrato' | 'nomina' | 'impuesto' | 'banco' | 'cliente' | 'anticipo' | 'pasarela' | 'gocardless'
@@ -255,6 +272,8 @@ export type Destino =
 export interface Decision {
   movimientoId: string
   confianza: Confianza
+  /** X30 · El porcentaje de seguridad (0–100): lo «seguro» de siempre, 99; el resto, de su historial (seguridadDe). */
+  seguridad?: number
   /** «Lo que Folvy cree que es», el título de la línea. */
   que: string
   /** El porqué, en una línea. */
@@ -309,6 +328,88 @@ export function nombra(concepto: string, alias: readonly string[]): boolean {
   })
 }
 
+/**
+ * X30 · Si una regla casa con un movimiento: el concepto contiene su texto y, si los dice, el signo (pago o ingreso), el
+ * importe (exacto o entre dos, sin signo), el banco y desde cuándo mira (solo lo que entró en Sumied desde entonces). La
+ * misma para el motor y para «a cuántos pendientes se aplicaría» de la pantalla.
+ */
+export function reglaCasa(r: Pick<Regla, 'contiene' | 'signo' | 'importe' | 'bancoId' | 'desde'>,
+  m: Pick<Movimiento, 'concepto' | 'contraparte' | 'referencias' | 'importeCent' | 'cuentaId' | 'creado'>): boolean {
+  const txt = [m.concepto, m.contraparte ?? '', ...(m.referencias ?? [])].join(' ')
+  if (!nombra(txt, [r.contiene])) return false
+  if (r.signo !== null && r.signo !== undefined && r.signo !== Math.sign(m.importeCent)) return false
+  const a = Math.abs(m.importeCent), i = r.importe
+  if (i) {
+    if (i.exactoCent !== null && i.exactoCent !== undefined && a !== i.exactoCent) return false
+    if (i.desdeCent !== null && i.desdeCent !== undefined && a < i.desdeCent) return false
+    if (i.hastaCent !== null && i.hastaCent !== undefined && a > i.hastaCent) return false
+  }
+  if (r.bancoId && r.bancoId !== m.cuentaId) return false
+  if (r.desde && (!m.creado || m.creado < r.desde)) return false
+  return true
+}
+
+/** X30 · El umbral por defecto («Solo desde 95 %») y el porcentaje de lo «seguro» de siempre (respuesta X30 · 1, A). */
+export const UMBRAL_POR_DEFECTO = 95
+export const SEGURIDAD_SEGURO = 99
+
+/**
+ * X30 · El acierto con lo visto: (a favor + 1) / (a favor + en contra + 2), en porcentaje y sin llegar a lo «seguro».
+ * Sin nada visto, 50 %; 20 a favor y ninguno en contra, 95 %; 30 a favor, 97 %.
+ */
+export function acierto(aFavor: number, enContra: number): number {
+  const p = Math.floor((100 * (Math.max(0, aFavor) + 1)) / (Math.max(0, aFavor) + Math.max(0, enContra) + 2))
+  return Math.min(p, SEGURIDAD_SEGURO - 1)
+}
+
+/**
+ * X30 · Lo que no tiene historial propio (una factura que casa, un traspaso, una liquidación…) cuando no es «seguro»: un
+ * porcentaje fijo por dónde sale, por debajo del umbral, para que nunca se case solo por el porcentaje. Lo que se casa solo
+ * de éstos es lo «seguro» de siempre (99 %).
+ */
+export const SEGURIDAD_SIN_HISTORIAL: Partial<Record<Origen, number>> = {
+  factura: 90, traspaso: 88, liquidacion: 88, libro: 88, contrato: 85, pasarela: 85, gocardless: 85,
+  impuesto: 80, nomina: 80, cliente: 80, banco: 80, anticipo: 70,
+}
+
+/** X30 · El porcentaje de seguridad de una decisión (la columna «Por qué»: «Como 6 ant. · 91 %»). */
+export function seguridadDe(d: Pick<Decision, 'confianza' | 'origen' | 'reglaId' | 'destino' | 'contraparte' | 'facturaSinAprobar'>, ctx: Pick<Contexto, 'reglas' | 'aprendido'>): number {
+  if (d.confianza === 'seguro') return SEGURIDAD_SEGURO
+  if (d.confianza === 'duda') return d.destino ? 40 : 0
+  if (d.origen === 'regla' && d.reglaId) {
+    const r = ctx.reglas.find((x) => x.id === d.reglaId)
+    if (r) return r.lineas?.length ? Math.min(acierto(r.confirmaciones ?? 0, r.correcciones ?? 0), 90) : acierto(r.confirmaciones ?? 0, r.correcciones ?? 0)
+  }
+  if (d.origen === 'historial' && d.contraparte) {
+    const cuenta = d.destino && 'lineas' in d.destino ? d.destino.lineas?.[0]?.cuenta : null
+    const vistos = ctx.aprendido.filter((a) => a.contraparte === d.contraparte)
+    const aFavor = vistos.filter((a) => a.cuenta === cuenta).reduce((t, a) => t + a.veces, 0)
+    const enContra = vistos.filter((a) => a.cuenta !== cuenta).reduce((t, a) => t + a.veces, 0)
+    // La compra en el extranjero (dos líneas, gasto y comisión) nunca pasa del 90 %: se reparte.
+    return d.destino && 'lineas' in d.destino && (d.destino.lineas?.length ?? 0) > 1 ? Math.min(acierto(aFavor, enContra), 90) : acierto(aFavor, enContra)
+  }
+  if (d.facturaSinAprobar) return 75
+  return (d.origen && SEGURIDAD_SIN_HISTORIAL[d.origen]) ?? 70
+}
+
+/**
+ * X30 · Si Sumied concilia solo una decisión: lo «seguro» de siempre, sí (respuesta A: el agente no cambia); lo
+ * «probable» con destino, solo si sale de una regla o de lo de antes (lo que tiene historial) y llega al umbral. Una
+ * regla de partida sin confirmar nunca (respuesta B).
+ */
+export function seCasaSolo(d: Pick<Decision, 'confianza' | 'origen' | 'reglaId' | 'destino' | 'seguridad' | 'facturaSinAprobar' | 'alternativas'>,
+  ctx: Pick<Contexto, 'reglas' | 'umbral'>): boolean {
+  if (!d.destino) return false
+  if (d.confianza === 'seguro') return true
+  if (d.confianza !== 'probable' || d.facturaSinAprobar || (d.alternativas?.length ?? 0) > 1) return false
+  if (d.origen !== 'regla' && d.origen !== 'historial') return false
+  if (d.origen === 'regla') {
+    const r = ctx.reglas.find((x) => x.id === d.reglaId)
+    if (!r || (r.partida && (r.confirmaciones ?? 0) === 0)) return false
+  }
+  return (d.seguridad ?? 0) >= (ctx.umbral ?? UMBRAL_POR_DEFECTO)
+}
+
 /** La contraparte de un concepto: lo que queda quitando la operación, números y siglas sociales. */
 export function contraparte(concepto: string): string | null {
   const limpio = limpiarConcepto(concepto)
@@ -351,7 +452,8 @@ function conOrigen(d: Decision): Decision {
 
 /** Una decisión para un movimiento, sin gastar nada (para el que se mira suelto). */
 export function decidir(m: Movimiento, ctx: Contexto): Decision {
-  return conOrigen(decidirCon(m, ctx, nuevoGastado()))
+  const d = conOrigen(decidirCon(m, ctx, nuevoGastado()))
+  return { ...d, seguridad: seguridadDe(d, ctx) }
 }
 
 /** Un lote entero, en orden de fecha: cada candidato se usa una sola vez. */
@@ -361,7 +463,8 @@ export function conciliar(movs: readonly Movimiento[], ctx: Contexto): Decision[
   const porId = new Map<string, Decision>()
   for (const m of orden) {
     if (g.movimientos.has(m.id)) continue // ya casado como el otro lado de un traspaso
-    porId.set(m.id, conOrigen(decidirCon(m, ctx, g)))
+    const d = conOrigen(decidirCon(m, ctx, g))
+    porId.set(m.id, { ...d, seguridad: seguridadDe(d, ctx) })
   }
   // El otro lado de un traspaso queda casado por el mismo asiento.
   for (const d of porId.values()) {
@@ -910,7 +1013,7 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
   }
 
   // ── 9 · Reglas activas ───────────────────────────────────────────────────
-  const reglas = ctx.reglas.filter((r) => nombra(txt, [r.contiene]) && (r.signo === null || r.signo === Math.sign(imp)))
+  const reglas = ctx.reglas.filter((r) => reglaCasa(r, m))
   if (reglas.length === 1) {
     const r = reglas[0]
     // Una regla propone; casa sola cuando la persona la ha confirmado 3 veces sin corregir (B01).
@@ -933,8 +1036,9 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
     }
     const sola = conf >= 3
     return { ...b, confianza: sola ? 'seguro' : 'probable', preseleccionar: !sola, reglaId: r.id, origen: 'regla', que: nombreCuenta(ctx, r.cuenta),
-      porque: sola ? `Regla confirmada ${conf} veces: ${r.palabras}.` : `Regla: ${r.palabras} (confirmada ${conf} ${conf === 1 ? 'vez' : 'veces'}; a la 3.ª caso sola).`, destino: { tipo: 'cuenta', tercero_id: r.terceroId, concepto: limpiarConcepto(m.concepto) || ctx.nombres[r.cuenta] || r.cuenta,
-        lineas: [{ cuenta: r.cuenta, importe: euros(abs(imp)) }] } }
+      porque: sola ? `Regla confirmada ${conf} veces: ${r.palabras}.` : `Regla: ${r.palabras} (confirmada ${conf} ${conf === 1 ? 'vez' : 'veces'}; a la 3.ª caso sola).`,
+      destino: { tipo: 'cuenta', tercero_id: r.terceroId, concepto: r.concepto?.trim() || limpiarConcepto(m.concepto) || ctx.nombres[r.cuenta] || r.cuenta,
+        lineas: [{ cuenta: r.cuenta, importe: euros(abs(imp)) }], ...(r.analitica ?? {}) } as Destino }
   }
 
   // ── 9b · B01·21 · Compra en el extranjero con la comisión dentro ──────────

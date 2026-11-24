@@ -151,11 +151,16 @@ export async function leerMovimientosEntre(accountId: string, bancoId: string, d
   const PAGINA = 1000
   const filas: Fila[] = []
   for (let i = 0; ; i += PAGINA) {
-    const pagina = await leer(tabla('bank_movement')
-      .select((conValidado ? 'id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, before_cutover, validated_at, validated_by_name, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept, status))'
+    let q = tabla('bank_movement')
+      .select((conValidado ? 'id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, before_cutover, validated_at, validated_by_name, position, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, created_at, confidence_pct, rule_id, journal_entry_id, journal_entry(concept, status))'
         : 'id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept, status))'))
       .eq('account_id', accountId).eq('treasury_account_id', bancoId).gte('op_date', desde).lte('op_date', hasta)
-      .order('op_date', { ascending: subiendo }).order('created_at', { ascending: subiendo }).order('id').range(i, i + PAGINA - 1), 'los movimientos')
+      .order('op_date', { ascending: subiendo })
+    // X30 · Dentro del mismo día: lo que entró antes y, de un mismo extracto (entra todo a la vez), el orden del banco
+    // (position, 2051). Lo importado antes del X30 no tiene orden: como siempre.
+    q = q.order('created_at', { ascending: subiendo })
+    if (conValidado) q = q.order('position', { ascending: subiendo, nullsFirst: subiendo })
+    const pagina = await leer(q.order('id').range(i, i + PAGINA - 1), 'los movimientos')
     filas.push(...pagina)
     if (pagina.length < PAGINA) break
   }
@@ -172,6 +177,8 @@ export async function leerMovimientosEntre(accountId: string, bancoId: string, d
         id: String(vivo.id), tipo: String(vivo.kind), porque: String(vivo.reason), porQuien: vivo.by_who === 'folvy' ? 'folvy' : 'persona',
         asientoId: s(vivo.journal_entry_id), asientoConcepto: s((vivo.journal_entry as Fila | null)?.concept),
         asientoEstado: (s((vivo.journal_entry as Fila | null)?.status) as NonNullable<MovimientoBanco['casado']>['asientoEstado']) ?? null,
+        // X30 · Cuándo y con qué porcentaje (Conciliar).
+        ...(conValidado ? { cuando: s(vivo.created_at), seguridad: vivo.confidence_pct === null || vivo.confidence_pct === undefined ? null : Number(vivo.confidence_pct), reglaId: s(vivo.rule_id) } : {}),
       } : null,
       tarjeta: tarjeta ? { ultimos4: String(tarjeta.last4), titular: String(tarjeta.holder_name) } : null,
       ticket: s(m.receipt_path), motivoIgnorado: s(m.ignored_reason),

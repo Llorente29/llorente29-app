@@ -12,7 +12,7 @@
 //   · el panel «Casar con facturas» se pliega (queda una pestaña estrecha con las propuestas), se recuerda al volver a
 //     entrar y se despliega;
 //   · el concepto largo se corta con «…» y el title lo dice entero;
-//   · la pantalla cabe sin estirarse: la ventana no pasa del ancho máximo, la columna de bancos y el panel miden lo mismo a
+//   · la pantalla cabe sin estirarse (X30: la ventana usa todo el ancho; lo mide su e2e): la columna de bancos y el panel miden lo mismo a
 //     1366 que a 1920, y la página no rueda.
 // Cada ancho, su propio fichero (x29-<ancho>-…): lo de una pasada anterior se deshace antes (su casado y el extracto).
 
@@ -148,7 +148,8 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     })
     console.log(`[X29] ${ancho} · ${JSON.stringify(m)}`)
     medidas[ancho] = m
-    expect(m.ventana!, 'la ventana no pasa del ancho máximo').toBeLessThanOrEqual(VENTANA_MAX)
+    // X30: Conciliar es una lista y usa todo el ancho (las fichas no se estiran): lo mide la e2e del X30.
+    expect(m.ventana!, 'la ventana, con su ancho').toBeGreaterThan(VENTANA_MAX / 2)
     expect(m.sobra, 'la página no rueda de lado').toBeLessThanOrEqual(1)
     expect(m.rueda, 'la página no rueda hacia abajo').toBeLessThanOrEqual(1)
     await page.screenshot({ path: `${DIR}/conciliar-${ancho}.png` })
