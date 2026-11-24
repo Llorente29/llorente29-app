@@ -29,7 +29,6 @@
 // verify_jwt = true (config.toml).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { MOTIVO_SALIDA_PARADA, SALIDA_ERP10_PARADA } from "../_shared/erp10Parada.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { FrenoErp10 } from "../_shared/erp10Cliente.ts";
@@ -66,8 +65,6 @@ Deno.serve(async (req) => {
   const sb = createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
   const { data: u } = await sb.auth.getUser();
   if (!u?.user) return json({ error: "no autenticado" }, 401);
-  // X31 · 0 · La salida a ERP10, parada en todas las empresas hasta que esté la comprobación de lo que ya hay en ERP10.
-  if (SALIDA_ERP10_PARADA) return json({ error: `${MOTIVO_SALIDA_PARADA}: la salida a ERP10 está parada.`, parada: true }, 409);
 
   let b: { company_id?: unknown; mes?: unknown; quien?: unknown } = {};
   try { b = await req.json(); } catch { /* vacío */ }

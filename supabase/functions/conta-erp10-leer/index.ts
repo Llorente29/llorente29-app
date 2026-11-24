@@ -18,6 +18,9 @@
 //     asientos o las facturas de un mes, o el resumen del ejercicio. La pantalla las pide una a una:
 //     ninguna llamada pasa de un minuto (si ERP10 tarda más de 55 s, 504 y se vuelve a pedir esa).
 //     Solo GET. Solo un administrador.
+//   · { company_id, accion: 'intercalados', mes }: X31 · 2 (24/11) · antes de enviar, los asientos del mes en ERP10 que no
+//     ha escrito ni enlazado Sumied, por serie (_shared/erp10Intercalados.ts): solo sus números, sin importes ni nombres.
+//     Solo GET. Cualquiera que vea la sociedad.
 //   · { company_id, accion: 'saldos', desde, hasta }: las líneas de los apuntes
 //     entre los dos días, sumadas por cuenta (el sumas y saldos del paso 3, sin
 //     Excel). Cualquiera que vea la sociedad.
@@ -34,6 +37,7 @@ import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { clienteErp10 } from "../_shared/erp10Despacho.ts";
 import { medidaEnTexto, medirParaTraer } from "../_shared/erp10Medir.ts";
 import { FalloAlTraer, pedidaDelCuerpo, traerUnaPagina } from "../_shared/erp10Traer.ts";
+import { avisoIntercalados, deFuera, type Conocido } from "../_shared/erp10Intercalados.ts";
 import { finalDelNif, FrenoErp10, lineas, porTipo, resumenSinDatos, sumarPorCuenta, type ClienteErp10 } from "../_shared/erp10Cliente.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -69,8 +73,8 @@ Deno.serve(async (req) => {
   let b: { company_id?: unknown; accion?: unknown; desde?: unknown; hasta?: unknown; documentos?: unknown; ejercicio?: unknown; que?: unknown; mes?: unknown; pagina?: unknown } = {};
   try { b = await req.json(); } catch { /* vacío */ }
   const companyId = typeof b.company_id === "string" && /^[0-9a-f-]{36}$/i.test(b.company_id) ? b.company_id : "";
-  const accion = b.accion === "probar" || b.accion === "saldos" || b.accion === "medir" || b.accion === "traer" ? b.accion : "";
-  if (!companyId || !accion) return json({ error: "faltan company_id o accion (probar, medir, traer o saldos)" }, 400);
+  const accion = b.accion === "probar" || b.accion === "saldos" || b.accion === "medir" || b.accion === "traer" || b.accion === "intercalados" ? b.accion : "";
+  if (!companyId || !accion) return json({ error: "faltan company_id o accion (probar, medir, traer, intercalados o saldos)" }, 400);
   const pedida = accion === "traer" ? pedidaDelCuerpo(b as Record<string, unknown>) : null;
   if (typeof pedida === "string") return json({ error: pedida }, 400);
 
@@ -107,6 +111,14 @@ Deno.serve(async (req) => {
       const m = await medirParaTraer({ get: (r) => c.cliente.get(r), ahora: () => Date.now() }, { ejercicio: ej, codEmpresa: c.cliente.codEmpresa });
       return json({ ok: true, medida: m, texto: medidaEnTexto(m) });
     }
+    if (accion === "intercalados") {
+      const mes = typeof b.mes === "string" && /^\d{4}-\d{2}$/.test(b.mes) ? b.mes : "";
+      if (!mes) return json({ error: "falta mes (AAAA-MM)" }, 400);
+      const apuntes = await c.cliente.apuntesDelMes(mes);
+      const conocidos = await conocidosDeSumied(srv, co.account_id, companyId);
+      const xs = deFuera(apuntes, conocidos);
+      return json({ ok: true, mes, asientos: apuntes.length, deFuera: xs, aviso: avisoIntercalados(xs, mes) });
+    }
     const desde = dia(b.desde), hasta = dia(b.hasta);
     if (!desde || !hasta || desde > hasta) return json({ error: "faltan desde y hasta (AAAA-MM-DD)" }, 400);
     const apuntes = await c.cliente.apuntesEntre(desde, hasta);
@@ -125,6 +137,30 @@ Deno.serve(async (req) => {
     return json({ error: msg }, e instanceof FrenoErp10 ? 409 : e instanceof FalloAlTraer && e.status === 400 ? 409 : 502);
   }
 });
+
+/** X31 · Los números de ERP10 que Sumied conoce de la sociedad: lo que salió por la conexión (con su cobro) y con el Excel. */
+// deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function conocidosDeSumied(srv: any, accountId: string, companyId: string): Promise<Conocido[]> {
+  const r: Conocido[] = [];
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await srv.from("conta_erp10_envio").select("erp10_serie, erp10_documento, cobro_serie, cobro_documento")
+      .eq("account_id", accountId).eq("company_id", companyId).eq("estado", "en_erp10").order("id").range(i, i + 999);
+    if (error) throw new Error(`No se ha podido leer lo que salió de Sumied: ${error.message}`);
+    const xs = (data ?? []) as { erp10_serie: string | null; erp10_documento: number | null; cobro_serie: string | null; cobro_documento: number | null }[];
+    for (const x of xs) { r.push({ serie: x.erp10_serie, documento: x.erp10_documento }); if (x.cobro_documento != null) r.push({ serie: x.cobro_serie, documento: x.cobro_documento }); }
+    if (xs.length < 1000) break;
+  }
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await srv.from("conta_erp10_salida_partida").select("erp10_serie, erp10_documento")
+      .eq("account_id", accountId).eq("company_id", companyId).not("erp10_documento", "is", null).order("id").range(i, i + 999);
+    if (error) throw new Error(`No se ha podido leer lo que salió con el Excel: ${error.message}`);
+    const xs = (data ?? []) as { erp10_serie: string | null; erp10_documento: number | null }[];
+    r.push(...xs.map((x) => ({ serie: x.erp10_serie, documento: x.erp10_documento })));
+    if (xs.length < 1000) break;
+  }
+  return r;
+}
 
 // deno-lint-ignore no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

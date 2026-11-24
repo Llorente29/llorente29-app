@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase'
 import { hayBase, rpc, tabla } from '@/modules/conta/services/bd'
 import type { FilaSumas } from '@/modules/conta/lib/traer'
 import type { DocumentoErp10, EnvioErp10 } from '@/modules/conta/erp10/casar'
+import { deLaFila, type DudaVista } from '@/modules/conta/erp10/dudas'
 import { aSalidoHoy, type DatosLinea, type EnvioDeUnAsiento, type SalidoHoy } from '@/modules/conta/erp10/salidaSola'
 import { getConnectorCredentialsStatus, saveConnectorCredentials } from '@/modules/integrations/services/connectorCredentialsService'
 
@@ -227,7 +228,9 @@ export async function leerEstadoEscribir(accountId: string, companyId: string): 
 /** Lo que dice el servidor de cada factura. */
 export interface Salido {
   entryId: string; numero: string; clase?: ClaseConexion
-  estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo'
+  estado: 'en_erp10' | 'ya_estaba' | 'en_marcha' | 'no_pudo' | 'duda'
+  /** X31 · 2 · Lo que ya estaba en ERP10 y encaja: espera a una persona. */
+  duda?: Record<string, unknown>
   serie?: string; documento?: number; enlazada?: boolean; pdf?: 'subido' | 'fallo' | null; porque?: string
   /** X10e · El cobro del día (de un solo asiento) y, si es el cobro aparte de un día, de cuál. */
   cobro?: { serie: string; documento: number; enlazado: boolean }; cobroDe?: string
@@ -316,10 +319,47 @@ export async function leerSalidoHoy(accountId: string, companyId: string): Promi
   const { data, error } = await tabla('conta_erp10_envio')
     .select('entry_id, estado, erp10_documento, motivo, intentos, como, cambiado_en, journal_entry(series, number, concept)')
     .eq('account_id', accountId).eq('company_id', companyId)
-    .or(`cambiado_en.gte.${hoy}T00:00:00+01:00,estado.eq.no_pudo`)
+    .or(`cambiado_en.gte.${hoy}T00:00:00+01:00,estado.in.(no_pudo,duda)`)
     .order('cambiado_en', { ascending: false }).limit(200)
   if (error) throw new Error(`No se ha podido leer lo que ha salido hoy: ${error.message}`)
   return ((data ?? []) as Fila[]).map(aSalidoHoy)
+}
+
+// ── X31 · 2 · Lo que ya está en ERP10 y espera a una persona ──────────────────────────────────────
+
+/**
+ * Los envíos en duda de la sociedad, con su asiento. Si la base aún no tiene la columna (staging antes de que la tanda
+ * llegue de main: la aplica solo en ROLLBACK desde la rama), no hay dudas que enseñar: no tumba la pantalla.
+ */
+export async function leerDudasErp10(accountId: string, companyId: string): Promise<DudaVista[]> {
+  hayBase()
+  const { data, error } = await tabla('conta_erp10_envio')
+    .select('id, entry_id, clase, duda, motivo, journal_entry(series, number, concept, entry_date)')
+    .eq('account_id', accountId).eq('company_id', companyId).eq('estado', 'duda')
+    .order('cambiado_en', { ascending: false }).limit(200)
+  if (error) {
+    if (error.code === '42703') return []
+    throw new Error(`No se ha podido leer lo que ya estaba en ERP10: ${error.message}`)
+  }
+  return ((data ?? []) as Fila[]).map(deLaFila).filter((x): x is DudaVista => x !== null)
+}
+
+/** X31 · 2 · Antes de mandar: el aviso si en ERP10 hay asientos del mes que no ha escrito Sumied (null si no hay). */
+export async function leerIntercalados(companyId: string, mes: string): Promise<string | null> {
+  const d = await invocar({ company_id: companyId, accion: 'intercalados', mes })
+  return str(d.aviso)
+}
+
+/** «Es la misma, no la mandes»: queda unida a lo que ya está en ERP10. Con totales distintos, solo con la diferencia mirada. */
+export async function decirEsLaMisma(envioId: string, mirada: boolean, quien: string | null): Promise<string> {
+  const r = await rpc<{ texto?: string }>('conta_erp10_envio_es_la_misma', { p_envio: envioId, p_mirada: mirada, p_quien_nombre: quien })
+  return r?.texto ?? 'Es la misma: no se manda.'
+}
+
+/** «Es otro, mándalo» (solo un asiento): sale en la siguiente salida. */
+export async function decirEsOtro(envioId: string, quien: string | null): Promise<string> {
+  const r = await rpc<{ texto?: string }>('conta_erp10_envio_es_otro', { p_envio: envioId, p_quien_nombre: quien })
+  return r?.texto ?? 'Es otro: sale en la siguiente salida.'
 }
 
 /** K08 · La salida a ERP10 de la empresa (null: no tiene) y si ya hizo su primera salida (la misma regla que la ficha). */

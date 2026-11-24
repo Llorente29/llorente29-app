@@ -1,0 +1,3 @@
+# X31 · la vuelta atrás: sin las decisiones, la cola de su respaldo, el CHECK de antes y sin las columnas nuevas.
+cuenta: scripts/conta/produccion/cuentas/x31-erp10.sql
+supabase/vuelta-atras/20261124T0835_x31_antes_de_enviar_mirar.down.sql

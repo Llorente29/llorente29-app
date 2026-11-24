@@ -446,10 +446,23 @@ for (const tam of TAMANOS) {
 const EJEMPLO = resolve('tests/conta/r04/revo_ejemplo')
 
 /** El ejemplo de Revo del 09/11 (el del R04), movido a hoy, con su centena de facturas (60 + el día: no choca con las del X08). */
+/**
+ * El día de Revo del ejemplo (tests/conta/r04/revo_ejemplo), con la fecha de hoy y sus números de documento. R16 (#780): un
+ * día con más de una factura en su libro (con NIF o con devoluciones) sale por el fichero, nunca por la conexión. Para que este
+ * día salga por la conexión, va en UNA sola factura: sus dos documentos con NIF, sin NIF (tickets), y su devolución, en positivo
+ * (la misma orden en los cuatro ficheros: siguen cuadrando, y los documentos siguen sin saltos).
+ */
 function revoDeHoy(dia: string) {
   const centena = String(60 + Number(dia.slice(8, 10)))
+  const DEVOLUCION = '700047'
   return ['Ordenes', 'Documentos', 'Impuestos', 'Pagos'].map((n) => {
     const t = readFileSync(resolve(EJEMPLO, `${n}_2026-11-09.csv`), 'utf8').replaceAll('2026-11-09', dia).replace(/\b50(\d\d)\b/g, `${centena}$1`)
+      .split('\n').map((l) => {
+        const c = l.split(';')
+        if (c[0].trim() === DEVOLUCION) return l.replace(/;-/g, ';')
+        if (n === 'Documentos' && /^\s*\d+$/.test(c[0]) && c[4]?.trim()) { c[4] = ''; return c.join(';') }
+        return l
+      }).join('\n')
     return { nombre: `${n}_${dia}.csv`, contenido: new TextEncoder().encode(t) }
   })
 }

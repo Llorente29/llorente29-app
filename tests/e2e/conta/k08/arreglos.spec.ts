@@ -8,8 +8,8 @@
 //      proveedor (X31 · 0: desde el R14 lo da de alta Sumied solo, con su subcuenta, y lo dice con «Proveedor nuevo»);
 //   2. validada, la casilla «Proveedor» con su código (el nombre, en «Nombre»), y cada línea del asiento, el nombre de su cuenta
 //      («Compras de mercaderías», nunca su explicación);
-//   3. la barra de abajo, cuando la empresa espera su primera salida a ERP10: en gris (X31 · 0: con la salida
-//      parada, «La salida a ERP10 está parada», sin «Mandarla» y con el motivo al pasar el ratón). Esa empresa no se puede montar en staging sin un asiento validado hace más
+//   3. la barra de abajo, cuando la empresa espera su primera salida a ERP10: en gris, «Esperando la primera
+//      salida a ERP10 · Mandarla». Esa empresa no se puede montar en staging sin un asiento validado hace más
 //      de una hora (un asiento validado no se toca), así que las dos lecturas de ERP10 de la barra se
 //      contestan desde la prueba (page.route): lo que se prueba es la pantalla con esos datos.
 
@@ -140,13 +140,10 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await esperandoLaPrimeraSalida(page)
     const s = await entrarEnLaGestoria(page)
 
-    // ── 3 · La barra de abajo: en gris y sin ámbar de ERP10. X31 · 0: con la salida a ERP10 parada, sin «Mandarla»
-    // y con el motivo al pasar el ratón. ──
+    // ── 3 · La barra de abajo: esperando la primera salida, en gris y con «Mandarla»; nada en ámbar de ERP10. ──
     const erp10 = page.locator('.k-estado-frase', { hasText: 'ERP10' })
     await expect(erp10).toHaveAttribute('data-tono', 'gris', { timeout: 30_000 })
-    await expect(erp10).toContainText('La salida a ERP10 está parada')
-    await expect(erp10).not.toContainText('Mandarla')
-    await expect(erp10).toHaveAttribute('title', 'Falta la comprobación de lo que ya hay en ERP10.')
+    await expect(erp10).toContainText('Esperando la primera salida a ERP10 · Mandarla')
     await expect(page.locator('.k-estado-frase[data-tono="mira"]', { hasText: 'sin salir a ERP10' })).toHaveCount(0)
     if (t === 1) await page.screenshot({ path: `${DIR}/barra-primera-salida-${ancho}.png` })
     await page.unrouteAll({ behavior: 'ignoreErrors' })
