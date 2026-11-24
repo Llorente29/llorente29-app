@@ -4,11 +4,11 @@
 // K08 · Cinco arreglos de la ficha, vistos grabando facturas de verdad (Julio, 21/11), contra staging, con
 // la cuenta del núcleo (semilla K02) en su gestoría y la semilla K08, a 1456 × 816 y a 1366 × 768:
 //   1. una factura de un proveedor recién dado de alta enseña su asiento antes de validar, con la línea del
-//      proveedor «Será la 4000000N · Proveedores · …» (aún no tiene subcuenta: se la crea la base al validar);
+//      proveedor (X31 · 0: desde el R14 lo da de alta Sumied solo, con su subcuenta, y lo dice con «Proveedor nuevo»);
 //   2. validada, la casilla «Proveedor» con su código (el nombre, en «Nombre»), y cada línea del asiento, el nombre de su cuenta
 //      («Compras de mercaderías», nunca su explicación);
-//   3. la barra de abajo, cuando la empresa espera su primera salida a ERP10: en gris, «Esperando la primera
-//      salida a ERP10 · Mandarla». Esa empresa no se puede montar en staging sin un asiento validado hace más
+//   3. la barra de abajo, cuando la empresa espera su primera salida a ERP10: en gris (X31 · 0: con la salida
+//      parada, «La salida a ERP10 está parada», sin «Mandarla» y con el motivo al pasar el ratón). Esa empresa no se puede montar en staging sin un asiento validado hace más
 //      de una hora (un asiento validado no se toca), así que las dos lecturas de ERP10 de la barra se
 //      contestan desde la prueba (page.route): lo que se prueba es la pantalla con esos datos.
 
@@ -24,7 +24,6 @@ const factura = (t: number) => enCarril(`c0e80000-0000-4000-8000-000000000d${t}1
 const EMISOR = (t: number) => `Emisor Nuevo K08 de Prueba ${t}, S.L.`
 const FICHA = '[data-prueba="ficha-recibida-nucleo"]'
 const ficha = (page: Page) => page.locator(`.k-zona[data-activa="si"] ${FICHA}`)
-const aviso = (page: Page) => page.locator('.k-zona[data-activa="si"] [data-prueba="aviso-ficha"]')
 const asiento = (page: Page) => ficha(page).locator('.kf-asiento')
 const laDeAntes = (page: Page) => page.locator('.k-zona[data-activa="si"] .s-pagina')
 
@@ -125,27 +124,26 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
       if (await plegar.isVisible()) await plegar.click()
     }
 
-    // ── 1 · Un proveedor recién dado de alta: el asiento se pinta, con «Será la 4000000N». ──
+    // ── 1 · Un proveedor recién dado de alta: el asiento se pinta con su subcuenta. Desde el R14 lo da de alta Sumied solo
+    // con lo que trae la factura («Proveedor nuevo: …», con «Deshacer»), y la subcuenta ya existe antes de validar: no hay
+    // «Darlo de alta» ni «Será la…» (puesto al día en el X31 · 0, como el K11b hizo con las demás). ──
     await page.goto(`/conta/documentos/recibidas/${factura(t)}?ver=por-revisar`, { timeout: 30_000 })
     await fichaLista(page)
-    await ficha(page).locator('.kf-duda').getByRole('button', { name: 'Darlo de alta' }).click()
-    const form = page.locator('[data-prueba="formulario-alta-factura"]')
-    await expect(form).toBeVisible()
-    await form.getByRole('button', { name: 'Darlo de alta y elegirlo' }).click()
-    await expect(aviso(page)).toContainText('dado de alta y elegido', { timeout: 30_000 })
+    await expect(ficha(page).locator('.kf-duda', { hasText: 'Proveedor nuevo:' })).toContainText('lo ha dado de alta Sumied con lo que trae la factura.', { timeout: 30_000 })
+    await expect(ficha(page).locator('.kf-duda', { hasText: 'Proveedor nuevo:' }).getByRole('button', { name: 'Deshacer' })).toBeVisible()
     const gasto = ficha(page).locator('#kf-cuenta-0')
     if (!(await gasto.inputValue()).trim()) {
       await gasto.fill('600')
       await page.getByRole('option', { name: /^60000000 · / }).click()
     }
-    await expect(ficha(page).locator('#kf-proveedor')).toHaveValue(/^4000\d{4}$/, { timeout: 30_000 })
-    const sera = new RegExp(`Será la 4000\\d{4} · Proveedores · ${EMISOR(t).replace(/[.,]/g, '\\$&')}`)
-    await expect(asiento(page)).toContainText(sera, { timeout: 30_000 })
+    await expect(ficha(page).locator('#kf-proveedor')).toHaveValue(/^4[01]\d{6}$/, { timeout: 30_000 })
+    const numero = await ficha(page).locator('#kf-proveedor').inputValue()
+    await expect(asiento(page), 'la subcuenta del proveedor, en el asiento').toContainText(`(${numero})`, { timeout: 30_000 })
+    await expect(asiento(page)).not.toContainText('Será la')
     await expect(asiento(page).locator('tr', { hasText: '60000000' })).toContainText('Compras de mercaderías')
     await expect(ficha(page).locator('[data-prueba="cuadra"]')).toContainText('Cuadra', { timeout: 30_000 })
     expect(await loQueSeCorta(page, FICHA), `lo que se corta antes de validar a ${ancho}`).toEqual([])
     if (t === 1) { await cargada(page, 'antes de validar'); await page.screenshot({ path: `${DIR}/proveedor-nuevo-antes-${ancho}.png` }) }
-    const numero = (await asiento(page).textContent())?.match(/Será la (4000\d{4})/)?.[1]
     await introFuera(page)
     await expect(page.getByText(/Apuntada y validada/).first()).toBeVisible({ timeout: 60_000 })
 
@@ -154,14 +152,13 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await fichaLista(page)
     await expect(ficha(page).locator('.kf-estado')).toContainText(/Contabilizada · asiento \d+\./, { timeout: 30_000 })
     // La casilla «Proveedor», con su código (la maqueta); el nombre, entero, en «Nombre» (Julio, 21/11).
-    await expect(ficha(page).locator('#kf-proveedor')).toHaveValue(/^4000\d{4}$/)
-    if (numero) await expect(ficha(page).locator('#kf-proveedor')).toHaveValue(numero)
+    await expect(ficha(page).locator('#kf-proveedor')).toHaveValue(numero)
     await expect(ficha(page).locator('#kf-nombre')).toHaveValue(EMISOR(t))
     await expect(asiento(page).locator('tr', { hasText: '60000000' })).toContainText('Compras de mercaderías')
     await expect(asiento(page)).not.toContainText('Bebidas y producto')
     await expect(asiento(page)).not.toContainText('Será la')
-    // La subcuenta que se creó al validar es la que dijo antes.
-    if (numero) await expect(asiento(page).locator('tr', { hasText: numero })).toContainText(`Proveedores · ${EMISOR(t)}`)
+    // La subcuenta del proveedor, la misma que antes de validar, con su nombre.
+    await expect(asiento(page).locator('tr', { hasText: numero })).toContainText(EMISOR(t))
     expect(await loQueSeCorta(page, FICHA), `lo que se corta, validada, a ${ancho}`).toEqual([])
     if (t === 1) { await cargada(page, 'validada'); await page.screenshot({ path: `${DIR}/proveedor-nuevo-validada-${ancho}.png` }) }
 
