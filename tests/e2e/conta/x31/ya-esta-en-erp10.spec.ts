@@ -95,8 +95,8 @@ test('X31 · 2 · 1366 × 768 y 1920 × 1080: «Ya está en ERP10», con los dos
   await expect(totales).toContainText('En ERP10120,00 €')
   const dif = factura.locator('[data-prueba="diferencia-erp10"]')
   await expect(dif).toHaveText('Diferencia+1,00 €')
-  // La diferencia, en rojo: el color de --cx-rojo.
-  const [rojo, colorDif] = await dif.locator('dd').evaluate((el) => [getComputedStyle(document.documentElement).getPropertyValue('--cx-rojo').trim(), getComputedStyle(el).color])
+  // La diferencia, en rojo: el color de --cx-rojo (definida en .cx, tokens.css: se lee donde la hereda la propia cifra).
+  const [rojo, colorDif] = await dif.locator('dd').evaluate((el) => [getComputedStyle(el).getPropertyValue('--cx-rojo').trim(), getComputedStyle(el).color])
   expect(rojo, 'la variable --cx-rojo existe').not.toBe('')
   const conRojo = await page.evaluate((c) => { const x = document.createElement('span'); x.style.color = c; document.body.appendChild(x); const r = getComputedStyle(x).color; x.remove(); return r }, rojo)
   expect(colorDif).toBe(conRojo)
