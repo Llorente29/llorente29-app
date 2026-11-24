@@ -1,0 +1,12 @@
+# K13m · La línea de estado cuenta los asientos (24/11). Rama conta/k13m-motivos-de-quien, aparte de la K13 (respuesta de
+# Julio, como el #798). Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0720  Cambia conta_motivos_para_validar (misma firma): para una recibida, a nombre de quién va con conta_de_quien_es
+#         en vez de la interna _conta_de_quien, que una persona no puede ejecutar. Hoy, en producción (desde el E03,
+#         18/11), conta_esperan falla en cuanto una empresa tiene una recibida sin validar y algún asiento por contar, y
+#         conta_pendientes da los asientos a null: la línea de estado no dice nada de ellos. No escribe en ninguna fila.
+#         Lo cuenta k13m-motivos-de-quien.sql (regla 31: los asientos y las recibidas, iguales antes y después).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k13m-motivos-de-quien.sql
+supabase/migrations/20261124T0720_k13_motivos_de_quien.sql

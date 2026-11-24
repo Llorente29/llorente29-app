@@ -1,0 +1,5 @@
+# X30 · Conciliar solo y reglas de verdad: las tres de la tanda y su prueba en ROLLBACK.
+supabase/migrations/20261123T2050_x30_conciliar_solo_anade.sql
+supabase/migrations/20261123T2051_x30_orden_y_seguridad.sql
+supabase/migrations/20261123T2052_x30_reglas_de_partida.sql
+supabase/staging/sql/20261123_x30_conciliar_solo_prueba.sql

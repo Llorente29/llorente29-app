@@ -84,7 +84,7 @@ describe('el saldo línea a línea', () => {
 
 describe('el «Por qué»', () => {
   it('regla, memoria («Como 6 ant.») y facturas, con su seguridad; el porqué entero, en el title', () => {
-    expect(porQueDe(L[2])).toEqual({ texto: 'Regla · probable', tono: 'regla', title: 'Regla: TGSS' })
+    expect(porQueDe(L[2])).toEqual({ texto: 'Regla · TGSS · probable', tono: 'regla', title: 'Regla: TGSS' })   // X30: con las palabras de la regla
     expect(porQueDe(L[3])).toMatchObject({ texto: 'Como 6 ant. · probable', tono: 'memoria' })
     expect(porQueDe(L[6])).toMatchObject({ texto: '3 facturas · probable', tono: 'factura' })
   })

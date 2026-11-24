@@ -14,7 +14,10 @@ import { leerMovimientosEntre, type BancoVista } from '@/modules/conta/services/
 import { asientosDeTesoreria, type AsientoDeTesoreria } from '../tesoreria/servicio'
 import { subcuentaDeFila } from '../tesoreria/tesoreria'
 import { saldoDelExtracto } from '../bancos/servicio'
-import type { HechoHoy, Linea } from './conciliar'
+import { DIAS_AVISO, inicioDelDiaEnMadrid, type HechoHoy, type Linea } from './conciliar'
+import { aCuantosAplica, aLaBase, deLaBase, destinoDeRegla, type ReglaEd, type ReglaVista } from './reglas'
+import { UMBRAL_POR_DEFECTO } from '@/modules/conta/lib/conciliacion'
+import { bancos as nucleo } from '@/modules/conta/services/bancosService'
 
 type Fila = Record<string, unknown>
 
@@ -65,7 +68,7 @@ export async function cuentasDeLosBancos(accountId: string, bancos: readonly Ban
 /** Lo que Sumied ha conciliado solo hoy (Madrid) en la empresa: los casados de Folvy vivos de hoy, por qué. */
 export async function hechoHoy(companyId: string, hoy: string): Promise<HechoHoy & { movimientos: string[] }> {
   const { data, error } = await tabla('bank_match').select('movement_id, kind, rule_id, reason, bank_movement:movement_id(treasury_account_id)')
-    .eq('company_id', companyId).eq('by_who', 'folvy').eq('status', 'vivo').gte('created_at', `${hoy}T00:00:00+01:00`)
+    .eq('company_id', companyId).eq('by_who', 'folvy').eq('status', 'vivo').gte('created_at', inicioDelDiaEnMadrid(hoy))
   if (error) throw new Error(mensaje('No se ha podido leer lo conciliado hoy', error))
   const filas = (data ?? []) as unknown as (Fila & { bank_movement: { treasury_account_id: string } | null })[]
   const h = { n: filas.length, bancos: new Set(filas.map((f) => f.bank_movement?.treasury_account_id)).size, regla: 0, factura: 0, memoria: 0, otros: 0, movimientos: filas.map((f) => String(f.movement_id)) }
@@ -106,4 +109,86 @@ export async function leerPlegado(accountId: string, userId: string): Promise<bo
 export async function guardarPlegado(accountId: string, userId: string, plegado: boolean): Promise<void> {
   const { error } = await tabla('conta_user_pref').upsert({ account_id: accountId, user_id: userId, casar_plegado: plegado }, { onConflict: 'account_id,user_id' })
   if (error) throw new Error(mensaje('No se ha podido guardar el panel', error))
+}
+
+// ── X30 · El umbral, los días del aviso y las reglas ─────────────────────────────────────────────────────────────────────
+
+export interface AjustesConciliar { umbral: number; dias: number }
+
+/** El umbral desde el que Sumied concilia solo y los días del aviso de la empresa (sin valor, 95 y 10). */
+export async function leerAjustes(accountId: string, companyId: string): Promise<AjustesConciliar> {
+  const { data, error } = await tabla('bank_settings').select('auto_threshold, aviso_dias').eq('account_id', accountId).eq('company_id', companyId).maybeSingle()
+  if (error) return { umbral: UMBRAL_POR_DEFECTO, dias: DIAS_AVISO }
+  const f = (data ?? {}) as { auto_threshold?: number | null; aviso_dias?: number | null }
+  return { umbral: f.auto_threshold ?? UMBRAL_POR_DEFECTO, dias: f.aviso_dias ?? DIAS_AVISO }
+}
+
+export async function guardarAjustes(companyId: string, a: AjustesConciliar): Promise<string> {
+  const r = await rpc<Fila>('bank_ajustes_conciliar', { p_company: companyId, p_umbral: a.umbral, p_dias: a.dias })
+  return String(r.texto ?? 'Guardado.')
+}
+
+/** Todas las reglas de la empresa, con cuántas veces ha conciliado cada una (lo vivo) y la última vez. */
+export async function leerReglas(accountId: string, companyId: string): Promise<ReglaVista[]> {
+  const [reglas, usos] = await Promise.all([
+    tabla('bank_rule').select('id, words, condition, target, status, confirmations, corrections, last_used_at, applies_from, seed, created_at')
+      .eq('account_id', accountId).eq('company_id', companyId).neq('status', 'rechazada').order('created_at', { ascending: true }),
+    tabla('bank_match').select('rule_id, created_at').eq('account_id', accountId).eq('company_id', companyId).eq('status', 'vivo').not('rule_id', 'is', null).limit(20000),
+  ])
+  if (reglas.error) throw new Error(mensaje('No se han podido leer las reglas', reglas.error))
+  const cuenta = new Map<string, { veces: number; ultima: string }>()
+  for (const u of (usos.data ?? []) as { rule_id: string; created_at: string }[]) {
+    const c = cuenta.get(u.rule_id) ?? { veces: 0, ultima: '' }
+    c.veces++; if (u.created_at > c.ultima) c.ultima = u.created_at
+    cuenta.set(u.rule_id, c)
+  }
+  return ((reglas.data ?? []) as Fila[]).map((f) => {
+    const c = cuenta.get(String(f.id))
+    return deLaBase({ ...f, veces: c?.veces ?? 0, ultima: c?.ultima || f.last_used_at })
+  })
+}
+
+/**
+ * Guardar una regla (nueva o corregida), activa, de la persona. `haciaAtras`: también mira lo que ya estaba (sin fecha);
+ * si no, solo lo que entre desde ahora. Devuelve su id.
+ */
+export async function guardarRegla(companyId: string, r: ReglaEd, haciaAtras: boolean): Promise<string> {
+  const b = aLaBase(r)
+  const idRegla = await rpc<string>('bank_regla_guardar', { p_company: companyId, p_id: r.id, p_palabras: b.palabras, p_condicion: b.condicion, p_destino: b.destino, p_origen: 'persona', p_estado: 'activa' })
+  await rpc('bank_regla_desde', { p_id: idRegla, p_desde: haciaAtras ? null : new Date().toISOString() })
+  return String(idRegla)
+}
+
+/** Aplicarla hacia atrás: concilia cada pendiente que casa, por la persona y con la regla. Devuelve cuántas y los fallos. */
+export async function aplicarHaciaAtras(idRegla: string, r: ReglaEd, ls: readonly Linea[]): Promise<{ bien: number; cent: number; no: string[] }> {
+  let bien = 0, cent = 0
+  const no: string[] = []
+  for (const l of aCuantosAplica(r, ls)) {
+    try {
+      await nucleo.confirmar(l.m.id, `Regla: ${r.contiene.trim().toUpperCase()} (aplicada hacia atrás).`, destinoDeRegla(r, l.m), 'probable', idRegla)
+      bien++; cent += Math.abs(l.m.importeCent)
+    } catch (e) { no.push(`${l.m.conceptoLimpio || l.m.conceptoBanco}: ${e instanceof Error ? e.message : String(e)}`) }
+  }
+  return { bien, cent, no }
+}
+
+export async function estadoRegla(idRegla: string, estado: 'activa' | 'apagada'): Promise<void> {
+  await rpc('bank_regla_estado', { p_id: idRegla, p_estado: estado })
+}
+
+export async function borrarRegla(idRegla: string): Promise<void> {
+  await rpc('bank_regla_borrar', { p_id: idRegla })
+}
+
+/** Lo pendiente de todos los bancos de la empresa (para «a cuántos pendientes se aplicaría» una regla sin banco). */
+export async function pendientesDeLaEmpresa(accountId: string, companyId: string): Promise<Linea[]> {
+  const { data, error } = await tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, status')
+    .eq('account_id', accountId).eq('company_id', companyId).eq('before_cutover', false).in('status', ['pendiente', 'propuesto', 'por_aclarar', 'posible_repetido']).limit(5000)
+  if (error) throw new Error(mensaje('No se han podido leer los pendientes', error))
+  return ((data ?? []) as Fila[]).map((f) => ({
+    antes: false, validado: false, subcuenta: null,
+    m: { id: String(f.id), cuentaId: String(f.treasury_account_id), fecha: String(f.op_date), importeCent: Math.round(Number(f.amount) * 100),
+      conceptoBanco: String(f.bank_concept ?? ''), conceptoLimpio: String(f.clean_concept || f.bank_concept || ''), contraparte: (f.counterparty as string | null) ?? null,
+      estado: f.status as Linea['m']['estado'], confianza: null, porque: null, propuesta: null, casado: null, tarjeta: null, ticket: null, motivoIgnorado: null },
+  }))
 }

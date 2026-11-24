@@ -17,7 +17,7 @@
 
 import type { CuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 
-export interface FraseEstado { id: string; tono: 'bien' | 'mira' | 'gris'; fuerte: string; resto: string; ruta: string }
+export interface FraseEstado { id: string; tono: 'bien' | 'mira' | 'gris'; fuerte: string; resto: string; ruta: string; title?: string }
 
 const n = (c: CuentasMenu, k: string): number | null => (typeof c[k] === 'number' ? (c[k] as number) : null)
 const plural = (x: number, uno: string, varios: string) => (x === 1 ? uno : varios)

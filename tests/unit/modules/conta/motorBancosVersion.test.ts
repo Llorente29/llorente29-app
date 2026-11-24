@@ -16,6 +16,7 @@ const VERSIONES: Record<string, string> = {
   // B01·21: traspaso solo con la palabra del banco, la compra en el extranjero, el anticipo con tarjeta,
   // el redondeo con varias pendientes y el pago en parte de una factura posterior. Y el motor pasa a _shared.
   '2026-11-12.1': '552cf6077e4b06bee1eb08a4fc78019d',
+  '2026-11-23.1': '5acfa88908d4a9931f732179fa67992d',   // X30: el porcentaje de seguridad, el umbral y las condiciones nuevas de las reglas
 }
 
 describe('Cola 2 · la versión del motor de Bancos', () => {

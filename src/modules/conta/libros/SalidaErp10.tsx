@@ -34,6 +34,7 @@ import { comparar, fechaDelSumas } from '@/modules/conta/erp10/comparar'
 import { abrirExcel, leerSumasYSaldos, reconocer, texto as textoDe, type FilaSumas } from '@/modules/conta/lib/traer'
 import { ComprobarErp10, type Subido } from '@/modules/conta/libros/ComprobarErp10'
 import { casarFacturas, documentosACasar, type DocumentoErp10, type EnvioErp10 } from '@/modules/conta/erp10/casar'
+import { MOTIVO_SALIDA_PARADA, SALIDA_ERP10_PARADA } from '@/modules/conta/erp10/parada'
 import { leerConexionErp10, leerEnviosErp10, leerEstadoEscribir, leerSaldosErp10, leerSalidoHoy, loQueFalta, sacarAErp10, type ClaseConexion } from '@/modules/conta/services/erp10ApiService'
 import { listaDeHoy } from '@/modules/conta/erp10/salidaSola'
 import { loQueHaEntrado, queVaAEntrar } from '@/modules/conta/erp10/conexion'
@@ -330,13 +331,15 @@ export function SalidaErp10() {
   const pendienteComprobar = !pruebaPrimero && sinComprobar.length > 0 && sinComprobar.length === clases.length
   const aSacar: PorLaConexion[] = sinPrueba ? porClase[sinPrueba].slice(0, 1)
     : clases.filter((c) => !sinComprobar.includes(c)).flatMap((c) => porClase[c])
-  const porQueNoSacar = faltaErp10
+  // X31 · 0 · La salida a ERP10, parada en todas las empresas: el motivo, al pasar el ratón.
+  const porQueNoSacar = (SALIDA_ERP10_PARADA ? `${MOTIVO_SALIDA_PARADA}.` : null) ?? faltaErp10
     ?? (!escribir.datos ? 'Leyendo lo que ya ha salido a ERP10…'
       : pendienteComprobar ? 'Antes de sacar más, comprueba en el paso 3 la factura de prueba y dala por igualada.'
       : !aSacar.length ? 'Este mes no hay ninguna factura que pueda salir por la conexión con ERP10.' : null)
   const avisoSacar = faltaErp10 ? `Para sacar a ERP10: ${faltaErp10}` : pendienteComprobar ? 'Antes de sacar más, comprueba en el paso 3 la factura de prueba y dala por igualada.' : null
 
   async function sacarPorLaConexion() {
+    if (SALIDA_ERP10_PARADA) { setFallo(`${MOTIVO_SALIDA_PARADA}: la salida a ERP10 está parada.`); return }
     if (!s || !mes || !aSacar.length) return
     setFallo(null); setDicho(null); setHaciendo(pruebaPrimero ? (aSacar[0]?.clase === 'dia' ? 'Metiendo el día de prueba en ERP10…' : 'Metiendo la factura de prueba en ERP10…') : `Metiendo en ERP10 ${aSacar.length} ${aSacar.length === 1 ? 'factura' : 'facturas'}…`)
     try {
