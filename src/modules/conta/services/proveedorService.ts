@@ -23,6 +23,8 @@ import type {
 } from '@/modules/conta/types'
 import { MARCA } from '../cuenta/marca'
 import { autorVisible } from '@/modules/conta/lib/autor'
+import { nifClave } from '@/modules/conta/lib/nif'
+import { textoNifRepetido } from '@/modules/conta/lib/altaProveedor'
 
 type Fila = Record<string, unknown>
 
@@ -217,6 +219,28 @@ export interface NuevoProveedor {
   createdByName: string | null
 }
 
+/**
+ * X24 · La base no deja dos proveedores con el mismo NIF limpio en una cuenta (ux_supplier_account_nif_clave), y lo
+ * cuenta con los archivados. Si para un alta, quién lo tiene ya, para decir «Ya tienes a … con este NIF» con
+ * «Abrirlo», nunca un error técnico.
+ */
+export class NifRepetidoError extends Error {
+  readonly repetido: { id: string; name: string; taxId: string | null; archivado: boolean }
+  constructor(repetido: NifRepetidoError['repetido']) {
+    super(textoNifRepetido(repetido.archivado ? `${repetido.name} (archivado)` : repetido.name))
+    this.name = 'NifRepetidoError'
+    this.repetido = repetido
+  }
+}
+
+async function quienTieneEsteNif(accountId: string, nif: string | null): Promise<NifRepetidoError['repetido'] | null> {
+  const clave = nifClave(nif)
+  if (!clave) return null
+  const { data } = await from('supplier').select('id, name, tax_id, archived_at').eq('account_id', accountId).not('tax_id', 'is', null)
+  const f = ((data ?? []) as Fila[]).find((x) => nifClave(x.tax_id as string | null) === clave)
+  return f ? { id: String(f.id), name: String(f.name), taxId: (f.tax_id as string | null) ?? null, archivado: !!f.archived_at } : null
+}
+
 export async function crearProveedor(n: NuevoProveedor): Promise<FichaProveedor> {
   requireSupabase()
   const { data, error } = await from('supplier')
@@ -235,7 +259,10 @@ export async function crearProveedor(n: NuevoProveedor): Promise<FichaProveedor>
     .select('*')
     .single()
   if (error) {
-    if (error.code === '23505') throw new Error('Ese NIF ya lo tiene otro proveedor de tu cuenta.')
+    if (error.code === '23505') {
+      const ya = await quienTieneEsteNif(n.accountId, n.taxId).catch(() => null)
+      throw ya ? new NifRepetidoError(ya) : new Error('Ese NIF ya lo tiene otro proveedor de tu cuenta.')
+    }
     throw new Error(mensaje('No se pudo crear el proveedor', error))
   }
   return filaAFicha(data as Fila)

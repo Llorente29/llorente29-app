@@ -16,7 +16,7 @@ describe('la pregunta, en el paso de las cuentas', () => {
     expect(qs.map((q) => q.clave)).toEqual(['cuentas', 'programa'])
     const p = qs[1]
     expect(p.texto).toBe('¿De qué programa vienes?')
-    expect(p.opciones.map((o) => o.texto)).toEqual(['Cegid Diez', 'Holded', 'Sage', 'a3', 'ContaSol', 'Quipu', 'Otro', 'Empiezo de cero'])
+    expect(p.opciones.map((o) => o.texto)).toEqual(['Cegid Diez', 'ERP10', 'Holded', 'Sage', 'a3', 'ContaSol', 'Quipu', 'Otro', 'Empiezo de cero'])
     expect(p.entrada).toBe('texto') // «Otro» con su nombre escrito
   })
 })
@@ -45,6 +45,10 @@ describe('lo que se le dice: la verdad, sin prometer importaciones que no existe
   it('Cegid Diez: el plan al terminar y el histórico después', () => {
     expect(fraseDePrograma({ programa: 'diez', otro: null }, 'pymes')).toBe(
       'Vienes de Cegid Diez: al terminar el alta activo el plan general contable de pymes, y tu histórico, con tus subcuentas, lo traigo después. En el Inicio verás cómo va.')
+  })
+  it('ERP10 (N06b · 3.3): el plan al terminar, y sus cuentas, sus proveedores y lo de antes se traen de ERP10', () => {
+    expect(fraseDePrograma({ programa: 'erp10', otro: null }, 'pymes')).toBe(
+      'Vienes de ERP10: al terminar el alta activo el plan general contable de pymes. Tus cuentas y tus proveedores los traes de ERP10 cuando quieras, y lo de antes, después.')
   })
   it('cualquier otro: la frase de Julio, con el nombre que dio', () => {
     expect(fraseDePrograma({ programa: 'holded', otro: null }, 'normal')).toBe(

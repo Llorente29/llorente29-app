@@ -1,0 +1,56 @@
+[
+ {
+  "id": "793-1",
+  "pr": 793,
+  "fecha": "2026-11-23T22:53:27Z",
+  "producto": "sumied",
+  "apartado": "Datos factura",
+  "frase": ", con el ⊕ de «Otros datos»;",
+  "ruta": null
+ },
+ {
+  "id": "793-2",
+  "pr": 793,
+  "fecha": "2026-11-23T22:53:27Z",
+  "producto": "sumied",
+  "apartado": "I.V.A. · Retención · Total factura",
+  "frase": ";",
+  "ruta": null
+ },
+ {
+  "id": "793-3",
+  "pr": 793,
+  "fecha": "2026-11-23T22:53:27Z",
+  "producto": "sumied",
+  "apartado": "Contrapartida/s",
+  "frase": ", una fila por línea. La marca y la plataforma solo salen en las empresas de hostelería;",
+  "ruta": null
+ },
+ {
+  "id": "793-4",
+  "pr": 793,
+  "fecha": "2026-11-23T22:53:27Z",
+  "producto": "sumied",
+  "apartado": "Pago factura",
+  "frase": ", una fila por pago, para cambiarlo o borrarlo con sus candados;",
+  "ruta": null
+ },
+ {
+  "id": "793-5",
+  "pr": 793,
+  "fecha": "2026-11-23T22:53:27Z",
+  "producto": "sumied",
+  "apartado": "Observaciones",
+  "frase": ";",
+  "ruta": null
+ },
+ {
+  "id": "793-6",
+  "pr": 793,
+  "fecha": "2026-11-23T22:53:27Z",
+  "producto": "sumied",
+  "apartado": "Visualización del asiento",
+  "frase": "el de la factura y, debajo, el de cada pago.",
+  "ruta": null
+ }
+]

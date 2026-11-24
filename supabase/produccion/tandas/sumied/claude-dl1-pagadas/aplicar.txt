@@ -1,0 +1,20 @@
+# DL1 · Las tres compensaciones de Glovo del céntimo (Julio, DL1·21, 13/11).
+# Rama claude/dl1-pagadas. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   0045  Valida como Julio las tres compensaciones de Glovo del 16/10 que
+#         difieren 0,01 de su factura (I170326000547001, I170326000544739 e
+#         I170326000541469; 872,27 en total). Los 0,03 quedan en la 41000002.
+#         No crea ni cambia ningún objeto. Coheldi y la factura 195 no van:
+#         no tienen un camino en la aplicación que no rompa algo (el informe).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-glovo-centimos.sql
+supabase/migrations/20261113T0045_dl1_glovo_centimos.sql
+sin-vuelta-atras: supabase/migrations/20261113T0045_dl1_glovo_centimos.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-glovo-centimos · Las tres compensaciones del céntimo validadas por Julio, menos 3 = 0
+esperado: dl1-glovo-centimos · Lo que suman, menos 872,27 = 0.00
+esperado: dl1-glovo-centimos · Liquidaciones de octubre en «Propuesto» = 0
+esperado: dl1-glovo-centimos · 40000007 (Coheldi) = como antes
+esperado: dl1-glovo-centimos · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
+esperado: dl1-glovo-centimos · IVA de Foodint 477 del 1T al 3T de 2026 = como antes

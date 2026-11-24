@@ -1,0 +1,8 @@
+# X07 · los asientos salen a ERP10.
+# Primero, la medida de los asientos que hoy no salen (solo lee, ROLLBACK).
+supabase/staging/sql/20261118_x07_asientos_medida.sql
+# Después, 0745 (cambia por_salir), 0746 (añade los asientos por salir) y su prueba
+# (ROLLBACK, empresas inventadas en las cuentas A y B, con su vuelta atrás).
+supabase/migrations/20261118T0745_x07_por_salir_asientos.sql
+supabase/migrations/20261118T0746_x07_asientos_por_salir.sql
+supabase/staging/sql/20261118_x07_asientos_a_erp10_prueba.sql

@@ -748,3 +748,24 @@ button.cx-plan-flecha:hover { background: var(--cx-fondo); color: var(--cx-texto
 @media (max-width: 767px) {
   .cx-rejilla-2 { grid-template-columns: 1fr; }
 }
+
+/* X20 · Crear una subcuenta como en ERP10: Código y Nombre en una línea, con «Añadir», encima del árbol del plan.
+   La ficha (cliente, proveedor o banco), al lado; en el móvil, debajo. */
+.cx-subcuenta { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px 16px; padding-bottom: 10px; border-bottom: 1px solid var(--cx-linea); margin-bottom: 10px; }
+.cx-subcuenta-con-ficha { grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); }
+.cx-subcuenta-linea { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.cx-subcuenta-casilla { display: flex; flex-direction: column; gap: 3px; font-size: .8rem; color: var(--cx-apoyo); }
+.cx-subcuenta-codigo { width: 13em; }
+.cx-subcuenta-nombre { flex: 1; min-width: 14em; }
+.cx-subcuenta-frase { margin: 0; font-size: .85rem; min-height: 1.3em; color: var(--cx-apoyo); grid-column: 1; }
+.cx-subcuenta-frase[data-tono='bien'] { color: var(--cx-verde-oscuro); }
+.cx-subcuenta-frase[data-tono='mal'] { color: var(--cx-rojo); }
+.cx-subcuenta-ficha { grid-column: 2; grid-row: 1 / span 2; border: 1px solid var(--cx-linea); border-left: 4px solid var(--cx-verde-oscuro); border-radius: var(--cx-radio-caja);
+  background: var(--cx-fondo); padding: 8px 12px; font-size: .85rem; display: flex; flex-direction: column; gap: 4px; }
+.cx-subcuenta-ficha p { margin: 0; }
+.cx-subcuenta-ficha-botones { display: flex; align-items: center; gap: 12px; }
+@media (max-width: 760px) {
+  .cx-subcuenta-con-ficha { grid-template-columns: minmax(0, 1fr); }
+  .cx-subcuenta-ficha { grid-column: 1; grid-row: auto; }
+  .cx-subcuenta-codigo, .cx-subcuenta-nombre { width: 100%; min-width: 0; }
+}

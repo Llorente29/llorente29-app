@@ -1,0 +1,4 @@
+# E10 · la factura larga se lee entera.
+# 0907 (solo añade: desde la rama, de verdad, W05: la e2e usa su función), con su prueba.
+supabase/migrations/20261123T0907_e10_lineas_por_partes.sql
+supabase/staging/sql/20261123_e10_lineas_por_partes_prueba.sql

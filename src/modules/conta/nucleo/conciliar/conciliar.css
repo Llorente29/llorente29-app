@@ -1,0 +1,144 @@
+/* src/modules/conta/nucleo/conciliar/conciliar.css
+ *
+ * X29 · «Conciliar» (Gestión de extractos bancarios), con las medidas de las maquetas nucleo_23 y 23b a 1366. Lo común
+ * (la ventana, las casillas, las líneas) va en nucleo/piezas/piezas.css: aquí solo cómo se reparte esta pantalla.
+ * Colores: verde lo contabilizado, amarillo lo pendiente, ámbar lo que propone Sumied, gris lo de antes del inicio.
+ */
+
+/* X30 · Una lista usa todo el ancho de la pantalla (las fichas no se estiran: nucleo_reglas_comunes.md). Lo que sobra va a
+ * las columnas de texto (concepto bancario, concepto del asiento, nombre y documento); los bancos y el panel no cambian. */
+.cn { flex: 1; min-height: 0; display: flex; flex-direction: column; --kp-ventana-max: 100%; }
+.cn .kp-ventana-pestanas:empty { display: none; }
+.cn-cargando { padding: 12px; color: var(--kp-gris-tinta); }
+.cn-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.cn-corto { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* La barra: los botones con texto de la maqueta 23; el principal, azul. */
+.cn-barra { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; row-gap: 2px; height: auto; min-height: 32px; padding-top: 2px; padding-bottom: 2px; }
+.cn-barra > button { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border: 0; background: none; color: var(--kp-tinta, #1f2a37); white-space: nowrap; cursor: pointer; }
+.cn-barra > button:hover:not(:disabled) { background: var(--kp-elegida); }
+.cn-barra > button:disabled { color: var(--kp-gris-tinta); cursor: default; }
+.cn-barra > button[data-confirma='si'] { background: var(--kp-ambar-fondo); border: 1px solid var(--kp-ambar-borde); }
+.cn-barra kbd, .cn-principal kbd { font: inherit; font-size: 11px; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; opacity: .8; }
+.cn-principal { background: #1f5fbf !important; color: #fff !important; border-radius: 3px; font-weight: 600; padding: 0 10px; }
+.cn-principal:disabled { opacity: .5; }
+.cn-sep { width: 1px; height: 18px; background: var(--kp-raya); margin: 0 4px; flex-shrink: 0; }
+.cn-barra .kp-barra-aviso { min-width: 0; flex: 1 1 220px; }
+.cn-umbral { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 6px; white-space: nowrap; color: var(--kp-tinta, #1f2a37); }
+.cn-umbral select { height: 22px; font: inherit; font-size: 12px; padding: 0 2px; border: 1px solid var(--kp-raya); border-radius: 3px; background: #fff; }
+
+/* Las franjas: lo que Sumied ha conciliado solo hoy (verde) y los avisos (ámbar). */
+.cn-franja { display: flex; align-items: center; gap: 14px; margin: 0; padding: 3px 10px; font-size: 12.5px; white-space: nowrap; overflow: hidden; }
+.cn-franja > span { overflow: hidden; text-overflow: ellipsis; }
+.cn-franja[data-tono='verde'] { background: #e9f6ec; color: #1d5b2c; }
+.cn-franja[data-tono='ambar'] { background: #fff4dc; color: #7a4b00; }
+.cn-franja .kf-enlace { flex-shrink: 0; font-weight: 600; }
+
+/* Los bancos a la izquierda · el centro · el panel de la derecha (plegado, una pestaña estrecha). */
+.cn-cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: 138px minmax(0, 1fr) 250px; gap: 0 8px; padding: 6px 8px 6px 6px; }
+.cn-cuerpo[data-plegado='si'] { grid-template-columns: 138px minmax(0, 1fr) 24px; }
+.cn-bancos { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: auto; }
+.cn-banco { display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 6px 7px; text-align: left; border: 1px solid var(--kp-raya); border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; }
+.cn-banco[aria-current='true'] { border-color: #1f5fbf; background: #f3f7ff; box-shadow: inset 3px 0 0 #1f5fbf; }
+.cn-banco-cuenta { color: #1f5fbf; font-weight: 600; font-size: 13px; }
+.cn-banco-estado { color: var(--kp-gris-tinta); font-size: 11px; }
+.cn-banco-cuantos { font-size: 11px; }
+.cn-banco-cuantos b { color: #b06a00; }
+.cn-barrita { display: block; height: 5px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+.cn-barrita > span { display: block; height: 100%; background: #2f9e55; }
+
+.cn-centro { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+.cn-filtros { display: grid; grid-template-columns: 188px 124px 124px 124px minmax(0, 1fr) 112px; gap: 0 6px; align-items: end; }
+.cn-fechas .kp-casilla-dentro { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.cn-tres { display: inline-flex; border: 1px solid var(--kp-raya); border-radius: 3px; overflow: hidden; height: 22px; }
+.cn-tres button { border: 0; background: #fff; padding: 0 8px; font-size: 12px; cursor: pointer; }
+.cn-tres button[aria-pressed='true'] { background: #1f5fbf; color: #fff; }
+
+/* La lista: el color de cada fila; la subcuenta que propone Sumied, en ámbar. */
+.cn-lista { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.cn .kp-lineas tbody tr[data-color='verde'] td { background: #eaf6ed; }
+.cn .kp-lineas tbody tr[data-color='amarillo'] td { background: #fffbe8; }
+.cn .kp-lineas tbody tr[data-color='ambar'] td { background: #fffbe8; }
+.cn .kp-lineas tbody tr[data-color='ambar'] td:nth-child(7) { background: var(--kp-ambar-fondo); color: #8a4b00; font-weight: 600; }
+.cn .kp-lineas tbody tr[data-color='gris'] td { background: #f3f4f6; color: #9aa0a6; }
+.cn .kp-lineas tbody tr[aria-selected='true'] td { background: var(--kp-elegida); }
+.cn .kp-lineas tbody tr[data-marcado='si'] td:first-child { box-shadow: inset 3px 0 0 #1f5fbf; }
+.cn .kp-lineas td [data-signo='menos'] { color: #c0392b; }
+.cn .kp-lineas td input[type='checkbox'] { margin: 0; vertical-align: middle; }
+.cn-porque { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; border-radius: 9px; font-size: 11px; line-height: 16px; vertical-align: middle; }
+.cn-porque[data-tono='regla'] { background: #e7edfb; color: #1f4fa8; }
+.cn-porque[data-tono='factura'] { background: #e5f5e9; color: #1d6b34; }
+.cn-porque[data-tono='memoria'] { background: #f1e8fb; color: #6b2fa8; }
+.cn-porque[data-tono='falta'] { background: #fde8e8; color: #b42318; }
+.cn-porque[data-tono='otro'] { background: #eef0f3; color: #444; }
+.cn-porque[data-tono='hecho'] { background: transparent; color: #1d6b34; font-weight: 600; padding: 0; }
+.cn-porque[data-tono='solo'] { background: #dff3e4; color: #1d5b2c; font-weight: 600; }
+.cn-pie { flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; color: var(--kp-gris-tinta); }
+.cn-pie-cuenta { display: flex; gap: 0; flex-wrap: wrap; }
+.cn-pie-cuenta > span + span::before { content: ' · '; white-space: pre; }
+.cn-pie-cuenta > span[data-parte='0'] { color: var(--kp-tinta, #1f2a37); font-weight: 600; }
+.cn-pie-cuenta > span[data-parte='1'] { color: #b06a00; font-weight: 600; }
+.cn-pie strong { color: var(--kp-tinta, #1f2a37); }
+
+/* Datos del movimiento. */
+.cn-datos { flex-shrink: 0; border-top: 1px solid var(--kp-raya); padding-top: 2px; }
+.cn-datos .kp-bloque-titulo { margin: 0 0 2px; }
+.cn-datos-uno { display: grid; grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) 84px 108px minmax(0, 0.8fr); gap: 0 5px; }
+/* La segunda fila: local (marca y plataforma en hostelería) · validar · los dos saldos y si cuadran. */
+.cn-datos-dos { display: grid; grid-template-columns: minmax(0, 220px) 1fr 56px 104px 104px 56px; gap: 0 6px; margin-top: 2px; }
+.cn-datos-dos[data-hosteleria='si'] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 56px 104px 104px 56px; }
+.cn-datos-dos:not([data-hosteleria='si']) > .kp-casilla:nth-child(2) { grid-column: 3; }
+.cn-cuadra { text-align: center; font-weight: 700; }
+
+/* El panel «Casar con facturas» (23b) y su pestaña plegada (23c). */
+.cn-panel { min-width: 0; min-height: 0; overflow: auto; border-left: 1px solid var(--kp-raya); padding: 0 0 0 8px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.cn-panel header { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--kp-raya); }
+.cn-plegar { border: 0; background: none; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; }
+.cn-panel-nota { margin: 0; color: var(--kp-gris-tinta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cn-facturas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.cn-facturas label { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 6px; align-items: center; cursor: pointer; }
+.cn-panel-buscar { width: 100%; }
+.cn-panel-cuentas { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin: 4px 0; padding-top: 6px; border-top: 1px solid var(--kp-raya); }
+.cn-panel-cuentas dt { margin: 0; }
+.cn-panel-cuentas dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cn-panel-cuentas dd[data-tono='ambar'] { color: #b06a00; }
+.cn-panel .cn-principal { height: 28px; border: 0; align-self: flex-start; }
+.cn-panel-plegado { writing-mode: vertical-rl; transform: rotate(180deg); border: 1px solid var(--kp-raya); background: #f3f7ff; color: #1f5fbf; font-size: 12px; cursor: pointer; padding: 8px 2px; white-space: nowrap; }
+
+.cn .kp-lineas-cuantas { display: none; }
+.cn-enlace { border: 0; background: none; padding: 0; color: #1f5fbf; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+.cn-enlace[aria-pressed='true'] { text-decoration: underline; }
+
+/* X30 · «＋ Crear regla con este», junto al título de «Datos del movimiento». */
+.cn-datos-titulo { display: flex; align-items: center; gap: 10px; }
+.cn-datos-titulo .cn-enlace { margin-left: auto; font-size: 12px; }
+.cn-enlace:disabled { color: var(--kp-gris-tinta); cursor: default; }
+
+/* X30 · Las ventanas de las reglas: una frase que se lee y, debajo, las casillas. */
+.kp-lupa.cn-dlg { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); display: flex; flex-direction: column; font-size: 13px; }
+.kp-lupa.cn-dlg-lista { width: min(900px, calc(100vw - 32px)); }
+.cn-frase { margin: 10px 12px 6px; padding: 8px 10px; background: #f3f7ff; border: 1px solid #cfdcf5; border-radius: 4px; font-size: 14px; font-weight: 600; color: #1f3f78; }
+.cn-dlg-casillas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 10px; padding: 4px 12px; }
+.cn-dlg-casillas > label { display: flex; flex-direction: column; gap: 2px; color: var(--kp-rotulo, #4b5563); font-size: 11.5px; min-width: 0; }
+.cn-dlg-casillas input, .cn-dlg-casillas select { height: 24px; font: inherit; font-size: 13px; }
+.cn-dlg-ancha { grid-column: span 2; }
+.cn-dlg-sub { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px; align-items: center; color: var(--kp-tinta, #1f2a37); }
+.cn-dlg-sub > :first-child { min-width: 0; width: 120px; }
+.cn-dlg-sub > :first-child input { width: 100%; box-sizing: border-box; }
+.cn-dlg-casillas .kp-con-lupa { min-width: 0; }
+.cn-dlg-casillas .kp-con-lupa input { width: 100%; box-sizing: border-box; }
+.cn-dlg-cuantos { margin: 8px 12px 2px; font-weight: 600; }
+.cn-dlg-atras { display: flex; align-items: center; gap: 6px; margin: 2px 12px; }
+.cn-dlg-pie { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--kp-raya); margin-top: 8px; }
+.cn-dlg-pie .kp-aviso { margin-right: auto; }
+.cn-dlg-pie > button { height: 28px; padding: 0 12px; }
+.cn-dlg-lista .kp-lupa-lista { margin: 10px; max-height: calc(100vh - 160px); }
+.cn-dlg-lista td { padding: 3px 6px; border-bottom: 1px solid var(--kp-raya); vertical-align: middle; }
+.cn-dlg-lista td:first-child { max-width: 480px; }
+.cn-dlg-lista th { text-align: left; padding: 3px 6px; }
+.cn-dlg-acciones { white-space: nowrap; }
+.cn-dlg-acciones .cn-enlace + .cn-enlace { margin-left: 10px; }
+.cn-etiqueta { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 9px; background: #eef0f3; color: #444; font-size: 11px; }
+
+/* X30 · Con la lista estrecha (a 1366), la pastilla de «Por qué» entera: una palabra, con poco relleno. */
+.cn-porque[data-corta='si'] { padding: 0 3px; overflow: visible; text-overflow: clip; }

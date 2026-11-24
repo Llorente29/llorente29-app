@@ -1,0 +1,2 @@
+# DL1 · Cloudtown, enero: la 1451 no tiene vuelta atrás (se declara en aplicar.txt): una factura emitida se corrige con una rectificativa; un asiento validado, con un contraasiento.
+cuenta: scripts/conta/produccion/cuentas/dl1-cloudtown-enero.sql

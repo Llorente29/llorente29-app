@@ -1,0 +1,4 @@
+# X28 · la vuelta atrás: el casado como antes, y quita lo nuevo (modificar y el «a mano» con analítica).
+cuenta: scripts/conta/produccion/cuentas/x28-tesoreria.sql
+supabase/vuelta-atras/20261123T0801_x28_banco_con_marca.down.sql
+supabase/vuelta-atras/20261123T0800_x28_tesoreria_modificar.down.sql

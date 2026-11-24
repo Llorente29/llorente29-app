@@ -47,7 +47,7 @@ test('A · apagado (como está en staging): el libro no ofrece «Validar y envia
   await expect(page.getByRole('button', { name: /Validar y enviar a Diez/ })).toHaveCount(0)
 })
 
-test('A · las ventas de Glovo propuestas ya no se validan desde el libro: esperan en Ventas › Cierres del día', async ({ page }) => {
+test('A · las ventas de Glovo propuestas no se validan y envían desde el libro: salen en «Para revisar» diciendo que esperan en Cierres del día', async ({ page }) => {
   // V01 · Entrega 2 (Julio, 24/10): las propuestas de ventas de un canal se validan en
   // Cierres del día, con su factura resumen y su PDF; el libro ya no las ofrece ni las
   // envía a Diez al validar (entran en el traspaso del mes). Las del día entero «a la
@@ -62,7 +62,10 @@ test('A · las ventas de Glovo propuestas ya no se validan desde el libro: esper
     ? page.getByRole('grid', { name: 'Asientos del libro diario' })
     : page.getByRole('list', { name: 'Asientos del libro diario' })
   await expect(asientos).toBeVisible({ timeout: 30_000 })
-  await expect(asientos.getByText(/Ventas Glovo · /)).toHaveCount(0)
+  // S01p·18 · 2 (Julio, 12/11): todo lo propuesto sale en «Para revisar»; las de Glovo lo dicen
+  // («También en Ventas › Cierres del día»); «Validar y enviar a Diez» no las cuenta (unitaria del candidato).
+  await expect(asientos.getByText(/Ventas Glovo · /).first()).toBeVisible()
+  await expect(asientos.getByText(/También en Ventas › Cierres del día/).first()).toBeVisible()
   await capturar(page, 'validar-y-enviar')
 })
 

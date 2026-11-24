@@ -13,7 +13,7 @@
 
 import { createContext, useContext, useEffect, useRef } from 'react'
 import type { Densidad, Nivel } from '@/modules/conta/esqueleto/preferencias'
-import type { Analitica, EjeVista } from '@/modules/conta/esqueleto/productos'
+import { conVentasTpv, type Analitica, type EjeVista } from '@/modules/conta/esqueleto/productos'
 import type { GrupoDeAcciones } from '@/modules/conta/marco/acciones'
 import type { Ejercicio } from '@/modules/conta/marco/periodo'
 
@@ -43,6 +43,8 @@ export interface Marco {
    * hasta saberlo.
    */
   hosteleria: boolean | null
+  /** R05 · «Ventas por día» encendido en la empresa activa (company_tax_profile.ventas_por_dia). Null mientras no se sabe. */
+  ventasPorDia?: boolean | null
   /**
    * G03 · ¿El sector de la empresa activa es Gestoría? (sectores/sectores.ts).
    * Null mientras no se sabe: lo de gestoría no sale hasta saberlo.
@@ -176,6 +178,25 @@ export function useNivel(): Nivel {
 export function useHosteleria(): boolean {
   const marco = useContext(MarcoContexto)
   return marco ? marco.hosteleria === true : true
+}
+
+/**
+ * R05 (decisión 9) · ¿La empresa activa ve Cierres del día? Si es de hostelería
+ * o tiene «ventas por día» encendido. Fuera del marco, sí (como useHosteleria).
+ */
+export function useVentasPorDia(): boolean {
+  const marco = useContext(MarcoContexto)
+  return marco ? conVentasTpv(marco) : true
+}
+
+/**
+ * R06 · ¿La empresa activa sube las ventas de un TPV de fuera («Subir las ventas del TPV» y
+ * Ajustes › Ventas por día)? R09: una de hostelería, siempre; si no, con «ventas por día»
+ * encendido. La regla es conVentasTpv, la misma de la condición «tpv» del menú.
+ */
+export function useVentasPorDiaEncendido(): boolean {
+  const marco = useContext(MarcoContexto)
+  return marco ? conVentasTpv(marco) : false
 }
 
 /**

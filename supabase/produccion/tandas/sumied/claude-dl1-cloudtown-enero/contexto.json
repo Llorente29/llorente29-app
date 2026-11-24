@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · Cloudtown, enero · contexto de producción, medido en SOLO LECTURA el 12/11 a las 13:56Z: la 1451 añade _dl1_asiento_iva (no existe, ni otra con ese nombre), emite una factura nueva a Cloudtown con conta_venta_guardar y conta_venta_emitir (_dl1_factura_emitir) y apunta tres asientos con _dl1_asiento_iva y _dl1_validar (en producción). La 1421 ya está en el historial y la 43000004 está en −4.210,62. Verifactu, apagado para Foodint. Nada en el camino del pedido; la 1451 no está en el historial.",
+ "medido": "2026-11-12T13:56Z",
+ "tanda": {
+  "supabase/migrations/20261112T1451_dl1_cloudtown_enero.sql": "af432e7b1f67540bedc7840ccfcbddf6"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

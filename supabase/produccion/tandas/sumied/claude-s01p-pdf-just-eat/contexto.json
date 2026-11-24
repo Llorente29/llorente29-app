@@ -1,0 +1,8 @@
+{
+ "_que": "S01p·20 · 1b · el PDF de las facturas de Just Eat · contexto medido en SOLO LECTURA el 2026-11-13 (16:00Z): en Foodint, 43 correos «Just-eat invoice» entraron como liquidación, los 43 con su factura de comisión y los 43 sin papel (raw_document_url nulo); los 3 de octubre siguen «sin_facturas», sin factura. No existen conta_factura_papel_del_correo ni conta_correo_papeles_que_faltan. supplier_invoice tiene raw_document_url y no_document_* (las escribe ya conta_recibida_guardar). Solo añade. Nada de la tanda en el historial.",
+ "medido": "2026-11-13T16:00Z",
+ "tanda": {
+  "supabase/migrations/20261113T1706_s01p_pdf_del_correo.sql": "25aa5ec21a2a9ff7c232c98d443c5122"
+ },
+ "contexto": {"tablas": ["public.supplier_invoice", "public.inbound_email_log"], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

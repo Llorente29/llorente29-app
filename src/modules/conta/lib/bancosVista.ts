@@ -9,14 +9,16 @@
 // Un umbral ordena, no esconde (regla 7): «Todo» enseña todas las filas del
 // mes; «Para confirmar» y «Por aclarar» solo filtran a petición.
 
+import { MOTIVO_ANULADO } from '@/modules/conta/lib/cargoAnulado'
+
 export type Tono = 'verde' | 'ambar' | 'gris'
-export type Boton = 'ver' | 'deshacer' | 'si' | 'otra-cosa' | 'subir-foto' | 'si-sin-ticket' | 'buscar-factura' | 'decirlo-yo' | 'alta-tarjeta' | 'es-el-mismo' | 'son-dos'
+export type Boton = 'ver' | 'deshacer' | 'si' | 'otra-cosa' | 'subir-foto' | 'si-sin-ticket' | 'buscar-factura' | 'decirlo-yo' | 'alta-tarjeta' | 'es-el-mismo' | 'son-dos' | 'desapartar'
 
 /** Lo que dice cada botón de la tabla. */
 export const TEXTO_BOTON: Record<Boton, string> = {
   ver: 'Ver', deshacer: 'Deshacer', si: 'Sí', 'otra-cosa': 'Otra cosa', 'subir-foto': 'Subir foto', 'si-sin-ticket': 'Sí, sin ticket',
   'buscar-factura': 'Buscar factura', 'decirlo-yo': 'Decirlo yo', 'alta-tarjeta': 'Dar de alta la tarjeta',
-  'es-el-mismo': 'Es el mismo', 'son-dos': 'Son dos',
+  'es-el-mismo': 'Es el mismo', 'son-dos': 'Son dos', desapartar: 'Deshacer',
 }
 
 /**
@@ -44,6 +46,8 @@ export interface PropuestaGuardada {
   facturaSinAprobar?: boolean
   /** S01d · Las cuentas de una regla con reparto cuyo importe no cuadró: la ventana abre con ellas. */
   reparto?: { cuenta: string; importeCent: number | null; concepto: string | null; modelo?: string | null; periodo?: string | null }[] | null
+  /** X30 · El porcentaje de seguridad (0–100) con el que lo propone Sumied. Sin él, de antes del X30. */
+  seguridad?: number | null
 }
 
 export interface MovimientoBanco {
@@ -62,10 +66,18 @@ export interface MovimientoBanco {
   propuesta: PropuestaGuardada | null
   casado: { id: string; tipo: string; porque: string; porQuien: 'folvy' | 'persona'; asientoId: string | null; asientoConcepto: string | null
     /** S02 · PR 2: el estado de su asiento (propuesto: espera en «Por validar»; validado; anulado). */
-    asientoEstado?: 'propuesto' | 'borrador' | 'validado' | 'anulado' | null } | null
+    asientoEstado?: 'propuesto' | 'borrador' | 'validado' | 'anulado' | null
+    /** X30 · Cuándo se concilió y con qué porcentaje (Conciliar). */
+    cuando?: string | null; seguridad?: number | null
+    /** X30 · La regla con la que se concilió (bank_match.rule_id). */
+    reglaId?: string | null } | null
   tarjeta: { ultimos4: string; titular: string } | null
   ticket: string | null
   motivoIgnorado: string | null
+  /** X29 · De antes del día de inicio de la empresa (before_cutover). */
+  antesDelInicio?: boolean
+  /** X29 · Validado (revisado) como en ERP10: cuándo y quién. */
+  validado?: { cuando: string; quien: string | null } | null
 }
 
 export interface Fila {
@@ -138,7 +150,10 @@ function filaSinPrincipal(m: MovimientoBanco): Omit<Fila, 'principal'> {
   if (m.estado === 'posible_repetido') {
     return { id: m.id, tono: 'gris', grupo: 'aclarar', estado: 'Por aclarar', titulo: '¿Es el mismo movimiento otra vez?', porque: 'Mismo día e importe que otro que ya estaba, por otro camino.', botones: ['es-el-mismo', 'son-dos'] }
   }
-  return { id: m.id, tono: 'gris', grupo: 'otro', estado: 'Apartado', titulo: 'Apartado', porque: sinPunto(m.motivoIgnorado ?? ''), botones: [] }
+  // B01·20 · Lo apartado se puede deshacer desde la fila. El que quitó el aviso del cargo anulado lleva su motivo de título.
+  const anulado = m.motivoIgnorado === MOTIVO_ANULADO
+  return { id: m.id, tono: 'gris', grupo: 'otro', estado: 'Apartado', titulo: anulado ? m.motivoIgnorado! : 'Apartado',
+    porque: anulado ? 'No cuenta: el banco lo anuló.' : sinPunto(m.motivoIgnorado ?? ''), botones: m.estado === 'ignorado' ? ['desapartar'] : [] }
 }
 
 /** Las cinco cifras de arriba y la frase de la banda, contadas con la misma vara que la tabla (regla 31). */

@@ -1,0 +1,11 @@
+# K07 · Una factura, una sola ficha, y cambiar su documento (20/11). Rama conta/k07-una-ficha.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2004  Añade journal_entry_document_anterior y conta_recibida_documento_cambiar: cambiar el
+#         documento de una recibida contabilizada (el de la factura y el enlazado a su asiento).
+#         El de antes del asiento se guarda en la tabla nueva; el fichero no se borra; el asiento
+#         no cambia. No cambia ninguna tabla ni función que exista.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k07-cambiar-documento.sql
+supabase/migrations/20261120T2004_k07_cambiar_documento.sql

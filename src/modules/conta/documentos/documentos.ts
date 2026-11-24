@@ -12,8 +12,10 @@
 //     recibe la mercancía con Folvy y la cuenta no es solo de contabilidad.
 //   · Las cuentas, siempre nombre · código.
 
+import { ETIQUETA_DE_QUIEN } from '@/modules/conta/lib/deQuienEs'
 import { calcularVencimiento } from '@/modules/conta/lib/cifras'
 import { MARCA } from '@/modules/conta/cuenta/marca'
+import { etiquetaYaContabilizada } from './antesDelInicio'
 
 /**
  * R6 · 'en_diez': una recepción de antes del corte cuyo papel es una factura. La
@@ -22,7 +24,9 @@ import { MARCA } from '@/modules/conta/cuenta/marca'
  */
 /** S01 (0160) · 'descartada': «No es una factura», con su motivo; sale en «Todas» y se deshace. */
 /** S01g (0931) · 'soporte': una recepción que es soporte de la liquidación mensual de un socio (CTB): no se apunta como compra. */
-export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez' | 'descartada' | 'soporte'
+/** N03 (0956) · 'ya_contabilizada': de antes del día de inicio, y alguien dijo «Sí, ya estaba» en el programa de antes. Sale (regla 7), no se contabiliza ni cuenta en lo pendiente. */
+/** N06b · 'traida_en_prueba': traída de otro programa, con su carga todavía en prueba (o dejada fuera): se ve, no se paga ni se casa. */
+export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez' | 'descartada' | 'soporte' | 'ya_contabilizada' | 'traida_en_prueba'
 export type Canal = 'correo' | 'subida' | 'cocina' | 'portal' | 'compras' | 'a_mano'
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
@@ -54,8 +58,14 @@ export interface FilaDocumento {
   /** S01g · Solo las de soporte: de qué liquidación (proveedor, mes y local) y la liquidación, si ya está. */
   soporte?: Soporte | null
   asiento: { id: string; estado: string; solo: boolean } | null
+  /** E03 · Va a nombre de otro y nadie lo ha contestado: sale en «Por aclarar» con «¿De quién es?». */
+  de_quien?: { caso: string; sociedad: string | null } | null
   llego: string
   archivo?: string | null
+  /** S01p·20 · 1 · Si es un correo de plataforma del que no salió nada: su correo y su asunto (lo pone la pantalla). */
+  correo?: { id: string; asunto: string | null } | null
+  /** N03 · Solo las «ya_contabilizada»: el programa de antes («ERP10», «Diez»), o nulo. */
+  programa_antes?: string | null
 }
 
 /** S01g · El soporte de una liquidación mensual (conta_documentos_recibidos, 0931). */
@@ -215,7 +225,7 @@ const frase = (x: string) => (/[.!?…:]$/.test(x.trim()) ? x.trim() : `${x.trim
  * (escrita a mano) o no tiene cuenta todavía. Nunca solo «Sin cuenta».
  */
 export function entendido(f: FilaDocumento, solo = false): { titulo: string; porque: string | null } {
-  if (f.tipo === 'llegada') return { titulo: f.archivo ? `«${f.archivo}»` : 'Un documento sin leer', porque: f.porque ?? 'Ha llegado y aún no la he leído.' }
+  if (f.tipo === 'llegada') return { titulo: tituloDeLlegada(f), porque: f.porque ?? 'Ha llegado y aún no la he leído.' }
   if (f.tipo === 'recepcion' && f.estado === 'soporte') {
     return { titulo: 'Soporte de la liquidación · no se apunta como compra', porque: f.porque ?? null }
   }
@@ -223,7 +233,11 @@ export function entendido(f: FilaDocumento, solo = false): { titulo: string; por
     const titulo = f.estado === 'en_diez' ? (f.diez ? `Ya en Diez · asiento ${f.diez.serie}/${f.diez.numero}` : 'De antes del corte · la llevó Diez') : 'Leída por la recepción · aún no es factura'
     return { titulo, porque: f.porque ?? 'La leyó la recepción.' }
   }
+  if (f.estado === 'ya_contabilizada') return { titulo: etiquetaYaContabilizada(f.programa_antes), porque: f.porque ?? null }
+  if (f.estado === 'traida_en_prueba') return { titulo: 'Traída · en prueba', porque: 'Es de lo traído de otro programa, que todavía está en prueba: se paga cuando lo des por bueno.' }
   if (!f.proveedor.id) return { titulo: 'No reconozco el emisor', porque: f.porque ?? 'No reconozco el emisor: dime quién es.' }
+  // E03 · Lo que falta es saber de quién es: la etiqueta lo dice; el porqué, a nombre de quién va.
+  if (f.de_quien) return { titulo: ETIQUETA_DE_QUIEN, porque: f.porque ?? null }
   const e = f.entendido
   const cuenta = e ? `${e.nombre} · ${e.cuenta}${e.sin_confirmar ? ' · sin confirmar' : ''}` : 'Sin cuenta de gasto todavía'
   const casa = f.recepcion ? ` · casa con la recepción del ${diaMes(f.recepcion.fecha)}` : ''
@@ -256,11 +270,25 @@ export function boton(f: FilaDocumento): { texto: string; principal: boolean } {
   // S01g · Ninguna fila de «Por aclarar» se abre sin una acción que la resuelva (regla 8).
   if (f.tipo === 'recepcion' && f.estado === 'por_aclarar') return { texto: 'Aclarar', principal: true }
   if (f.tipo === 'recepcion') return { texto: 'Ver la factura', principal: false }
-  if (f.tipo === 'llegada' && f.estado === 'por_aclarar') return { texto: faltaElPdf(f) ? 'Subir el PDF' : 'Leerla', principal: true }
+  if (f.tipo === 'llegada' && f.estado === 'por_aclarar') return { texto: faltaElPdf(f) ? 'Subir el PDF' : esCorreoSinFactura(f) ? 'Volver a leer' : 'Leerla', principal: true }
   if (f.tipo === 'factura' && !f.proveedor.id) return { texto: 'Decirlo yo', principal: true }
   if (f.estado === 'para_mirar') return { texto: 'Mirar', principal: false }
   if (f.estado === 'por_aclarar') return { texto: f.tipo === 'llegada' ? 'Ver' : 'Aclarar', principal: false }
   return { texto: 'Ver', principal: false }
+}
+
+/**
+ * S01p·20 · 1 · Un correo de plataforma del que no salió nada: sin fichero, con su correo.
+ * Se vuelve a leer o se le sube el PDF a mano; «Leerla» no tiene qué leer.
+ */
+export const esCorreoSinFactura = (f: Pick<FilaDocumento, 'tipo' | 'archivo' | 'correo' | 'porque'>) =>
+  f.tipo === 'llegada' && !f.archivo && !!f.correo && !faltaElPdf(f)
+
+/** El nombre de una llegada: su fichero; si es un correo sin factura, su asunto (Julio, 13/11). */
+export function tituloDeLlegada(f: Pick<FilaDocumento, 'tipo' | 'archivo' | 'correo' | 'porque'>): string {
+  if (f.archivo) return `«${f.archivo}»`
+  if (esCorreoSinFactura(f)) return f.correo?.asunto ? `«${f.correo.asunto}»` : 'Un correo sin factura'
+  return 'Un documento sin leer'
 }
 
 /** S01g · Una llegada a la que le falta el PDF (el correo traía un enlace). */
@@ -270,7 +298,7 @@ export const faltaElPdf = (f: Pick<FilaDocumento, 'tipo' | 'porque'>) => f.tipo 
 export function punto(f: FilaDocumento): 'verde' | 'ambar' | 'gris' | 'rojo' {
   if (f.estado === 'apuntada') return 'verde'
   if (f.estado === 'en_diez') return f.diez ? 'verde' : 'gris'
-  if (f.estado === 'repetida' || f.estado === 'descartada') return 'gris'
+  if (f.estado === 'repetida' || f.estado === 'descartada' || f.estado === 'ya_contabilizada' || f.estado === 'traida_en_prueba') return 'gris'
   if (f.confianza === 'duda' || f.tipo === 'llegada') return 'gris'
   return 'ambar'
 }

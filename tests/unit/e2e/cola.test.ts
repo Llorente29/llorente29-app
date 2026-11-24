@@ -47,6 +47,10 @@ echo "test $2 salida=$E2E_SALIDA blob=$PLAYWRIGHT_BLOB_OUTPUT_FILE fuera=$E2E_SE
 mkdir -p blob-report && touch "$PLAYWRIGHT_BLOB_OUTPUT_FILE"
 case "$2" in *tiempo*) echo "Test timeout of 60000ms exceeded." ;; esac
 case "$2" in *texto*) printf 'Timed out 15000ms waiting for expect(locator).toHaveText(expected)\nExpected string: "Pagada"\nReceived string: "Pendiente"\n' ;; esac
+echo "$3" > "${dir}/reporters"
+# Lo que haría reporter-pantalla.mjs con una prueba que falla (Q03).
+case "$2" in *rojo*) printf '── Falló: %s:9 · una prueba [ordenador] ──\nLo que había en pantalla:\n  - paragraph: Ninguna cuenta encaja con lo que buscas.\n' "$2" >> "$PANTALLA_REGISTRO"
+  printf '<details><summary>❌ %s</summary>\n</details>\n' "$2" >> "$PANTALLA_RESUMEN" ;; esac
 case "$2" in *rojo*) exit 1 ;; esac
 `)
   chmodSync(f, 0o755)
@@ -86,6 +90,25 @@ describe('la barrera es por fichero (por-fichero.sh)', () => {
     expect(r.status).toBe(1)
     expect(log().filter((x) => !x.startsWith('merge')).map((x) => x.split(' ')[0])).toEqual(['entrar', 'test', 'salir', 'entrar', 'test', 'salir'])
     expect(r.stdout).toContain('1 de 2 ficheros en rojo')
+  })
+
+  it('Q03: lo que había en pantalla sale en el registro, FUERA del grupo plegado de su fichero, y en el resumen del run', () => {
+    const r = correr(['tests/e2e/a-rojo.spec.ts', 'tests/e2e/b.spec.ts'])
+    expect(readFileSync(join(dir, 'reporters'), 'utf8')).toMatch(/^--reporter=list,github,blob,\/.*\/scripts\/e2e\/reporter-pantalla\.mjs$/m)
+    const fin = r.stdout.indexOf('::endgroup::')
+    const volcado = r.stdout.indexOf('── Falló: tests/e2e/a-rojo.spec.ts:9 · una prueba [ordenador] ──')
+    expect(volcado).toBeGreaterThan(fin)
+    // Y antes de que empiece el fichero siguiente.
+    expect(volcado).toBeLessThan(r.stdout.indexOf('::group::[2/2]'))
+    const resumen = readFileSync(join(dir, 'resumen.md'), 'utf8')
+    expect(resumen).toContain('### Lo que había en pantalla cuando falló')
+    expect(resumen).toContain('<details><summary>❌ tests/e2e/a-rojo.spec.ts</summary>')
+  })
+
+  it('Q03: sin fallos, ni volcado ni apartado en el resumen', () => {
+    const r = correr(['tests/e2e/b.spec.ts'])
+    expect(r.stdout).not.toContain('── Falló:')
+    expect(readFileSync(join(dir, 'resumen.md'), 'utf8')).not.toContain('Lo que había en pantalla')
   })
 
   it('sin la barrera (se acaba la espera): ese fichero no corre, cuenta como rojo, y los demás sí', () => {

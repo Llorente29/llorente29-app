@@ -1,0 +1,29 @@
+[
+ {
+  "id": "766-1",
+  "pr": 766,
+  "fecha": "2026-11-21T15:55:37Z",
+  "producto": "sumied",
+  "apartado": "Facturas recibidas",
+  "frase": "una leída con el NIF de un proveedor que no tienes se abre con él ya dado de alta, con lo que trae la factura y su subcuenta 400 o 410. La franja dice «Proveedor nuevo» y tiene «Deshacer».",
+  "ruta": null
+ },
+ {
+  "id": "766-2",
+  "pr": 766,
+  "fecha": "2026-11-21T15:55:37Z",
+  "producto": "sumied",
+  "apartado": "La cuenta de gasto, desde la primera factura",
+  "frase": "la de sus facturas en otra sociedad, la comisión si es una plataforma, o la de lo que vende. Sale en ámbar con su porqué («Propuesta: vende pollo y alitas → 600 Compras de mercaderías»), y basta Intro.",
+  "ruta": null
+ },
+ {
+  "id": "766-3",
+  "pr": 766,
+  "fecha": "2026-11-21T15:55:37Z",
+  "producto": "sumied",
+  "apartado": "La de a mano",
+  "frase": "«+ Nuevo proveedor» bajo la casilla del proveedor. El NIF y el nombre se escriben en la misma fila, sin salir y sin perder lo escrito.",
+  "ruta": null
+ }
+]

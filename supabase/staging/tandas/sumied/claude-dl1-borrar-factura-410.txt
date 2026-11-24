@@ -1,0 +1,4 @@
+# DL1 · borrar la FAC-00410 (0950: no añade objetos; en Foodint borra una
+# factura subida por error). Su prueba (ROLLBACK): sin Foodint no borra nada.
+supabase/migrations/20261113T0950_dl1_borrar_factura_410.sql
+supabase/staging/sql/20261113_dl1_borrar_factura_410_prueba.sql

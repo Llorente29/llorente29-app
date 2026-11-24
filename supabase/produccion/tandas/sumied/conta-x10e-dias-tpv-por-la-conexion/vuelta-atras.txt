@@ -1,0 +1,3 @@
+# X10e · la vuelta atrás: quita las tres columnas si ninguna fila las usa.
+cuenta: scripts/conta/produccion/cuentas/x10e-erp10-envio-dia.sql
+supabase/vuelta-atras/20261120T1140_x10e_erp10_envio_dia.down.sql

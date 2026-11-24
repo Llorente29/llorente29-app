@@ -18,6 +18,7 @@
 import { tabla, mensaje, rpc } from '@/modules/conta/services/bd'
 import { loQueEnciendeLaEmpresa } from '@/modules/conta/sectores/sectores'
 import { leerEnvioEmpresa } from '@/modules/conta/services/envioDiezService'
+import { leerSalidaEmpresa } from '@/modules/conta/services/erp10Service'
 import { supabase } from '@/lib/supabase'
 import { aFila, deFila, type Preferencias } from '@/modules/conta/esqueleto/preferencias'
 import { INTERRUPTORES, type Analitica, type Contexto } from '@/modules/conta/esqueleto/productos'
@@ -58,6 +59,8 @@ export async function leerContexto(accountId: string, companyId: string | null):
   ])
   // C07 (Julio, 22/10): con «Enviar a Diez» apagado, las pantallas no hablan de Diez (tampoco su pestaña).
   const enviaADiez = companyId && diez.data ? (await leerEnvioEmpresa(accountId, companyId)).encendido : false
+  // X04 · La salida a ERP10 encendida enciende su entrada (Libros › Cierre). Si no se puede leer, no sale.
+  const erp10 = companyId ? await leerSalidaEmpresa(accountId, companyId).then((x) => x.encendida, () => false) : false
   if (empresa.error) throw new Error(mensaje('No se ha podido leer la empresa', empresa.error))
   if (diez.error) throw new Error(mensaje('No se ha podido saber si la empresa trabaja con Diez', diez.error))
   if (flags.error) throw new Error(mensaje('No se han podido leer los productos de la cuenta', flags.error))
@@ -71,11 +74,17 @@ export async function leerContexto(accountId: string, companyId: string | null):
   const demo = ((await tabla('accounts').select('is_demo').eq('id', accountId).maybeSingle()).data as { is_demo?: unknown } | null)?.is_demo === true
   // G03 · El sector de la empresa (company.sector; sin la columna, lo de hoy) y lo que enciende su paquete.
   const { sector, hosteleria, gestoria } = loQueEnciendeLaEmpresa(companyId ? fila : null, asesoria)
+  // R05 · «Ventas por día» de la empresa (company_tax_profile.ventas_por_dia, R03). Sin leer, apagado: decide solo el sector.
+  const ventasPorDia = companyId
+    ? ((await tabla('company_tax_profile').select('ventas_por_dia').eq('account_id', accountId).eq('company_id', companyId).maybeSingle()).data as { ventas_por_dia?: unknown } | null)?.ventas_por_dia === true
+    : false
   return {
     hosteleria,
     gestoria,
+    ventasPorDia,
     sector,
     diez: !!diez.data && enviaADiez,
+    erp10,
     interruptores: new Set(encendidos),
     logoEmpresa: typeof fila?.logo_path === 'string' && fila.logo_path ? await urlDelLogo(fila.logo_path) : null,
     // S02 · company.color llega con la 0460; con «*», hasta que esté aplicada no se pide por nombre.

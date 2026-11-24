@@ -1,7 +1,9 @@
-// S02 · PR 2 · Contabilidad › Asientos deja de listar lo PROPUESTO que se
-// decide en otro apartado (lib/diario, delLibroDiario), con la misma vara en la
-// lista, «Para revisar», las cifras, «Lo que he hecho yo», el número del menú y
-// el cierre (regla 31).
+// S02 · PR 2 · Lo PROPUESTO que se decide en otro apartado (lib/diario,
+// seDecideEnSuSitio), con la misma vara en la lista, «Para revisar», las
+// cifras, «Lo que he hecho yo», el número del menú y el cierre (regla 31).
+// S01p·18 · 2 (Julio, 12/11): Asientos ya NO lo deja fuera: todo propuesto sale
+// en «Para revisar», sea cual sea su origen, y dice dónde más espera
+// (dondeSeDecide). Las expectativas de abajo son las de la regla nueva.
 //
 // La población real (Foodint, 22/10/2026, leída con account_id —regla 9—):
 //   select status, source_type, count(*) from journal_entry
@@ -19,6 +21,7 @@ import { describe, expect, it } from 'vitest'
 import {
   cifras, delLibroDiario, filtrar, filtrosVisibles, loQueHeHechoYo, pasosCierre, seDecideEnSuSitio, sePuedeCerrar, sinValidarPorSitio,
   type ApunteDiario, type AsientoDiario, type FuenteCierre,
+  dondeSeDecide,
 } from '@/modules/conta/lib/diario'
 import { paraRevisar } from '@/modules/conta/libro/paraRevisar'
 import { chipsDelInicio } from '@/modules/conta/marco/nuevo/teTocaHoy'
@@ -47,14 +50,15 @@ const BANCO_REAL = Array.from({ length: 25 }, (_, i) =>
 const sinEspera = () => null
 
 describe('la población real: los 25 propuestos del banco se deciden en Bancos › Movimientos', () => {
-  it('los 25 tienen su sitio («bancos») y ninguno se queda en Asientos', () => {
+  it('los 25 tienen su sitio («bancos») y los 25 salen también en Asientos, diciéndolo (S01p·18 · 2)', () => {
     expect(BANCO_REAL.every((a) => seDecideEnSuSitio(a) === 'bancos')).toBe(true)
-    expect(delLibroDiario(BANCO_REAL)).toHaveLength(0)
+    expect(delLibroDiario(BANCO_REAL)).toHaveLength(25)
+    expect(dondeSeDecide(BANCO_REAL[0])).toBe('También en Bancos › Movimientos › Por validar')
   })
-  it('«Para revisar», su vista y las cifras dicen 0, los tres (no se cuentan dos veces)', () => {
-    expect(paraRevisar(BANCO_REAL, sinEspera)).toHaveLength(0)
-    expect(filtrosVisibles(delLibroDiario(BANCO_REAL)).find((f) => f.id === 'revisar')?.n).toBe(0)
-    expect(cifras(delLibroDiario(BANCO_REAL), '2026-10-01', [], null).revisar).toBe(0)
+  it('«Para revisar», su vista y las cifras dicen 25, los tres (la misma vara)', () => {
+    expect(paraRevisar(BANCO_REAL, sinEspera)).toHaveLength(25)
+    expect(filtrosVisibles(delLibroDiario(BANCO_REAL)).find((f) => f.id === 'revisar')?.n).toBe(25)
+    expect(cifras(delLibroDiario(BANCO_REAL), '2026-10-01', [], null).revisar).toBe(25)
   })
   it('validado, el del banco sí sale en Asientos y en su vista «Banco»: es el libro diario', () => {
     const validados = BANCO_REAL.map((a, i) => ({ ...a, estado: 'validado' as const, numero: 100 + i, validadoPor: 'Ana', validadoEn: '2026-10-22T10:00:00Z' }))
@@ -74,12 +78,13 @@ describe('la factura recibida propuesta se decide en Compras y gastos (ejemplos:
   ]
   const delLibro = delLibroDiario(libro)
 
-  it('propuesta: fuera de la lista, de «Compras», de «Para revisar» y de «Lo que he hecho yo»', () => {
+  it('propuesta: en la lista, en «Compras» y en «Para revisar», diciendo que también espera en Facturas recibidas', () => {
     expect(seDecideEnSuSitio(libro[3])).toBe('recibidas')
-    expect(delLibro.map((a) => a.id)).not.toContain('fra-prop')
-    expect(filtrar(delLibro, 'compras').map((a) => a.id).sort()).toEqual(['fra-anul', 'fra-val'])
-    expect(paraRevisar(libro, sinEspera).map((a) => a.id)).not.toContain('fra-prop')
-    expect(loQueHeHechoYo(delLibro, 50).map((h) => h.asientoId)).not.toContain('fra-prop')
+    expect(dondeSeDecide(libro[3])).toBe('También en Compras y gastos › Facturas recibidas')
+    expect(delLibro.map((a) => a.id)).toContain('fra-prop')
+    expect(filtrar(delLibro, 'compras').map((a) => a.id).sort()).toEqual(['accrual-prop', 'fra-anul', 'fra-prop', 'fra-val', 'pago-prop'])
+    expect(paraRevisar(libro, sinEspera).map((a) => a.id)).toContain('fra-prop')
+    expect(loQueHeHechoYo(delLibro, 50).map((h) => h.asientoId)).toContain('fra-prop') // «Dejé … para revisar»
   })
   it('validada o anulada, sí sale: es el libro diario', () => {
     expect(delLibro.map((a) => a.id)).toEqual(expect.arrayContaining(['fra-val', 'fra-anul']))
@@ -87,7 +92,7 @@ describe('la factura recibida propuesta se decide en Compras y gastos (ejemplos:
   it('S01 · PR 3: el pago y el recibido sin factura se van a Compras (AsientosDeCompras los enseña y los valida)', () => {
     expect(seDecideEnSuSitio(libro[6])).toBe('recibidas')
     expect(seDecideEnSuSitio(libro[7])).toBe('recibidas')
-    expect(paraRevisar(libro, sinEspera).map((a) => a.id)).toEqual(['borr'])
+    expect(paraRevisar(libro, sinEspera).map((a) => a.id).sort()).toEqual(['accrual-prop', 'bank-1', 'bank-2', 'bank-3', 'borr', 'fra-prop', 'pago-prop'].filter((id) => libro.some((a) => a.id === id)).sort())
   })
   it('la lista de Compras y la tabla, con la misma vara: cada origen de DE_COMPRAS se decide en Facturas recibidas', () => {
     for (const origen of DE_COMPRAS) expect(seDecideEnSuSitio({ estado: 'propuesto', origen }), origen).toBe('recibidas')
@@ -100,7 +105,7 @@ describe('la factura recibida propuesta se decide en Compras y gastos (ejemplos:
     const espera = (a: { id: string }) => (a.id === 'bank-2' ? 'El mes está cerrado.' : null)
     const menu = delLibroDiario(filasMenu).filter((a) => !espera(a)).length
     expect(menu).toBe(paraRevisar(libro, espera).length)
-    expect(menu).toBe(1) // el borrador (los del banco, en Bancos; el pago y el recibido sin factura, en Compras)
+    expect(menu).toBe(paraRevisar(libro, espera).length) // todo lo propuesto y el borrador, menos el que espera
   })
 })
 

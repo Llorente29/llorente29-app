@@ -1,0 +1,27 @@
+{
+ "_que": "E03 · Sumied pregunta, no decide · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA, el 18/11: no en producción (esta sesión no lee producción). Las funciones que cambian existen y se cambian sobre su definición viva, con respaldo; las nuevas, no. Las filas de producción las mide el ensayo. Nada del camino del pedido.",
+ "medido": "2026-11-18T17:38Z",
+ "tanda": {
+  "supabase/migrations/20261118T1833_e03_de_quien_es.sql": "5ca2e9b5c0e1ea31baf9f40d28e67cac",
+  "supabase/migrations/20261118T1835_e03_no_decide_solo.sql": "0fc26abc63e6424abcc974a4a8dc91fa",
+  "supabase/migrations/20261118T1836_e03_lo_marcado_vuelve_a_pregunta.sql": "4d2893a1de0b0182c7e9622d8c082f6b"
+ },
+ "contexto": {
+  "tablas": [
+   "public.supplier_invoice",
+   "public.supplier_invoice_change"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.supplier_invoice": 9,
+   "public.supplier_invoice_change": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

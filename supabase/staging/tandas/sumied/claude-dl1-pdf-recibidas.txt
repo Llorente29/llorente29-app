@@ -1,0 +1,4 @@
+# DL1 · PDF recibidas (1805: no añade objetos; en Foodint pone el documento a
+# 44 facturas). Su prueba (ROLLBACK, cuenta A): sin Foodint no hace nada.
+supabase/migrations/20261114T1805_dl1_pdf_recibidas.sql
+supabase/staging/sql/20261114_dl1_pdf_recibidas_prueba.sql

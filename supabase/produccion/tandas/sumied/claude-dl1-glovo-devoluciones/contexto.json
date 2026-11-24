@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · devoluciones falsas de Glovo · contexto de producción, medido en SOLO LECTURA el 13/11 a las 00:52Z: la 0205 añade _dl1_anular y _dl1_descartar (no existen, ni otras con esos nombres) y, en Foodint, anula la 1/2010 (validada) con journal_entry_anular a 06/10 (octubre abierto), apunta un journal_dismissal de sales_adjustment del pedido 234 (como la pantalla) y descarta 20 devoluciones propuestas con journal_entry_descartar. Ninguno de los 21 pedidos tiene descarte. Nada en el camino del pedido; la 0205 no está en el historial.",
+ "medido": "2026-11-13T00:52Z",
+ "tanda": {
+  "supabase/migrations/20261113T0205_dl1_glovo_devoluciones.sql": "63c04612ff36e9f25eb34e7d937aa212"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

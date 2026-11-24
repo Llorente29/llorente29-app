@@ -1,0 +1,29 @@
+[
+ {
+  "id": "710-1",
+  "pr": 710,
+  "fecha": "2026-11-17T21:15:56Z",
+  "producto": "sumied",
+  "apartado": "Cierres del día",
+  "frase": "las ventas de un TPV de fuera (Revo) salen una fila por día, con quién las subió, las facturas con NIF, la numeración, base, IVA, total y cómo se cobró.",
+  "ruta": null
+ },
+ {
+  "id": "710-2",
+  "pr": 710,
+  "fecha": "2026-11-17T21:15:56Z",
+  "producto": "sumied",
+  "apartado": "Validar los listos",
+  "frase": "un día del TPV se propone y se valida con el mismo botón, en una transacción, con su asiento y su PDF «Resumen de ventas»; si falta una cuenta, queda en espera con su motivo.",
+  "ruta": null
+ },
+ {
+  "id": "710-3",
+  "pr": 710,
+  "fecha": "2026-11-17T21:15:56Z",
+  "producto": "sumied",
+  "apartado": "Barra",
+  "frase": "Cierres del día sale también en una empresa que no es de hostelería si tiene «ventas por día» encendido.",
+  "ruta": null
+ }
+]

@@ -1,0 +1,24 @@
+# R07 · El día de ventas en dos asientos: la factura del día y su cobro (encargo R07,
+# 19/11; respuesta R07 · 1). Rama conta/r07-factura-y-cobro-del-dia. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1405  Añade conta_tpv_factura_cuenta: a qué cuenta va la factura del día
+#         («Clientes de contado»), una por empresa.
+#   0810  Solo añade: la columna «desde» (admite nulos), el enlace conta_dia_cobro, las
+#         funciones que parten y proponen el día en dos, y las de la pantalla
+#         (conta_tpv_factura_de, conta_tpv_factura_guardar, conta_tpv_dia_ejemplo).
+#   0900  Desde el día en que la empresa elige esa cuenta, cada día de ventas (del TPV
+#         de fuera y del de Folvy) va en dos asientos unidos: la factura del día y su
+#         cobro. Amplía el CHECK del origen con «sales_day_payment» y pone un disparador
+#         en journal_entry (validar, anular o quitar uno hace lo mismo con el otro).
+#         Cambia en caliente, por trozos exactos y con respaldo, _conta_tpv_propuesta,
+#         conta_tpv_dia_para_validar, conta_tpv_dia_validar, conta_proponer_dias y
+#         conta_erp10_dias_tpv_por_salir.
+#
+# Los días ya validados NO se rehacen (respuesta R07 · 1, punto 1): la cuenta lo mide
+# antes y después. Sin la cuenta elegida, Folvy sigue como hoy. Nada en el camino del
+# pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r07-dias-tpv.sql
+supabase/migrations/20261119T1405_r07_cuenta_factura_del_dia.sql
+supabase/migrations/20261120T0810_r07_factura_del_dia_anade.sql
+supabase/migrations/20261120T0900_r07_factura_y_cobro_del_dia.sql

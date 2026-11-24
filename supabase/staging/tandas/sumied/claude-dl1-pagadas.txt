@@ -1,0 +1,6 @@
+# DL1 · compensaciones de Glovo del céntimo (0045: no añade objetos; en Foodint
+# valida 3 compensaciones propuestas). Su prueba (ROLLBACK, cuenta A): sin
+# Foodint no hace nada; una compensación se valida como la persona; con otro
+# importe no se valida nada.
+supabase/migrations/20261113T0045_dl1_glovo_centimos.sql
+supabase/staging/sql/20261113_dl1_glovo_centimos_prueba.sql

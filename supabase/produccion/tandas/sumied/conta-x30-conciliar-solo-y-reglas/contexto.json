@@ -1,0 +1,33 @@
+{
+ "_que": "X30 · Conciliar solo y reglas de verdad · contexto medido en la BASE LOCAL con la estructura de staging (main 0738c79), en SOLO LECTURA: no en producción. 2050 solo añade (columnas opcionales en bank_settings, bank_match, bank_rule y bank_movement, y cuatro funciones); 2051 cambia bank_importar (trozos exactos, misma firma, con respaldo) y añade dos disparadores (bank_match y treasury_account), con su prueba de staging; 2052 inserta las reglas de partida, desde ahora. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-23T19:55Z",
+ "tanda": {
+  "supabase/migrations/20261123T2050_x30_conciliar_solo_anade.sql": "16a7bb445b51b895b9a0992a29dadd62",
+  "supabase/migrations/20261123T2051_x30_orden_y_seguridad.sql": "6b31c3d0532a210445a8c9909922ae27",
+  "supabase/migrations/20261123T2052_x30_reglas_de_partida.sql": "bdb8b754ec6ccfe16d4e8471aac65fbf"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_match",
+   "public.bank_movement",
+   "public.bank_rule",
+   "public.bank_settings",
+   "public.treasury_account"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.bank_match": 0,
+   "public.bank_movement": 14,
+   "public.bank_rule": 0,
+   "public.bank_settings": 0,
+   "public.treasury_account": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

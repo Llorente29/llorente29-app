@@ -1,0 +1,10 @@
+# E10 · La factura larga se lee entera (encargo E10, 23/11). Rama conta/e10-factura-larga. Se ensaya y
+# se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0907  Solo añade: conta_lectura_lineas_guardar, que guarda las líneas de una factura larga leída
+#         por páginas en su sesión de lectura y en su factura. No cambia conta_factura_desde_lectura
+#         ni nada de lo que existe: la lectura en dos pasos la hace ocr-albaran.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/e10-factura-larga.sql
+supabase/migrations/20261123T0907_e10_lineas_por_partes.sql

@@ -1,0 +1,4 @@
+# S01p·20 · 1 · la vuelta atrás, al revés: fuera las 8 filas de Foodint de la 1511 (y su actividad) y después las tres funciones.
+cuenta: scripts/conta/produccion/cuentas/s01p-correo-por-aclarar.sql
+supabase/vuelta-atras/20261113T1511_s01p_foodint_ocho_por_aclarar.down.sql
+supabase/vuelta-atras/20261113T1504_s01p_correo_por_aclarar.down.sql

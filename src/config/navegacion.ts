@@ -204,6 +204,8 @@ export const CONTA = {
     diarioResumido: 'libros/diario/resumido',
     /** C06b R7 · Pendientes de adjuntar en Diez: ruta propia, como el resumido, para no chocar con un asiento. */
     pendientesDiez: 'libros/diario/pendientes-diez',
+    /** N07 · «Traer de ERP10»: ruta propia, como Pendientes de Diez, para no chocar con un asiento. */
+    traerErp10: 'libros/diario/traer-erp10',
     /** Un área de Libros y su primera acción (C05). */
     librosArea: 'libros/:area',
     /** Una acción de un área de Libros (C05): balance, sumas y saldos, libro registro… */
@@ -243,9 +245,17 @@ export const CONTA = {
     facturasVenta: 'ventas/facturas',
     nuevaFacturaVenta: 'ventas/facturas/nueva',
     facturaVenta: 'ventas/facturas/:facturaId',
+    /** K05 · La emitida del núcleo desde su asiento (una de expedida por revisar, o ya validada). Fuera del núcleo lleva al asiento. */
+    emitidaAsiento: 'ventas/facturas/asiento/:entryId',
+    /** K05 · La emitida escrita a mano, contable (no la emite: eso es Facturación). Fuera del núcleo, la «Nueva factura emitida» de Asientos. */
+    emitidaAMano: 'ventas/facturas/a-mano',
+    /** K05 · Asientos › «Emitidas» en el núcleo: la primera por revisar o, si no hay, una a mano. Fuera, la lista. */
+    emitidasPorRevisar: 'ventas/facturas/revisar',
     /** V01 · Entrega 2 · Ventas › Cierres del día (solo con «Vendo en hostelería»): la lista y la ficha de uno. */
     cierres: 'ventas/cierres',
     cierre: 'ventas/cierres/:cierreId',
+    /** R15 · La ficha de un día del TPV de fuera (Revo…): sus facturas, su IVA, sus cobros, sus dos asientos y su PDF. */
+    diaTpv: 'ventas/cierres/tpv/:diaId',
     /**
      * V01 · Entrega 3 · Ventas › Liquidaciones (solo con «Vendo en hostelería»):
      * las de plataforma, por periodo, plataforma y local (y la ficha de una
@@ -272,6 +282,8 @@ export const CONTA = {
     loteCatcher: 'documentos/catcher/:loteId',
     /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
     bancos: 'bancos',
+    /** X29 · Conciliar: la Gestión de extractos bancarios de ERP10 (maqueta nucleo_23). */
+    conciliar: 'bancos/conciliar',
     /** Una pestaña de Bancos, o una de sus acciones (subir, hecho-por-folvy). */
     bancosPestana: 'bancos/:pestana',
     /** M01 · La muestra de las tres piezas comunes, con datos inventados. Solo fuera de producción (module.tsx). */
@@ -316,7 +328,7 @@ export const CONTA = {
  * su aviso «aún no» (`hueco`), como pide el encargo para Certificados: el
  * índice dice lo que habrá, y la entrada dice que todavía no está.
  */
-export interface EntradaAjustes { id: string; etiqueta: string; ruta: string; hueco?: string; /** GD · Solo en una cuenta de demostración. */ soloDemo?: boolean }
+export interface EntradaAjustes { id: string; etiqueta: string; ruta: string; hueco?: string; /** GD · Solo en una cuenta de demostración. */ soloDemo?: boolean; /** R06 · Solo en una empresa con «ventas por día» encendido. */ soloVentasPorDia?: boolean }
 export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
   {
     grupo: 'Empresa',
@@ -356,6 +368,13 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
     ],
   },
   {
+    // R06 · Ajustes › Ventas por día: a qué cuenta va cada forma de pago del TPV.
+    grupo: 'Ventas',
+    entradas: [
+      { id: 'ventas-por-dia', etiqueta: 'Ventas por día', ruta: 'ajustes/ventas-por-dia', soloVentasPorDia: true },
+    ],
+  },
+  {
     grupo: 'Acceso y avisos',
     entradas: [
       // DM1 · PR 1 (30/10): ya no es un hueco. Quién entra e «Invitar a una persona» (tablero 4).
@@ -378,8 +397,8 @@ export const ENTRADA_DE_APARTADO: Record<string, string> = {
 }
 
 /** Las entradas del índice de Ajustes que se pintan: en el producto vendido solo, sin las que dicen «aún no». */
-export function indiceAjustes(solo = false, demo = false): typeof INDICE_AJUSTES {
-  return INDICE_AJUSTES.map((g) => ({ ...g, entradas: g.entradas.filter((e) => !(solo && e.hueco) && (demo || !e.soloDemo)) })).filter((g) => g.entradas.length > 0)
+export function indiceAjustes(solo = false, demo = false, ventasPorDia = false): typeof INDICE_AJUSTES {
+  return INDICE_AJUSTES.map((g) => ({ ...g, entradas: g.entradas.filter((e) => !(solo && e.hueco) && (demo || !e.soloDemo) && (ventasPorDia || !e.soloVentasPorDia)) })).filter((g) => g.entradas.length > 0)
 }
 
 /** N1 · La ficha nueva de una persona en Sumied › Laboral. */
@@ -415,6 +434,7 @@ export const rutaLibros = (area?: string, accion?: string): string => {
   if (!area) return rutaConta(CONTA.rutas.libros)
   if (area === 'diario' && accion === 'diario-resumido') return rutaConta(CONTA.rutas.diarioResumido)
   if (area === 'diario' && accion === 'pendientes-diez') return rutaConta(CONTA.rutas.pendientesDiez)
+  if (area === 'diario' && accion === 'traer-erp10') return rutaConta(CONTA.rutas.traerErp10)
   if (area === 'diario' && (!accion || accion === 'libro-diario')) return rutaConta(CONTA.rutas.libroDiario)
   return accion ? rutaConta(CONTA.rutas.librosAccion, { area, accion }) : rutaConta(CONTA.rutas.librosArea, { area })
 }
@@ -447,9 +467,12 @@ export const rutaRecibidaAMano = (): string => rutaConta(CONTA.rutas.recibidaAMa
 export const rutaFacturasVenta = (): string => rutaConta(CONTA.rutas.facturasVenta)
 export const rutaNuevaFacturaVenta = (): string => rutaConta(CONTA.rutas.nuevaFacturaVenta)
 export const rutaFacturaVenta = (facturaId: string): string => rutaConta(CONTA.rutas.facturaVenta, { facturaId })
+export const rutaEmitidaAsiento = (entryId: string): string => rutaConta(CONTA.rutas.emitidaAsiento, { entryId })
+export const rutaEmitidaAMano = (): string => rutaConta(CONTA.rutas.emitidaAMano)
 /** V01 · Entrega 2 · Ventas › Cierres del día y un cierre. */
 export const rutaCierres = (): string => rutaConta(CONTA.rutas.cierres)
 export const rutaCierre = (cierreId: string): string => rutaConta(CONTA.rutas.cierre, { cierreId })
+export const rutaDiaTpv = (diaId: string): string => rutaConta(CONTA.rutas.diaTpv, { diaId })
 /** V01 · Entrega 3 · Ventas › Liquidaciones (ver: plataformas · socios) y la ficha de una fila de plataforma. */
 export const rutaLiquidacionesVentas = (ver?: 'plataformas' | 'socios'): string => `${rutaConta(CONTA.rutas.liquidacionesVentas)}${ver ? `?ver=${ver}` : ''}`
 export const rutaLiquidacionPlataforma = (clave: string): string => rutaConta(CONTA.rutas.liquidacionPlataforma, { clave })

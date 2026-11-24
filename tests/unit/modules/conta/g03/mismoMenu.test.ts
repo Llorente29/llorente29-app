@@ -5,6 +5,8 @@
 // buscador y Favoritos y las mismas tarjetas antes y después (regla 31: la
 // misma vara a los dos lados).
 //   · Antes: foto-antes.json, sacada sobre `main` (45585d8) con medirMenu.ts
+//     N07 (18/11): a mano, solo lo suyo —la pestaña «Importar» para todas y «Traer de ERP10»—; la foto
+//     regenerada hoy cambiaría además Facturación (otro contexto de entonces), y eso no se toca.
 //     (generarAntes.test.ts dice cómo).
 //   · Después: la misma vara, con el contexto que arma ahora la app
 //     (loQueEnciendeLaEmpresa) y la tarjeta de Cobros con `gestoria`.
@@ -19,7 +21,7 @@ import { foto, medir, type Empresa } from './medirMenu'
 import { HOY } from './poblacion'
 
 const ANTES = JSON.parse(readFileSync(join(__dirname, 'foto-antes.json'), 'utf8')) as ReturnType<typeof foto>
-const vistaAntes = (quien: string) => Object.fromEntries(Object.entries(ANTES.empresas[quien]).map(([c, i]) => [c, conG04(ANTES.vistas[i])]))
+const vistaAntes = (quien: string) => Object.fromEntries(Object.entries(ANTES.empresas[quien]).map(([c, i]) => [c, conR09(conG04(ANTES.vistas[i]))]))
 
 /**
  * G04 (maqueta del 08/11) · El único cambio que se quiere en el menú: «Clientes
@@ -36,6 +38,21 @@ function conG04(v: unknown): unknown {
   const ordenes = x.ordenes.filter((o) => o !== 'ir.facturacion.clientesCuotas')
   const i = ordenes.findIndex((o) => o.startsWith('ir.facturacion.'))
   ordenes.splice(i < 0 ? ordenes.length : i, 0, 'ir.clientesCuotas.clientesGestoria', 'ir.clientesCuotas.tarifasGestoria')
+  return { ...x, menu, ordenes }
+}
+
+/**
+ * R09 (20/11) · El otro cambio que se quiere: una empresa de hostelería (la que ve Cierres del día)
+ * tiene «Ajustes › Ventas por día» sin interruptor, en el menú y en el buscador, detrás de Cobros.
+ */
+function conR09(v: unknown): unknown {
+  const x = v as { menu: string[]; ordenes: string[] }
+  const hosteleria = x.menu.some((l) => l.split(/[: ]+/).includes('cierres'))
+  if (!hosteleria || x.menu.some((l) => l.startsWith('ajustes:') && l.split(' ').includes('ventas-por-dia'))) return v
+  const menu = x.menu.map((l) => (l.startsWith('ajustes:') ? l.replace(/ cobros( |$)/, ' cobros ventas-por-dia$1') : l))
+  const ordenes = [...x.ordenes]
+  const i = ordenes.indexOf('ir.ajustes.cobros')
+  ordenes.splice(i < 0 ? ordenes.length : i + 1, 0, 'ir.ajustes.ventas-por-dia')
   return { ...x, menu, ordenes }
 }
 

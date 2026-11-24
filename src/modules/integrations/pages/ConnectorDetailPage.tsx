@@ -14,6 +14,12 @@
 //
 // El secreto NUNCA se muestra una vez guardado: el estado se lee como booleano
 // (hasCredentials). Para cambiarlo, se re-introduce.
+//
+// B01r26 (15/11): connector_secret_save SUSTITUYE el secreto entero, y la
+// config también. Guardar con los secretos en blanco los dejaba en `{}`, y la
+// config del formulario borraba la que no sale en él (base_url,
+// adjuntar_documentos de Diez). Ahora los secretos van todos o no se guarda
+// (secretosParaGuardar), y la config se manda encima de la que hay.
 
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Check, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
@@ -24,6 +30,7 @@ import {
   clearConnectorCredentials,
 } from '@/modules/integrations/services/connectorCredentialsService'
 import { upsertAccountConnector } from '@/modules/integrations/services/connectorService'
+import { configParaGuardar, presentacionDeEstado, secretosParaGuardar } from '@/modules/integrations/lib/estadoConexion'
 import type {
   Connector,
   AccountConnector,
@@ -45,11 +52,12 @@ interface ConnectorDetailPageProps {
   createdByName?: string | null
   onBack: () => void
   onChanged?: () => void
+  backLabel?: string                         // a dónde vuelve (por defecto, el Marketplace)
 }
 
 export default function ConnectorDetailPage({
   connector, accountConnector, accountId, locationId,
-  createdBy, createdByName, onBack, onChanged,
+  createdBy, createdByName, onBack, onChanged, backLabel = 'Marketplace',
 }: ConnectorDetailPageProps) {
   const fields = connector.configSchema?.fields ?? []
   const secretFields = fields.filter(f => f.type === 'secret')
@@ -121,17 +129,16 @@ export default function ConnectorDetailPage({
         setError(`El campo "${f.label}" es obligatorio.`); return
       }
     }
+    const sec = secretosParaGuardar(fields, values, hasCredentials)
+    if (!sec.ok) { setError(sec.motivo); return }
+    const secrets = sec.secretos
     setSaving(true); setError(null); setOkMsg(null)
 
-    const secrets: Record<string, string> = {}
-    for (const f of secretFields) {
-      const v = values[f.key]?.trim()
-      if (v) secrets[f.key] = v
-    }
-    const config: Record<string, unknown> = {}
+    const delFormulario: Record<string, unknown> = {}
     for (const f of plainFields) {
-      config[f.key] = castPlain(f, values[f.key] ?? '')
+      delFormulario[f.key] = castPlain(f, values[f.key] ?? '')
     }
+    const config = configParaGuardar((conn?.config as Record<string, unknown> | null) ?? null, delFormulario)
 
     try {
       // Si no existe la conexión todavía, la creamos ahora (activación al configurar).
@@ -157,7 +164,10 @@ export default function ConnectorDetailPage({
       })
       if (!res.ok) { setError(res.error); setSaving(false); return }
       setHasCredentials(prev => prev || Object.keys(secrets).length > 0)
-      setOkMsg('Configuración guardada de forma segura.')
+      // Regla 8: qué ha pasado, no un visto. Guardar no prueba las credenciales.
+      setOkMsg(Object.keys(secrets).length > 0
+        ? `Credenciales guardadas: ${connector.name} queda «Conectada». Se prueban la próxima vez que Folvy entre; si no valen, volverá a salir «Caída» con el motivo.`
+        : 'Configuración guardada.')
       setValues(prev => {
         const next = { ...prev }
         for (const f of secretFields) next[f.key] = ''
@@ -192,6 +202,7 @@ export default function ConnectorDetailPage({
   }
 
   const canSave = !!accountId  // con cuenta activa ya podemos crear+guardar
+  const estado = presentacionDeEstado(conn?.status)
 
   return (
     <div className="space-y-4">
@@ -201,8 +212,18 @@ export default function ConnectorDetailPage({
         className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-base"
       >
         <ArrowLeft size={16} />
-        Marketplace
+        {backLabel}
       </button>
+
+      {estado.rota && !okMsg && (
+        <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm space-y-1">
+          <p className="font-medium">{connector.name}: {estado.etiqueta}.</p>
+          {conn?.lastError && <p className="break-words">{conn.lastError}</p>}
+          {secretFields.length > 0 && (
+            <p>Para levantarla, escribe otra vez {secretFields.length === 1 ? 'la credencial' : `las ${secretFields.length} credenciales`} y pulsa «Guardar configuración».</p>
+          )}
+        </div>
+      )}
 
       <div className="rounded-xl border border-border-default bg-card">
         <div className="flex items-center gap-3 px-4 py-4 border-b border-border-default">

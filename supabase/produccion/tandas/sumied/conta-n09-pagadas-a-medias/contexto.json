@@ -1,0 +1,19 @@
+{
+ "_que": "N09 · Pagos y Bancos leen lo pagado en el programa de antes · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging f843d5b, 19/11 06:29Z), sin la 0800 y en SOLO LECTURA: no en producción (esta sesión no lee producción). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-19T08:04Z",
+ "tanda": {
+  "supabase/migrations/20261119T0800_n09_pagos_lee_lo_traido.sql": "037b57c8a8db0f41de506ed2469492dc"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

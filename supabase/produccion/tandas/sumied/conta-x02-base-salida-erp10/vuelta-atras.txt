@@ -1,0 +1,5 @@
+# X02 · la vuelta atrás, en orden inverso: la 1011 (quita las cinco funciones) y
+# la 1010 (quita las cuatro tablas; para si ya hay lotes apuntados).
+cuenta: scripts/conta/produccion/cuentas/x02-salida-erp10.sql
+supabase/vuelta-atras/20261117T1011_x02_salida_erp10_funciones.down.sql
+supabase/vuelta-atras/20261117T1010_x02_salida_erp10_tablas.down.sql

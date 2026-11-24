@@ -1,0 +1,20 @@
+# B01r·26 · Libera el freno «nunca dos veces» de octubre DESPUÉS de que Julio
+# borre en Diez (C0008) todo lo que había desde el 01/10. Rama
+# claude/b01-paso-a-diez. El ensayo, antes de fusionar; el REAL lo lanza Julio
+# después de borrar, desde main con «tanda» = claude-b01-paso-a-diez.
+#
+#   1745  Los 215 envíos de Foodint a Diez de octubre (213 «enviado» y 2
+#         «enlazado») pasan a «rechazado», con su referencia de antes en el
+#         motivo. Foodint está en modo mensual: nada sale hasta que Julio
+#         confirme el traspaso de octubre.
+#
+# guarda-diez.json: el real lee antes la C0008 (solo GET) y PARA si hay algún
+# asiento con fecha desde el 01/10. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/b01r26-liberar-octubre.sql
+supabase/migrations/20261113T1745_b01r26_liberar_octubre.sql
+sin-vuelta-atras: supabase/migrations/20261113T1745_b01r26_liberar_octubre.sql · motivo: devolverlos a «enviado» diría que están en Diez cuando Julio los ha borrado; si hiciera falta, se vuelve a medir Diez.
+esperado: b01r26-liberar-octubre · Envíos de Foodint en enviado o enlazado = 0
+esperado: b01r26-liberar-octubre · Envíos de Foodint rechazados por el borrado de Diez, menos 215 = 0
+esperado: b01r26-liberar-octubre · Envíos pendientes de Foodint, menos 27 = 0
+esperado: b01r26-liberar-octubre · Validados de octubre sin anular que el traspaso no lleva = 0
+esperado: b01r26-liberar-octubre · Anulaciones de octubre que el traspaso lleva = 0

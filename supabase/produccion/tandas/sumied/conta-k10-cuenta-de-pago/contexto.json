@@ -1,0 +1,24 @@
+{
+ "_que": "K10 · cuenta de pago en la ficha del proveedor · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. 1650 añade una tabla y una función, la llama (añade enlaces «pago» a company_account_link, sin cambiar ninguno), y cambia un trozo de conta_recibida_motivos y dos de company_account_misma_cuenta. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-21T15:56Z",
+ "tanda": {
+  "supabase/migrations/20261121T1650_k10_cuenta_de_pago.sql": "3bca5fe25d11403ed2adca2e5975ffd6"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_account_link"
+  ],
+  "funciones": [
+   "public.company_account_misma_cuenta()",
+   "public.conta_recibida_motivos(uuid,uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

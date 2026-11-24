@@ -1,0 +1,38 @@
+{
+ "_que": "N06b · darlo por bueno · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging 9a9afc4, 17/11 21:12Z, ya con el N06a y el R05), sin el N06b (quitado con sus vueltas atrás) y en SOLO LECTURA: no en producción (esta sesión no lee producción). Las filas son las de la base local; el contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-17T22:30Z",
+ "tanda": {
+  "supabase/migrations/20261117T2224_n06b_programa_erp10.sql": "282e3ef0541f266b0f50d678b57d759c",
+  "supabase/migrations/20261117T2240_n06b_traida_sin_pagar.sql": "0052a649781f3f83d7dabb8ef222289a",
+  "supabase/migrations/20261117T2241_n06b_serie_y_listas.sql": "0aee73e4797efcfceafe53928eef88e0",
+  "supabase/migrations/20261117T2242_n06b_darlo_por_bueno.sql": "cd58d85b766638bbd66d5640c6491382"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_pago_remesa_linea",
+   "public.conta_programa_anterior",
+   "public.journal_entry",
+   "public.supplier_invoice",
+   "public.supplier_invoice_payment"
+  ],
+  "funciones": [
+   "public.conta_traer_cargar(uuid,text,jsonb,text)",
+   "public.conta_traer_dejar_fuera(uuid,uuid[],boolean)",
+   "public.conta_traer_deshacer(uuid,text)"
+  ],
+  "filas": {
+   "public.conta_pago_remesa_linea": 0,
+   "public.conta_programa_anterior": 0,
+   "public.journal_entry": 0,
+   "public.supplier_invoice": 9,
+   "public.supplier_invoice_payment": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

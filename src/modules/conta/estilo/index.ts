@@ -33,11 +33,14 @@ import './impuestos.css'
 import './despacho.css'
 import './inicio.css'
 import './ventas.css'
+import './tpv.css' // R06 · «Subir las ventas del TPV» y «A qué cuenta va cada forma de pago» (maquetas 2 y 3)
 import './ficha.css'
 import './verifactu.css'
 import './marco.css'
 import './piezas.css'
 import './libroMarco.css'
+import './erp10.css' // X04 · «Salida a ERP10» (la maqueta aprobada del 17/11)
+import './traer-erp10.css' // N07 · «Traer de ERP10» (las maquetas aprobadas del 17/11)
 import '../diseno/diseno.css'
 import '../marco/marco.css' // S02 · el marco del patrón único (barra, cabecera, encabezado)
 import '../diseno/plantillas/plantillas.css' // S02 · las seis plantillas

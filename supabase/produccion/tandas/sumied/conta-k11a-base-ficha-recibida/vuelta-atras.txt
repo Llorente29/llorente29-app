@@ -1,0 +1,4 @@
+# K11a · la vuelta atrás: _journal_entry_proponer desde su respaldo, fuera las funciones nuevas, y lo que guarda datos solo si nadie lo ha usado.
+cuenta: scripts/conta/produccion/cuentas/k11a-base-ficha-recibida.sql
+supabase/vuelta-atras/20261122T0840_k11a_plataforma_en_el_asiento.down.sql
+supabase/vuelta-atras/20261122T0839_k11a_otros_datos_y_lineas.down.sql

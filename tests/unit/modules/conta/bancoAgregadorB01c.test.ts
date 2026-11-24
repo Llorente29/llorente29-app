@@ -60,11 +60,12 @@ const cuenta = (id: string, iban: string, saldo: string | null, fecha = '2026-10
   balances: saldo === null ? [{ type: 'ITAV', amount: '99999.00', currency: 'EUR', referenceDate: fecha }] : [{ type: 'ITBD', amount: saldo, currency: 'EUR', referenceDate: fecha }],
 })
 
-describe('B01c · la copia de extractoBanco.ts que usa la función', () => {
-  it('es la misma que la de la app, byte a byte (salvo su primera línea)', () => {
-    const app = readFileSync('src/modules/conta/lib/extractoBanco.ts', 'utf8').split('\n').slice(1).join('\n')
-    const funcion = readFileSync('supabase/functions/_shared/extractoBanco.ts', 'utf8').split('\n').slice(1).join('\n')
-    expect(funcion).toBe(app)
+describe('B01c · extractoBanco.ts, una sola copia para la app y la función', () => {
+  // B01·21: antes había dos copias que esta prueba comparaba byte a byte; ahora la app re-exporta la de la función.
+  it('la app no tiene su propia copia: re-exporta la de supabase/functions/_shared', () => {
+    const app = readFileSync('src/modules/conta/lib/extractoBanco.ts', 'utf8')
+    expect(app).toContain("export * from '../../../../supabase/functions/_shared/extractoBanco.ts'")
+    expect(app).not.toMatch(/export function|export const/)
   })
 })
 

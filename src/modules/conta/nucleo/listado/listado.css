@@ -1,0 +1,117 @@
+/* src/modules/conta/nucleo/listado/listado.css
+ *
+ * Q06 · La ventana de listado del núcleo, medida sobre las maquetas aprobadas
+ * (nucleo_7 y nucleo_8, a 1456 × 816). Se lee como un listado de ERP10:
+ * columnas finas, cifras a la derecha con su raya de totales, los grupos en
+ * gris y en negrita, el movimiento marcado en azul claro y lo que Sumied ha
+ * mirado con su raya ámbar a la izquierda. Los colores, los del núcleo (--k-*)
+ * y los de la ficha (--kf-*). El panel de la derecha es el de la K04.
+ */
+
+/* Con «:not([hidden])», como la ficha desde el K04b: si no, esta regla gana a la que esconde una pestaña y el
+   listado de una pestaña escondida sale debajo del que se mira (las dos «Abrir el asiento» de la e2e 44471618212). */
+.cx.cxm .k-zona.cx-principal:not([hidden]):has(.kl-listado) { padding: 0 16px 0; overflow: hidden; display: flex; flex-direction: column; }
+
+.kl-listado {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  background: var(--k-blanco); border: 1px solid var(--k-borde); border-top: 0; border-radius: 0 0 6px 6px;
+  font-size: 13px; color: var(--k-tinta);
+}
+.kl-listado button { font: inherit; }
+.kl-listado :focus-visible { outline: 2px solid var(--k-azul); outline-offset: -2px; }
+.kl-der { text-align: right; }
+.kl-apoyo { color: var(--k-apoyo); white-space: nowrap; }
+.kl-hueco { flex: 1; }
+
+/* ── Arriba ─────────────────────────────────────────────────────────── */
+.kl-cabecera { flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 7px 14px 7px 14px; }
+.kl-segmentos button { padding: 0 14px; }
+.kl-cabecera-botones { margin-left: auto; display: flex; gap: 8px; }
+
+.kl-cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.46fr) minmax(0, 1fr); }
+.kl-izquierda { min-height: 0; display: flex; flex-direction: column; padding: 0 16px 0 14px; }
+
+/* ── Los datos del informe ──────────────────────────────────────────── */
+.kl-datos { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 4px 0 8px; }
+.kl-datos select, .kl-datos input {
+  height: 26px; padding: 0 8px; border: 1px solid var(--kf-casilla-borde); border-radius: 4px; background: var(--k-blanco); color: var(--k-tinta); font: inherit;
+}
+.kl-datos input { width: 108px; }
+.kl-datos input.kl-cuenta { width: 88px; }
+.kl-datos input[aria-invalid='true'] { border-color: var(--kf-ambar-borde); }
+
+/* ── El listado ─────────────────────────────────────────────────────── */
+.kl-caja { flex: 1; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--k-borde); border-radius: 4px; }
+.kl-rueda { flex: 1; min-height: 0; overflow: auto; }
+.kl-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.kl-tabla th {
+  position: sticky; top: 0; z-index: 1; height: 26px; padding: 0 8px; background: var(--k-blanco); border-bottom: 1px solid var(--k-borde);
+  color: var(--k-apoyo); font-weight: 400; font-size: 12px; text-align: left; white-space: nowrap;
+}
+.kl-tabla th.kl-der { text-align: right; }
+.kl-tabla td { height: 25px; padding: 0 8px; border-bottom: 1px solid #edf0f3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kl-tabla tbody tr { cursor: default; }
+.kl-tabla tr[data-clase='grupo'], .kl-tabla tr[data-clase='mes'] { background: #f3f5f7; font-weight: 700; }
+.kl-tabla tr[data-clase='cuenta'] td:first-child { color: var(--k-azul); text-decoration: underline; text-underline-offset: 2px; }
+.kl-tabla tr[data-clase='cuenta'] { font-weight: 600; }
+.kl-tabla tr[data-clase='movimiento'], .kl-tabla tr[data-clase='inicial'] { color: #3e4a55; font-size: 12.5px; }
+.kl-tabla tr[data-clase='movimiento'] td, .kl-tabla tr[data-clase='inicial'] td { border-bottom-style: dashed; }
+.kl-tabla tr[data-clase='inicial'] td:nth-child(2) { font-style: italic; }
+.kl-tabla tbody tr[aria-selected='true'] { background: var(--k-azul-claro); }
+.kl-tabla tbody tr[aria-selected='true'][data-clase='movimiento'], .kl-tabla tbody tr[aria-selected='true'][data-clase='factura'] { font-weight: 700; }
+.kl-tabla tbody tr:focus-visible { outline-offset: -2px; }
+.kl-flecha { display: inline-block; width: 14px; color: var(--k-apoyo); font-weight: 400; text-decoration: none; }
+
+/* Lo que Sumied ha mirado: la raya ámbar a la izquierda, la fila y su frase, sin tapar nada. */
+.kl-tabla tr[data-mirar='si'] { background: var(--kf-ambar-fondo); box-shadow: inset 3px 0 0 var(--k-mira); }
+.kl-tabla tr.kl-mira { background: var(--kf-ambar-fondo); box-shadow: inset 3px 0 0 var(--k-mira); }
+.kl-tabla tr.kl-mira td { height: 20px; padding-left: 36px; color: var(--kf-ambar-tinta); font-size: 12.5px; border-bottom: 1px solid #edf0f3; white-space: normal; }
+.kl-tabla tr.kl-mira strong { color: var(--kf-ambar-boton); }
+
+/* El total, abajo, con su raya. */
+.kl-total { flex-shrink: 0; border-top: 2px solid var(--k-tinta); }
+.kl-total td { height: 30px; border-bottom: 0; font-weight: 700; overflow: visible; }
+.kl-abrir { margin-left: 14px; font-weight: 400; color: var(--k-apoyo); font-size: 12px; }
+.kl-abrir .kf-enlace { font-size: 12px; }
+
+.kl-nota { margin: 18px 12px; color: var(--k-apoyo); }
+.kl-nota[data-tono='mal'] { color: #a4261d; }
+
+.kl-ayuda { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 7px 0 6px; color: var(--k-apoyo); font-size: 11.5px; }
+
+/* ── El panel: «Qué mirar» ──────────────────────────────────────────── */
+.kl-que-mirar ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.kl-que-mirar li button {
+  width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 5px; cursor: pointer;
+  background: var(--kf-ambar-fondo); color: var(--kf-ambar-tinta); box-shadow: inset 3px 0 0 var(--k-mira);
+}
+.kl-aviso { margin: 8px 0 0; padding: 8px 10px; border-radius: 5px; background: var(--kf-ambar-fondo); color: var(--kf-ambar-tinta); }
+
+/* ── La hoja (maqueta 8) ────────────────────────────────────────────── */
+.kl-barra-hoja { gap: 8px; }
+.kl-barra-hoja .kf-flecha { height: 26px; width: 26px; }
+.kl-barra-hoja .kf-boton-hueco { height: 28px; }
+.kl-mesa { flex: 1; min-height: 0; overflow: auto; padding: 14px 38px; background: #e4e7eb; border: 1px solid var(--k-borde); border-radius: 4px; }
+.kl-hoja {
+  max-width: 650px; margin: 0 auto; padding: 28px 30px 20px; background: var(--k-blanco); box-shadow: 0 1px 4px rgba(16, 24, 40, 0.18);
+  font-size: 12px;
+}
+.kl-hoja[data-apaisada] { max-width: 860px; }
+.kl-hoja-cabecera { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 8px; border-bottom: 2px solid var(--k-tinta); }
+.kl-hoja-cabecera > div { display: flex; flex-direction: column; gap: 2px; }
+.kl-hoja-cabecera strong { font-size: 14px; }
+.kl-hoja-cabecera .kl-der { align-items: flex-end; }
+.kl-hoja-tabla { width: 100%; margin-top: 12px; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.kl-hoja-tabla th { padding: 4px 4px; border-bottom: 1px solid var(--k-tinta); font-weight: 700; text-align: left; white-space: nowrap; }
+.kl-hoja-tabla td { padding: 4px 4px; border-bottom: 1px solid #e5e8ec; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kl-hoja-tabla tr[data-clase='cabecera'] td, .kl-hoja-tabla tr[data-clase='suma'] td { font-weight: 700; }
+.kl-hoja-pie { display: flex; justify-content: space-between; margin-top: 14px; color: var(--k-apoyo); font-size: 11px; }
+
+/* A 1366 × 768 (cinta plegada): un poco más prieto. */
+@media (max-height: 790px) {
+  .kl-tabla td { height: 23px; }
+  .kl-ayuda { display: none; }
+}
+
+/* «Abrir el asiento» sin movimiento marcado: se ve, pero apagado. */
+.kl-listado .kf-enlace:disabled { color: var(--k-apoyo); text-decoration: none; cursor: default; }

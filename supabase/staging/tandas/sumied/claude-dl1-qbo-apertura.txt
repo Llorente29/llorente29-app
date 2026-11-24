@@ -1,0 +1,5 @@
+# DL1 · apertura de QBO (1035: no añade objetos; en Foodint apunta y valida un
+# asiento a 01/01). Su prueba (ROLLBACK, cuenta A): sin Foodint no hace nada;
+# un asiento a 01/01 sin IVA en un mes cerrado por el corte se valida.
+supabase/migrations/20261113T1035_dl1_qbo_apertura.sql
+supabase/staging/sql/20261113_dl1_qbo_apertura_prueba.sql

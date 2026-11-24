@@ -45,6 +45,7 @@ import {
 import { guardarCambiosCierre, leerCierres, leerPedidosCierre, ponerEnEspera, quitarDeEspera, validarCierre } from '@/modules/conta/services/cierresService'
 import { numeroDeTexto, textoDeNumero } from '@/modules/conta/lib/facturasVenta'
 import { LoQueDejaElCierre } from './LoQueDejaElCierre'
+import { useSeVe } from '@/modules/conta/diseno/plantillas/pestana'
 
 const importeEs = (n: number) => textoDeNumero(n)
 
@@ -70,6 +71,8 @@ export default function CierrePage() {
   const pedidos = useLeer(accountId && cierreId ? () => leerPedidosCierre(cierreId) : null, `${cierreId}:pedidos:${vuelta}`)
   const c = (lista.datos ?? []).find((x) => x.id === cierreId) ?? null
   const asiento = useLeer(accountId && c?.asientoId ? () => leerAsiento(accountId, c.asientoId!) : null, `${c?.asientoId}:asiento`)
+  // R07 · Un día en dos asientos: su cobro, aparte.
+  const asientoCobro = useLeer(accountId && c?.cobro ? () => leerAsiento(accountId, c.cobro!.id) : null, `${c?.cobro?.id}:asiento-cobro`)
   const documento = useLeer(c?.documento ? () => urlDocumento(c.documento!) : null, `${c?.documento}:pdf`)
   const previa = useLeer(c && !c.documento && c.asientoId && c.estado !== 'validado' ? () => vistaPreviaCierre(c.asientoId!) : null, `${c?.asientoId}:previa`)
   useEffect(() => () => { if (previa.datos?.url) URL.revokeObjectURL(previa.datos.url) }, [previa.datos?.url])
@@ -125,9 +128,11 @@ export default function CierrePage() {
   }
 
   // Intro valida y pasa al siguiente (fuera de un campo y sin diálogos ni cambios).
+  // K03 · En una pestaña escondida del núcleo, esta pantalla no escucha el teclado.
+  const seVe = useSeVe()
   useEffect(() => {
     const alTeclear = (ev: KeyboardEvent) => {
-      if (ev.key !== 'Enter' || ev.defaultPrevented || dialogo || hay || !c || c.estado !== 'por_validar') return
+      if (!seVe() || ev.key !== 'Enter' || ev.defaultPrevented || dialogo || hay || !c || c.estado !== 'por_validar') return
       const t = ev.target as HTMLElement | null
       if (t && (t.closest('input, textarea, select, button, a, [role="dialog"]'))) return
       ev.preventDefault(); void validarYSiguiente()
@@ -171,9 +176,17 @@ export default function CierrePage() {
     porMarca.set(k, { n: x.n + 1, total: Math.round((x.total + p.total) * 100) / 100 })
   }
   const apuntes = asiento.datos?.apuntes ?? []
-  const cobro = apuntes.filter((x) => x.cuenta.startsWith('43')).reduce((t, x) => t + x.debe - x.haber, 0)
-  const cobraQuien = apuntes.find((x) => x.cuenta.startsWith('43') && x.debe > 0)
-  const lineasAsiento = apuntes.map((x) => ({ nombre: x.nombreCuenta, codigo: x.cuenta, debe: x.debe ? importeEs(x.debe) : null, haber: x.haber ? importeEs(x.haber) : null }))
+  const apuntesCobro = asientoCobro.datos?.apuntes ?? []
+  // Lo cobrado: con el día en dos, lo que va al debe del cobro (la 430 de la plataforma); si no, la 43 del asiento del día.
+  const deCobro = c?.cobro ? apuntesCobro.filter((x) => x.debe > 0) : apuntes.filter((x) => x.cuenta.startsWith('43'))
+  const cobro = deCobro.reduce((t, x) => t + x.debe - x.haber, 0)
+  const cobraQuien = deCobro.find((x) => x.debe > 0)
+  const enLineas = (xs: typeof apuntes) => xs.map((x) => ({ nombre: x.nombreCuenta, codigo: x.cuenta, debe: x.debe ? importeEs(x.debe) : null, haber: x.haber ? importeEs(x.haber) : null }))
+  const lineasAsiento = enLineas(apuntes)
+  const lineasCobro = enLineas(apuntesCobro)
+  // «Clientes de contado»: la cuenta que está en los dos (la factura la carga y el cobro la descarga).
+  const contado = apuntes.find((x) => apuntesCobro.some((y) => y.cuenta === x.cuenta))?.cuenta ?? null
+  const saldoContado = contado ? [...apuntes, ...apuntesCobro].filter((x) => x.cuenta === contado).reduce((t, x) => t + Math.round(x.debe * 100) - Math.round(x.haber * 100), 0) / 100 : null
   const cambioDe = new Map(cambios.map((x) => [x.pedido, x]))
 
   const datos = (
@@ -259,13 +272,18 @@ export default function CierrePage() {
       <BloqueFicha titulo="Cobro">
         <FilaCampos columnas={2}>
           <CampoFicha etiqueta="Lo cobra" valor={cobraQuien ? `${cobraQuien.nombreCuenta} (${cobraQuien.cuenta})` : c.canal} />
-          <CampoFicha etiqueta="Importe" valor={apuntes.length ? eurosExactos(Math.round(cobro * 100) / 100) : '—'} cifra />
+          <CampoFicha etiqueta="Importe" valor={(c.cobro ? apuntesCobro : apuntes).length ? eurosExactos(Math.round(cobro * 100) / 100) : '—'} cifra />
         </FilaCampos>
       </BloqueFicha>
 
-      <AsientoQueSeCrea titulo={c.estado === 'validado' ? 'Su asiento' : 'El asiento que se valida'} lineas={lineasAsiento}
-        nota={c.asientoId ? <><Link to={rutaAsiento(c.asientoId)}>Ver el asiento{c.numeroAsiento ? ` ${c.numeroAsiento.toLocaleString('es-ES')}` : ''}</Link>{c.estado === 'validado' ? ' · Validado. Entra en el traspaso del mes.' : ' · Se valida con su PDF y su factura, juntos.'}</> : 'Sin asiento: mira el motivo de arriba.'}
+      <AsientoQueSeCrea titulo={c.cobro ? '1 · La factura del día' : c.estado === 'validado' ? 'Su asiento' : 'El asiento que se valida'} lineas={lineasAsiento}
+        nota={c.asientoId ? <><Link to={rutaAsiento(c.asientoId)}>Ver el asiento{c.numeroAsiento ? ` ${c.numeroAsiento.toLocaleString('es-ES')}` : ''}</Link>{c.estado === 'validado' ? ' · Validado. Entra en el traspaso del mes.' : c.cobro ? ' · Se valida con su PDF, su factura y su cobro, juntos.' : ' · Se valida con su PDF y su factura, juntos.'}</> : 'Sin asiento: mira el motivo de arriba.'}
         vacio={c.asientoId ? (asiento.error ? `No se ha podido leer su asiento: ${asiento.error}` : 'Leyendo su asiento…') : 'Este cierre no tiene asiento.'} />
+      {c.cobro && (
+        <AsientoQueSeCrea titulo="2 · El cobro del día" lineas={lineasCobro}
+          nota={<><Link to={rutaAsiento(c.cobro.id)}>Ver el asiento{c.cobro.numero ? ` ${c.cobro.numero.toLocaleString('es-ES')}` : ''}</Link>{saldoContado != null ? ` · Clientes de contado queda a ${eurosExactos(saldoContado)}` : ''}. Va con la factura del día: se validan y se deshacen juntos.</>}
+          vacio={asientoCobro.error ? `No se ha podido leer su cobro: ${asientoCobro.error}` : 'Leyendo su cobro…'} />
+      )}
     </>
   )
 

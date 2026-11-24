@@ -1,0 +1,3 @@
+# K11f2 · la vuelta atrás: las dos funciones desde su respaldo.
+cuenta: scripts/conta/produccion/cuentas/k11f2-303-otros-datos.sql
+supabase/vuelta-atras/20261122T1815_k11f2_303_otros_datos.down.sql

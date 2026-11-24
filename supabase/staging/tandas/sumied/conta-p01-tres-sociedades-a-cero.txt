@@ -1,0 +1,6 @@
+# P01 · las tres sociedades a cero (1015: añade tres funciones sin permisos; sin la
+# cuenta de las tres no borra nada). Su prueba (ROLLBACK): sin esa cuenta no toca
+# nada; con tres sociedades inventadas y una cuarta de control, borra solo lo de las
+# tres, deja la cuarta igual, fija el corte y para cuando debe.
+supabase/migrations/20261117T1015_p01_tres_sociedades_a_cero.sql
+supabase/staging/sql/20261117_p01_tres_sociedades_a_cero_prueba.sql

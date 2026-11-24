@@ -1,0 +1,22 @@
+{
+ "_que": "X05 · las emitidas salen a ERP10 · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging 149ed13c6, 17/11 22:10Z, ya con la X02, el X04a y el X04), en SOLO LECTURA, el 17/11: no en producción (esta sesión no lee producción). conta_erp10_por_salir existe (la del X04a); conta_erp10_emitidas_por_salir es nueva. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-17T22:40Z",
+ "tanda": {
+  "supabase/migrations/20261117T2230_x05_por_salir_emitidas.sql": "4fb6e9801ada1e5a7b8c841fde021876",
+  "supabase/migrations/20261117T2231_x05_emitidas_por_salir.sql": "32526938cc9834f4e4816f6dffa74b92"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_erp10_por_salir(uuid,date)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

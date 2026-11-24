@@ -1,0 +1,15 @@
+# X24 · Un proveedor nunca se da de alta dos veces (encargo del 21/11). Rama conta/x24-proveedor-nunca-repetido.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1700  CAMBIA EN CALIENTE (declarado en su cabecera, con su prueba de staging): _conta_proveedor_solo busca,
+#         antes de dar de alta, entre los proveedores SIN NIF de la cuenta el del mismo nombre (uno: se une y se le
+#         completa el NIF; dos o más: ninguno, con su motivo); _conta_proveedor_solo_deshacer le quita el NIF que le
+#         puso. Añade conta_proveedor_solo.nif_completado. Misma firma, guarda md5, respaldo y vuelta atrás.
+#   1710  Destruye (autorizo): el índice único del NIF de supplier pasa a ser por el NIF LIMPIO
+#         (ux_supplier_account_nif_clave sobre _conta_nif_clave). Su guarda PARA si hay NIF repetidos (limpios) en
+#         alguna cuenta, con la lista por cuenta, sin tocar nada.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x24-proveedor-nunca-repetido.sql
+supabase/migrations/20261121T1700_x24_proveedor_sin_nif.sql
+supabase/migrations/20261121T1710_x24_nif_unico.sql

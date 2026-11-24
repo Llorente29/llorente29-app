@@ -1,0 +1,14 @@
+# N03 · Una factura de antes del día de inicio: Sumied para y pregunta. Rama
+# conta/n03-factura-de-antes-del-inicio. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   0955  Añade la respuesta en la factura (supplier_invoice.before_start_answer y
+#         quién y cuándo, que admiten nulos) y cuatro funciones nuevas.
+#   0956  Cambia en caliente, con la misma firma y su respaldo:
+#         _conta_recibida_no_antes_de_entrar (para y pregunta), conta_documentos_recibidos
+#         (la marcada sale con su etiqueta) y conta_pagos_lista (no sale en Pagos).
+#
+# No cambia ni una fila. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/n03-antes-del-inicio.sql
+supabase/migrations/20261117T0955_n03_respuesta_antes_del_inicio.sql
+supabase/migrations/20261117T0956_n03_parar_y_preguntar.sql

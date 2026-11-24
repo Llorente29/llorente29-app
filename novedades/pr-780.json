@@ -1,0 +1,20 @@
+[
+ {
+  "id": "780-1",
+  "pr": 780,
+  "fecha": "2026-11-22T08:49:49Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "un día del TPV sale como su libro de IVA: una factura por serie, una por cada factura con NIF a su cliente y una por cada devolución, en negativo; el total del día, el mismo.",
+  "ruta": null
+ },
+ {
+  "id": "780-2",
+  "pr": 780,
+  "fecha": "2026-11-22T08:49:49Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "el cliente de una factura con NIF que no tiene ficha se da de alta solo, con su 430, y sale primero en las cuentas nuevas con su NIF.",
+  "ruta": null
+ }
+]

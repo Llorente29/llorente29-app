@@ -1,0 +1,29 @@
+[
+ {
+  "id": "727-1",
+  "pr": 727,
+  "fecha": "2026-11-18T19:24:32Z",
+  "producto": "sumied",
+  "apartado": "Facturas recibidas",
+  "frase": "si una factura va a nombre de otra sociedad o de alguien de fuera, Sumied ya no decide solo que su IVA no se deduce: lo pregunta en ámbar y no deja validar hasta que alguien conteste.",
+  "ruta": null
+ },
+ {
+  "id": "727-2",
+  "pr": 727,
+  "fecha": "2026-11-18T19:24:32Z",
+  "producto": "sumied",
+  "apartado": "Pasarla a otra sociedad",
+  "frase": "una factura que va a nombre de otra sociedad de tu cuenta se pasa a ella con un clic, con su PDF.",
+  "ruta": null
+ },
+ {
+  "id": "727-3",
+  "pr": 727,
+  "fecha": "2026-11-18T19:24:32Z",
+  "producto": "sumied",
+  "apartado": "Lo que decides se queda",
+  "frase": "la respuesta guarda quién y cuándo, y no cambia aunque se vuelva a leer la factura o se cambie su proveedor.",
+  "ruta": null
+ }
+]

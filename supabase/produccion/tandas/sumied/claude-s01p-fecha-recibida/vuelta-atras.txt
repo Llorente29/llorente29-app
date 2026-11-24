@@ -1,0 +1,3 @@
+# S01p·18.2 · la vuelta atrás: fuera conta_recibida_fecha.
+cuenta: scripts/conta/produccion/cuentas/s01p-recibida-fecha.sql
+supabase/vuelta-atras/20261113T0913_s01p_recibida_fecha.down.sql

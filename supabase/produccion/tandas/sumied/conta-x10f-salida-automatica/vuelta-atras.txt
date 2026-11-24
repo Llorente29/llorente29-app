@@ -1,0 +1,5 @@
+# X10f · la vuelta atrás, en orden inverso: el lote como estaba (del respaldo) y lo añadido fuera
+# (para si algún envío ya dice cómo salió).
+cuenta: scripts/conta/produccion/cuentas/x10f-cola-erp10.sql
+supabase/vuelta-atras/20261120T2011_x10f_lote_desde_el_servidor.down.sql
+supabase/vuelta-atras/20261120T2010_x10f_cola_erp10.down.sql

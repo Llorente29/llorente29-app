@@ -55,6 +55,7 @@ import { DialogoPagarVarias, PanelFijo } from '@/modules/conta/pagos/PagarVarias
 import { ResultadoPago } from '@/modules/conta/pagos/ResultadoPago'
 import { cuentasParaPagar } from '@/modules/conta/pagos/pagarService'
 import { leerQuienPaga } from '@/modules/conta/bancos/revolut/pagosRevolut'
+import { useSeVe } from '@/modules/conta/diseno/plantillas/pestana'
 
 /** Cola 1d · El orden elegido se recuerda (solo en este navegador; si no se puede guardar, el de siempre). */
 const CLAVE_ORDEN = 'sumied.pagos.orden'
@@ -158,10 +159,12 @@ export default function PagosPage() {
   }
 
   // Intro paga (como en el tablero), si hay algo que pagar y no se está escribiendo en un campo.
+  // K03 · En una pestaña escondida del núcleo, esta pantalla no escucha el teclado.
+  const seVe = useSeVe()
   useEffect(() => {
     const alPulsar = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
-      if (e.key !== 'Enter' || !pagables.length || dialogo || ponerIbanA || (t && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(t.tagName))) return
+      if (!seVe() || e.key !== 'Enter' || !pagables.length || dialogo || ponerIbanA || (t && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(t.tagName))) return
       e.preventDefault(); if (!abierto) setAbierto(true); else if (!porBanco) void pagar()
     }
     window.addEventListener('keydown', alPulsar)

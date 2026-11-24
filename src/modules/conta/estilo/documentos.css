@@ -380,3 +380,17 @@
 .cxcm-lista li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 8px; background: var(--s-superficie); }
 .cxcm-lista li[data-sugerida='si'] { outline: 2px solid var(--s-ok); }
 @media (max-width: 720px) { .cxcm-lista li { flex-direction: column; align-items: stretch; } }
+
+/* N03 · La pregunta de una factura de antes del día de inicio: los dos botones, del mismo tamaño y el mismo peso. */
+.cxr-dos-iguales { justify-content: stretch; }
+.cxr-dos-iguales > button { flex: 1 1 0; }
+
+/* E03 · «¿De quién es esta factura?»: sus dos botones, del mismo tamaño, uno al lado del otro; en el móvil, uno debajo del otro. */
+.cxf-de-quien-botones { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--s-2); max-width: 100%; }
+.cxf-de-quien-botones > .s-boton { width: 100%; justify-content: center; }
+@media (max-width: 767px) { .cxf-de-quien-botones { display: grid; grid-auto-flow: row; } }
+
+/* E04 · «Es de: [sociedad ▾]» debajo de la frase, y su «Pasarla a …» al lado; en el móvil, uno debajo del otro. */
+.cxf-de-quien-es { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-2); }
+.cxf-de-quien-es label { display: inline-flex; align-items: center; gap: var(--s-2); }
+@media (max-width: 767px) { .cxf-de-quien-es, .cxf-de-quien-es label { display: grid; } .cxf-de-quien-es .s-control { width: 100%; } }

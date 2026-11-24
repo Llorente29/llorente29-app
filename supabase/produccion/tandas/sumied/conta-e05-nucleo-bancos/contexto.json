@@ -1,0 +1,8 @@
+{
+ "_que": "E05 · Bancos del núcleo · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA, el 18/11 (analizar.mjs sql-contexto): no en producción (esta sesión no lee producción). conta_banco_a_mano es nueva; no toca ninguna tabla. Las filas de producción las mide el ensayo. Nada del camino del pedido.",
+ "medido": "2026-11-18T22:58Z",
+ "tanda": {
+  "supabase/migrations/20261118T2248_e05_banco_a_mano.sql": "eb4ede39a67ec01fb80f1cc74865a758"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

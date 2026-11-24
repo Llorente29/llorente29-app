@@ -1,0 +1,4 @@
+# X24 · la vuelta atrás: primero el índice de antes, después las dos funciones (de su respaldo).
+cuenta: scripts/conta/produccion/cuentas/x24-proveedor-nunca-repetido.sql
+supabase/vuelta-atras/20261121T1710_x24_nif_unico.down.sql
+supabase/vuelta-atras/20261121T1700_x24_proveedor_sin_nif.down.sql

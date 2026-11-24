@@ -1,0 +1,11 @@
+# S01p·18 · punto 2 · «Contabilizar» en la liquidación del socio valida lo que propone
+# (Julio, 12/11). Rama claude/s01p-contabilizar-valida. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   1915  _compras_liquidacion_confirmar (con respaldo): después de confirmar, cada
+#         asiento que el libro propone para esa liquidación se valida a nombre de quien
+#         pulsa, por el camino de «Validar»; el que no se puede, queda propuesto y se dice.
+#
+# Nada en el camino del pedido. No mueve ninguna fila. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-contabilizar-valida.sql
+supabase/migrations/20261112T1915_s01p_contabilizar_valida.sql

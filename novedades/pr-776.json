@@ -1,0 +1,29 @@
+[
+ {
+  "id": "776-1",
+  "pr": 776,
+  "fecha": "2026-11-22T07:26:51Z",
+  "producto": "sumied",
+  "apartado": "Factura recibida",
+  "frase": "el tipo de operación se cambia en la factura sin tocar la ficha del proveedor, y el trimestre en que se deduce se elige entre los abiertos.",
+  "ruta": null
+ },
+ {
+  "id": "776-2",
+  "pr": 776,
+  "fecha": "2026-11-22T07:26:51Z",
+  "producto": "sumied",
+  "apartado": "Factura recibida",
+  "frase": "el concepto del asiento se puede escribir, hay observaciones que se guardan con la factura, y la marca se puede poner.",
+  "ruta": null
+ },
+ {
+  "id": "776-3",
+  "pr": 776,
+  "fecha": "2026-11-22T07:26:51Z",
+  "producto": "sumied",
+  "apartado": "Factura recibida",
+  "frase": "si no hay asiento propuesto, la ficha dice por qué (por ejemplo, que al proveedor le falta el NIF).",
+  "ruta": null
+ }
+]

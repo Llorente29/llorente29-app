@@ -1,0 +1,2 @@
+# B01r26 · los enlaces falsos de octubre: la 2041 no tiene vuelta atrás (se declara en aplicar.txt): devolverlos a «enlazado» diría que están en Diez y no están.
+cuenta: scripts/conta/produccion/cuentas/b01r26-enlaces-falsos.sql

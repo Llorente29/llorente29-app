@@ -1,0 +1,5 @@
+# DL1·28 · IVA 3T y socio (1220: no añade objetos; en Foodint apunta dos
+# asientos). Su prueba (ROLLBACK, cuenta A): sin Foodint no hace nada; un
+# asiento de tres líneas se valida.
+supabase/migrations/20261114T1220_dl1_iva_3t_socio.sql
+supabase/staging/sql/20261114_dl1_iva_3t_socio_prueba.sql

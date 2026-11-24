@@ -1,0 +1,5 @@
+# B01r26 · 0757: el cerrojo de la tanda del traspaso a Diez (tanda_hasta y sus dos
+# funciones). Solo añade. Su prueba (ROLLBACK): una tanda a la vez, soltar, caducar,
+# los límites, sin permiso para un usuario y la vuelta atrás.
+supabase/migrations/20261114T0757_b01r26_traspaso_cerrojo.sql
+supabase/staging/sql/20261114_b01r26_traspaso_cerrojo_prueba.sql

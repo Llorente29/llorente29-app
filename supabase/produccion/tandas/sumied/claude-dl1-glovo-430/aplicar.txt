@@ -1,0 +1,19 @@
+# DL1 · la 43000001 (Glovo) conciliada con el zip de liquidaciones (Julio, 15/11,
+# 09:14: A1, A2 y A3 aprobados; las ventas a la 70000000; el IVA al 4T). Rama
+# claude/dl1-glovo-430. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   0916  A1 ventas que faltaban (35), A2 facturas al revés (28), A3 compensaciones
+#         del 16–30/06 (13) y 4 facturas que faltaban, todo a 01/10. La 43000001 a
+#         31/10 sube 13.364,58. Validado como Julio. No crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-glovo-430.sql
+supabase/migrations/20261115T0916_dl1_glovo_430.sql
+sin-vuelta-atras: supabase/migrations/20261115T0916_dl1_glovo_430.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-glovo-430 · 43000001 de la tanda, menos 13.364,58 = 0.00
+esperado: dl1-glovo-430 · 70000000 de A1, menos 16.076,36 = 0.00
+esperado: dl1-glovo-430 · 47700010 de A1, menos 1.607,63 = 0.00
+esperado: dl1-glovo-430 · 47200021 de A2 y A3, menos 532,45 = 0.00
+esperado: dl1-glovo-430 · 41000002 de A3, menos 1.251,64 = 0.00
+esperado: dl1-glovo-430 · de las 4 facturas del 16–30/06, las que faltan = 0

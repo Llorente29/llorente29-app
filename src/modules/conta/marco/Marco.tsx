@@ -89,7 +89,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
   const pendientes = cuentasDeLaBarra(cuentas)
   const frases = frasesDeLaBarra(cuentas)
   const contadores = useContadoresPestanas(producto?.id ?? null, activa?.id ?? null, cuentas)
-  const catalogo = producto && pestana ? cintaDe(producto.id, pestana.id, ctx) : []
+  const catalogo = producto && pestana ? cintaDe(producto.id, pestana.id, ctx, { pathname, search }) : []
   const grupos = resolverGrupos(catalogo, { datos: datosCinta, entradas: entradasCinta, pathname, search, abrirBuscador })
 
   // Los ejercicios de la empresa, para el botón del periodo.
@@ -150,6 +150,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
     ponerDatosCinta: setDatosCinta,
     ponerEntradasCinta: setEntradasCinta,
     hosteleria: ctxListo ? ctx.hosteleria : null,
+    ventasPorDia: ctxListo ? ctx.ventasPorDia === true : null,
     gestoria: ctxListo ? ctx.gestoria === true : null,
     analitica: ctxListo ? ctx.analitica ?? null : null,
     nivel: prefs.nivel,
@@ -160,7 +161,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
     abrirBuscador,
     colorEmpresa: ctx.colorEmpresa ?? null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [prefs.nivel, prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria, ctx.gestoria, ctx.analitica, ctx.diez, ctx.colorEmpresa, clave, ejercicios, activa?.id, abrirBuscador])
+  }), [prefs.nivel, prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria, ctx.ventasPorDia, ctx.gestoria, ctx.analitica, ctx.diez, ctx.colorEmpresa, clave, ejercicios, activa?.id, abrirBuscador])
 
   // Lo que se puede fijar desde aquí: esta página y sus acciones.
   const fijables: Orden[] = [

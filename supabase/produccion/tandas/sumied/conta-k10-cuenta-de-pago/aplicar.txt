@@ -1,0 +1,13 @@
+# K10 · La «Cuenta de pago» en la ficha del proveedor, como en ERP10, y la contrapartida con cualquier subcuenta (21/11).
+# Rama conta/k10-cuenta-de-pago. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1650  Añade conta_k10_pago_desde_plataforma (tabla y función) y la llama una vez: a cada proveedor de
+#         una plataforma con su 430 que aún no tiene cuenta de pago en esa empresa, le pone esa 430 en su
+#         ficha (company_account_link, papel «pago»), y apunta cada enlace. No cambia ningún enlace que ya
+#         existe. Cambia dos trozos en caliente: conta_recibida_motivos (la contrapartida puede ser la 480
+#         o un 21x) y company_account_misma_cuenta (la cuenta de pago de un proveedor, cualquier subcuenta
+#         menos la suya). Lo cuenta k10-cuenta-de-pago.sql, con la regla 31.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k10-cuenta-de-pago.sql
+supabase/migrations/20261121T1650_k10_cuenta_de_pago.sql

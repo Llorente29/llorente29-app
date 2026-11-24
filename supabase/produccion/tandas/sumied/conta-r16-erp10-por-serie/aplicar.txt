@@ -1,0 +1,12 @@
+# R16 · El día del TPV sale a ERP10 como su libro de IVA: por serie, con sus facturas con NIF y sus
+# devoluciones (encargo R16, 22/11). Rama conta/r16-erp10-por-serie. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   0810  Solo añade: la 430 del cliente de cada factura con NIF (y su alta, si no tiene ficha en
+#         Sumied), los clientes con NIF de los días del mes y el libro de cada día para el fichero de
+#         ERP10. No cambia conta_erp10_dias_tpv_por_salir ni nada de lo que existe: el reparto lo hace
+#         supabase/functions/_shared/erp10Ficheros.ts.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r16-erp10-por-serie.sql
+supabase/migrations/20261122T0810_r16_erp10_dia_por_serie_anade.sql

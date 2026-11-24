@@ -1,0 +1,20 @@
+[
+ {
+  "id": "788-1",
+  "pr": 788,
+  "fecha": "2026-11-22T20:01:51Z",
+  "producto": "sumied",
+  "apartado": "Proveedores y clientes",
+  "frase": "la ficha no se estira en una pantalla grande. Cada casilla mide lo que su dato, como en ERP10, y cada bloque va en su recuadro.",
+  "ruta": null
+ },
+ {
+  "id": "788-2",
+  "pr": 788,
+  "fecha": "2026-11-22T20:01:51Z",
+  "producto": "sumied",
+  "apartado": "Proveedores",
+  "frase": "«Página web» y «Subcuenta suplidos». Lo no sujeto a IVA de sus facturas va a esa subcuenta, y al darlo de alta su domicilio se parte en calle, código postal, población y provincia.",
+  "ruta": null
+ }
+]

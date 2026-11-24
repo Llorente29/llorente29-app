@@ -191,7 +191,7 @@ export function SubirExtracto() {
           <div className="cx-guardado" role="status">
             Subido «{paso.nombre}». {paso.importados.map((r) => r.repetido
               ? `${nombreBanco(r.banco)}: ${r.mensaje ?? 'ese fichero ya se había subido'}.`
-              : `${nombreBanco(r.banco)}: ${r.nuevos} ${r.nuevos === 1 ? 'nuevo' : 'nuevos'}${r.repetidos ? `, ${r.repetidos} ya estaban` : ''}${r.posiblesRepetidos ? `, ${r.posiblesRepetidos} quizá repetidos` : ''}${r.continuidad === 'hueco' && r.hueco !== null ? ` · falta un trozo entre este y el anterior (${eurosExactos(r.hueco)})` : r.continuidad === 'sigue' ? ' · sigue al anterior' : ''}.`).join(' ')}
+              : `${nombreBanco(r.banco)}: ${r.nuevos} ${r.nuevos === 1 ? 'nuevo' : 'nuevos'}${r.repetidos ? `, ${r.repetidos} ya estaban` : ''}${r.borradas ? ` · ${r.borradas} ${r.borradas === 1 ? 'borrada' : 'borradas'} antes` : ''}${r.posiblesRepetidos ? `, ${r.posiblesRepetidos} quizá repetidos` : ''}${r.continuidad === 'hueco' && r.hueco !== null ? ` · falta un trozo entre este y el anterior (${eurosExactos(r.hueco)})` : r.continuidad === 'sigue' ? ' · sigue al anterior' : ''}.`).join(' ')}
           </div>
           {paso.conciliado && (
             <p className="cxb-frase-verde">

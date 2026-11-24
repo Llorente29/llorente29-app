@@ -27,7 +27,8 @@
 //     Hierro: no es un local abierto), ni un subgrupo vetado (el 9: Lovers
 //     Burgers va siempre con el 11). Ver GRUPOS_VETADOS y SUBGRUPOS_VETADOS.
 //
-// El TOKEN dura 14 días. Se guarda fuera (Vault, por connector_token_save) y
+// El TOKEN dura 14 días y es de UNA base (la que abre al entrar). Se guarda fuera
+// (Vault, por connector_token_save) con esa base, solo vale para ella (B01r26), y
 // se renueva cuando le quedan menos de 2 días. Renovar es UN intento: si falla,
 // la conexión pasa a «caída» (connector_mark_down) y se para. No hay bucles.
 //
@@ -169,6 +170,46 @@ export function limitesMes(aaaamm: string): [number, number] {
   const ultimo = new Date(Date.UTC(y, m, 0)).getUTCDate()
   return [y * 10000 + m * 100 + 1, y * 10000 + m * 100 + ultimo]
 }
+/** El día siguiente de un AAAAMMDD numérico, dentro del mismo mes (para recorrer un mes día a día). */
+export const siguienteDia = (d: number) => d + 1
+
+/**
+ * B01r26 (14/11) · LO QUE SE LEE DE DIEZ UNA VEZ Y SE REAPROVECHA, por servidor y
+ * base, entre los clientes de la misma función (el traspaso crea uno por asiento).
+ * En el ensayo de octubre en la C0009 el traspaso iba a unos 5 asientos por minuto:
+ * cada asiento releía todos los apuntes del mes y preguntaba una a una por sus
+ * subcuentas. Ahora:
+ *   · las subcuentas de la base, una lectura (la lista), 10 minutos; lo que crea
+ *     Sumied se añade;
+ *   · los apuntes de un mes, una lectura, 10 minutos; lo que escribe Sumied se
+ *     añade. Para leerlos de vuelta después de escribir, `fresco`.
+ * Solo para lo que escribe Sumied: lo que alguien apunte a mano en Diez se ve a los
+ * 10 minutos como mucho (la búsqueda de «nunca dos veces» lo mira entonces).
+ */
+const VIDA_CACHE_MS = 10 * 60 * 1000
+type Cache = { subcuentas?: { en: number; m: Map<string, Record<string, unknown>> }; meses: Map<string, { en: number; filas: Apunte[] }> }
+const CACHES = new Map<string, Cache>()
+/** B01r26 (14/11): el token se guarda con la base que abrió. */
+const PREFIJO_BD = 'diez-bd:'
+export const tokenConLaBase = (bd: string, token: string) => `${PREFIJO_BD}${bd.trim().toUpperCase()}|${token}`
+/** La base y el token de lo guardado; null si es de antes (sin base): no se sabe para qué base se sacó. */
+export function tokenDeLaBase(guardado: string): { bd: string; token: string } | null {
+  if (!guardado.startsWith(PREFIJO_BD)) return null
+  const i = guardado.indexOf('|')
+  if (i < 0) return null
+  const bd = guardado.slice(PREFIJO_BD.length, i).trim().toUpperCase()
+  const token = guardado.slice(i + 1)
+  return bd && token ? { bd, token } : null
+}
+
+/** Para las pruebas: empezar sin nada leído. */
+export function olvidarLoLeido() { CACHES.clear() }
+/**
+ * B01r26 (14/11): olvidar los apuntes de los meses ya leídos (todas las bases); las
+ * subcuentas se quedan. El traspaso lo llama al empezar cada tanda: cada tanda lee el
+ * mes de Diez de nuevo una vez, y lo que cambie en Diez entre tanda y tanda se ve.
+ */
+export function olvidarLosMeses() { for (const c of CACHES.values()) c.meses.clear() }
 
 export class ClienteDiez {
   private readonly base: string
@@ -196,6 +237,12 @@ export class ClienteDiez {
   }
 
   get nombreBd() { return this.cfg.nombreBd.trim().toUpperCase() }
+  private get cache(): Cache {
+    const k = `${this.base}|${this.nombreBd}`
+    let c = CACHES.get(k)
+    if (!c) { c = { meses: new Map() }; CACHES.set(k, c) }
+    return c
+  }
 
   // ── Hablar ───────────────────────────────────────────────────────────────────
   private async llamar(metodo: 'GET' | 'POST', ruta: string, cuerpo?: unknown, form?: Record<string, string>): Promise<{ status: number; json: unknown }> {
@@ -271,14 +318,22 @@ export class ClienteDiez {
     return { token: j.access_token, expiresAt }
   }
 
-  /** El token vigente; si caduca en menos de 2 días, uno nuevo (un intento). */
+  /**
+   * El token vigente; si caduca en menos de 2 días, uno nuevo (un intento).
+   * B01r26 (14/11): el token de Diez va ligado a la base que abrió (nombre_bd al
+   * entrar). Se guarda con ella («diez-bd:C0008|…») y solo se reutiliza si es de la
+   * base que se pide: el de la C0009 del ensayo siguió guardado cuando la conexión
+   * volvió a la C0008, y el traspaso de octubre leyó y escribió en la C0009. Uno
+   * sin base (de antes de esto) o de otra base no se usa: se entra de nuevo.
+   */
   async asegurarToken(): Promise<string> {
     if (this.token) return this.token
     const g = await this.cfg.almacen.leer()
-    if (g && Date.parse(g.expiresAt) - this.ahora() > MARGEN_RENOVAR_MS) return (this.token = g.token)
+    const deLaBase = g ? tokenDeLaBase(g.token) : null
+    if (g && deLaBase && deLaBase.bd === this.nombreBd && Date.parse(g.expiresAt) - this.ahora() > MARGEN_RENOVAR_MS) return (this.token = deLaBase.token)
     try {
       const n = await this.entrar()
-      await this.cfg.almacen.guardar(n.token, n.expiresAt)
+      await this.cfg.almacen.guardar(tokenConLaBase(this.nombreBd, n.token), n.expiresAt)
       return (this.token = n.token)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -297,13 +352,13 @@ export class ClienteDiez {
   }
 
   /** Todas las filas de un listado paginado, con las tres rarezas cubiertas. */
-  async todas<T>(ruta: string): Promise<T[]> {
+  async todas<T>(ruta: string, tam = TAM_PAGINA): Promise<T[]> {
     const sep = ruta.includes('?') ? '&' : '?'
     const filas: T[] = []
     const vistas = new Set<string>()
     let total: number | null = null
     for (let pag = 0; pag < 5000; pag++) {
-      const j = await this.get<Paginada<T> | T[]>(`${ruta}${sep}${q({ $top: TAM_PAGINA, $skip: pag })}`)
+      const j = await this.get<Paginada<T> | T[]>(`${ruta}${sep}${q({ $top: tam, $skip: pag })}`)
       const d = Array.isArray(j) ? j : j?.Datos
       if (!Array.isArray(d)) throw new ErrorDiez(`${ruta.split('?')[0]}: forma inesperada`, 200, null)
       if (!Array.isArray(j) && typeof j.ResultadosTotales === 'number') total = j.ResultadosTotales
@@ -312,7 +367,7 @@ export class ClienteDiez {
       if (vistas.has(primero)) break // Diez ha vuelto al principio
       vistas.add(primero)
       filas.push(...d)
-      if (total != null ? filas.length >= total : d.length < TAM_PAGINA) break
+      if (total != null ? filas.length >= total : d.length < tam) break
     }
     if (total != null && filas.length !== total) {
       throw new ErrorDiez(`${ruta.split('?')[0]}: Diez dice ${total} y se han leído ${filas.length}`, 200, null)
@@ -324,8 +379,35 @@ export class ClienteDiez {
     const [a, b] = limitesMes(aaaamm)
     return q({ $filter: `Fecha ge ${a} and Fecha le ${b}` })
   }
-  apuntesDelMes(aaaamm: string) { return this.todas<Apunte>(`/api/apuntes?${this.filtroMes(aaaamm)}`) }
+  /** Los apuntes del mes; leídos una vez y reaprovechados (B01r26), salvo con `fresco`. */
+  async apuntesDelMes(aaaamm: string, o: { fresco?: boolean } = {}): Promise<Apunte[]> {
+    const c = this.cache.meses.get(aaaamm)
+    if (!o.fresco && c && this.ahora() - c.en < VIDA_CACHE_MS) return c.filas
+    const filas = await this.todas<Apunte>(`/api/apuntes?${this.filtroMes(aaaamm)}`)
+    this.cache.meses.set(aaaamm, { en: this.ahora(), filas })
+    return filas
+  }
   facturasDelMes(aaaamm: string) { return this.todas<Factura>(`/api/facturas?${this.filtroMes(aaaamm)}`) }
+
+  /**
+   * B01r26 (ensayo del 14/11) · Las facturas del mes como se pueda: en la C0009,
+   * después de importar el Excel con los PDF, «GET /api/facturas» del mes dio 500.
+   * Primero el mes en páginas de 200; si Diez da 500, en páginas de 25; si aún falla,
+   * día a día (en páginas de 10). Los días que Diez no deje leer se devuelven
+   * aparte: quien llama los dice, no los da por vacíos (regla 7).
+   */
+  async facturasDelMesComoSePueda(aaaamm: string): Promise<{ facturas: Factura[]; diasSinLeer: string[]; como: 'mes' | 'mes_25' | 'dia' }> {
+    const ruta = `/api/facturas?${this.filtroMes(aaaamm)}`
+    const es500 = (x: unknown) => x instanceof ErrorDiez && x.status >= 500
+    try { return { facturas: await this.todas<Factura>(ruta), diasSinLeer: [], como: 'mes' } } catch (x) { if (!es500(x)) throw x }
+    try { return { facturas: await this.todas<Factura>(ruta, 25), diasSinLeer: [], como: 'mes_25' } } catch (x) { if (!es500(x)) throw x }
+    const [a, b] = limitesMes(aaaamm)
+    const facturas: Factura[] = []; const diasSinLeer: string[] = []
+    for (let d = a; d <= b; d = siguienteDia(d)) {
+      try { facturas.push(...await this.todas<Factura>(`/api/facturas?${q({ $filter: `Fecha ge ${d} and Fecha le ${d}` })}`, 10)) } catch (x) { if (!es500(x)) throw x; diasSinLeer.push(String(d)) }
+    }
+    return { facturas, diasSinLeer, como: 'dia' }
+  }
   subcuentas() { return this.todas<Record<string, unknown>>('/api/subcuentas') }
   series() { return this.todas<{ Codigo: string; Descripcion: string }>('/api/series') }
 
@@ -335,10 +417,35 @@ export class ClienteDiez {
    * NIF, NombreComercial… Null si Diez no la tiene.
    */
   async subcuenta(codigo: string): Promise<Record<string, unknown> | null> {
+    // B01r26 (14/11): primero la lista de la base, leída una vez. Si no está en ella, no existe.
+    const lista = await this.listaDeSubcuentas().catch(() => null)
+    if (lista) {
+      const x = lista.get(codigo.trim())
+      if (!x) return null
+      if (String(x.Descripcion ?? '').trim()) return x
+    }
     const r = await this.llamar('GET', `/api/subcuentas/subcuenta/${encodeURIComponent(codigo)}`)
     if (r.status === 404 || r.json == null) return null
+    // Diez contesta 500 «Object reference not set to an instance of an object» a la
+    // subcuenta que NO existe en esa base, en vez de 404 (C0009, ensayo del 14/11:
+    // 47 asientos cortados). Con la lista leída, eso ya se sabe arriba; sin ella, no
+    // se adivina: se corta, como hasta hoy.
+    if (r.status === 500 && lista && !lista.has(codigo.trim())) return null
     if (r.status !== 200) throw new ErrorDiez(`GET subcuenta → ${r.status}`, r.status, r.json)
     return r.json as Record<string, unknown>
+  }
+
+  /** B01r26 (14/11) · Que la próxima consulta de subcuentas lea la lista de Diez otra vez (antes y después de crear). */
+  olvidarSubcuentas() { this.cache.subcuentas = undefined }
+
+  /** Las subcuentas de la base, por código; una lectura cada 10 minutos (B01r26). */
+  private async listaDeSubcuentas(): Promise<Map<string, Record<string, unknown>>> {
+    const c = this.cache.subcuentas
+    if (c && this.ahora() - c.en < VIDA_CACHE_MS) return c.m
+    const xs = await this.subcuentas()
+    const m = new Map(xs.map((x) => [String(x.Codigo ?? '').trim(), x] as const).filter(([k]) => k !== ''))
+    this.cache.subcuentas = { en: this.ahora(), m }
+    return m
   }
 
   /** ¿Existe ya el asiento con esa clave? (para no enviar dos veces). */
@@ -376,12 +483,19 @@ export class ClienteDiez {
     // D07a: Diez no admite más de 40 caracteres en la descripción (ni en la de cada línea).
     const r = await this.llamar('POST', '/api/apuntes/add', conTextosDiez(a))
     if (r.status !== 200) throw new ErrorDiez(`apuntes/add → ${r.status}`, r.status, r.json)
-    return r.json as Apunte
+    const creado = r.json as Apunte
+    // B01r26: lo que escribe Sumied, a los apuntes del mes ya leídos (para «nunca dos veces» en esta misma tanda).
+    const mes = String(a.Fecha).slice(0, 6)
+    const c = this.cache.meses.get(mes)
+    if (c) c.filas = [...c.filas, { ...a, ...(creado ?? {}), Detalles: (creado as Apunte | null)?.Detalles ?? a.Detalles } as Apunte]
+    return creado
   }
   /** Alta de una subcuenta (SubCuentaCompleta: Codigo y Descripcion, las dos obligatorias). */
   async crearSubcuenta(sc: { Codigo: string; Descripcion: string }): Promise<unknown> {
     const r = await this.llamar('POST', '/api/subcuentas/add', sc)
     if (r.status !== 200) throw new ErrorDiez(`subcuentas/add → ${r.status}`, r.status, r.json)
+    // B01r26: la nueva, a la lista ya leída.
+    this.cache.subcuentas?.m.set(sc.Codigo.trim(), { ...sc })
     return r.json
   }
   /**

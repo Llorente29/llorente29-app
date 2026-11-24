@@ -1,0 +1,3 @@
+# S01p·18 · 2 · la vuelta atrás: _compras_liquidacion_confirmar desde su respaldo.
+cuenta: scripts/conta/produccion/cuentas/s01p-contabilizar-valida.sql
+supabase/vuelta-atras/20261112T1915_s01p_contabilizar_valida.down.sql

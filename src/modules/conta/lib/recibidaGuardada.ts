@@ -35,6 +35,16 @@ export function lineasYCuotas(lineas: readonly LineaDeFactura[], impuestos: read
   }
 }
 
+/**
+ * X27c · «Subcuenta suplidos» de la ficha del proveedor (company_account_link, rol «suplidos»): los gastos que paga por
+ * cuenta de la empresa y repercute sin IVA. La base no sujeta (con su tipo al 0 %) de su factura va a esa subcuenta, no
+ * a la de gasto. Sin subcuenta de suplidos en su ficha, nada cambia.
+ */
+export function conSuplidos(lineas: readonly LineaDeFactura[], suplidos: string | null): LineaDeFactura[] {
+  if (!suplidos) return [...lineas]
+  return lineas.map((l) => (l.tipo && l.tipo.porcentaje === 0 && l.base !== 0 ? { ...l, cuentaGasto: suplidos } : l))
+}
+
 export interface RepartoGuardado { cuenta: string; local: string | null; comun: boolean; importe: number }
 
 const esGasto = (l: LineaAsiento) => l.debe > 0 && !l.iva && !l.retencion && /^6/.test(l.cuenta)
@@ -82,4 +92,36 @@ export function cuentaDelReparto(filas: readonly { position?: unknown; account_c
   if (conCuenta.length === 0) return null
   const primera = [...conCuenta].sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0))[0]
   return String(primera.account_code).trim()
+}
+
+// ── K11a · Los datos de cada línea de gasto (supplier_invoice_expense_dato) ──
+
+/** El concepto, la marca y la plataforma de una línea de gasto, por su posición (la del reparto, desde 0). */
+export interface DatoDeLinea { posicion: number; concepto: string | null; marcaId: string | null; canalId: string | null }
+
+/** Una línea del asiento con su plataforma (journal_line.channel_id; la escribe _journal_entry_proponer, 0840). */
+export type LineaConCanal = LineaAsiento & { canalId?: string | null }
+
+/**
+ * Los datos de cada línea, en las líneas de gasto del asiento por su orden (la primera de gasto es la posición 0,
+ * como en el reparto): su concepto, su marca (manda sobre la de la factura) y su plataforma. Su IVA no deducible
+ * (la misma cuenta, con IVA «no») lleva su marca y su plataforma, para que la analítica no se parta. Lo que la línea no
+ * dice se queda como estaba.
+ */
+export function aplicarDatosDeLineas(p: Propuesta, datos: readonly DatoDeLinea[]): Propuesta {
+  if (datos.length === 0) return p
+  const porPos = new Map(datos.map((d) => [d.posicion, d]))
+  let i = 0
+  const deCuenta = new Map<string, DatoDeLinea>()
+  const lineas: LineaConCanal[] = p.lineas.map((l) => {
+    if (!esGasto(l)) return l
+    const d = porPos.get(i++)
+    if (!d) return l
+    if (!deCuenta.has(l.cuenta)) deCuenta.set(l.cuenta, d)
+    return { ...l, ...(d.concepto ? { concepto: d.concepto } : {}), ...(d.marcaId ? { marcaId: d.marcaId } : {}), ...(d.canalId ? { canalId: d.canalId } : {}) }
+  }).map((l) => {
+    const d = l.iva?.deducible === 'no' ? deCuenta.get(l.cuenta) : undefined
+    return d ? { ...l, ...(d.marcaId ? { marcaId: d.marcaId } : {}), ...(d.canalId ? { canalId: d.canalId } : {}) } : l
+  })
+  return { ...p, lineas }
 }

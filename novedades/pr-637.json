@@ -1,0 +1,29 @@
+[
+ {
+  "id": "637-1",
+  "pr": 637,
+  "fecha": "2026-11-12T22:43:52Z",
+  "producto": "sumied",
+  "apartado": "Liquidación del socio",
+  "frase": "«Contabilizar» deja validados a tu nombre los asientos de la liquidación; si alguno no se puede, dice cuál y por qué.",
+  "ruta": null
+ },
+ {
+  "id": "637-2",
+  "pr": 637,
+  "fecha": "2026-11-12T22:43:52Z",
+  "producto": "sumied",
+  "apartado": "Asientos",
+  "frase": "«Para revisar» enseña todo lo propuesto, de cualquier origen y fecha, y el filtro de Estado tiene «Propuesto».",
+  "ruta": null
+ },
+ {
+  "id": "637-3",
+  "pr": 637,
+  "fecha": "2026-11-12T22:43:52Z",
+  "producto": "sumied",
+  "apartado": "Filtros de fechas",
+  "frase": "una fecha escrita sin año se completa con el año en curso al salir del campo.",
+  "ruta": null
+ }
+]

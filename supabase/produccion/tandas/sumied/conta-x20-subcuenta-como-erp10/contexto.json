@@ -1,0 +1,19 @@
+{
+ "_que": "X20 · crear una subcuenta como en ERP10 · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción (esta sesión no lee producción). 0930 solo añade una función nueva (company_account_add_codigo); no cambia nada que exista. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-21T09:45Z",
+ "tanda": {
+  "supabase/migrations/20261121T0930_x20_subcuenta_con_codigo.sql": "2334185062b82b1a38446a489ee6cd51"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

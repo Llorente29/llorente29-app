@@ -1,0 +1,29 @@
+[
+ {
+  "id": "779-1",
+  "pr": 779,
+  "fecha": "2026-11-22T05:09:09Z",
+  "producto": "sumied",
+  "apartado": "Libro de IVA",
+  "frase": "cada día del TPV va por serie, con su primer y su último ticket; cada factura con NIF, en su fila con su cliente, y cada devolución, aparte como rectificativa. Los días ya contabilizados, también.",
+  "ruta": null
+ },
+ {
+  "id": "779-2",
+  "pr": 779,
+  "fecha": "2026-11-22T05:09:09Z",
+  "producto": "sumied",
+  "apartado": "Cierres del día",
+  "frase": "la ficha de un día del TPV enseña sus filas del libro de IVA: «Tickets 5097 a 5144», cada factura con NIF y cada devolución en rojo.",
+  "ruta": null
+ },
+ {
+  "id": "779-3",
+  "pr": 779,
+  "fecha": "2026-11-22T05:09:09Z",
+  "producto": "sumied",
+  "apartado": "Facturas emitidas",
+  "frase": "cada serie del día con su PDF, cada factura con NIF y cada devolución, como van en el libro.",
+  "ruta": null
+ }
+]

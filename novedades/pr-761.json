@@ -1,0 +1,29 @@
+[
+ {
+  "id": "761-1",
+  "pr": 761,
+  "fecha": "2026-11-20T21:03:04Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "con la salida encendida, lo que se valida sale solo a ERP10 en pocos minutos. La primera de cada empresa sale a mano, para probar, y nada sale dos veces.",
+  "ruta": null
+ },
+ {
+  "id": "761-2",
+  "pr": 761,
+  "fecha": "2026-11-20T21:03:04Z",
+  "producto": "sumied",
+  "apartado": "Fichas",
+  "frase": "junto al estado, «En ERP10 · asiento N», «Saliendo a ERP10…» o «No ha salido a ERP10» con su motivo y «Volver a intentarlo».",
+  "ruta": null
+ },
+ {
+  "id": "761-3",
+  "pr": 761,
+  "fecha": "2026-11-20T21:03:04Z",
+  "producto": "sumied",
+  "apartado": "Barra de abajo",
+  "frase": "avisa en ámbar, con el número, de lo que lleva más de una hora sin salir. «Salida a ERP10» enseña lo de hoy y cómo salió.",
+  "ruta": null
+ }
+]

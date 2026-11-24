@@ -14,6 +14,7 @@ import type { CertificadosVer } from '@/modules/conta/impuestos/certificados'
 import type { DatosJustificante, Mirado } from '@/modules/conta/impuestos/justificantes'
 import type { Lectura } from '@/modules/conta/lib/justificanteAeat'
 import type { Sociedades } from '@/modules/conta/impuestos/sociedades'
+import type { LiquidacionRepetida } from '@/modules/conta/impuestos/liquidacionRepetida'
 
 /** Las preguntas del paso «impuestos» del alta que deciden modelos. */
 const CLAVES_DEL_ALTA = ['retiene', 'alquiler', 'retenido70'] as const
@@ -117,6 +118,16 @@ export function ponerPago(declaracion: string, modo: 'direct_debit' | 'self' | '
 /** El asiento de liquidación (0180). */
 export function contabilizar303(declaracion: string): Promise<{ mensaje: string }> {
   return rpc('conta_impuesto_303_contabilizar', { p_return: declaracion })
+}
+
+/** S01p·21 · Las liquidaciones del trimestre de un 303 apuntadas más de una vez (vacío si no hay ninguna). */
+export function liquidacionesRepetidas(declaracion: string): Promise<LiquidacionRepetida[]> {
+  return rpc<LiquidacionRepetida[]>('conta_liquidaciones_repetidas', { p_return: declaracion })
+}
+
+/** S01p·21 · «Dejar solo esta»: el 303 enlazado con esta y cada repetida sin efecto con su contraasiento. Devuelve lo que ha hecho. */
+export function dejarSoloEstaLiquidacion(declaracion: string, asiento: string, quien: string | null): Promise<{ mensaje: string; fecha: string }> {
+  return rpc('conta_liquidacion_dejar_esta', { p_return: declaracion, p_buena: asiento, p_quien_nombre: quien })
 }
 
 export interface CargoPosible { movimiento: string; fecha: string; importe: number; concepto: string | null; cuenta: string }

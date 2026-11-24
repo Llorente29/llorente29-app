@@ -1,0 +1,20 @@
+[
+ {
+  "id": "633-1",
+  "pr": 633,
+  "fecha": "2026-11-12T18:08:31Z",
+  "producto": "sumied",
+  "apartado": "Liquidación del socio",
+  "frase": "una línea de su cuenta que no es ninguna de las dos facturas ya no bloquea: Sumied pregunta qué es y la apunta. El género que te cobrará el mes que viene queda pendiente y se cancela solo.",
+  "ruta": null
+ },
+ {
+  "id": "633-2",
+  "pr": 633,
+  "fecha": "2026-11-12T18:08:31Z",
+  "producto": "sumied",
+  "apartado": "Ficha del proveedor",
+  "frase": "en los socios que liquidan cada mes, «Lo que sé de las líneas de su liquidación», con «Cambiar».",
+  "ruta": null
+ }
+]

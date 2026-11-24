@@ -1,0 +1,29 @@
+[
+ {
+  "id": "773-1",
+  "pr": 773,
+  "fecha": "2026-11-21T20:37:19Z",
+  "producto": "sumied",
+  "apartado": "Ficha del proveedor",
+  "frase": "nueva casilla «Cuenta de pago», con cualquier cuenta del plan (un banco, la 551 de un socio, la 430 de Glovo o Uber). Cada factura suya la trae en «Cómo se paga», «De su ficha», y se puede cambiar en la factura.",
+  "ruta": null
+ },
+ {
+  "id": "773-2",
+  "pr": 773,
+  "fecha": "2026-11-21T20:37:19Z",
+  "producto": "sumied",
+  "apartado": "Factura recibida",
+  "frase": "la contrapartida admite cualquier cuenta, primero las del 6; con una del 21x avisa de darla de alta en la ficha de bienes. Y el proveedor se encuentra también por su código (40000002).",
+  "ruta": null
+ },
+ {
+  "id": "773-3",
+  "pr": 773,
+  "fecha": "2026-11-21T20:37:19Z",
+  "producto": "sumied",
+  "apartado": "Barra de arriba",
+  "frase": "el logo de Sumied.",
+  "ruta": null
+ }
+]

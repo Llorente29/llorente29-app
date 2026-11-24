@@ -1,0 +1,51 @@
+/* src/modules/conta/nucleo/terceros/fichaTercero.css
+ *
+ * X27 · La ficha de proveedor y la de cliente, con las medidas de la maqueta nucleo_20 a 1366 (las de la maqueta,
+ * exportada a 2000 px, entre 1,464). Lo común (la ventana, la barra, las casillas, la rejilla) va en
+ * nucleo/piezas/piezas.css: aquí solo cómo se reparten las casillas de esta pantalla.
+ */
+
+.ft { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ft-cargando { padding: 12px; color: var(--kp-gris-tinta); }
+.ft-cuerpo { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 4px 14px 6px 14px; overflow: auto; }
+
+/* La subcuenta (8 cifras) y el nombre (largo, con tope), como ERP10. */
+.ft-cabeza { display: flex; gap: 0 8px; margin-bottom: 4px; }
+
+/* Las dos columnas, como la maqueta: «Datos proveedor» a la izquierda; «Datos por defecto en facturas» y «Datos de pago»,
+   uno debajo de otro, a la derecha. Cada uno en su recuadro (la pieza Bloque, `recuadro`). */
+.ft-columnas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 14px; align-items: start; margin-top: 4px; }
+.ft-derecha { min-width: 0; display: flex; flex-direction: column; }
+
+/* X27c · Cada fila, las casillas con su ancho (el de su dato, de la captura de ERP10): no se estiran; lo que sobra, vacío. */
+.ft-fila { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 2px 8px; margin-bottom: 3px; }
+.ft-fila > .kp-casilla:not([data-mide]) { flex: 0 1 auto; }
+.ft-tipo-nif { width: 130px; }
+.ft-domicilio { width: 300px; }
+.ft-postal { width: 64px; }
+.ft-telefono { width: 150px; }
+.ft-correo { width: 230px; }
+.ft-web { width: 220px; }
+.ft-deducible { width: 112px; }
+.ft-forma { width: 140px; }
+.ft-iban { width: 260px; }
+.ft-analitica { width: 196px; }
+.ft-rotulo-solo { min-height: 15px; color: var(--kp-rotulo); font-size: 11.5px; line-height: 15px; }
+.ft-f-ivas .kp-rotulo { display: none; }
+
+/* La lupa con su nombre en gris al lado: el código y el nombre con su ancho (en la pantalla). */
+.ft-con-nombre { flex: 0 0 auto; }
+.ft-con-nombre .kp-casilla-dentro { display: flex; gap: 6px; }
+.ft-lupa { display: flex; min-width: 0; }
+.ft-con-nombre .ft-lupa { flex: none; }
+.ft .ft-gris { flex: none; background: var(--kp-gris-fondo); color: var(--kp-gris-tinta); }
+
+.ft-marcas { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 6px 0 2px; }
+.ft-marca { display: inline-flex; align-items: center; gap: 5px; color: var(--kp-rotulo); font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.kp-ventana .ft-marca input { width: 12px; height: 12px; margin: 0; }
+.ft-marca:has(input:disabled) { color: var(--kp-gris-tinta); cursor: default; }
+
+.ft-nada { padding: 12px 4px; color: var(--kp-gris-tinta); }
+.ft-suma { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+.ft-hoja-mayor { width: 10px; height: 13px; border-radius: 1px; background: #f2b632; display: inline-block; }
+.ft-barra-facturas { margin-left: 8px; }

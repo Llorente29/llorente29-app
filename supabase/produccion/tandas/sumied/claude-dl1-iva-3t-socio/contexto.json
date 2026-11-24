@@ -1,0 +1,8 @@
+{
+ "_que": "DL1·28 · IVA 3T y socio · contexto de producción, medido en SOLO LECTURA el 14/11 a las 11:20Z: la 1220 no crea ni cambia ningún objeto; apunta el 4/3155 con _dl1_asiento_iva y lo valida con _dl1_validar, y contabiliza el 303 del 3T (presentado, sin asiento) con conta_impuesto_303_contabilizar (en producción). Nada en el camino del pedido; la 1220 no está en el historial.",
+ "medido": "2026-11-14T11:20Z",
+ "tanda": {
+  "supabase/migrations/20261114T1220_dl1_iva_3t_socio.sql": "b15a29982a2128d5d67e520d456eeb8a"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

@@ -4,7 +4,7 @@
 // el almacén local del navegador: es una comodidad, no un dato; si se pierde,
 // queda la primera).
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { listarEmpresas } from '@/modules/conta/services/empresaService'
 import {
@@ -21,7 +21,19 @@ function recordar(accountId: string, id: string): void {
 
 interface Carga { accountId: string | null; empresas: EmpresaResumen[]; error: string | null }
 
+/**
+ * K03 · Si ya hay empresas por encima (una pestaña de trabajo del marco del
+ * núcleo, que vuelve a pintar la ruta entera), se usan esas: una sola empresa
+ * elegida para todas las pestañas, y una sola lectura. Fuera de eso, como
+ * siempre.
+ */
 export function EmpresasProveedor({ children }: { children: ReactNode }) {
+  const encima = useContext(EmpresasContexto)
+  if (encima) return <>{children}</>
+  return <EmpresasProveedorPropio>{children}</EmpresasProveedorPropio>
+}
+
+function EmpresasProveedorPropio({ children }: { children: ReactNode }) {
   const { accountId, cargando: cargandoCuenta } = useCuentaConta()
   const [carga, setCarga] = useState<Carga>({ accountId: null, empresas: [], error: null })
   const [vuelta, setVuelta] = useState(0)

@@ -1,0 +1,15 @@
+# X30 · Conciliar: lo seguro se concilia solo, y reglas de verdad (encargo y respuesta X30 · 1, 23/11). Rama
+# conta/x30-conciliar-solo-y-reglas. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2050  Añade: bank_settings.auto_threshold y aviso_dias (bank_ajustes_conciliar), bank_match.confidence_pct,
+#         bank_rule.applies_from y seed (bank_regla_desde, _bank_reglas_de_partida) y bank_movement.position.
+#   2051  Cambia public.bank_importar (trozos exactos, la misma firma, con su respaldo: escribe el orden de cada línea),
+#         public.bank_match (el disparador del porcentaje) y public.treasury_account (el disparador de las reglas de
+#         partida del primer banco). Declarado, con su prueba.
+#   2052  Las reglas de partida de las empresas que ya tienen banco, desde ahora: no tocan nada de lo que ya está.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x30-conciliar.sql
+supabase/migrations/20261123T2050_x30_conciliar_solo_anade.sql
+supabase/migrations/20261123T2051_x30_orden_y_seguridad.sql
+supabase/migrations/20261123T2052_x30_reglas_de_partida.sql

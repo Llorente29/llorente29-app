@@ -1,0 +1,8 @@
+# Lo que necesita la e2e (tests/e2e/conta/k10), en la gestoría de la cuenta del núcleo: la 43000002 y una 21x,
+# dos proveedores de prueba con su factura por revisar, y la 43000091 en la ficha de la plataforma del K06. Solo
+# añade, con ids fijos: se puede aplicar dos veces igual (W07), y va de verdad desde la rama (W05). Va DELANTE de
+# la migración: no la necesita, y la migración (cambia) solo pasa en ROLLBACK desde la rama.
+supabase/seeds/conta/seed_k10_cuenta_de_pago_staging.sql
+# K10 · La cuenta de pago en la ficha del proveedor, y la contrapartida con cualquier subcuenta.
+supabase/migrations/20261121T1650_k10_cuenta_de_pago.sql
+supabase/staging/sql/20261121_k10_cuenta_de_pago_prueba.sql

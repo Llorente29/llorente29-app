@@ -1,0 +1,4 @@
+# S01p·20·2 · la vuelta atrás, en orden inverso: las cuatro funciones desde su respaldo; fuera el botón y la columna (si está vacía).
+cuenta: scripts/conta/produccion/cuentas/s01p-me-lo-factura-otro.sql
+supabase/vuelta-atras/20261114T0033_s01p_me_lo_factura_otro_caminos.down.sql
+supabase/vuelta-atras/20261113T1910_s01p_me_lo_factura_otro.down.sql
