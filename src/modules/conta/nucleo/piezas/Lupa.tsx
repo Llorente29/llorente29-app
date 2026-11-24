@@ -81,8 +81,12 @@ export function CasillaLupa<T extends Registro>({ id, etiqueta, registros, valor
   const [texto, setTexto] = useState<string | null>(null)
   const [abierta, setAbierta] = useState(false)
   const yo = useRef<HTMLInputElement>(null)
+  // K13 · Lo elegido con Intro ya está puesto: al pasar a la casilla siguiente, el «salir» no lo vuelve a poner (dos
+  // guardados seguidos de la marca, el segundo «No había nada que guardar»: e2e 45302266721).
+  const recienElegido = useRef(false)
   const ayuda = useId()
   const elegir = (r: T | null, siguiente: boolean) => {
+    recienElegido.current = true
     poner(r); setTexto(null); setAbierta(false)
     if (siguiente) alIntro?.(); else yo.current?.focus()
   }
@@ -104,8 +108,9 @@ export function CasillaLupa<T extends Registro>({ id, etiqueta, registros, valor
       <span className="kp-con-lupa">
         <input ref={yo} id={id} aria-label={etiqueta} aria-describedby={ayuda} readOnly={gris} data-ambar={ambar ? 'si' : undefined} {...datos}
           value={texto ?? ver(elegido)} title={titulo ?? (elegido ? `${elegido.codigo} · ${elegido.descripcion}` : undefined)}
-          onChange={(e) => setTexto(e.target.value)}
-          onBlur={() => { if (texto !== null && !abierta) { const r = resolverlo(texto); if (!texto.trim()) poner(null); else if (r.registro) poner(r.registro); setTexto(null) } }}
+          onChange={(e) => { recienElegido.current = false; setTexto(e.target.value) }}
+          onFocus={() => { recienElegido.current = false }}
+          onBlur={() => { if (recienElegido.current) { recienElegido.current = false; return } if (texto !== null && !abierta) { const r = resolverlo(texto); if (!texto.trim()) poner(null); else if (r.registro) poner(r.registro); setTexto(null) } }}
           onKeyDown={alPulsar} aria-keyshortcuts="F4" />
         {!gris && <button type="button" className="kp-lupa-boton" tabIndex={-1} aria-label={`Buscar ${etiqueta.toLowerCase()}`} onClick={() => setAbierta(true)}>
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" strokeWidth="2.4" /><path d="M15.5 15.5l5 5" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" /></svg>

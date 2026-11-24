@@ -48,7 +48,8 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(page.locator('.k-nucleo')).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('.s-barra')).toHaveCount(0)
     const cinta = page.getByRole('tablist', { name: 'La cinta' })
-    await expect(cinta.getByRole('tab')).toHaveText(['Definiciones', 'Asientos', 'Importaciones', 'Listados', 'Utilidades', 'Impuestos'])
+    // Con Tesorería (X28), como la fila del menú de la maqueta 17b.
+    await expect(cinta.getByRole('tab')).toHaveText(['Definiciones', 'Asientos', 'Tesorería', 'Importaciones', 'Listados', 'Utilidades', 'Impuestos'])
     // exact: «Inicio» está dentro de «Definiciones», y Playwright busca por trozo.
     await expect(page.getByRole('tab', { name: 'Inicio', exact: true })).toHaveAttribute('aria-selected', 'true')
     await expect(page.locator('.k-marca')).toHaveText('Sumied')
@@ -125,10 +126,19 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
       await page.getByRole('button', { name: 'Desplegar los módulos' }).click()
       await expect(page.getByRole('button', { name: 'Plegar los módulos' })).toBeVisible()
       await cinta.getByRole('tab', { name: 'Listados' }).click()
-      await page.getByRole('button', { name: 'Más', exact: true }).click()
-      await expect(page.getByRole('group', { name: 'Más botones' })).toBeVisible()
-      await page.screenshot({ path: `${DIR}/marco-mas-listados-${ancho}.png` })
-      await page.keyboard.press('Escape')
+      // K13 (17b): con los botones solo con su nombre, a lo mejor caben todos y no hace falta «Más ▾». Si sale, abre lo
+      // que no cabe; si no sale, ningún botón se queda fuera de la fila (regla 7).
+      const mas = page.getByRole('button', { name: 'Más', exact: true })
+      if (await mas.count()) {
+        await mas.click()
+        await expect(page.getByRole('group', { name: 'Más botones' })).toBeVisible()
+        await page.screenshot({ path: `${DIR}/marco-mas-listados-${ancho}.png` })
+        await page.keyboard.press('Escape')
+      } else {
+        const fuera = await page.locator('#k-cinta-botones').evaluate((f) => [...f.querySelectorAll<HTMLElement>('.k-boton')]
+          .filter((b) => b.offsetLeft + b.offsetWidth > f.clientWidth).map((b) => b.textContent))
+        expect(fuera, 'los botones de Listados que se salen de la fila').toEqual([])
+      }
       await cinta.getByRole('tab', { name: 'Asientos' }).click()
     }
 

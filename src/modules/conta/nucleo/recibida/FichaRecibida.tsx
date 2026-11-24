@@ -1074,13 +1074,13 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                   return (
                     <div key={`iva-${idx}`} style={{ display: 'contents' }}>
                       <Caja sitio={`iva-${g * 3 + 1}`} campo={campo(1)} rotulo={rot('Base')} para={`kr-base-${idx}`} centro num estilo={estilo}>
-                        <input id={`kr-base-${idx}`} data-casilla={l || libre ? '' : undefined} aria-label={`Base ${idx + 1}`} value={l?.base ?? ''} readOnly={!l && !libre} tabIndex={l || libre ? undefined : -1}
+                        <input id={`kr-base-${idx}`} data-casilla={l ? '' : undefined} aria-label={`Base ${idx + 1}`} value={l?.base ?? ''} readOnly={!l && !libre} tabIndex={l || libre ? undefined : -1}
                           onChange={(e) => tocar({ base: e.target.value })}
                           data-ambar={l && importeDudoso(l.base) ? 'si' : undefined} title={l && importeDudoso(l.base) ? MOTIVO_IMPORTE_DUDOSO : undefined}
                           onBlur={() => { if (!l) return; const n = num(l.base); if (n !== null && !importeDudoso(l.base)) ponerIva(idx, { base: importeEs(n) }) }} />
                       </Caja>
                       <Caja sitio={`iva-${g * 3 + 2}`} campo={campo(2)} rotulo={rot('%')} para={`kr-tipo-${idx}`} centro estilo={estilo}>
-                        <select id={`kr-tipo-${idx}`} data-casilla={l || libre ? '' : undefined} aria-label={`Tipo de IVA ${idx + 1}`} value={l?.tipo ?? ''} disabled={!l && !libre} tabIndex={l || libre ? undefined : -1}
+                        <select id={`kr-tipo-${idx}`} data-casilla={l ? '' : undefined} aria-label={`Tipo de IVA ${idx + 1}`} value={l?.tipo ?? ''} disabled={!l && !libre} tabIndex={l || libre ? undefined : -1}
                           onChange={(e) => { if (e.target.value) tocar({ tipo: e.target.value }) }}>
                           {!l && <option value="" />}
                           {[...new Set([...tiposIva.map(String), ...(l ? [l.tipo] : [])])].filter(Boolean).map((t) => <option key={t} value={t}>{t}</option>)}
@@ -1176,6 +1176,8 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                                 poner={(r) => (uno ? ponerGasto(i, { local: r ? r.id : '' }) : cambiar({ localId: r?.id || null }))} />
                             </Caja>
                             <Caja sitio="c2-2" campo={cc('c2-2')} gris estilo={estilo}><input aria-label={`Nombre del local${sufijo}`} readOnly tabIndex={-1} value={nombreDelLocal(t.localId)} title={nombreDelLocal(t.localId) || undefined} /></Caja>
+                            {/* La marca y la plataforma, solo en una empresa de hostelería (K11b). */}
+                            {hosteleria && <>
                             <Caja sitio="c2-3" campo={cc('c2-3')} rotulo={k === 0 ? 'Marca' : undefined} para={idMarca} estilo={estilo}>
                               <CasillaLupa id={idMarca} etiqueta={`Marca${sufijo}`} registros={marcasLupa} valor={t.marcaId ?? null}
                                 gris={!cabEscribible || durante} datos={cabEscribible ? { 'data-casilla': '' } : undefined} alIntro={() => pasarDe(idMarca)}
@@ -1190,6 +1192,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                                 poner={(r) => (uno ? ponerDatoLinea(i, { plataforma: r?.id ?? null }) : cambiar({ canalId: r?.id ?? null }))} />
                             </Caja>
                             <Caja sitio="c2-6" campo={cc('c2-6')} gris estilo={estilo}><input aria-label={`Nombre de la plataforma${sufijo}`} readOnly tabIndex={-1} value={plataformasLupa.find((x) => x.id === t.canalId)?.descripcion ?? ''} title={plataformasLupa.find((x) => x.id === t.canalId)?.descripcion} /></Caja>
+                            </>}
                             <Caja sitio="c2-7" campo={cc('c2-7')} rotulo={k === 0 ? 'Importe' : undefined} para={`kr-tramo-${i}-${k}`} num estilo={estilo}
                               mas={k === tramos.length - 1 ? <BotonMas17 etiqueta={`Otro tramo del reparto de la línea ${i + 1}`} puede={cabEscribible && !durante}
                                 titulo={cabEscribible ? 'Repartir la línea: otro local, marca o plataforma con su importe' : 'El reparto se escribe en una factura guardada'}
