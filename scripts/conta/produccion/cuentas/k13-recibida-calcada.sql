@@ -7,11 +7,13 @@
 --     «erp10») y cuántos sin código. Si la tabla no existe (antes de la tanda y después de su vuelta atrás), 0 códigos;
 --     después de la tanda, lo que puso el relleno: lo que pide el encargo, cuántos salen de cada manera;
 --   · las recibidas contabilizadas y sus apuntes: cuántas y su huella (la tanda no toca ningún asiento validado).
--- Y siempre una fila con todas las cuentas juntas, aunque no haya filas (staging, 23/11).
+-- Corte fijo: lo creado antes del 24/11/2026 a las 02:00 de Madrid (otro proceso puede dar de alta un local, una marca o
+-- validar una recibida a mitad del ensayo, el #241). Y siempre una fila con todas las cuentas juntas, aunque no haya
+-- filas (staging, 23/11).
 with q as (
-  select 'locales' que, 'locations' tabla, account_id, id, name from public.locations where account_id is not null
-  union all select 'marcas', 'brand', account_id, id, name from public.brand
-  union all select 'plataformas', 'sales_channel', account_id, id, name from public.sales_channel
+  select 'locales' que, 'locations' tabla, account_id, id, name from public.locations where account_id is not null and created_at < timestamptz '2026-11-24 02:00:00+01'
+  union all select 'marcas', 'brand', account_id, id, name from public.brand where created_at < timestamptz '2026-11-24 02:00:00+01'
+  union all select 'plataformas', 'sales_channel', account_id, id, name from public.sales_channel where created_at < timestamptz '2026-11-24 02:00:00+01'
 ), k as (
   -- Los códigos, si la tabla existe: «tabla|id|origen» por fila.
   select split_part(x, '|', 1) tabla, split_part(x, '|', 2)::uuid id, split_part(x, '|', 3) origen
@@ -23,7 +25,7 @@ with q as (
 ), v as (
   select e.account_id, e.id, md5(string_agg(concat_ws('|', jl.company_account_id, jl.debit, jl.credit, jl.location_id, jl.brand_id, jl.channel_id), ';' order by jl.id)) h
     from public.journal_entry e join public.journal_line jl on jl.entry_id = e.id
-   where e.source_type = 'supplier_invoice' and e.status = 'validado'
+   where e.source_type = 'supplier_invoice' and e.status = 'validado' and e.created_at < timestamptz '2026-11-24 02:00:00+01'
    group by e.account_id, e.id
 )
 select clave, valor from (
