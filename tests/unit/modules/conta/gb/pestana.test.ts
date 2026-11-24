@@ -34,10 +34,10 @@ describe('GB · lo que manda Bitrix24 al abrir la pestaña', () => {
   })
 })
 
-describe('GB · solo en el portal de pruebas', () => {
-  it('el de pruebas sí; el real de QBO y uno cualquiera, no', () => {
-    expect(portalPermitido(portalLimpio('https://b24-s3mr2y.bitrix24.es/'))).toBe(true)
-    expect(portalPermitido(portalLimpio('crm.asesoriaqbo.es'))).toBe(false)
+describe('GB · R18 · solo en el portal de QBO', () => {
+  it('el de QBO sí; el de pruebas de antes (su prueba gratuita se acabó) y uno cualquiera, no', () => {
+    expect(portalPermitido(portalLimpio('crm.asesoriaqbo.es'))).toBe(true)
+    expect(portalPermitido(portalLimpio('https://b24-s3mr2y.bitrix24.es/'))).toBe(false)
     expect(portalPermitido(portalLimpio('servidor-ajeno.example.com'))).toBe(false)
     expect(portalLimpio('b24-s3mr2y.bitrix24.es@evil.com')).toBeNull()
     expect(portalPermitido(null)).toBe(false)

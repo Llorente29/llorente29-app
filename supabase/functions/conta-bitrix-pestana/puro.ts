@@ -13,9 +13,62 @@
 //   · Lo que contesta Bitrix24 (app.info y user.current): que el token es de la
 //     aplicación de Sumied y de un usuario activo, con su correo.
 
+/**
+ * El Bitrix24 de pruebas de antes. R18 (24/11): su prueba gratuita se acabó (Bitrix24 contesta
+ * «FEATURE_NOT_AVAILABLE_ON_CURRENT_PLAN») y deja de usarse: ya no está en PORTALES. Se queda el
+ * nombre para la red y la sección del GBd, que solo actuaban en él (red.ts, seccion.ts): ahí no hacen nada.
+ */
 export const PORTAL_DE_PRUEBAS = 'b24-s3mr2y.bitrix24.es'
-/** Los portales donde está la pestaña. Uno nuevo entra aquí solo cuando QBO y Julio digan sí. */
-export const PORTALES = new Set<string>([PORTAL_DE_PRUEBAS])
+/** R18 · El Bitrix24 de QBO (su dominio propio). */
+export const PORTAL_QBO = 'crm.asesoriaqbo.es'
+/** Los portales donde está la pestaña. Uno nuevo entra aquí solo cuando QBO y Julio digan sí (R18, 24/11: el de QBO). */
+export const PORTALES = new Set<string>([PORTAL_QBO])
+
+/**
+ * R18 · Las únicas fichas en las que Sumied puede ESCRIBIR, por portal. En el de QBO, solo la empresa
+ * de prueba «EMPRESA PRUEBA SUMIED» (ID 1495, la creó Julio el 24/11): ninguna ficha de un cliente de
+ * verdad se toca hasta que Julio diga sí. Ampliarla es cambiar esta lista, en su propio PR.
+ */
+export const FICHAS_ESCRIBIBLES: Readonly<Record<string, readonly string[]>> = { [PORTAL_QBO]: ['1495'] }
+
+/** Lo que solo lee en Bitrix24: se llama siempre (en un portal permitido). */
+const SOLO_LEEN = new Set(['app.info', 'user.current', 'user.get', 'crm.company.get', 'crm.company.fields', 'crm.company.list',
+  'crm.contact.get', 'crm.contact.fields', 'crm.contact.list', 'crm.company.userfield.list', 'crm.company.details.configuration.get'])
+
+/**
+ * R18 · ¿Puede Sumied hacer esta llamada a Bitrix24? Todo pasa por aquí antes de salir:
+ *   · solo en un portal de PORTALES;
+ *   · lo que solo lee, siempre;
+ *   · enganchar la pestaña (placement.bind) al instalar o reinstalar, que lo pulsa el administrador del portal;
+ *   · cualquier otra cosa escribe, y entonces hacen falta las dos llaves: el interruptor «Actualizar Bitrix24»
+ *     encendido (lo enciende Julio en Ajustes; apagado de serie) y que la ficha sea una de FICHAS_ESCRIBIBLES.
+ *     Una llamada que escribe sin decir en qué ficha, no sale.
+ */
+export function puedeLlamar(x: { portal: string | null; metodo: string; cuerpo: Record<string, unknown>; actualizar: boolean }):
+  { ok: true } | { ok: false; porque: string } {
+  if (!portalPermitido(x.portal)) return { ok: false, porque: 'portal no permitido' }
+  if (SOLO_LEEN.has(x.metodo)) return { ok: true }
+  if (x.metodo === 'placement.bind') return { ok: true }
+  if (!x.actualizar) return { ok: false, porque: 'Bitrix24 no se actualiza: lo enciende Julio en Ajustes' }
+  const ficha = fichaDeLaLlamada(x.metodo, x.cuerpo)
+  if (!ficha) return { ok: false, porque: 'una escritura sin su ficha no sale' }
+  if (ficha.tipo !== 'empresa') return { ok: false, porque: 'solo se escribe en fichas de empresa' }
+  if (!(FICHAS_ESCRIBIBLES[x.portal as string] ?? []).includes(ficha.id)) return { ok: false, porque: `la ficha ${ficha.id} no es la de prueba: no se toca` }
+  return { ok: true }
+}
+
+/** La ficha que toca una llamada que escribe: crm.company.update (id) o una nota en el historial (ENTITY_TYPE/ENTITY_ID). */
+export function fichaDeLaLlamada(metodo: string, cuerpo: Record<string, unknown>): { tipo: 'empresa' | 'otra'; id: string } | null {
+  const f = (cuerpo.fields && typeof cuerpo.fields === 'object' ? cuerpo.fields : {}) as Record<string, unknown>
+  const limpio = (v: unknown) => (typeof v === 'number' || (typeof v === 'string' && /^[0-9]{1,18}$/.test(v)) ? String(v) : null)
+  if (metodo === 'crm.company.update') { const id = limpio(cuerpo.id); return id ? { tipo: 'empresa', id } : null }
+  if (metodo === 'crm.timeline.comment.add') {
+    const id = limpio(f.ENTITY_ID)
+    if (!id) return null
+    return { tipo: String(f.ENTITY_TYPE ?? '').toLowerCase() === 'company' ? 'empresa' : 'otra', id }
+  }
+  return null
+}
 
 export type TipoFicha = 'empresa' | 'contacto'
 
