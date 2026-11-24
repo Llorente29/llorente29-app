@@ -13,7 +13,9 @@
 --   5. Una ficha sin enlazar lo dice, también solo leyendo.
 --   6. El mismo portal en dos cuentas: ni se une ni se lee.
 --   7. Una cuenta sin administradora activa: no se lee (no hay con qué permisos).
---   8. La vuelta atrás quita funciones, tabla y columnas.
+--   8. Como usuario (la administradora de la cuenta): no puede leer como el portal ni unirlo (solo el servidor), y ve
+--      quién ha mirado su pestaña, solo de su cuenta.
+--   9. La vuelta atrás (el fichero de verdad) quita funciones, tabla y columnas.
 
 begin;
 do $$ begin
@@ -127,17 +129,37 @@ do $$ declare e text; begin
   raise notice 'PRUEBA R18d · 7 OK: sin administradora activa no se lee';
 end $$;
 
--- 8 · La vuelta atrás
-do $$ begin
-  drop function if exists public.conta_bitrix_pestana_leer_portal(text, text, text, text, text);
-  drop function if exists public.conta_bitrix_portal_unir(text, text);
-  drop table if exists public.conta_bitrix_pestana_persona;
-  alter table public.conta_crm drop column if exists pestana_portal_por, drop column if exists pestana_portal_at;
-  if to_regprocedure('public.conta_bitrix_portal_unir(text,text)') is not null or to_regclass('public.conta_bitrix_pestana_persona') is not null
-     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_crm' and column_name like 'pestana_portal%') then
-    raise exception 'PRUEBA R18d · 8: la vuelta atrás dejó algo';
+-- 8 · Como usuario: la administradora de la cuenta (y alguien que miró la pestaña de OTRA cuenta, que no debe ver)
+insert into public.conta_bitrix_pestana_persona (account_id, portal, usuario_id, nombre)
+values ('ae18d000-0000-4000-8000-000000000011', 'otro-portal-r18d.bitrix24.es', '9', 'De otra cuenta');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"ae18d000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+do $$ declare n int; begin
+  begin
+    perform public.conta_bitrix_pestana_leer_portal('r18d-prueba.bitrix24.es', '7', 'X', 'empresa', '1495');
+    raise exception 'PRUEBA R18d · 8: una sesión ha leído como el portal';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.conta_bitrix_portal_unir('r18d-prueba.bitrix24.es', 'X');
+    raise exception 'PRUEBA R18d · 8: una sesión ha unido el portal';
+  exception when insufficient_privilege then null; end;
+  select count(*) into n from public.conta_bitrix_pestana_persona;
+  if n <> 2 or exists (select 1 from public.conta_bitrix_pestana_persona where account_id <> 'ae18d000-0000-4000-8000-000000000010') then
+    raise exception 'PRUEBA R18d · 8: la administradora ve % personas (esperaba las 2 de su cuenta, ninguna de otra)', n;
   end if;
-  raise notice 'PRUEBA R18d · 8 OK: la vuelta atrás lo quita todo';
+  raise notice 'PRUEBA R18d · 8 OK: una sesión no lee como el portal ni lo une; la administradora ve quién ha mirado, solo de su cuenta';
+end $$;
+reset role;
+
+-- 9 · La vuelta atrás, el fichero de verdad
+\i supabase/vuelta-atras/20261124T2311_r18d_pestana_sin_usuario.down.sql
+do $$ begin
+  if to_regprocedure('public.conta_bitrix_portal_unir(text,text)') is not null or to_regprocedure('public.conta_bitrix_pestana_leer_portal(text,text,text,text,text)') is not null
+     or to_regclass('public.conta_bitrix_pestana_persona') is not null
+     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_crm' and column_name like 'pestana_portal%') then
+    raise exception 'PRUEBA R18d · 9: la vuelta atrás dejó algo';
+  end if;
+  raise notice 'PRUEBA R18d · 9 OK: la vuelta atrás lo quita todo';
 end $$;
 
 rollback;
