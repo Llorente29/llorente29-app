@@ -1,0 +1,20 @@
+{
+ "_que": "K13 · código corto y reparto en tramos · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: no en producción. Las dos solo añaden (tablas y funciones nuevas; el relleno escribe solo en la tabla nueva). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-24T00:01Z",
+ "tanda": {
+  "supabase/migrations/20261123T2347_k13_codigo_corto.sql": "af63cf191227337cd4d21c8722172709",
+  "supabase/migrations/20261124T0001_k13_reparto_en_tramos.sql": "e82fa4415e37350d9766a64666ae10dc"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

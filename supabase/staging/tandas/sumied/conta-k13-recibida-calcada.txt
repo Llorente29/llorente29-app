@@ -1,0 +1,8 @@
+# K13 · La recibida calcada de ERP10 (maqueta 17b), PR 1. Su tanda de producción solo añade: el código corto de los
+# locales, marcas y plataformas (2347, tabla nueva con su relleno) y el reparto analítico en tramos (0001). Las dos se
+# pueden pasar dos veces igual (if not exists, create or replace, on conflict do nothing): van de verdad desde la rama
+# (W05), y la e2e de la rama las necesita.
+supabase/migrations/20261123T2347_k13_codigo_corto.sql
+supabase/migrations/20261124T0001_k13_reparto_en_tramos.sql
+# Su prueba, por los caminos (regla 10), en ROLLBACK: el relleno, el alta, a mano, y los tramos con sus puertas.
+supabase/staging/sql/20261124_k13_codigo_corto_y_tramos_prueba.sql

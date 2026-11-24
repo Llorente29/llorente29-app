@@ -1,0 +1,15 @@
+# K13 · La factura recibida calcada de ERP10 (maqueta 17b), PR 1 (24/11). Rama conta/k13-recibida-calcada. Se ensaya y
+# se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2347  El código corto de cada local, marca y plataforma (003, MIL, GLO), en una tabla nueva (conta_codigo_corto),
+#         único por cuenta; las funciones que lo proponen del nombre, lo leen y lo cambian a mano; y el relleno de lo que
+#         ya existe (solo escribe en la tabla nueva). Solo añade: no toca locations, brand ni sales_channel.
+#   0001  El reparto analítico de cada línea de gasto en tramos (supplier_invoice_expense_tramo) y la función que lo pone
+#         (conta_recibida_reparto_linea). Solo añade.
+#
+# Lo cuenta k13-recibida-calcada.sql (regla 31): los locales, marcas y plataformas sin moverse, los asientos validados de
+# las recibidas sin moverse, y cuántos códigos salen de cada manera, cuenta por cuenta. Nada en el camino del pedido. El
+# real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k13-recibida-calcada.sql
+supabase/migrations/20261123T2347_k13_codigo_corto.sql
+supabase/migrations/20261124T0001_k13_reparto_en_tramos.sql
