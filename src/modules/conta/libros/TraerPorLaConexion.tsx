@@ -20,13 +20,13 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalS
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import {
-  FRASES_UN_BOTON, confirmarDarlo, confirmarDescartar, conLoDeLaTabla, estadoUnBoton, filasUnBoton, leerCarga, leidoDeLaConexion, lineaDadoPorBueno,
+  FRASES_UN_BOTON, confirmarDarlo, fraseMetiendo, confirmarDescartar, conLoDeLaTabla, estadoUnBoton, filasUnBoton, leerCarga, leidoDeLaConexion, lineaDadoPorBueno,
   lineaDeshecho, loQueMirar, paraLaBase, pastillaUnBoton, queSeTrajoSoloCuentas, type EntradaUnBoton, type FilaUnBoton,
 } from '@/modules/conta/lib/traer'
 import { PARADO, lectorDe, type LectorTraer, type VistaLector } from '@/modules/conta/erp10/lectorTraer'
 import { almacenDelNavegador } from '@/modules/conta/erp10/almacenTraer'
 import { traerPaginaErp10, type ConexionErp10 } from '@/modules/conta/services/erp10ApiService'
-import { antesDeDarlo, darPorBueno, deshacer, leerEnPrueba, leerUltima, traer, type Ultima } from '@/modules/conta/services/traerService'
+import { antesDeDarlo, darPorBueno, deshacer, leerAMedias, leerEnPrueba, leerUltima, seguirCarga, traer, type AvanceCarga, type Ultima } from '@/modules/conta/services/traerService'
 
 const hoyMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
 const SIN_LECTOR = () => () => undefined
@@ -41,7 +41,11 @@ function useLector(l: LectorTraer | null): VistaLector | null {
 export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: ConexionErp10; alFicheros: () => void }) {
   const L = useLibros()
   const [vuelta, setVuelta] = useState(0)
-  const enPrueba = useLeer(async () => ({ p: await leerEnPrueba(L.accountId, L.companyId) }), `${L.companyId}:${vuelta}:${L.vuelta}`)
+  // X14 · Y la carga a medias («cargando»), si la hay: se sigue con ella.
+  const enPrueba = useLeer(async () => {
+    const [p, medias] = await Promise.all([leerEnPrueba(L.accountId, L.companyId), leerAMedias(L.accountId, L.companyId)])
+    return { p, medias }
+  }, `${L.companyId}:${vuelta}:${L.vuelta}`)
   const ultima = useLeer(() => leerUltima(L.accountId, L.companyId), `${L.companyId}:${vuelta}:${L.vuelta}`)
   const [ejercicio, setEjercicio] = useState<string>(L.ejercicio.code)
   const lector = useMemo(() => lectorDe(L.companyId, ejercicio, () => ({
@@ -81,16 +85,20 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
   })
 
   // Al acabar de leer, lo leído entra en prueba solo (una vez por lectura). Si la base no lo deja, se dice su frase.
-  const clave = hecho ? `${lector.clave}|${hecho.acabado ?? ''}` : null
+  // X14 · Entra por trozos, diciendo lo que lleva («Trayendo 2024: asientos 2.100 de 4.425»). Si hay una carga a medias
+  // (otra pestaña, o una vuelta que se cortó), se sigue con ella, aunque lo leído ya no esté en este navegador.
+  const medias = enPrueba.datos?.medias ?? null
+  const clave = medias ? `medias|${medias.id}` : hecho ? `${lector.clave}|${hecho.acabado ?? ''}` : null
   useEffect(() => {
-    if (!clave || !carga || !enPrueba.datos || enPrueba.datos.p || METIENDO.has(clave)) return
+    if (!clave || !enPrueba.datos || enPrueba.datos.p || METIENDO.has(clave) || (!medias && !carga)) return
     METIENDO.add(clave)
+    const avance = (a: AvanceCarga) => setMeter({ estado: 'metiendo', avance: { ejercicio, ...a } })
     // El aviso de «metiendo» va en la siguiente vuelta (sin setState síncrono en el efecto).
-    void Promise.resolve().then(() => setMeter({ estado: 'metiendo' }))
-      .then(() => traer(L.companyId, ejercicio, paraLaBase(carga), L.quien))
-      .then(() => { setMeter(null); setVuelta((v) => v + 1) },
+    void Promise.resolve().then(() => setMeter({ estado: 'metiendo', ...(medias ? { avance: { ejercicio, ...medias.avance } } : {}) }))
+      .then(() => (medias ? seguirCarga(medias.id, avance) : traer(L.companyId, ejercicio, paraLaBase(carga!), L.quien, avance)))
+      .then(() => { METIENDO.delete(clave); setMeter(null); setVuelta((v) => v + 1) },
         (e: unknown) => { METIENDO.delete(clave); setMeter({ estado: 'fallo', texto: e instanceof Error ? e.message : 'No ha contestado.' }) })
-  }, [clave, carga, enPrueba.datos, L.companyId, L.quien, ejercicio])
+  }, [clave, carga, medias, enPrueba.datos, L.companyId, L.quien, ejercicio])
 
   if (enPrueba.error) return <ErrorConReintento mensaje={enPrueba.error} reintentar={enPrueba.recargar} />
   if (!enPrueba.datos) return <div className="cx-tarjeta" aria-busy="true" aria-label="Mirando si hay algo traído en prueba"><Hueso alto={40} /></div>
@@ -119,6 +127,17 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
     } finally { setHaciendo(null); setConfirmar(null) }
   }
   const reintentar = () => { setMeter(null); if (clave) METIENDO.delete(clave); setVuelta((v) => v + 1) }
+  // X14 · Descartar lo leído deshace también la carga a medias, si la hay: si no, la siguiente no entraría.
+  async function descartarLoLeido() {
+    setMeter(null)
+    try {
+      if (medias) await deshacer(medias.id, L.quien)
+      await lector.olvidar()
+      setVuelta((v) => v + 1)
+    } catch (e) {
+      setFallo(e instanceof Error ? e.message : 'No ha contestado.')
+    }
+  }
 
   // Un botón principal en cada estado, a la derecha; el secundario, a su izquierda.
   const botones = (
@@ -130,7 +149,7 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
         <button type="button" className="cxe-grande" onClick={() => { void lector.traer() }}>Seguir trayendo de ERP10</button>
       </>}
       {estado === 'fallo' && <>
-        <button type="button" className="cxe-sec" onClick={() => { setMeter(null); void lector.olvidar() }}>Descartar lo leído</button>
+        <button type="button" className="cxe-sec" onClick={() => { void descartarLoLeido() }}>Descartar lo leído</button>
         <button type="button" className="cxe-grande" onClick={reintentar}>Volver a intentarlo</button>
       </>}
       {estado === 'acabado' && <>
@@ -191,7 +210,7 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
             {estado === 'antes' && <>{caja('Un botón y listo', FRASES_UN_BOTON.unBoton)}{caja('En ERP10 no cambia nada', FRASES_UN_BOTON.soloLee)}</>}
             {(estado === 'trayendo' || estado === 'parado' || estado === 'metiendo') && <>
               {caja('Qué está pasando', estado === 'parado' ? (vista?.fallo && vista.fallo !== PARADO ? `Se ha cortado: ${vista.fallo} Lo leído se queda: «Seguir trayendo de ERP10» sigue donde se quedó.` : FRASES_UN_BOTON.parado)
-                : estado === 'metiendo' ? 'Leído de ERP10. Ahora entra en prueba en Sumied: tarda unos segundos.' : FRASES_UN_BOTON.queEstaPasando)}
+                : estado === 'metiendo' ? fraseMetiendo(meter?.estado === 'metiendo' ? meter.avance : null) : FRASES_UN_BOTON.queEstaPasando)}
               {caja('Cuando acabe', FRASES_UN_BOTON.cuandoAcabe)}
             </>}
             {estado === 'fallo' && meter?.estado === 'fallo' && (

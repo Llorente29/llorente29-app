@@ -1,0 +1,12 @@
+# X14 · 1 · Que el 2024 de QBO entre en prueba (respuesta X14 · 1, punto 1): «Traer de ERP10» lo mete por trozos, sin pasar
+# del corte de 8 s de la sesión. Rama conta/x14-traer-qbo-entrar. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   1552  import_run: el estado «cargando» (amplía su CHECK); conta_traer_trozo (la cola, nueva); conta_traer_cargar (la
+#         misma firma, con respaldo): las fichas como antes y los asientos y las facturas a la cola; _conta_traer_seguir y
+#         conta_traer_seguir (nuevas); conta_traer_deshacer y _journal_entry_proponer (trozos exactos, con respaldo): una
+#         carga a medias se deshace y sus asientos entran. Declarado, con su prueba.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x14-traer.sql
+supabase/migrations/20261124T1552_x14_traer_por_trozos.sql

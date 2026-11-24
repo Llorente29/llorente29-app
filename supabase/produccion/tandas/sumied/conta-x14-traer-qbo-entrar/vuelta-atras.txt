@@ -1,0 +1,3 @@
+# X14 · 1 · la vuelta atrás: las tres funciones de sus respaldos, sin la cola, sin seguir y con el CHECK de antes.
+cuenta: scripts/conta/produccion/cuentas/x14-traer.sql
+supabase/vuelta-atras/20261124T1552_x14_traer_por_trozos.down.sql
