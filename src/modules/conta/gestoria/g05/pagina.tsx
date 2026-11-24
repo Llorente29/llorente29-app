@@ -45,8 +45,10 @@ export function CobroG05Page() {
   const frente = fr.datos ? frenteAGocardless(mes, fr.datos.recibos, fr.datos.suscripciones, fr.datos.clientes, fr.datos.enlaces) : null
   const descargar = () => {
     if (!frente) return 'Aún se está leyendo lo de GoCardless.'
-    // Solo letras, números, espacios y guiones: con «·», comas o «S.L..xlsx», el navegador lo baja como «download» (e2e 45403458600).
-    const nombre = `Cobro de ${nombreDelMes(mes)} frente a GoCardless - ${empresa.nombre}`.replace(/[^\p{L}\p{N} -]+/gu, ' ').replace(/\s+/g, ' ').trim()
+    // Sin tildes ni signos: con una «í» (o «·», comas…), SheetJS 0.18.5 en Chromium lo baja como «download», sin nombre ni
+    // extensión (e2e 45403458600 y 45405018413; reproducido en local con «Gestoría.xlsx»).
+    const nombre = `Cobro de ${nombreDelMes(mes)} frente a GoCardless - ${empresa.nombre}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ñ/gi, 'n')
+      .replace(/[^A-Za-z0-9 -]+/g, ' ').replace(/\s+/g, ' ').trim()
     const ok = excelTabla(`${nombre}.xlsx`, 'Frente a GoCardless', CABECERA_EXCEL, filasExcel(frente))
     return ok ? `Bajado: ${nombre}.xlsx, ${frente.filas.length} clientes (${frente.diferencias.length} con diferencias).` : 'No había nada que bajar.'
   }
