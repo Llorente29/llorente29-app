@@ -73,6 +73,10 @@
 .cxe-aviso-botones { display: flex; gap: 8px; flex-wrap: wrap; }
 .cxe-ambar { height: 32px; padding: 0 14px; border: 0; border-radius: var(--cx-radio-boton); background: var(--cx-ambar); color: var(--cx-blanco); font: inherit; font-weight: 700; cursor: pointer; }
 .cxe-ambar-sec { height: 32px; padding: 0 14px; border: 1px solid var(--cx-ambar); border-radius: var(--cx-radio-boton); background: var(--cx-blanco); color: var(--cx-ambar); font: inherit; cursor: pointer; }
+/* X31 · 2 · Un botón apagado se ve apagado (respuesta de Julio, 24/11): el fondo gris de los botones apagados de Sumied
+   (componentes.css, .cx-alta-enviar:disabled), el texto de apoyo (en blanco no se lee: 1,27 de contraste; así, 5,44) y el
+   cursor «no permitido» (.cx-boton:disabled). Nada de colores nuevos. */
+.cxe-ambar:disabled, .cxe-ambar-sec:disabled { background: var(--cx-borde-campo); border-color: var(--cx-borde-campo); color: var(--cx-apoyo); cursor: not-allowed; }
 .cxe-nota { border: 1px solid var(--cx-linea); background: var(--cx-blanco); border-radius: var(--cx-radio-caja); padding: 10px 12px; font-size: .9rem; }
 .cxe-nota p { margin: 0; }
 .cxe-chips { display: flex; flex-wrap: wrap; gap: 6px; border: 1px solid var(--cx-borde-control); border-radius: var(--cx-radio-caja); padding: 8px; margin-top: 6px; }

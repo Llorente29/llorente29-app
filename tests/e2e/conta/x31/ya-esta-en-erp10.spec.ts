@@ -12,7 +12,7 @@
 //   3. «Es la misma» en la factura, con la diferencia mirada (la función recibe p_mirada): lo dice, y no queda nada.
 // Datos inventados (T11): los números de ERP10, los totales y los ids de los asientos.
 
-import { test, expect, type Page, type Route } from '@playwright/test'
+import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { CUENTA_A, enCarril, entrarComo, type Sesion } from '../sesion'
 import { rest } from '../api'
 
@@ -41,6 +41,16 @@ function dudasDeMentira(hoy: string) {
       journal_entry: { series: 3, number: 9002, concept: 'Pago inventado X31', entry_date: hoy } },
   ]
   return { filas, decisiones: [] as { envio: string; que: 'la_misma' | 'otro'; mirada?: boolean }[] }
+}
+
+/** Cómo se ve un botón (fondo, letra y cursor) y los colores de Sumied de sus tokens, todo en rgb() para comparar. */
+async function aspecto(boton: Locator): Promise<{ fondo: string; letra: string; cursor: string; gris: string; apoyo: string; ambar: string }> {
+  return boton.evaluate((el) => {
+    const cs = getComputedStyle(el)
+    const rgb = (c: string) => { const x = document.createElement('span'); x.style.color = c; el.parentElement!.appendChild(x); const r = getComputedStyle(x).color; x.remove(); return r }
+    const token = (n: string) => rgb(cs.getPropertyValue(n).trim())
+    return { fondo: cs.backgroundColor, letra: cs.color, cursor: cs.cursor, gris: token('--cx-borde-campo'), apoyo: token('--cx-apoyo'), ambar: token('--cx-ambar') }
+  })
 }
 
 async function sustituir(page: Page, d: ReturnType<typeof dudasDeMentira>) {
@@ -103,6 +113,12 @@ test('X31 · 2 · 1366 × 768 y 1920 × 1080: «Ya está en ERP10», con los dos
   const laMisma = factura.getByRole('button', { name: 'Es la misma, no la mandes' })
   await expect(laMisma).toBeDisabled()
   await expect(laMisma).toHaveAttribute('title', 'Los totales no son iguales: mira antes la diferencia.')
+  // Apagado, se VE apagado (respuesta de Julio, 24/11): el gris de los botones apagados de Sumied, la letra de apoyo y el
+  // cursor «no permitido»; nada del ámbar de los botones encendidos.
+  const apagado = await aspecto(laMisma)
+  expect(apagado.gris, 'el token del gris existe').not.toBe('')
+  expect({ fondo: apagado.fondo, letra: apagado.letra, cursor: apagado.cursor }, 'apagado, se ve apagado').toEqual({ fondo: apagado.gris, letra: apagado.apoyo, cursor: 'not-allowed' })
+  expect(apagado.fondo).not.toBe(apagado.ambar)
   await expect(factura.getByRole('button', { name: /^Es otr/ })).toHaveCount(0)
   await expect(asiento).toContainText('El asiento 3/9002')
   await expect(asiento).toContainText('Ya está en ERP10 (asiento 61).')
@@ -127,6 +143,9 @@ test('X31 · 2 · 1366 × 768 y 1920 × 1080: «Ya está en ERP10», con los dos
   // 3 · «Es la misma», mirando la diferencia.
   await factura.getByLabel('He mirado la diferencia').check()
   await expect(laMisma).toBeEnabled()
+  // Al marcar la casilla se enciende, y se ve encendido: el ámbar y el cursor de pulsar.
+  const encendido = await aspecto(laMisma)
+  expect({ fondo: encendido.fondo, cursor: encendido.cursor }, 'encendido, se ve encendido').toEqual({ fondo: encendido.ambar, cursor: 'pointer' })
   for (const tam of TAMANOS) { await page.setViewportSize(tam); await laMisma.scrollIntoViewIfNeeded(); await page.screenshot({ path: `${DIR}/x31-mirada-${tam.width}.png` }) }
   await laMisma.click()
   await expect(dicho).toHaveText('La factura X31-0007 · Proveedor Inventado X31, S.L.: Es la misma: no se manda; queda unida al asiento 51 de ERP10.')
