@@ -1,0 +1,18 @@
+# G06 · GoCardless casado con Bitrix24 · Tarea 3: las propuestas del casado y la confirmación con un clic. Rama
+# conta/g06-cuadre. Se ensaya y se aplica antes de fusionar, desde main nombrando la rama (lo lanza Julio, T10).
+#
+#   1. 1110 — CAMBIA en caliente (declarado, con su prueba de staging) y AÑADE:
+#      · conta_gc_enlace: la columna antes (admite nulos) y el estado «sin_ficha» (el CHECK solo amplía; 1.228 filas,
+#        cierre exclusivo de un instante);
+#      · _conta_gc_enlace_guardar (lo que escribe la lectura, con la guarda «lo de una persona manda» dentro);
+#      · conta_gc_enlace_confirmar («Es esta» / «Es otra…»), conta_gc_enlace_sin_ficha y conta_gc_enlace_deshacer;
+#      · _conta_gestoria_juntar (misma firma, con la de antes al respaldo): al juntar dos fichas, su enlace pasa a la
+#        que queda, también el que confirmó una persona.
+#      No toca recibos, cobros ni facturas. Nada en el camino del pedido.
+#
+# Sin «autorizo»: el analizador dice «sigue» (contexto.json).
+# Antes de fusionar, también se despliega conta-gocardless-leer (escribe las propuestas por _conta_gc_enlace_guardar):
+# el real de esta tanda va ANTES del despliegue, porque la función nueva llama a la función que crea la tanda.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261112T1110_g06_confirmar_enlace.sql
+cuenta: scripts/conta/produccion/cuentas/g06-cuadre.sql

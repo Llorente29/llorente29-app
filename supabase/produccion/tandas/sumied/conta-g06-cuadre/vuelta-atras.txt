@@ -1,0 +1,3 @@
+# G06 · Tarea 3 · vuelta atrás: quita las cuatro funciones nuevas, devuelve el CHECK de estado y _conta_gestoria_juntar
+# (del respaldo) a como estaban, y quita la columna antes.
+supabase/vuelta-atras/20261112T1110_g06_confirmar_enlace.down.sql

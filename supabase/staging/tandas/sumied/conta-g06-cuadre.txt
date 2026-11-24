@@ -1,0 +1,6 @@
+# G06 · Tarea 3 · Las propuestas del casado y la confirmación con un clic. La 1110 cambia en caliente (el CHECK de
+# conta_gc_enlace y _conta_gestoria_juntar): desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK): lo que escribe la lectura y su guarda, «Es esta» con los dos enlaces de antes, deshacer,
+# «No tiene ficha en Bitrix24», otra cuenta no confirma, juntar dos fichas y la vuelta atrás con la huella de juntar.
+supabase/migrations/20261112T1110_g06_confirmar_enlace.sql
+supabase/staging/sql/20261112_g06_confirmar_enlace_prueba.sql
