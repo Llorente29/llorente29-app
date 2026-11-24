@@ -108,10 +108,13 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await esperandoLaPrimeraSalida(page)
     const s = await entrarEnLaGestoria(page)
 
-    // ── 3 · La barra de abajo: esperando la primera salida, en gris y con «Mandarla»; nada en ámbar de ERP10. ──
+    // ── 3 · La barra de abajo: en gris y sin ámbar de ERP10. X31 · 0: con la salida a ERP10 parada, sin «Mandarla»
+    // y con el motivo al pasar el ratón. ──
     const erp10 = page.locator('.k-estado-frase', { hasText: 'ERP10' })
     await expect(erp10).toHaveAttribute('data-tono', 'gris', { timeout: 30_000 })
-    await expect(erp10).toContainText('Esperando la primera salida a ERP10 · Mandarla')
+    await expect(erp10).toContainText('La salida a ERP10 está parada')
+    await expect(erp10).not.toContainText('Mandarla')
+    await expect(erp10).toHaveAttribute('title', 'Falta la comprobación de lo que ya hay en ERP10.')
     await expect(page.locator('.k-estado-frase[data-tono="mira"]', { hasText: 'sin salir a ERP10' })).toHaveCount(0)
     if (t === 1) await page.screenshot({ path: `${DIR}/barra-primera-salida-${ancho}.png` })
     await page.unrouteAll({ behavior: 'ignoreErrors' })

@@ -66,6 +66,7 @@ import { cintaVisible, modulosVisibles, MODULOS, sitioDe, type Boton, type IdMod
 import { conEjercicio, ejercicioAEnsenar } from './ejercicio'
 import { frasesDeEstado } from './estado'
 import { fraseErp10Barra } from '@/modules/conta/erp10/salidaSola'
+import { SALIDA_ERP10_PARADA } from '@/modules/conta/erp10/parada'
 import { leerAtascadosErp10, leerSalidaDeLaEmpresa } from '@/modules/conta/services/erp10ApiService'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { bancosCuadrados } from './bancos/servicio'
@@ -406,7 +407,7 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
   const atascados = useLeer(accountId && activa ? () => leerAtascadosErp10(activa.id) : null, `${accountId}:${activa?.id}:erp10-atascados:${cincoMinutos}`).datos ?? 0
   // K08 · Ámbar solo si algo ha fallado; esperando la primera salida (o con la salida apagada), en gris.
   const salidaEmpresa = useLeer(accountId && activa && atascados > 0 ? () => leerSalidaDeLaEmpresa(accountId, activa.id) : null, `${accountId}:${activa?.id}:erp10-salida:${atascados > 0 ? 'si' : 'no'}:${cincoMinutos}`).datos ?? null
-  const fraseErp10 = salidaEmpresa ? fraseErp10Barra({ atascados, salida: salidaEmpresa.salida, pruebaHecha: salidaEmpresa.pruebaHecha }) : null
+  const fraseErp10 = salidaEmpresa ? fraseErp10Barra({ atascados, salida: salidaEmpresa.salida, pruebaHecha: salidaEmpresa.pruebaHecha, parada: SALIDA_ERP10_PARADA }) : null
   if (fraseErp10) estadoFrases.push({ id: 'erp10', ...fraseErp10, ruta: rutaConta('libros/cierre/salida-erp10') })
   const actual = sitio?.tipo === 'cinta' ? sitio.boton.id : null
   const enFila = estado.abiertas.map((p) => ({ id: p.id, nombre: nombreDe(p.id), conCambios: !!cambios[llaveDe(empresaVista, p.id)], cerrable: p.id !== INICIO }))
@@ -436,7 +437,7 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
       </div>
       <footer className="k-estado" aria-label="Cómo va la empresa">
         {estadoFrases.map((f) => (
-          <button key={f.id} type="button" className="k-estado-frase" data-tono={f.tono} onClick={() => navegar(f.ruta)}>
+          <button key={f.id} type="button" className="k-estado-frase" data-tono={f.tono} title={f.title} onClick={() => navegar(f.ruta)}>
             <span className="k-estado-punto" aria-hidden="true" /><strong>{f.fuerte}</strong> {f.resto}
           </button>
         ))}
