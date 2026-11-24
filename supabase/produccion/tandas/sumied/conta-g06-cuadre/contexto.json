@@ -1,0 +1,8 @@
+{
+ "_que": "G06 · Tarea 3 · contexto de producción de la tanda (1110), medido en SOLO LECTURA el 12/11 a las 10:15Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existe conta_gc_enlace (1.228 filas según reltuples) y _conta_gestoria_juntar (md5 de prosrc 2158feb71e23d3a18cc43a4d6b0f7428, igual que la base local); no existe ninguna de las cuatro funciones nuevas; nada en el camino del pedido y nada en el historial. El analizador: sigue.",
+ "medido": "2026-11-12T10:15Z",
+ "tanda": {
+  "supabase/migrations/20261112T1110_g06_confirmar_enlace.sql": "a14fb87bc551d579dbe661ac0a0e285a"
+ },
+ "contexto": {"tablas":["public.conta_gc_enlace"],"funciones":["public._conta_gestoria_juntar(uuid,uuid,uuid,text)"],"filas":{"public.conta_gc_enlace":1228},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

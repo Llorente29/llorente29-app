@@ -139,10 +139,16 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     const enlacesAntes = await leerTodas<{ gc_cliente_id: string; por: PorEnlace; estado: EstadoEnlace }>((d, h) => db.from('conta_gc_enlace')
       .select('gc_cliente_id, por, estado').eq('company_id', empresa).order('gc_cliente_id').range(d, h), 'los enlaces de antes')
     const pe = planEnlaces(empresa, cuenta, new Date().toISOString(), enlacesAntes.map((e) => ({ gcClienteId: e.gc_cliente_id, por: e.por, estado: e.estado })),
-      plan.enlaces, personasDeDecisiones(decisiones))
-    await upsert(db, 'conta_gc_enlace', pe.guardar, 'company_id,gc_cliente_id')
+      plan.enlaces, personasDeDecisiones(decisiones), plan.propuestas)
+    // G06 · Tarea 3 · Por la función, no con upsert: la guarda «lo de una persona manda» va dentro del on conflict, así
+    // que una confirmación hecha mientras corre la lectura no se pisa.
+    for (const trozo of enTrozos(pe.guardar)) {
+      const { error } = await db.rpc('_conta_gc_enlace_guardar', { p_filas: trozo })
+      if (error) throw new Error(`No se ha podido guardar en conta_gc_enlace: ${error.message}`)
+    }
     for (const trozo of enTrozos(pe.quitar)) {
-      const { error } = await db.from('conta_gc_enlace').delete().eq('company_id', empresa).in('gc_cliente_id', trozo).eq('estado', 'atado').in('por', ['nif', 'correo'])
+      const { error } = await db.from('conta_gc_enlace').delete().eq('company_id', empresa).in('gc_cliente_id', trozo)
+        .in('estado', ['atado', 'propuesto']).in('por', ['nif', 'correo', 'nombre'])
       if (error) throw new Error(`No se han podido quitar los enlaces que ya no casan: ${error.message}`)
     }
     const yaEstan = await leerTodas<{ id: string; gc_mandato_id: string }>((d, h) => db.from('conta_mandato').select('id, gc_mandato_id').eq('company_id', empresa).not('gc_mandato_id', 'is', null).order('id').range(d, h), 'los mandatos')
