@@ -54,6 +54,10 @@ const NO_SALEN_POR_UNA_CUENTA: Record<string, string> = {
   'conta-gd-volver-a-empezar': 'vuelve a sembrar el Bitrix24 de pruebas (b24-s3mr2y) y el sandbox de GoCardless, solo en una cuenta de demo y con sus dos guardas; nunca los de verdad',
   // GB · Igual que la de arriba: solo escribe en el Bitrix24 de pruebas (la base solo da conexiones de pruebas y avisos.ts comprueba el portal).
   'conta-bitrix-pestana-avisos': 'pone y cierra tareas en el Bitrix24 de pruebas (b24-s3mr2y) por lo que pasa en Sumied; la base solo le da conexiones de pruebas y comprueba el portal antes de salir; nunca el Bitrix24 de verdad. El sandbox de GoCardless que ve la máquina llega con guardaPortal (_shared/gd/siembra.ts), que importa pero no lo llama',
+  // GBd · El plan B, en pruebas: el correo de la red de la «Cuota mensual» (Resend) va a quien la cambió y a la persona
+  // responsable en el Bitrix24 de pruebas, que son del equipo, nunca a un cliente. La red solo actúa con la conexión en entorno
+  // «pruebas» (conta_bitrix_red_leer) y en el portal de pruebas (red.ts); lo demás que sale (Bitrix24) va al portal de la ficha.
+  'conta-bitrix-pestana': 'el correo de la red (plan B) va a personas del equipo en el Bitrix24 de pruebas (b24-s3mr2y), nunca a un cliente; solo con la conexión en entorno «pruebas» y en el portal de pruebas. El resto de lo que sale es el Bitrix24 de la ficha abierta, con el token de quien mira',
   // De la plataforma, no de una cuenta.
   'create-platform-admin': 'da de alta a un superadministrador: es de la plataforma, no de una cuenta',
   // El acceso de la propia persona: también en una demo hace falta entrar.
