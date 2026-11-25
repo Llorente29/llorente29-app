@@ -2,7 +2,7 @@
  "_que": "X33b · Una factura con cobro nunca lleva dos asientos de cobro · contexto medido en la BASE LOCAL con la estructura de staging (y en producción, en solo lectura, la firma de conta_venta_cobrar y que la 1207 está aplicada). 1320 cambia tres funciones con la misma firma, añade dos columnas que admiten nulos y una función, y no escribe en ninguna fila. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
  "medido": "2026-11-25T13:12Z",
  "tanda": {
-  "supabase/migrations/20261125T1320_x33b_un_cobro_por_factura.sql": "b32c52e964472a2aba8f3377782abb7c"
+  "supabase/migrations/20261125T1320_x33b_un_cobro_por_factura.sql": "80cd00b9e32683340b89647c4518424f"
  },
  "contexto": {
   "tablas": [],

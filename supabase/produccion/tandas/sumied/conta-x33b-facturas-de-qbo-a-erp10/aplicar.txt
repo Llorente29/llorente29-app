@@ -2,8 +2,8 @@
 # ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
 #
 #   1320  Cambia _conta_gc_asientos_plan, conta_gc_asientos_preparar y conta_gc_asientos_del_mes (misma firma, con su
-#         respaldo): la factura de un cobro es la atada a él en conta_gc_cobro_factura (nueva; la escribe la emisión
-#         del Q10, una factura por cobro) o, sin enlace, la del mismo cliente e importe emitida después del cobro; si ya
+#         respaldo): la factura de un cobro es SOLO la atada a él en conta_gc_cobro_factura (nueva; la escribe la
+#         emisión del Q10, una factura por cobro); sin enlace, «Pendiente de revisar» con «Sin factura atada»; si ya
 #         está cobrada en Sumied (el G05 al emitir), «Preparar» no escribe otro asiento de cobro y señala el que tiene;
 #         si lo prepara él, deja el cobro apuntado en la factura con ese asiento. Añade una tabla, dos columnas que
 #         admiten nulos (factura_id, nota) y una función. No escribe en ninguna fila.

@@ -8,9 +8,10 @@
 --   1. Cliente Uno: dos facturas iguales emitidas el 26/11, después del cobro (Q10), la 2745 atada a su cobro
 --      (conta_gc_cobro_factura), y otra de octubre traída de ERP10; ninguna cobrada. Preparar: un asiento de cobro
 --      (57200002 / 43000101, «2026/1/2745-…») y el cobro apuntado en la 2745 con ese asiento; las otras, sin tocar.
---   2. Cliente Dos: su factura del 26/11, sin atar, ya cobrada en Sumied con su asiento (el camino del G05 al emitir).
---      Se encuentra igual (mismo cliente e importe, después del cobro). Preparar: ningún asiento nuevo; la fila señala
---      el asiento que ya tiene y lo dice en su nota.
+--   2. Cliente Dos: su factura del 26/11, atada a su cobro y ya cobrada en Sumied con su asiento (el camino del G05 al
+--      emitir). Preparar: ningún asiento nuevo; la fila señala el asiento que ya tiene y lo dice en su nota.
+--      Cliente Tres: su factura del 26/11 por lo mismo que su cobro, pero SIN atar. Nada se adivina (Julio, 25/11):
+--      «Pendiente de revisar» con «Sin factura atada», sin asiento y sin cobro apuntado.
 --   3. Otra vez: nada nuevo, y cada factura con un solo cobro.
 --   4. La vuelta atrás: las funciones de antes y sin las columnas nuevas.
 
@@ -19,7 +20,7 @@ do $$ begin
   if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
     raise exception 'PRUEBA X33b: esta base tiene cuentas de producción. No se toca nada.';
   end if;
-  if to_regprocedure('public._conta_gc_factura_de_cobro(uuid,text,uuid,numeric,date)') is null then
+  if to_regprocedure('public._conta_gc_factura_de_cobro(uuid,text)') is null then
     raise exception 'PRUEBA X33b · 0: falta la 20261125T1320.';
   end if;
 end $$;
@@ -33,15 +34,18 @@ begin
   if v_y is null then raise exception 'PRUEBA X33b: la empresa del núcleo no tiene ejercicio 2026 (semilla K02).'; end if;
   insert into public.party (id, account_id, name) values
     ('c0f33b00-0000-4000-8000-0000000000b1', a, 'Cliente de Prueba X33b Uno, S.L.'),
-    ('c0f33b00-0000-4000-8000-0000000000b2', a, 'Cliente de Prueba X33b Dos, S.L.');
+    ('c0f33b00-0000-4000-8000-0000000000b2', a, 'Cliente de Prueba X33b Dos, S.L.'),
+    ('c0f33b00-0000-4000-8000-0000000000b3', a, 'Cliente de Prueba X33b Tres, S.L.');
   insert into public.conta_gc_cliente (company_id, gc_id, account_id, nombre, party_id) values
     (emp, 'CU0X33BA', a, 'Cliente de Prueba X33b Uno, S.L.', 'c0f33b00-0000-4000-8000-0000000000b1'),
-    (emp, 'CU0X33BB', a, 'Cliente de Prueba X33b Dos, S.L.', 'c0f33b00-0000-4000-8000-0000000000b2');
+    (emp, 'CU0X33BB', a, 'Cliente de Prueba X33b Dos, S.L.', 'c0f33b00-0000-4000-8000-0000000000b2'),
+    (emp, 'CU0X33BC', a, 'Cliente de Prueba X33b Tres, S.L.', 'c0f33b00-0000-4000-8000-0000000000b3');
   insert into public.conta_gc_mandato (company_id, gc_id, account_id, gc_cliente_id) values
-    (emp, 'MD0X33BA', a, 'CU0X33BA'), (emp, 'MD0X33BB', a, 'CU0X33BB');
+    (emp, 'MD0X33BA', a, 'CU0X33BA'), (emp, 'MD0X33BB', a, 'CU0X33BB'), (emp, 'MD0X33BC', a, 'CU0X33BC');
   insert into public.conta_cobro_cliente (company_id, party_id, account_id, codigo_cliente, forma_cobro) values
     (emp, 'c0f33b00-0000-4000-8000-0000000000b1', a, 101, 'gocardless'),
-    (emp, 'c0f33b00-0000-4000-8000-0000000000b2', a, 102, 'gocardless');
+    (emp, 'c0f33b00-0000-4000-8000-0000000000b2', a, 102, 'gocardless'),
+    (emp, 'c0f33b00-0000-4000-8000-0000000000b3', a, 103, 'gocardless');
   insert into public.customer_invoice (id, account_id, company_id, status, doc_type, origin, series_code, fiscal_year, number, number_text,
                                        issue_date, party_id, base, tax, total) values
     ('c0f33b00-0000-4000-8000-0000000000c0', a, emp, 'emitida', 'factura', 'traida', 'X33B', 2026, 2700, '2026/1/2700', '2026-10-04',
@@ -52,10 +56,14 @@ begin
      'c0f33b00-0000-4000-8000-0000000000b2', 60, 12.6, 72.6),
     -- Otra de la Uno por lo mismo, del mismo día: no es de este cobro (la de este cobro está atada a él).
     ('c0f33b00-0000-4000-8000-0000000000c3', a, emp, 'emitida', 'factura', 'automatica', 'X33B', 2026, 2747, '2026/1/2747', '2026-11-26',
-     'c0f33b00-0000-4000-8000-0000000000b1', 50, 10.5, 60.5);
-  -- La emisión (Q10) ata cada factura a su cobro: la 2745 al de la Uno. La de la Dos, sin atar (se busca).
+     'c0f33b00-0000-4000-8000-0000000000b1', 50, 10.5, 60.5),
+    -- La de la Tres: emitida por lo mismo que su cobro, pero SIN atar a él. No se adivina.
+    ('c0f33b00-0000-4000-8000-0000000000c4', a, emp, 'emitida', 'factura', 'automatica', 'X33B', 2026, 2748, '2026/1/2748', '2026-11-26',
+     'c0f33b00-0000-4000-8000-0000000000b3', 25, 5.25, 30.25);
+  -- La emisión (Q10) ata cada factura a su cobro: la 2745 al de la Uno y la 2746 al de la Dos. La de la Tres, sin atar.
   insert into public.conta_gc_cobro_factura (company_id, account_id, gc_id, invoice_id) values
-    (emp, a, 'PM0X33BA', 'c0f33b00-0000-4000-8000-0000000000c1');
+    (emp, a, 'PM0X33BA', 'c0f33b00-0000-4000-8000-0000000000c1'),
+    (emp, a, 'PM0X33BB', 'c0f33b00-0000-4000-8000-0000000000c2');
   -- El cobro de la Dos ya apuntado en Sumied, con su asiento (como lo deja el G05 al emitir).
   select id into v_gasto from public.company_account where company_id = emp and code like '6%' order by code limit 1;
   select id into v_caja from public.company_account where company_id = emp and code like '57%' order by code limit 1;
@@ -67,7 +75,8 @@ begin
   values (a, emp, 'c0f33b00-0000-4000-8000-0000000000c2', '2026-11-26', 72.6, 'GoCardless', 'G05', 'prueba X33b', 'c0f33b00-0000-4000-8000-0000000000e9');
   insert into public.conta_gc_cobro (company_id, gc_id, account_id, mandato_gc_id, estado, fecha, importe) values
     (emp, 'PM0X33BA', a, 'MD0X33BA', 'paid_out', '2026-11-04', 60.5),
-    (emp, 'PM0X33BB', a, 'MD0X33BB', 'paid_out', '2026-11-04', 72.6);
+    (emp, 'PM0X33BB', a, 'MD0X33BB', 'paid_out', '2026-11-04', 72.6),
+    (emp, 'PM0X33BC', a, 'MD0X33BC', 'paid_out', '2026-11-04', 30.25);
 end $$;
 
 select set_config('request.jwt.claims', '{"sub":"c0e20000-0000-4000-8000-0000000000e1","role":"authenticated"}', true);
@@ -77,8 +86,8 @@ do $$
 declare emp constant uuid := 'c0e20000-0000-4000-8000-0000000000e2'; v jsonb; r record; n int;
 begin
   v := public.conta_gc_asientos_preparar(emp, '2026-11-01', 'Persona de Prueba X33b');
-  if (v->>'preparados')::int <> 1 or (v->>'ya_estaban')::int <> 1 or (v->>'pendientes')::int <> 0 then
-    raise exception 'PRUEBA X33b · 1: tenía que ser 1 preparado (la Uno) y 1 que ya estaba (la Dos, cobrada): %', v;
+  if (v->>'preparados')::int <> 1 or (v->>'ya_estaban')::int <> 1 or (v->>'pendientes')::int <> 1 then
+    raise exception 'PRUEBA X33b · 1: tenía que ser 1 preparado (la Uno), 1 que ya estaba (la Dos, cobrada) y 1 pendiente (la Tres, sin atar): %', v;
   end if;
   -- 1 · La Uno: su asiento de cobro y el cobro apuntado en la factura de noviembre, con ese asiento.
   select g.entry_id, g.factura_id, e.concept, e.status,
@@ -102,9 +111,16 @@ begin
     raise exception 'PRUEBA X33b · 2: la Dos tenía que señalar su asiento de cobro y decirlo: % · %', r.entry_id, r.nota;
   end if;
   raise notice 'PRUEBA X33b · 2: la Dos, ya cobrada: ningún asiento nuevo (%).', r.nota;
+  -- La Tres: su factura no está atada a su cobro. Nada se adivina: «Pendiente de revisar», sin asiento ni cobro apuntado.
+  select g.entry_id, g.pendiente into r from public.conta_gc_asiento g where g.company_id = emp and g.gc_id = 'PM0X33BC';
+  if r.entry_id is not null or not ('Sin factura atada' = any(r.pendiente))
+     or exists (select 1 from public.customer_invoice_payment p where p.invoice_id = 'c0f33b00-0000-4000-8000-0000000000c4') then
+    raise exception 'PRUEBA X33b · 2: la Tres tenía que quedar en «Pendiente de revisar» con «Sin factura atada»: % · %', r.entry_id, r.pendiente;
+  end if;
+  raise notice 'PRUEBA X33b · 2: la Tres, sin factura atada: «Pendiente de revisar» (%).', array_to_string(r.pendiente, ' · ');
   -- 3 · Otra vez: nada nuevo; cada factura con un solo cobro.
   v := public.conta_gc_asientos_preparar(emp, '2026-11-01', 'Persona de Prueba X33b');
-  if (v->>'preparados')::int <> 0 or (v->>'ya_estaban')::int <> 2 then raise exception 'PRUEBA X33b · 3: la segunda vez, nada nuevo: %', v; end if;
+  if (v->>'preparados')::int <> 0 or (v->>'ya_estaban')::int <> 2 or (v->>'pendientes')::int <> 1 then raise exception 'PRUEBA X33b · 3: la segunda vez, nada nuevo: %', v; end if;
   select max(c) into n from (select count(*) c from public.customer_invoice_payment p
                               where p.invoice_id in ('c0f33b00-0000-4000-8000-0000000000c1', 'c0f33b00-0000-4000-8000-0000000000c2') group by p.invoice_id) z;
   if n <> 1 then raise exception 'PRUEBA X33b · 3: una factura con dos cobros.'; end if;
@@ -121,7 +137,7 @@ end $$;
 reset role;
 \i supabase/vuelta-atras/20261125T1320_x33b_un_cobro_por_factura.down.sql
 do $$ begin
-  if to_regprocedure('public._conta_gc_factura_de_cobro(uuid,text,uuid,numeric,date)') is not null
+  if to_regprocedure('public._conta_gc_factura_de_cobro(uuid,text)') is not null
      or to_regclass('public.conta_gc_cobro_factura') is not null
      or exists (select 1 from information_schema.columns where table_name = 'conta_gc_asiento' and column_name in ('nota', 'factura_id'))
      or strpos(pg_get_functiondef('public._conta_gc_asientos_plan(uuid,date)'::regprocedure), '_conta_gc_factura_de_cobro') > 0 then

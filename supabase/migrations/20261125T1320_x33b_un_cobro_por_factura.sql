@@ -10,11 +10,10 @@
 -- cambia: public.conta_gc_asientos_preparar(uuid,date,text) · prueba: supabase/staging/sql/20261125_x33b_un_cobro_por_factura_prueba.sql
 -- cambia: public.conta_gc_asientos_del_mes(uuid,date) · prueba: supabase/staging/sql/20261125_x33b_un_cobro_por_factura_prueba.sql
 --
---   · La factura de un cobro es la que está atada a él (conta_gc_cobro_factura, nueva: la escribe la emisión del Q10, una
---     factura por cobro). Sin enlace, la emitida del mismo cliente, por el mismo importe, del día del cobro o de los 60
---     siguientes (el Q10 la fecha el día en que se emite, después del cobro), no traída de otro programa y no atada a
---     otro cobro. Antes: la de los dos meses ANTES del cobro, que con el Q10 no encontraría ninguna, y una factura de
---     octubre traída de ERP10 podía llevarse el cobro de noviembre.
+--   · La factura de un cobro es SOLO la que está atada a él (conta_gc_cobro_factura, nueva: la escribe la emisión del Q10,
+--     una factura por cobro). Sin enlace, el cobro va a «Pendiente de revisar» con «Sin factura atada»: nada se adivina
+--     (Julio, 25/11). Antes se buscaba por cliente, importe y fecha (la de los dos meses ANTES del cobro, que con el Q10,
+--     que fecha la factura el día en que se emite, no encontraría ninguna).
 --   · Preparar: si esa factura ya está cobrada en Sumied (lo cobrado más este cobro pasaría de su total), no hay asiento
 --     nuevo: la fila apunta al asiento de su cobro (si lo tiene) y lo dice en «nota». Si no, el asiento de siempre
 --     (propuesto) y el cobro apuntado en la factura con ese asiento.
@@ -53,46 +52,35 @@ revoke all on public.conta_gc_cobro_factura from anon;
 grant select on public.conta_gc_cobro_factura to authenticated;
 grant all on public.conta_gc_cobro_factura to service_role;
 
--- La factura de un cobro: la atada a él (conta_gc_cobro_factura); si no hay, la emitida del mismo cliente, por el mismo
--- importe, del día del cobro o de los 60 siguientes (Q10: se emite después de cobrar, con la fecha del día en que se
--- emite), que no sea traída de otro programa ni esté atada a otro cobro; primero la no cobrada, la más antigua.
-create or replace function public._conta_gc_factura_de_cobro(p_company uuid, p_gc_id text, p_party uuid, p_importe numeric, p_fecha date)
+-- La factura de un cobro: SOLO la atada a él en conta_gc_cobro_factura (Julio, 25/11: nada se adivina). Sin enlace,
+-- ninguna, y el cobro va a «Pendiente de revisar» («Sin factura atada»).
+create or replace function public._conta_gc_factura_de_cobro(p_company uuid, p_gc_id text)
 returns table (id uuid, numero text, total numeric, cobrado numeric)
 language sql stable security definer set search_path = public as $$
-  with candidatas as (
-    select ci.*, 0 as orden from public.customer_invoice ci
-      join public.conta_gc_cobro_factura cf on cf.invoice_id = ci.id
-     where cf.company_id = p_company and cf.gc_id = p_gc_id
-    union all
-    select ci.*, 1 from public.customer_invoice ci
-     where ci.company_id = p_company and ci.party_id = p_party and ci.total = p_importe and ci.status = 'emitida'
-       and ci.origin <> 'traida' and ci.import_run_id is null
-       and ci.issue_date >= p_fecha and ci.issue_date <= p_fecha + 60
-       and not exists (select 1 from public.conta_gc_cobro_factura cf where cf.invoice_id = ci.id)
-       and not exists (select 1 from public.conta_gc_cobro_factura cf where cf.company_id = p_company and cf.gc_id = p_gc_id)
-  )
-  select c.id, coalesce(nullif(btrim(c.number_text), ''), nullif(concat_ws('/', c.series_code, c.number::text), '')), c.total,
-         coalesce((select sum(p.amount) from public.customer_invoice_payment p where p.invoice_id = c.id), 0)
-    from candidatas c
-   order by c.orden,
-            coalesce((select sum(p.amount) from public.customer_invoice_payment p where p.invoice_id = c.id), 0) + p_importe > c.total,
-            c.issue_date, c.created_at
-   limit 1
+  select ci.id, coalesce(nullif(btrim(ci.number_text), ''), nullif(concat_ws('/', ci.series_code, ci.number::text), '')), ci.total,
+         coalesce((select sum(p.amount) from public.customer_invoice_payment p where p.invoice_id = ci.id), 0)
+    from public.conta_gc_cobro_factura cf
+    join public.customer_invoice ci on ci.id = cf.invoice_id and ci.company_id = cf.company_id
+   where cf.company_id = p_company and cf.gc_id = p_gc_id and ci.status = 'emitida'
 $$;
-revoke all on function public._conta_gc_factura_de_cobro(uuid, text, uuid, numeric, date) from public, anon, authenticated;
+revoke all on function public._conta_gc_factura_de_cobro(uuid, text) from public, anon, authenticated;
 
 -- El plan: lo mismo que antes, con la factura de cada cobro buscada así.
 do $$
 declare
   v_def text := pg_get_functiondef('public._conta_gc_asientos_plan(uuid,date)'::regprocedure);
   v_viejo constant text := 'public._conta_gc_factura_del_cobro(p_company, v_x.party_id, v_x.importe, v_x.fecha)';
-  v_nuevo constant text := '(select f.numero from public._conta_gc_factura_de_cobro(p_company, v_x.gc_id, v_x.party_id, v_x.importe, v_x.fecha) f)';
+  v_nuevo constant text := '(select f.numero from public._conta_gc_factura_de_cobro(p_company, v_x.gc_id) f)';
+  v_motivo_viejo constant text := '''Falta el número de factura''::text';
+  v_motivo_nuevo constant text := '''Sin factura atada''::text';
   v_n int;
 begin
   if strpos(v_def, '_conta_gc_factura_de_cobro') > 0 then return; end if;   -- ya pasada
   v_n := (length(v_def) - length(replace(v_def, v_viejo, ''))) / length(v_viejo);
   if v_n <> 1 then raise exception 'X33b: _conta_gc_asientos_plan no es la medida (% veces la búsqueda de la factura, y era 1): no se toca.', v_n; end if;
-  execute replace(v_def, v_viejo, v_nuevo);
+  v_n := (length(v_def) - length(replace(v_def, v_motivo_viejo, ''))) / length(v_motivo_viejo);
+  if v_n <> 1 then raise exception 'X33b: _conta_gc_asientos_plan no es la medida (% veces el motivo de la factura, y era 1): no se toca.', v_n; end if;
+  execute replace(replace(v_def, v_viejo, v_nuevo), v_motivo_viejo, v_motivo_nuevo);
 end $$;
 
 -- Preparar: un cobro por factura.
@@ -132,7 +120,7 @@ begin
     end if;
     v_entry := null; v_nota := null; v_f := null;
     if v_x.clase = 'cobro' and v_x.party_id is not null then
-      select * into v_f from public._conta_gc_factura_de_cobro(v_c.id, v_x.gc_id, v_x.party_id, v_x.importe, v_x.fecha);
+      select * into v_f from public._conta_gc_factura_de_cobro(v_c.id, v_x.gc_id);
     end if;
     if cardinality(v_x.pendiente) = 0 and v_f.id is not null and v_f.cobrado + v_x.importe > v_f.total then
       -- Una factura con cobro nunca lleva dos asientos de cobro: la fila señala el que ya tiene.
