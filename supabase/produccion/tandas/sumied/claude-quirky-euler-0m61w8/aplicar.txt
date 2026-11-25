@@ -2,13 +2,14 @@
 # producción. Rama claude/quirky-euler-0m61w8. Se ensaya y se aplica desde
 # main nombrando esta rama, antes de fusionar.
 #
-#   1. 1830 — AÑADE cuatro funciones nuevas, sin tocar ninguna de las que
+#   1. 1830 — AÑADE cinco funciones nuevas, sin tocar ninguna de las que
 #      existen ni datos: verifactu_cert_abrir_pruebas y _envio (solo el
-#      servicio), verifactu_despertar_empresa (un administrador o encargado)
-#      y verifactu_conexion_ultima (para la pantalla). Nada en el camino del
-#      pedido; ningún cron.
+#      servicio), verifactu_despertar_empresa (un administrador o encargado),
+#      verifactu_conexion_ultima y verifactu_pruebas_resumen (para la
+#      pantalla). Nada en el camino del pedido; ningún cron.
 #
 # Sin «autorizo»: no toca datos ni destruye nada.
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 supabase/migrations/20261125T1830_v05_verifactu_pruebas_empresas.sql
+cuenta: scripts/conta/produccion/cuentas/v05.sql

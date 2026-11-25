@@ -144,6 +144,36 @@ export async function probarConexion(companyId: string, esperaMs = 75_000, cadaM
   return null
 }
 
+/** V05 · Cómo van los registros de pruebas de la empresa (verifactu_pruebas_resumen). */
+export interface ResumenPruebas {
+  total: number; pendientes: number; correctas: number; con_errores: number; rechazadas: number
+  ultimo_rechazo: { num_serie: string; codigo: number | null; texto: string | null } | null
+  ultimo_fallo: { error: string; cuando: string | null } | null
+  para_qr: { nif: string; num_serie: string; fecha: string; importe: string } | null
+}
+
+export function resumenPruebas(companyId: string): Promise<ResumenPruebas> {
+  return rpc<ResumenPruebas>('verifactu_pruebas_resumen', { p_company: companyId })
+}
+
+/**
+ * V05 · «Enviar a Hacienda» (solo en pruebas): lo pide a conta-verifactu y
+ * espera, como mucho `esperaMs`, a que los pendientes cambien o se acaben.
+ * Devuelve cómo estaban antes y cómo quedan, para decirlo en pantalla.
+ */
+export async function enviarPruebas(companyId: string, esperaMs = 90_000, cadaMs = 4_000): Promise<{ antes: ResumenPruebas; despues: ResumenPruebas; termino: boolean }> {
+  const antes = await resumenPruebas(companyId)
+  await rpc('verifactu_despertar_empresa', { p_company: companyId, p_accion: 'enviar' })
+  const limite = Date.now() + esperaMs
+  let despues = antes
+  while (Date.now() < limite) {
+    await new Promise((r) => setTimeout(r, cadaMs))
+    despues = await resumenPruebas(companyId)
+    if (despues.pendientes === 0) return { antes, despues, termino: true }
+  }
+  return { antes, despues, termino: false }
+}
+
 /** V05 · Las 25 facturas de prueba, o un envío: lo pide a conta-verifactu (solo en pruebas). */
 export function pedirPruebas(companyId: string, accion: 'preparar_pruebas' | 'enviar') {
   return rpc<{ pedido: boolean }>('verifactu_despertar_empresa', { p_company: companyId, p_accion: accion })

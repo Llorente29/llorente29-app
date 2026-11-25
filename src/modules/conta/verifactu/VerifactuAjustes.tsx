@@ -24,9 +24,11 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { Boton, Campo, Chip, Dialogo, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
 import { leerCertificados } from '@/modules/conta/services/impuestosService'
 import {
-  autorizarCertificado, cambiarModo, guardarOtrosProgramas, leerVerifactu, pedirPruebas, probarConexion, retirarAutorizacion, type DatosVerifactu,
+  autorizarCertificado, cambiarModo, enviarPruebas, guardarOtrosProgramas, leerVerifactu, pedirPruebas, probarConexion, resumenPruebas, retirarAutorizacion,
+  type DatosVerifactu, type ResumenPruebas,
 } from '@/modules/conta/services/verifactuService'
-import { OBLIGA_VERIFACTU, OTROS_PROGRAMAS, avisoOtrosProgramas, obligaDesde, textoConexion } from '@/modules/conta/lib/verifactu/estado'
+import { OBLIGA_VERIFACTU, OTROS_PROGRAMAS, avisoOtrosProgramas, obligaDesde, textoConexion, textoEnvioPruebas } from '@/modules/conta/lib/verifactu/estado'
+import { modulosQr, urlQr } from '@/modules/conta/lib/verifactu/qr'
 import { CadenaYExportar } from './CadenaYExportar'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -84,10 +86,15 @@ export function VerifactuAjustes() {
 /**
  * V05 · «Probar la conexión», a la vista y sin buscarlo: pide a Hacienda de
  * pruebas una consulta con el certificado autorizado y dice qué pasó y de quién
- * es la culpa. En pruebas, además, «Lanzar las facturas de prueba».
+ * es la culpa. En pruebas, además, «Lanzar las facturas de prueba» y «Enviar a
+ * Hacienda» (V05b: nadie tiene que llamar a nada a mano), con cuántas aceptó
+ * Hacienda y el QR de una aceptada para escanearlo en el cotejo de pruebas.
  */
 function ProbarConexion({ d, companyId, alCambiar }: { d: DatosVerifactu; companyId: string; alCambiar: () => void }) {
-  const [ocupado, setOcupado] = useState<null | 'probar' | 'facturas'>(null)
+  const [ocupado, setOcupado] = useState<null | 'probar' | 'facturas' | 'enviar'>(null)
+  const [vueltaResumen, setVueltaResumen] = useState(0)
+  const enPruebas = d.empresa.modo === 'pruebas'
+  const resumen = useLeer(enPruebas ? () => resumenPruebas(companyId) : null, `${companyId}:verifactu-resumen-pruebas:${vueltaResumen}`)
   const [aviso, setAviso] = useState<{ tono: 'ok' | 'falta' | 'duda'; texto: string } | null>(null)
   if (d.empresa.modo === 'real') return null
   const probar = () => {
@@ -100,9 +107,16 @@ function ProbarConexion({ d, companyId, alCambiar }: { d: DatosVerifactu; compan
   const facturas = () => {
     setOcupado('facturas'); setAviso(null)
     void pedirPruebas(companyId, 'preparar_pruebas')
-      .then(() => setAviso({ tono: 'ok', texto: 'Pedidas las 25 facturas de prueba (con una rectificativa y una a un cliente de fuera de la UE). Salen al entorno de pruebas de Hacienda en un par de minutos; míralas en Ventas › Facturas.' }))
+      .then(() => setAviso({ tono: 'ok', texto: 'Pedidas las 25 facturas de prueba (con una rectificativa y una a un cliente de fuera de la UE). Cuando estén preparadas, pulsa «Enviar a Hacienda»: aquí sale cuántas aceptó.' }))
       .catch((e) => setAviso({ tono: 'falta', texto: msg(e) }))
-      .finally(() => setOcupado(null))
+      .finally(() => { setOcupado(null); setVueltaResumen((x) => x + 1) })
+  }
+  const enviar = () => {
+    setOcupado('enviar'); setAviso(null)
+    void enviarPruebas(companyId)
+      .then((r) => setAviso(textoEnvioPruebas(r)))
+      .catch((e) => setAviso({ tono: 'falta', texto: msg(e) }))
+      .finally(() => { setOcupado(null); setVueltaResumen((x) => x + 1) })
   }
   return (
     <section className="cxvf-probar" aria-label="Probar la conexión con Hacienda" data-prueba="probar-conexion">
@@ -112,13 +126,51 @@ function ProbarConexion({ d, companyId, alCambiar }: { d: DatosVerifactu; compan
           title={d.autorizacion ? undefined : 'Primero autoriza tu certificado para Verifactu (paso 2)'} onClick={probar}>
           {ocupado === 'probar' ? 'Probando… (hasta un minuto)' : 'Probar la conexión'}
         </Boton>
-        {d.empresa.modo === 'pruebas' && (
+        {enPruebas && (
           <Boton variante="secundario" disabled={ocupado !== null} onClick={facturas}>{ocupado === 'facturas' ? 'Pidiendo…' : 'Lanzar las facturas de prueba'}</Boton>
         )}
+        {enPruebas && (
+          <Boton variante="secundario" disabled={ocupado !== null} onClick={enviar}>{ocupado === 'enviar' ? 'Enviando… (hasta minuto y medio)' : 'Enviar a Hacienda'}</Boton>
+        )}
       </span>
+      {enPruebas && resumen.datos && <ResumenDePruebas r={resumen.datos} />}
       {!d.autorizacion && <p className="s-tarjeta-apoyo">Para probar, autoriza antes tu certificado para Verifactu (paso 2).</p>}
       {aviso && <p className="s-aviso-lista" data-tono={aviso.tono} role="status" data-prueba="resultado-conexion">{aviso.texto}</p>}
     </section>
+  )
+}
+
+/** Cómo van las de pruebas, y el QR de una aceptada para escanearlo con el móvil. */
+function ResumenDePruebas({ r }: { r: ResumenPruebas }) {
+  if (r.total === 0) return <p className="s-tarjeta-apoyo" data-prueba="resumen-pruebas">Aún no hay ninguna factura de prueba.</p>
+  let url: string | null = null
+  if (r.para_qr) {
+    try { url = urlQr({ nif: r.para_qr.nif, numSerie: r.para_qr.num_serie, fecha: r.para_qr.fecha, importe: r.para_qr.importe }, 'pruebas') } catch { url = null }
+  }
+  return (
+    <div className="cxvf-resumen-pruebas" data-prueba="resumen-pruebas">
+      <p className="s-tarjeta-apoyo">
+        En pruebas: {r.correctas} aceptadas, {r.con_errores} con errores, {r.rechazadas} rechazadas y {r.pendientes} sin enviar.
+        {r.ultimo_rechazo && <> La última rechazada, {r.ultimo_rechazo.num_serie}: {r.ultimo_rechazo.codigo ?? 'sin código'} · {r.ultimo_rechazo.texto ?? 'sin texto'}.</>}
+      </p>
+      {url && r.para_qr && (
+        <div className="cxvf-qr-prueba">
+          <QrSvg url={url} />
+          <span className="s-tarjeta-apoyo">QR de {r.para_qr.num_serie}: escanéalo o <a href={url} target="_blank" rel="noreferrer">ábrelo en el cotejo de pruebas de Hacienda</a>.</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function QrSvg({ url }: { url: string }) {
+  const m = modulosQr(url)
+  const n = m.length + 8
+  return (
+    <svg viewBox={`0 0 ${n} ${n}`} width={128} height={128} role="img" aria-label="QR tributario de la factura de prueba" shapeRendering="crispEdges">
+      <rect width={n} height={n} fill="#fff" />
+      {m.flatMap((fila, i) => fila.map((negro, j) => (negro ? <rect key={`${i}-${j}`} x={j + 4} y={i + 4} width={1} height={1} fill="#000" /> : null)))}
+    </svg>
   )
 }
 

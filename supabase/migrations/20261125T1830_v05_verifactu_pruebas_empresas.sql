@@ -5,7 +5,7 @@
 -- de la empresa vive en el Vault de producción, así que sus pruebas salen de
 -- aquí, solo al entorno de pruebas de la AEAT).
 --
--- SOLO AÑADE cuatro funciones; no toca ninguna de las que existen, ni datos,
+-- SOLO AÑADE cinco funciones; no toca ninguna de las que existen, ni datos,
 -- ni nada del camino del pedido:
 --   · verifactu_cert_abrir_pruebas(empresa): para la prueba de conexión.
 --   · verifactu_cert_abrir_pruebas_envio(envío): para un envío de pruebas.
@@ -20,6 +20,10 @@
 --     CONTA_VERIFACTU_EMPRESAS = «pruebas:AAAA-MM-DD» de ese día (Julio).
 --   · verifactu_conexion_ultima(empresa): la última prueba de conexión de esa
 --     empresa, para que la pantalla diga qué pasó (regla 8).
+--   · verifactu_pruebas_resumen(empresa): cómo van sus registros de pruebas
+--     (cuántos en cada estado, el último rechazo con su código y texto, el
+--     último fallo de envío y una aceptada para su QR), para «Enviar a
+--     Hacienda» (regla 8).
 --
 -- El certificado no sale nunca de la base más que hacia conta-verifactu, y el
 -- real sigue cerrado: la dirección de producción de Hacienda no está en la
@@ -123,3 +127,39 @@ revoke all on function public.verifactu_conexion_ultima(uuid) from public, anon;
 grant execute on function public.verifactu_conexion_ultima(uuid) to authenticated;
 comment on function public.verifactu_conexion_ultima(uuid) is
   'V05. La última prueba de conexión con el entorno de pruebas de la AEAT con el NIF de la empresa: si salió bien, qué contestó y cuándo. Para la pantalla.';
+
+-- ── Cómo van los registros de pruebas de una empresa ────────────────────────
+create or replace function public.verifactu_pruebas_resumen(p_company uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_co public.company; v_res jsonb;
+begin
+  select * into v_co from public.company where id = p_company;
+  if v_co.id is null or not public.belongs_to_account(v_co.account_id) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  select jsonb_build_object(
+    'total', count(*),
+    'pendientes', count(*) filter (where r.estado in ('pendiente', 'enviando')),
+    'correctas', count(*) filter (where r.estado = 'correcto'),
+    'con_errores', count(*) filter (where r.estado = 'aceptado_con_errores'),
+    'rechazadas', count(*) filter (where r.estado = 'incorrecto'),
+    'ultimo_rechazo', (select jsonb_build_object('num_serie', x.num_serie, 'codigo', x.codigo_error, 'texto', x.descripcion_error)
+                         from public.verifactu_registro x
+                        where x.company_id = p_company and x.entorno = 'pruebas' and x.estado = 'incorrecto'
+                        order by x.respondido_at desc nulls last limit 1),
+    'ultimo_fallo', (select jsonb_build_object('error', left(e.error, 300), 'cuando', e.terminado_at)
+                       from public.verifactu_envio e
+                      where e.company_id = p_company and e.entorno = 'pruebas' and e.error is not null
+                      order by e.empezado_at desc limit 1),
+    'para_qr', (select jsonb_build_object('nif', x.nif_emisor, 'num_serie', x.num_serie, 'fecha', to_char(x.fecha_expedicion, 'DD-MM-YYYY'),
+                                          'importe', to_char(x.importe_total, 'FM999999999990.00'))
+                  from public.verifactu_registro x
+                 where x.company_id = p_company and x.entorno = 'pruebas' and x.tipo = 'alta' and x.estado in ('correcto', 'aceptado_con_errores')
+                 order by x.respondido_at desc nulls last limit 1))
+    into v_res
+    from public.verifactu_registro r
+   where r.company_id = p_company and r.entorno = 'pruebas';
+  return v_res;
+end $$;
+revoke all on function public.verifactu_pruebas_resumen(uuid) from public, anon;
+grant execute on function public.verifactu_pruebas_resumen(uuid) to authenticated;
+comment on function public.verifactu_pruebas_resumen(uuid) is
+  'V05. Cómo van los registros de PRUEBAS de la empresa: cuántos en cada estado, el último rechazo (código y texto de Hacienda), el último fallo de envío y una aceptada para escanear su QR en el cotejo de pruebas.';

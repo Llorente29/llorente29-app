@@ -198,3 +198,22 @@ export function avisoOtrosProgramas(elegidos: readonly string[]): { tono: 'falta
   }
   return null
 }
+
+/** V05 · Lo que dice «Enviar a Hacienda» al terminar: cuántas, y si alguna se rechazó, su código y su texto. */
+export function textoEnvioPruebas(r: {
+  antes: { pendientes: number }
+  despues: { total: number; pendientes: number; correctas: number; con_errores: number; rechazadas: number
+    ultimo_rechazo: { num_serie: string; codigo: number | null; texto: string | null } | null
+    ultimo_fallo: { error: string } | null }
+  termino: boolean
+}): { tono: 'ok' | 'falta' | 'duda'; texto: string } {
+  const d = r.despues
+  if (r.antes.pendientes === 0) return { tono: 'duda', texto: `No había nada pendiente de enviar. En pruebas llevas ${d.correctas} aceptadas, ${d.con_errores} con errores y ${d.rechazadas} rechazadas.` }
+  const cifras = `${d.correctas} aceptadas, ${d.con_errores} con errores y ${d.rechazadas} rechazadas`
+  if (!r.termino) {
+    const motivo = d.ultimo_fallo ? ` Último fallo: ${d.ultimo_fallo.error}` : ' Puede que la conexión de Sumied con Hacienda no esté abierta hoy: no es cosa de tu certificado.'
+    return { tono: 'duda', texto: `Pedido el envío, pero quedan ${d.pendientes} sin respuesta de Hacienda (${cifras}).${motivo}` }
+  }
+  const rechazo = d.ultimo_rechazo ? ` La última rechazada, ${d.ultimo_rechazo.num_serie}: ${d.ultimo_rechazo.codigo ?? 'sin código'} · ${d.ultimo_rechazo.texto ?? 'sin texto'}.` : ''
+  return { tono: d.rechazadas > 0 ? 'falta' : 'ok', texto: `Enviadas al entorno de pruebas de Hacienda: ${cifras}.${rechazo}` }
+}

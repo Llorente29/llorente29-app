@@ -53,6 +53,8 @@
   display: grid; gap: var(--s-2); padding: var(--s-3) var(--s-4); margin-bottom: var(--s-3); background: var(--s-superficie);
   border: 1px solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
 }
+.cxvf-resumen-pruebas { display: grid; gap: var(--s-2); }
+.cxvf-qr-prueba { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
 .cxvf-lado { display: grid; gap: var(--s-3); }
 .cxvf-hace { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s-2); font-size: var(--s-t-s); }
 .cxvf-hace li::before { content: '✓ '; color: var(--s-ok); font-weight: var(--s-peso-fuerte); }
