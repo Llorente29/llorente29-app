@@ -1,0 +1,20 @@
+[
+ {
+  "id": "813-1",
+  "pr": 813,
+  "fecha": "2026-11-25T13:05:40Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "los cobros e ingresos de GoCardless del mes se preparan como asientos por revisar, y lo que falta por atar queda en «Pendiente de revisar» con su motivo.",
+  "ruta": null
+ },
+ {
+  "id": "813-2",
+  "pr": 813,
+  "fecha": "2026-11-25T13:05:40Z",
+  "producto": "sumied",
+  "apartado": "Ajustes",
+  "frase": "nuevo ajuste para que las facturas que emite Cegid no salgan dos veces a ERP10.",
+  "ruta": null
+ }
+]
