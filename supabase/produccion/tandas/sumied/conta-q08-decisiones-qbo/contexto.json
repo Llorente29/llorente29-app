@@ -1,0 +1,8 @@
+{
+ "_que": "Q08 · Paso 2 · contexto de producción de la tanda (1220), medido en SOLO LECTURA el 24/11 a las 11:25Z con la consulta de analizar.mjs sql-contexto: no existe ninguna de las dos funciones nuevas; nada en el camino del pedido y nada en el historial.",
+ "medido": "2026-11-24T11:25Z",
+ "tanda": {
+  "supabase/migrations/20261124T1220_q08_decisiones_externas.sql": "c647acefc59a9dfba94881a300ad73cf"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

@@ -1,0 +1,12 @@
+# Q08 · Paso 2 · Cargar las decisiones de QBO (el Excel del 12/11, contestado). Rama conta/q08-decisiones-qbo, encima
+# del #630 (conta/g06-cuadre). Se ensaya y se aplica antes de fusionar, desde main nombrando la rama (lo lanza Julio, T10).
+#
+#   1. 1220 — AÑADE dos funciones: conta_gc_enlace_decision_externa (ata como «Es esta», con quién lo decidió fuera de
+#      Sumied) y conta_gc_enlace_pendiente_externo (lo que no se entiende, pendiente de revisar con su texto).
+#      No toca recibos, cobros ni facturas. Nada en el camino del pedido.
+#
+# Va DESPUÉS del real de la tanda del #630 (conta-g06-cuadre): llama a conta_gc_enlace_confirmar, que crea la 1110.
+# Sin «autorizo»: solo añade.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261124T1220_q08_decisiones_externas.sql
+cuenta: scripts/conta/produccion/cuentas/q08-decisiones-qbo.sql

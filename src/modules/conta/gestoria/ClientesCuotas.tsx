@@ -11,7 +11,7 @@
 //   · a la derecha, la ficha del cliente abierto (FichaCliente).
 // Regla 7: «Todos» enseña todos y el pie dice cuántos de cuántos.
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TablaDensa, type ColumnaDensa } from '@/modules/conta/ui/tabla/TablaDensa'
 import { AccionesPantalla, BotonAccion } from '@/modules/conta/ui/marco/AccionesPantalla'
@@ -24,10 +24,11 @@ import {
 } from '@/modules/conta/gestoria/vista'
 import type { DatosGestoria } from '@/modules/conta/services/gestoriaService'
 import { FichaCliente, type AccionesFicha } from '@/modules/conta/gestoria/FichaCliente'
+import type { Linea as LineaDecision } from '@/modules/conta/gestoria/decisionesQbo'
 
 const fechaCorta = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(2, 4)}`
 
-export function ClientesCuotas({ datos, emisores, conectados, rutaConectar, mes, movil, rutaTarifas, tarifasDe, acciones, alHecho, alLeer, leyendo, aviso }: {
+export function ClientesCuotas({ datos, emisores, conectados, rutaConectar, mes, movil, rutaTarifas, tarifasDe, acciones, alHecho, alLeer, leyendo, aviso, decisiones }: {
   datos: DatosGestoria
   emisores: { id: string; nombre: string }[]
   /** El mes que se compara («2026-11»). */
@@ -46,7 +47,10 @@ export function ClientesCuotas({ datos, emisores, conectados, rutaConectar, mes,
   conectados: Conectados
   /** Ajustes › Cobros, donde se conecta. */
   rutaConectar: string
+  /** Q08 · «Cargar decisiones de QBO» (el Excel «Atar clientes GoCardless» contestado): solo con GoCardless conectado. */
+  decisiones?: { cargar: (f: File) => void; cargando: boolean; lineas: LineaDecision[] | null }
 }) {
+  const fichero = useRef<HTMLInputElement | null>(null)
   const [emisor, setEmisor] = useState<string | null>(null)
   const [chip, setChip] = useState<string | null>(null)
   const [abierto, setAbierto] = useState<string | null>(null)
@@ -146,9 +150,27 @@ export function ClientesCuotas({ datos, emisores, conectados, rutaConectar, mes,
       <AccionesPantalla>
         <BotonAccion principal onClick={alLeer} disabled={leyendo || nada}>{leyendo ? `Leyendo ${[conectados.bitrix ? 'tu CRM' : null, conectados.gocardless.size ? 'GoCardless' : null].filter(Boolean).join(' y ')}…` : 'Leer ahora'}</BotonAccion>
         <Link to={rutaTarifas} className="cxm-boton">Tarifas</Link>
+        {decisiones && conectados.gocardless.size > 0 && (
+          <>
+            <BotonAccion onClick={() => fichero.current?.click()} disabled={decisiones.cargando}>{decisiones.cargando ? 'Cargando las decisiones de QBO…' : 'Cargar decisiones de QBO'}</BotonAccion>
+            <input ref={fichero} type="file" hidden accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="El Excel de QBO con sus decisiones"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) decisiones.cargar(f); e.target.value = '' }} />
+          </>
+        )}
       </AccionesPantalla>
       <h2 className="cx-oculto">Clientes y cuotas</h2>
       {aviso && <p className="s-aviso-lista" data-tono={aviso.ok ? 'seguro' : 'falta'} role={aviso.ok ? 'status' : 'alert'}>{aviso.texto}</p>}
+      {/* Q08 · Lo que no se ató al cargar las decisiones de QBO, fila a fila, con su porqué (regla 7: nada se calla). */}
+      {decisiones?.lineas && decisiones.lineas.some((l) => l.resultado !== 'atado' && l.resultado !== 'solo') && (
+        <details className="cxg-decisiones" open data-prueba="decisiones-qbo">
+          <summary>Lo que no se ha atado ({decisiones.lineas.filter((l) => l.resultado !== 'atado' && l.resultado !== 'solo').length})</summary>
+          <ul>
+            {decisiones.lineas.filter((l) => l.resultado !== 'atado' && l.resultado !== 'solo').map((l) => (
+              <li key={l.fila} data-resultado={l.resultado}><strong>{l.cliente}</strong> ({l.emisor}, fila {l.fila}): {l.frase}</li>
+            ))}
+          </ul>
+        </details>
+      )}
       {/* Cada conector se enciende aparte: lo que falta se dice, y lo suyo no sale (regla 7). */}
       {(ve.sinGocardless.length > 0 || !conectados.bitrix) && (
         <p className="cxg-conectores">

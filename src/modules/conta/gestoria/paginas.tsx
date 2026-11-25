@@ -19,6 +19,8 @@ import {
   lineaDesdeGc, noContar, revisada,
 } from '@/modules/conta/services/gestoriaService'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { cargarDecisionesQbo } from '@/modules/conta/services/decisionesQboService'
+import type { Linea as LineaDecision } from './decisionesQbo'
 import { ClientesCuotas } from './ClientesCuotas'
 import { Tarifas } from './Tarifas'
 import { CobrosGestoria } from './CobrosGestoria'
@@ -47,11 +49,21 @@ export default function ClientesCuotasPage() {
     }
     catch (e) { setAviso({ ok: false, texto: msg(e) }) } finally { setLeyendo(false) }
   }
+  // Q08 · «Cargar decisiones de QBO»: el Excel se lee en el navegador (no pasa por el repositorio, T11).
+  const [cargandoQbo, setCargandoQbo] = useState(false)
+  const [lineas, setLineas] = useState<LineaDecision[] | null>(null)
+  const cargar = async (f: File) => {
+    if (!accountId) return
+    setCargandoQbo(true); setAviso(null); setLineas(null)
+    try { const r = await cargarDecisionesQbo(accountId, empresas, f); setLineas(r.lineas); setAviso({ ok: true, texto: r.frase }); d.recargar() }
+    catch (e) { setAviso({ ok: false, texto: `No se han podido cargar las decisiones de QBO: ${msg(e)}` }) } finally { setCargandoQbo(false) }
+  }
   if (d.error) return <ErrorConReintento mensaje={`No se han podido leer los clientes: ${d.error}`} reintentar={d.recargar} />
   if (!d.datos) return <TarjetaCargando />
   return <ClientesCuotas datos={d.datos.datos} conectados={d.datos.conectados} rutaConectar={rutaAjustes('cobros')} emisores={empresas.map((e) => ({ id: e.id, nombre: e.nombre }))} mes={hoyEnMadrid().slice(0, 7)} movil={movil}
     rutaTarifas={rutaTarifasGestoria()} tarifasDe={(cliente, emisor) => `${rutaTarifasGestoria()}?${new URLSearchParams({ cliente, empresa: emisor })}`}
-    acciones={{ altaEmpleado, bajaLinea, lineaDesdeGc, noContar, enlazar, revisada }} alHecho={() => d.recargar()} alLeer={() => void leer()} leyendo={leyendo} aviso={aviso} />
+    acciones={{ altaEmpleado, bajaLinea, lineaDesdeGc, noContar, enlazar, revisada }} alHecho={() => d.recargar()} alLeer={() => void leer()} leyendo={leyendo} aviso={aviso}
+    decisiones={{ cargar: (f) => void cargar(f), cargando: cargandoQbo, lineas }} />
 }
 
 export function TarifasPage() {
