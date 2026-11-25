@@ -11143,6 +11143,18 @@ $$;
 
 
 --
+-- Name: _conta_traer_margen(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_traer_margen() RETURNS interval
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  select make_interval(secs => least(4, greatest(0, coalesce(nullif(current_setting('conta.traer_segundos', true), ''), '4')::numeric)))
+$$;
+
+
+--
 -- Name: _conta_traer_ocupada(uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -11159,6 +11171,243 @@ CREATE FUNCTION public._conta_traer_ocupada(p_cta uuid, p_entity text, p_id uuid
      and not a.is_common and (l.entity, l.entity_id) is distinct from (p_entity, p_id::text)
    limit 1
 $$;
+
+
+--
+-- Name: _conta_traer_seguir(uuid, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_traer_seguir(p_carga uuid, p_hasta timestamp with time zone) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  st jsonb; tz record; n_hechos int := 0;
+  v_carga uuid := p_carga; v_company uuid; v_cuenta uuid; v_prog text; v_nombre_prog text; v_quien text; v_inicio date; v_hasta date;
+  v_fuera_a int; v_fuera_f int; v_apuntes int; v_tot_debe numeric; v_tot_haber numeric; n_asientos int; n_facturas int;
+  n_cuentas int; n_cuentas_estaban int; n_prov int; n_cli int; n_enlazados int; v_sin_tipo int; n_rec int; n_emi int; n_casadas int; n_sin_casar int;
+  v_tercero jsonb; v_mirar jsonb; v_emitidas jsonb; v_provs jsonb; v_fichas jsonb; v_deshacer jsonb; v_corte jsonb;
+  a jsonb; l jsonb; f jsonb; x jsonb;
+  v_lineas jsonb; v_r jsonb; v_entry uuid; v_tipo_id uuid; v_ret_id uuid; v_ret_modelo text;
+  v_sup uuid; v_party uuid; v_nif text; v_fac uuid; v_num int; v_serie text;
+  v_aprendidas int := 0; v_valor text; v_etiqueta text; v_texto text; v_counts jsonb;
+begin
+  st := (select detail->'estado' from public.import_run where id = p_carga and kind = 'carga' and status = 'cargando' for update);
+  if st is null then raise exception 'Esa carga no está a medias.' using errcode = '23514'; end if;
+  v_company := (st->>'company')::uuid; v_cuenta := (st->>'cuenta')::uuid; v_prog := st->>'prog'; v_nombre_prog := st->>'nombre_prog'; v_quien := st->>'quien';
+  v_inicio := (st->>'inicio')::date; v_hasta := (st->>'hasta')::date; v_fuera_a := (st->>'fuera_a')::int; v_fuera_f := (st->>'fuera_f')::int;
+  v_apuntes := (st->>'apuntes')::int; v_tot_debe := (st->>'tot_debe')::numeric; v_tot_haber := (st->>'tot_haber')::numeric;
+  n_asientos := (st->>'n_asientos')::int; n_facturas := (st->>'n_facturas')::int;
+  n_cuentas := (st->>'n_cuentas')::int; n_cuentas_estaban := (st->>'n_cuentas_estaban')::int; n_prov := (st->>'n_prov')::int; n_cli := (st->>'n_cli')::int;
+  n_enlazados := (st->>'n_enlazados')::int; v_sin_tipo := (st->>'sin_tipo')::int; n_rec := (st->>'n_rec')::int; n_emi := (st->>'n_emi')::int;
+  n_casadas := (st->>'n_casadas')::int; n_sin_casar := (st->>'n_sin_casar')::int;
+  v_tercero := st->'tercero'; v_mirar := st->'mirar'; v_emitidas := st->'emitidas'; v_provs := st->'provs'; v_fichas := st->'fichas';
+  v_deshacer := st->'deshacer'; v_corte := st->'corte';
+
+  -- La cola, en orden (los asientos antes que las facturas, que se atan a ellos), hasta la hora. Siempre avanza al menos uno.
+  for tz in select q.orden, q.tipo, q.dato from public.conta_traer_trozo q where q.carga = p_carga and not q.hecho order by q.orden loop
+    exit when n_hechos > 0 and clock_timestamp() > p_hasta;
+    update public.conta_traer_trozo q set hecho = true where q.carga = p_carga and q.orden = tz.orden;
+    n_hechos := n_hechos + 1;
+    if tz.tipo = 'asiento' then
+      a := tz.dato;
+      st := jsonb_set(st, '{hechos_a}', to_jsonb((st->>'hechos_a')::int + 1));
+      v_lineas := '[]';
+      for l in select * from jsonb_array_elements(a->'apuntes') loop
+        x := jsonb_build_object('cuenta', l->>'cuenta', 'debe', (l->>'debe')::numeric / 100, 'haber', (l->>'haber')::numeric / 100,
+                                'concepto', nullif(l->>'concepto', ''), 'comun', true, 'tercero_id', v_tercero->(l->>'cuenta')->>'party');
+        if l ? 'iva' then
+          select r.id into v_tipo_id from public.tax_rate r
+           where r.rate = (l->'iva'->>'tipo')::numeric and r.treatment = 'taxed' and r.valid_to is null and r.name like 'IVA%' limit 1;
+          if v_tipo_id is not null then
+            x := x || jsonb_build_object('iva', jsonb_build_object('tipo_id', v_tipo_id, 'base', (l->'iva'->>'base')::numeric / 100,
+                       'libro', l->'iva'->>'libro', 'deducible', case when l->'iva'->>'libro' = 'received' then 'yes' end, 'facturas', 1));
+          else
+            v_sin_tipo := v_sin_tipo + 1;
+          end if;
+        elsif l ? 'retencion' then
+          -- 19 %: alquiler si el asiento lleva un 621; si no, no se sabe (también es el de capital).
+          select r.id, r.filed_in into v_ret_id, v_ret_modelo from public.withholding_rate r
+           where r.is_system and r.valid_to is null and r.rate = (l->'retencion'->>'tipo')::numeric
+             and (r.rate <> 19 or (r.code = 'alquiler' and exists (select 1 from jsonb_array_elements(a->'apuntes') z where z->>'cuenta' like '621%')))
+             and r.code <> 'trabajo'
+           order by r.sort_order limit 1;
+          if v_ret_id is not null then
+            x := x || jsonb_build_object('retencion', jsonb_build_object('tipo_id', v_ret_id, 'base', (l->'retencion'->>'base')::numeric / 100, 'modelo', v_ret_modelo));
+          else
+            v_sin_tipo := v_sin_tipo + 1;
+          end if;
+        elsif l ? 'sinTipo' then
+          v_sin_tipo := v_sin_tipo + 1;
+        end if;
+        v_lineas := v_lineas || x;
+      end loop;
+      v_r := public._journal_entry_proponer(v_company,
+        jsonb_build_object('source_type', 'migrated', 'fecha', a->>'fecha',
+          'series', 8,   -- N06b · la serie de lo traído: se numera al darlo por bueno (#715)
+          'concepto', coalesce(nullif(trim(a->>'concepto'), ''), 'Asiento ' || coalesce(nullif(a->>'documento', ''), a->>'clave') || ' de ' || v_nombre_prog),
+          'documento', nullif(a->>'documento', ''),
+          'externo', jsonb_build_object('programa', v_nombre_prog, 'ejercicio', left(a->>'fecha', 4), 'serie', a->>'serie',
+                                        'numero', coalesce(nullif(a->>'documento', ''), a->>'clave')),
+          'carga', v_carga),
+        v_lineas, '{}'::jsonb, v_nombre_prog || ' (traído)', auth.uid());
+      update public.conta_traer_trozo q set entrada = (v_r->>'id')::uuid where q.carga = p_carga and q.orden = tz.orden;   -- X14 · para sus facturas
+    else
+      f := tz.dato;
+      st := jsonb_set(st, '{hechos_f}', to_jsonb((st->>'hechos_f')::int + 1));
+      v_entry := null;   -- X14 · el asiento de Sumied de su asiento de allí, apuntado en la cola
+      select q.entrada into v_entry from public.conta_traer_trozo q where q.carga = p_carga and q.clave = f->>'asiento';
+      v_nif := nullif(public.party_nif(f->>'nif'), '');
+      if f->>'libro' = 'recibidas' then
+        v_sup := null;
+        select (v->>'supplier')::uuid into v_sup from jsonb_each(v_tercero) e(k, v)
+         where v->>'supplier' is not null and v->>'nif' = v_nif limit 1;
+        if v_sup is null and v_nif is not null then
+          select s.id into v_sup from public.supplier s where s.account_id = v_cuenta and public.party_nif(s.tax_id) = v_nif and s.archived_at is null
+           order by s.created_at limit 1;
+        end if;
+        if v_sup is null then
+          insert into public.supplier (account_id, name, legal_name, tax_id, created_by_name, import_run_id)
+          values (v_cuenta, f->>'nombre', f->>'nombre', f->>'nif', v_nombre_prog || ' (traído)', v_carga) returning id into v_sup;
+          n_prov := n_prov + 1;
+          v_mirar := v_mirar || jsonb_build_object('que', 'tercero', 'frase',
+            format('El proveedor %s de la factura %s no estaba en el listado de proveedores: se ha creado sin cuenta.', f->>'nombre', f->>'numero'));
+        end if;
+        if exists (select 1 from public.supplier_invoice i where i.account_id = v_cuenta and i.supplier_id = v_sup
+                     and public.conta_clave_numero(i.invoice_number) = public.conta_clave_numero(f->>'numero')
+                     and round(i.grand_total * 100) = (f->>'total')::numeric and i.status not in ('anulada', 'descartada')) then
+          v_mirar := v_mirar || jsonb_build_object('que', 'factura', 'frase',
+            format('La factura %s de %s ya estaba en Sumied: no se ha traído otra vez.', f->>'numero', f->>'nombre'));
+          continue;
+        end if;
+        -- La retención, con su tipo (19 %: alquiler si su asiento va a un 621; si no, no se sabe y se dice).
+        v_ret_id := null;
+        if coalesce((f->'retencion'->>'importe')::numeric, 0) <> 0 then
+          select r.id into v_ret_id from public.withholding_rate r
+           where r.is_system and r.valid_to is null and r.code <> 'trabajo' and r.rate = (f->'retencion'->>'tipo')::numeric
+             and (r.rate <> 19 or (r.code = 'alquiler' and coalesce((f->>'asiento621')::boolean, false)))   -- X14 · mirado al encolar
+           order by r.sort_order limit 1;
+          if v_ret_id is null then
+            v_mirar := v_mirar || jsonb_build_object('que', 'factura', 'frase',
+              format('La factura %s de %s lleva una retención de %s que no sé de qué tipo es: se ha traído sin ella. Pónsela al repasarla.',
+                     f->>'numero', f->>'nombre', public._conta_traer_euros((f->'retencion'->>'importe')::numeric)));
+          end if;
+        end if;
+        insert into public.supplier_invoice (account_id, company_id, supplier_id, invoice_number, invoice_date, status, source,
+                                             tax_base_total, tax_total, grand_total, withholding_rate_id, withholding_amount, withholding_base, journal_entry_id,
+                                             needs_review, created_by, created_by_name, approved_at, approved_by, approved_by_name,
+                                             issuer_name, issuer_tax_id, import_run_id, import_mark, import_pending)
+        values (v_cuenta, v_company, v_sup, f->>'numero', (f->>'fecha')::date,
+                case when (f->>'pendiente')::numeric = 0 then 'pagada' else 'aprobada' end, 'traida',
+                (f->>'base')::numeric / 100, (f->>'cuota')::numeric / 100, (f->>'total')::numeric / 100,
+                v_ret_id, case when v_ret_id is not null then (f->'retencion'->>'importe')::numeric / 100 end,
+                case when v_ret_id is not null then (f->>'base')::numeric / 100 end,
+                v_entry, false, auth.uid(), v_nombre_prog || ' (traída)', now(), auth.uid(), v_nombre_prog || ' (traída)',
+                f->>'nombre', f->>'nif', v_carga, case when v_entry is null then 'sin_casar' end, (f->>'pendiente')::numeric / 100)
+        returning id into v_fac;
+        insert into public.supplier_invoice_tax (account_id, supplier_invoice_id, vat_pct, base, vat_amount)
+        select v_cuenta, v_fac, coalesce((z->>'tipo')::numeric, 0), (z->>'base')::numeric / 100, (z->>'cuota')::numeric / 100
+          from jsonb_array_elements(coalesce(f->'tramos', '[]')) z;
+        n_rec := n_rec + 1;
+      else
+        v_party := null;
+        select (v->>'party')::uuid into v_party from jsonb_each(v_tercero) e(k, v)
+         where v->>'supplier' is null and v->>'nif' = v_nif limit 1;
+        if v_party is null and v_nif is not null then
+          select p.id into v_party from public.party p where p.account_id = v_cuenta and p.tax_id = v_nif;
+        end if;
+        v_serie := upper(regexp_replace(coalesce(nullif(f->>'serie', ''), v_prog), '[^A-Za-z0-9-]', '', 'g'));
+        if v_serie !~ '^[A-Z0-9][A-Z0-9-]{0,9}$' then v_serie := 'ERP10'; end if;
+        v_num := case when coalesce(f->>'numeroSolo', '') ~ '^[0-9]{1,9}$' then (f->>'numeroSolo')::int
+                      when f->>'numero' ~ '[0-9]{1,9}$' then substring(f->>'numero' from '([0-9]{1,9})$')::int end;
+        if v_num is null or v_num = 0 or exists (select 1 from public.customer_invoice c where c.company_id = v_company and c.series_code = v_serie
+                                                    and c.fiscal_year = left(f->>'fecha', 4)::int and c.number = v_num) then
+          v_mirar := v_mirar || jsonb_build_object('que', 'factura', 'frase', case when v_num is null or v_num = 0
+            then format('La factura emitida %s no tiene un número que Sumied pueda guardar: no se ha traído.', f->>'numero')
+            else format('Ya hay en Sumied una factura emitida %s del %s: la %s de %s no se ha traído.', v_serie || '-' || v_num, left(f->>'fecha', 4), f->>'numero', v_nombre_prog) end);
+          continue;
+        end if;
+        -- N06b · Una emitida traída no existe en Sumied hasta darla por buena: mientras, no cuenta en las
+        -- emitidas, ni en Cobros, ni en el IVA (respuesta N06a · 1, «no sé» 2). Se guarda con la carga.
+        v_emitidas := v_emitidas || jsonb_build_object('id', gen_random_uuid(), 'serie', v_serie, 'ejercicio', left(f->>'fecha', 4)::int, 'numero', v_num,
+          'numero_texto', f->>'numero', 'fecha', f->>'fecha', 'party_id', v_party, 'cliente', jsonb_build_object('nombre', f->>'nombre', 'nif', f->>'nif'),
+          'base', (f->>'base')::numeric / 100, 'cuota', (f->>'cuota')::numeric / 100, 'retencion', coalesce((f->'retencion'->>'importe')::numeric, 0) / 100,
+          'total', (f->>'total')::numeric / 100, 'asiento', v_entry, 'marca', case when v_entry is null then 'sin_casar' end,
+          'pendiente', (f->>'pendiente')::numeric / 100);
+        n_emi := n_emi + 1;
+      end if;
+      if v_entry is null then n_sin_casar := n_sin_casar + 1; else n_casadas := n_casadas + 1; end if;
+    end if;
+  end loop;
+
+  -- Queda cola: se guarda por dónde va y se dice cuánto lleva.
+  if exists (select 1 from public.conta_traer_trozo q where q.carga = p_carga and not q.hecho) then
+    st := st || jsonb_build_object('sin_tipo', v_sin_tipo, 'n_rec', n_rec, 'n_emi', n_emi, 'n_casadas', n_casadas, 'n_sin_casar', n_sin_casar, 'n_prov', n_prov,
+                                   'mirar', v_mirar, 'emitidas', v_emitidas);
+    update public.import_run set detail = jsonb_build_object('estado', st) where id = p_carga;
+    return jsonb_build_object('carga', p_carga, 'acabado', false,
+      'asientos', jsonb_build_object('hechos', (st->>'hechos_a')::int, 'de', n_asientos), 'facturas', jsonb_build_object('hechos', (st->>'hechos_f')::int, 'de', n_facturas));
+  end if;
+
+  delete from public.conta_traer_trozo q where q.carga = p_carga;   -- X14 · la cola, vacía: se va
+
+  -- ── Lo aprendido: como propuesta en la ficha, sin pisar ──
+  for x in select * from jsonb_array_elements(coalesce(st->'aprendido', '[]')) loop
+    v_sup := (v_tercero->(x->>'codigo')->>'supplier')::uuid;
+    continue when v_sup is null or jsonb_array_length(coalesce(x->'tiposIva', '[]')) = 0;
+    continue when exists (select 1 from public.supplier_learning s where s.supplier_id = v_sup and s.campo = 'tax_rates');
+    select string_agg(trim(to_char(v::numeric, 'FM990D99'), ',.'), ',' order by v::numeric),
+           'IVA al ' || string_agg(trim(to_char(v::numeric, 'FM990D99'), ',.') || ' %', ' y al ' order by v::numeric)
+      into v_valor, v_etiqueta from jsonb_array_elements_text(x->'tiposIva') v;
+    insert into public.supplier_learning (account_id, supplier_id, campo, valor, etiqueta, porque, veces, a_mano)
+    values (v_cuenta, v_sup, 'tax_rates', v_valor, v_etiqueta, x->>'porque', 1, false)
+    returning to_jsonb(id) into x;
+    v_deshacer := jsonb_set(v_deshacer, '{aprendido}', (v_deshacer->'aprendido') || x);
+    v_aprendidas := v_aprendidas + 1;
+  end loop;
+
+  -- ── Lo que se guarda con la carga y lo que se cuenta ──
+  v_counts := jsonb_build_object('asientos', n_asientos, 'apuntes', v_apuntes, 'debe', v_tot_debe / 100, 'haber', v_tot_haber / 100,
+    'facturas_recibidas', n_rec, 'facturas_emitidas', n_emi, 'casadas', n_casadas, 'sin_casar', n_sin_casar,
+    'cuentas_nuevas', n_cuentas, 'cuentas_estaban', n_cuentas_estaban, 'proveedores_nuevos', n_prov, 'clientes_nuevos', n_cli,
+    'enlazados', n_enlazados, 'sin_tipo', v_sin_tipo, 'aprendido', v_aprendidas,
+    'fuera_asientos', v_fuera_a, 'fuera_facturas', v_fuera_f, 'mirar', jsonb_array_length(v_mirar));
+  v_texto := format('Traído en prueba: %s (%s apuntes, %s al debe y al haber) y %s, %s con su asiento.',
+    case when n_asientos = 1 then '1 asiento' else n_asientos || ' asientos' end, v_apuntes,
+    public._conta_traer_euros(v_tot_debe), case when n_rec + n_emi = 1 then '1 factura' else (n_rec + n_emi) || ' facturas' end, n_casadas)
+    || case when n_cuentas + n_prov + n_cli > 0 then format(' Nuevos en Sumied: %s, %s y %s.', public._conta_traer_cuantos(n_cuentas, 'cuenta', 'cuentas'),
+              public._conta_traer_cuantos(n_prov, 'proveedor', 'proveedores'), public._conta_traer_cuantos(n_cli, 'cliente', 'clientes')) else '' end
+    || case when v_inicio is not null and v_fuera_a + v_fuera_f > 0
+         then format(' Del %s en adelante lo lleva ya Sumied: se han dejado fuera %s y %s.', to_char(v_inicio, 'DD/MM/YYYY'),
+                     public._conta_traer_cuantos(v_fuera_a, 'asiento', 'asientos'), public._conta_traer_cuantos(v_fuera_f, 'factura', 'facturas'))
+         when v_inicio is null and v_hasta is not null then format(' Sumied empieza a llevar la contabilidad el %s.', to_char(v_hasta + 1, 'DD/MM/YYYY')) else '' end
+    || ' Nada está validado: repásalo y dalo por bueno, o deshazlo.';
+  -- N06b · Solo cuentas y terceros: lo que se ha traído y que lo de antes sigue sin traer.
+  if n_asientos = 0 and n_facturas = 0 then
+    v_texto := format('He traído %s, %s y %s.', public._conta_traer_cuantos(n_cuentas + n_cuentas_estaban, 'cuenta', 'cuentas'),
+                      public._conta_traer_cuantos((st->>'terceros_prov')::int, 'proveedor', 'proveedores'),
+                      public._conta_traer_cuantos((st->>'terceros_cli')::int, 'cliente', 'clientes'))
+      || case when v_inicio is not null then format(' Lo anterior al %s sigue sin traer.', to_char(v_inicio, 'DD/MM/YYYY')) else ' Lo de antes sigue sin traer.' end;
+  end if;
+  update public.import_run set status = 'en_prueba', finished_at = now(), counts = v_counts,
+         detail = jsonb_build_object('mirar', v_mirar, 'aprendido', coalesce(st->'aprendido', '[]'),
+                                     'pendientesNoExactos', coalesce(st->'pendientesNoExactos', '[]'), 'inmovilizado', st->'inmovilizado',
+                                     'frases', coalesce(st->'frases', '[]'), 'dia_de_inicio', coalesce(v_inicio, v_hasta + 1),
+                                     'sumas', st->'sumas', 'emitidas', v_emitidas, 'proveedores', v_provs, 'solo_plan', n_asientos = 0,
+                                     'texto', v_texto,
+                                     'deshacer', v_deshacer || jsonb_build_object('corte', v_corte, 'fichas', v_fichas))
+   where id = v_carga;
+  return jsonb_build_object('carga', v_carga, 'cuentas', v_counts, 'mirar', v_mirar, 'texto', v_texto,
+                            'dia_de_inicio', coalesce(v_inicio, v_hasta + 1), 'acabado', true,
+                            'asientos', jsonb_build_object('hechos', n_asientos, 'de', n_asientos), 'facturas', jsonb_build_object('hechos', n_facturas, 'de', n_facturas));
+end $_$;
+
+
+--
+-- Name: FUNCTION _conta_traer_seguir(p_carga uuid, p_hasta timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_traer_seguir(p_carga uuid, p_hasta timestamp with time zone) IS 'X14 · Mete en prueba lo que quepa de la cola de una carga hasta p_hasta (al menos uno); al vaciarla, la deja en prueba como antes. Interna.';
 
 
 --
@@ -14568,7 +14817,7 @@ begin
 
   -- N06a · Lo traído de otro programa solo entra con su carga, en prueba y de esta empresa.
   if v_tipo = 'migrated' and not exists (select 1 from public.import_run r where r.id = nullif(p_entry->>'carga', '')::uuid
-                                            and r.company_id = p_company and r.kind = 'carga' and r.status = 'en_prueba') then
+                                            and r.company_id = p_company and r.kind = 'carga' and r.status in ('en_prueba', 'cargando')) then   -- X14 · también a medias
     raise exception 'Lo traído de otro programa entra solo con su carga, en prueba.' using errcode = '23514', hint = 'sin_carga';
   end if;
   -- N06a · Una factura traída ya tiene su asiento traído (o se dejó sin casar a propósito): no se le propone otro.
@@ -66429,6 +66678,7 @@ declare
   v_mirar jsonb := '[]'; v_corte jsonb := null; v_locks jsonb;
   v_deshacer jsonb := jsonb_build_object('enlaces', '[]'::jsonb, 'roles', '[]'::jsonb, 'fiscales', '[]'::jsonb, 'aprendido', '[]'::jsonb);
   v_texto text; v_counts jsonb;
+  v_estado jsonb; v_r2 jsonb; v_empieza timestamptz := clock_timestamp();   -- X14
 begin
   select account_id into v_cuenta from public.company where id = p_company;
   if v_cuenta is null or not public.current_user_is_admin_of(v_cuenta) then
@@ -66438,7 +66688,11 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('conta_traer:' || p_company::text, 0));
 
   -- ── Las paradas ──
-  select * into v_otra from public.import_run r where r.company_id = p_company and r.kind = 'carga' and r.status = 'en_prueba' limit 1;
+  select * into v_otra from public.import_run r where r.company_id = p_company and r.kind = 'carga' and r.status in ('en_prueba', 'cargando') limit 1;
+  if v_otra.id is not null and v_otra.status = 'cargando' then   -- X14 · una carga a medias: se sigue con ella o se deshace
+    raise exception 'Hay una carga de esta empresa a medias, del %: sigue con ella o deshazla antes de traer otra.',
+      to_char(v_otra.started_at at time zone 'Europe/Madrid', 'DD/MM') using errcode = '23514', hint = 'a_medias';
+  end if;
   if v_otra.id is not null then
     raise exception 'Ya hay una carga en prueba de esta empresa, del %. Dala por buena o deshazla antes de traer otra.',
       to_char(v_otra.started_at at time zone 'Europe/Madrid', 'DD/MM') using errcode = '23514', hint = 'otra_carga';
@@ -66466,16 +66720,17 @@ begin
 
   -- Lo que se trae: el ejercicio pedido (o todo) y, si hay día de inicio, solo lo anterior.
   v_inicio := public.conta_dia_de_inicio(p_company);
-  for a in select * from jsonb_array_elements(p_datos->'asientos') loop
-    continue when p_ejercicio is not null and left(a->>'fecha', 4) <> p_ejercicio;
-    if v_inicio is not null and (a->>'fecha')::date >= v_inicio then v_fuera_a := v_fuera_a + 1; continue; end if;
-    v_asientos := v_asientos || a;
-  end loop;
-  for f in select * from jsonb_array_elements(coalesce(p_datos->'facturas', '[]')) loop
-    continue when p_ejercicio is not null and left(f->>'fecha', 4) <> p_ejercicio;
-    if v_inicio is not null and (f->>'fecha')::date >= v_inicio then v_fuera_f := v_fuera_f + 1; continue; end if;
-    v_facturas := v_facturas || f;
-  end loop;
+  -- X14 · En una sola consulta: añadir uno a uno a un jsonb que crece copia todo lo de antes en cada vuelta (17,7 s con 4.425 asientos).
+  select coalesce(jsonb_agg(s.v order by s.o) filter (where v_inicio is null or (s.v->>'fecha')::date < v_inicio), '[]'),
+         count(*) filter (where v_inicio is not null and (s.v->>'fecha')::date >= v_inicio)
+    into v_asientos, v_fuera_a
+    from jsonb_array_elements(p_datos->'asientos') with ordinality s(v, o)
+   where p_ejercicio is null or left(s.v->>'fecha', 4) = p_ejercicio;
+  select coalesce(jsonb_agg(s.v order by s.o) filter (where v_inicio is null or (s.v->>'fecha')::date < v_inicio), '[]'),
+         count(*) filter (where v_inicio is not null and (s.v->>'fecha')::date >= v_inicio)
+    into v_facturas, v_fuera_f
+    from jsonb_array_elements(coalesce(p_datos->'facturas', '[]')) with ordinality s(v, o)
+   where p_ejercicio is null or left(s.v->>'fecha', 4) = p_ejercicio;
   -- N06b · Una carga solo de cuentas y terceros (sin asientos ni facturas) también es una carga.
   if jsonb_array_length(v_asientos) = 0 and jsonb_array_length(v_facturas) = 0
      and jsonb_array_length(coalesce(p_datos->'cuentas', '[]')) = 0 and jsonb_array_length(coalesce(p_datos->'terceros', '[]')) = 0 then
@@ -66517,7 +66772,7 @@ begin
 
   -- ── La carga y sus lecturas (3.1: una carga es una) ──
   insert into public.import_run (account_id, company_id, program, kind, period_from, period_to, status, finished_at, created_by, created_by_name)
-  values (v_cuenta, p_company, v_prog, 'carga', v_desde, v_hasta, 'en_prueba', now(), auth.uid(), v_quien)
+  values (v_cuenta, p_company, v_prog, 'carga', v_desde, v_hasta, 'cargando', now(), auth.uid(), v_quien)   -- X14 · «cargando» hasta vaciar la cola
   returning id into v_carga;
   insert into public.import_run (account_id, company_id, program, kind, period_from, period_to, status, finished_at, counts, created_by, created_by_name, parent_id)
   select v_cuenta, p_company, v_prog, public._conta_traer_kind(fi.v->>'tipo'), v_desde, v_hasta, 'hecho', now(),
@@ -66659,185 +66914,33 @@ begin
     v_mirar := v_mirar || jsonb_build_object('que', 'raro', 'frase', x->>'frase');
   end loop;
 
-  -- ── Los asientos: en borrador, por el embudo, con su número de allí ──
-  for a in select * from jsonb_array_elements(v_asientos) loop
-    v_lineas := '[]';
-    for l in select * from jsonb_array_elements(a->'apuntes') loop
-      x := jsonb_build_object('cuenta', l->>'cuenta', 'debe', (l->>'debe')::numeric / 100, 'haber', (l->>'haber')::numeric / 100,
-                              'concepto', nullif(l->>'concepto', ''), 'comun', true, 'tercero_id', v_tercero->(l->>'cuenta')->>'party');
-      if l ? 'iva' then
-        select r.id into v_tipo_id from public.tax_rate r
-         where r.rate = (l->'iva'->>'tipo')::numeric and r.treatment = 'taxed' and r.valid_to is null and r.name like 'IVA%' limit 1;
-        if v_tipo_id is not null then
-          x := x || jsonb_build_object('iva', jsonb_build_object('tipo_id', v_tipo_id, 'base', (l->'iva'->>'base')::numeric / 100,
-                     'libro', l->'iva'->>'libro', 'deducible', case when l->'iva'->>'libro' = 'received' then 'yes' end, 'facturas', 1));
-        else
-          v_sin_tipo := v_sin_tipo + 1;
-        end if;
-      elsif l ? 'retencion' then
-        -- 19 %: alquiler si el asiento lleva un 621; si no, no se sabe (también es el de capital).
-        select r.id, r.filed_in into v_ret_id, v_ret_modelo from public.withholding_rate r
-         where r.is_system and r.valid_to is null and r.rate = (l->'retencion'->>'tipo')::numeric
-           and (r.rate <> 19 or (r.code = 'alquiler' and exists (select 1 from jsonb_array_elements(a->'apuntes') z where z->>'cuenta' like '621%')))
-           and r.code <> 'trabajo'
-         order by r.sort_order limit 1;
-        if v_ret_id is not null then
-          x := x || jsonb_build_object('retencion', jsonb_build_object('tipo_id', v_ret_id, 'base', (l->'retencion'->>'base')::numeric / 100, 'modelo', v_ret_modelo));
-        else
-          v_sin_tipo := v_sin_tipo + 1;
-        end if;
-      elsif l ? 'sinTipo' then
-        v_sin_tipo := v_sin_tipo + 1;
-      end if;
-      v_lineas := v_lineas || x;
-    end loop;
-    v_r := public._journal_entry_proponer(p_company,
-      jsonb_build_object('source_type', 'migrated', 'fecha', a->>'fecha',
-        'series', 8,   -- N06b · la serie de lo traído: se numera al darlo por bueno (#715)
-        'concepto', coalesce(nullif(trim(a->>'concepto'), ''), 'Asiento ' || coalesce(nullif(a->>'documento', ''), a->>'clave') || ' de ' || v_nombre_prog),
-        'documento', nullif(a->>'documento', ''),
-        'externo', jsonb_build_object('programa', v_nombre_prog, 'ejercicio', left(a->>'fecha', 4), 'serie', a->>'serie',
-                                      'numero', coalesce(nullif(a->>'documento', ''), a->>'clave')),
-        'carga', v_carga),
-      v_lineas, '{}'::jsonb, v_nombre_prog || ' (traído)', auth.uid());
-    v_ids := v_ids || jsonb_build_object((a->>'clave') || '|' || (a->>'fecha'), v_r->>'id');
-  end loop;
+  -- ── X14 · Los asientos y las facturas, a la cola de la carga: entran por trozos (_conta_traer_seguir) ──
+  insert into public.conta_traer_trozo (carga, orden, tipo, dato, clave)
+  select v_carga, s.ord, 'asiento', s.v, (s.v->>'clave') || '|' || (s.v->>'fecha') from jsonb_array_elements(v_asientos) with ordinality s(v, ord);
+  -- La retención del 19 % de una recibida mira si su asiento va a un 621: se mira aquí, con todos los asientos a mano.
+  with c621 as (select distinct (a3->>'clave') || '|' || (a3->>'fecha') k
+                  from jsonb_array_elements(v_asientos) a3, jsonb_array_elements(a3->'apuntes') z where z->>'cuenta' like '621%')
+  insert into public.conta_traer_trozo (carga, orden, tipo, dato)
+  select v_carga, jsonb_array_length(v_asientos) + s.ord, 'factura', s.v || jsonb_build_object('asiento621', c.k is not null)
+    from jsonb_array_elements(v_facturas) with ordinality s(v, ord) left join c621 c on c.k = s.v->>'asiento';
 
-  -- ── Las facturas: traídas, atadas a la carga y a su asiento ──
-  for f in select * from jsonb_array_elements(v_facturas) loop
-    v_entry := nullif(v_ids->>(f->>'asiento'), '')::uuid;
-    v_nif := nullif(public.party_nif(f->>'nif'), '');
-    if f->>'libro' = 'recibidas' then
-      v_sup := null;
-      select (v->>'supplier')::uuid into v_sup from jsonb_each(v_tercero) e(k, v)
-       where v->>'supplier' is not null and v->>'nif' = v_nif limit 1;
-      if v_sup is null and v_nif is not null then
-        select s.id into v_sup from public.supplier s where s.account_id = v_cuenta and public.party_nif(s.tax_id) = v_nif and s.archived_at is null
-         order by s.created_at limit 1;
-      end if;
-      if v_sup is null then
-        insert into public.supplier (account_id, name, legal_name, tax_id, created_by_name, import_run_id)
-        values (v_cuenta, f->>'nombre', f->>'nombre', f->>'nif', v_nombre_prog || ' (traído)', v_carga) returning id into v_sup;
-        n_prov := n_prov + 1;
-        v_mirar := v_mirar || jsonb_build_object('que', 'tercero', 'frase',
-          format('El proveedor %s de la factura %s no estaba en el listado de proveedores: se ha creado sin cuenta.', f->>'nombre', f->>'numero'));
-      end if;
-      if exists (select 1 from public.supplier_invoice i where i.account_id = v_cuenta and i.supplier_id = v_sup
-                   and public.conta_clave_numero(i.invoice_number) = public.conta_clave_numero(f->>'numero')
-                   and round(i.grand_total * 100) = (f->>'total')::numeric and i.status not in ('anulada', 'descartada')) then
-        v_mirar := v_mirar || jsonb_build_object('que', 'factura', 'frase',
-          format('La factura %s de %s ya estaba en Sumied: no se ha traído otra vez.', f->>'numero', f->>'nombre'));
-        continue;
-      end if;
-      -- La retención, con su tipo (19 %: alquiler si su asiento va a un 621; si no, no se sabe y se dice).
-      v_ret_id := null;
-      if coalesce((f->'retencion'->>'importe')::numeric, 0) <> 0 then
-        select r.id into v_ret_id from public.withholding_rate r
-         where r.is_system and r.valid_to is null and r.code <> 'trabajo' and r.rate = (f->'retencion'->>'tipo')::numeric
-           and (r.rate <> 19 or (r.code = 'alquiler' and exists (
-                 select 1 from jsonb_array_elements(v_asientos) a3, jsonb_array_elements(a3->'apuntes') z
-                  where (a3->>'clave') || '|' || (a3->>'fecha') = f->>'asiento' and z->>'cuenta' like '621%')))
-         order by r.sort_order limit 1;
-        if v_ret_id is null then
-          v_mirar := v_mirar || jsonb_build_object('que', 'factura', 'frase',
-            format('La factura %s de %s lleva una retención de %s que no sé de qué tipo es: se ha traído sin ella. Pónsela al repasarla.',
-                   f->>'numero', f->>'nombre', public._conta_traer_euros((f->'retencion'->>'importe')::numeric)));
-        end if;
-      end if;
-      insert into public.supplier_invoice (account_id, company_id, supplier_id, invoice_number, invoice_date, status, source,
-                                           tax_base_total, tax_total, grand_total, withholding_rate_id, withholding_amount, withholding_base, journal_entry_id,
-                                           needs_review, created_by, created_by_name, approved_at, approved_by, approved_by_name,
-                                           issuer_name, issuer_tax_id, import_run_id, import_mark, import_pending)
-      values (v_cuenta, p_company, v_sup, f->>'numero', (f->>'fecha')::date,
-              case when (f->>'pendiente')::numeric = 0 then 'pagada' else 'aprobada' end, 'traida',
-              (f->>'base')::numeric / 100, (f->>'cuota')::numeric / 100, (f->>'total')::numeric / 100,
-              v_ret_id, case when v_ret_id is not null then (f->'retencion'->>'importe')::numeric / 100 end,
-              case when v_ret_id is not null then (f->>'base')::numeric / 100 end,
-              v_entry, false, auth.uid(), v_nombre_prog || ' (traída)', now(), auth.uid(), v_nombre_prog || ' (traída)',
-              f->>'nombre', f->>'nif', v_carga, case when v_entry is null then 'sin_casar' end, (f->>'pendiente')::numeric / 100)
-      returning id into v_fac;
-      insert into public.supplier_invoice_tax (account_id, supplier_invoice_id, vat_pct, base, vat_amount)
-      select v_cuenta, v_fac, coalesce((z->>'tipo')::numeric, 0), (z->>'base')::numeric / 100, (z->>'cuota')::numeric / 100
-        from jsonb_array_elements(coalesce(f->'tramos', '[]')) z;
-      n_rec := n_rec + 1;
-    else
-      v_party := null;
-      select (v->>'party')::uuid into v_party from jsonb_each(v_tercero) e(k, v)
-       where v->>'supplier' is null and v->>'nif' = v_nif limit 1;
-      if v_party is null and v_nif is not null then
-        select p.id into v_party from public.party p where p.account_id = v_cuenta and p.tax_id = v_nif;
-      end if;
-      v_serie := upper(regexp_replace(coalesce(nullif(f->>'serie', ''), v_prog), '[^A-Za-z0-9-]', '', 'g'));
-      if v_serie !~ '^[A-Z0-9][A-Z0-9-]{0,9}$' then v_serie := 'ERP10'; end if;
-      v_num := case when coalesce(f->>'numeroSolo', '') ~ '^[0-9]{1,9}$' then (f->>'numeroSolo')::int
-                    when f->>'numero' ~ '[0-9]{1,9}$' then substring(f->>'numero' from '([0-9]{1,9})$')::int end;
-      if v_num is null or v_num = 0 or exists (select 1 from public.customer_invoice c where c.company_id = p_company and c.series_code = v_serie
-                                                  and c.fiscal_year = left(f->>'fecha', 4)::int and c.number = v_num) then
-        v_mirar := v_mirar || jsonb_build_object('que', 'factura', 'frase', case when v_num is null or v_num = 0
-          then format('La factura emitida %s no tiene un número que Sumied pueda guardar: no se ha traído.', f->>'numero')
-          else format('Ya hay en Sumied una factura emitida %s del %s: la %s de %s no se ha traído.', v_serie || '-' || v_num, left(f->>'fecha', 4), f->>'numero', v_nombre_prog) end);
-        continue;
-      end if;
-      -- N06b · Una emitida traída no existe en Sumied hasta darla por buena: mientras, no cuenta en las
-      -- emitidas, ni en Cobros, ni en el IVA (respuesta N06a · 1, «no sé» 2). Se guarda con la carga.
-      v_emitidas := v_emitidas || jsonb_build_object('id', gen_random_uuid(), 'serie', v_serie, 'ejercicio', left(f->>'fecha', 4)::int, 'numero', v_num,
-        'numero_texto', f->>'numero', 'fecha', f->>'fecha', 'party_id', v_party, 'cliente', jsonb_build_object('nombre', f->>'nombre', 'nif', f->>'nif'),
-        'base', (f->>'base')::numeric / 100, 'cuota', (f->>'cuota')::numeric / 100, 'retencion', coalesce((f->'retencion'->>'importe')::numeric, 0) / 100,
-        'total', (f->>'total')::numeric / 100, 'asiento', v_entry, 'marca', case when v_entry is null then 'sin_casar' end,
-        'pendiente', (f->>'pendiente')::numeric / 100);
-      n_emi := n_emi + 1;
-    end if;
-    if v_entry is null then n_sin_casar := n_sin_casar + 1; else n_casadas := n_casadas + 1; end if;
-  end loop;
+  -- Lo que hace falta para seguir, guardado con la carga.
+  v_estado := jsonb_build_object('company', p_company, 'cuenta', v_cuenta, 'prog', v_prog, 'nombre_prog', v_nombre_prog, 'quien', v_quien,
+    'inicio', v_inicio, 'hasta', v_hasta, 'fuera_a', v_fuera_a, 'fuera_f', v_fuera_f, 'apuntes', v_apuntes, 'tot_debe', v_tot_debe, 'tot_haber', v_tot_haber,
+    'n_asientos', jsonb_array_length(v_asientos), 'n_facturas', jsonb_array_length(v_facturas),
+    'n_cuentas', n_cuentas, 'n_cuentas_estaban', n_cuentas_estaban, 'n_prov', n_prov, 'n_cli', n_cli, 'n_enlazados', n_enlazados,
+    'sin_tipo', 0, 'n_rec', 0, 'n_emi', 0, 'n_casadas', 0, 'n_sin_casar', 0, 'hechos_a', 0, 'hechos_f', 0,
+    'terceros_prov', (select count(*)::int from jsonb_array_elements(coalesce(p_datos->'terceros', '[]')) z where z->>'clase' = 'proveedor'),
+    'terceros_cli', (select count(*)::int from jsonb_array_elements(coalesce(p_datos->'terceros', '[]')) z where z->>'clase' = 'cliente'),
+    'tercero', v_tercero, 'mirar', v_mirar, 'emitidas', '[]'::jsonb, 'provs', v_provs, 'fichas', v_fichas,
+    'deshacer', v_deshacer, 'corte', v_corte,
+    'aprendido', coalesce(p_datos->'aprendido', '[]'), 'pendientesNoExactos', coalesce(p_datos->'pendientesNoExactos', '[]'),
+    'inmovilizado', p_datos->'inmovilizado', 'frases', coalesce(p_datos->'frases', '[]'), 'sumas', p_datos->'sumas');
+  update public.import_run set detail = jsonb_build_object('estado', v_estado) where id = v_carga;
 
-  -- ── Lo aprendido: como propuesta en la ficha, sin pisar ──
-  for x in select * from jsonb_array_elements(coalesce(p_datos->'aprendido', '[]')) loop
-    v_sup := (v_tercero->(x->>'codigo')->>'supplier')::uuid;
-    continue when v_sup is null or jsonb_array_length(coalesce(x->'tiposIva', '[]')) = 0;
-    continue when exists (select 1 from public.supplier_learning s where s.supplier_id = v_sup and s.campo = 'tax_rates');
-    select string_agg(trim(to_char(v::numeric, 'FM990D99'), ',.'), ',' order by v::numeric),
-           'IVA al ' || string_agg(trim(to_char(v::numeric, 'FM990D99'), ',.') || ' %', ' y al ' order by v::numeric)
-      into v_valor, v_etiqueta from jsonb_array_elements_text(x->'tiposIva') v;
-    insert into public.supplier_learning (account_id, supplier_id, campo, valor, etiqueta, porque, veces, a_mano)
-    values (v_cuenta, v_sup, 'tax_rates', v_valor, v_etiqueta, x->>'porque', 1, false)
-    returning to_jsonb(id) into x;
-    v_deshacer := jsonb_set(v_deshacer, '{aprendido}', (v_deshacer->'aprendido') || x);
-    v_aprendidas := v_aprendidas + 1;
-  end loop;
-
-  -- ── Lo que se guarda con la carga y lo que se cuenta ──
-  v_counts := jsonb_build_object('asientos', jsonb_array_length(v_asientos), 'apuntes', v_apuntes, 'debe', v_tot_debe / 100, 'haber', v_tot_haber / 100,
-    'facturas_recibidas', n_rec, 'facturas_emitidas', n_emi, 'casadas', n_casadas, 'sin_casar', n_sin_casar,
-    'cuentas_nuevas', n_cuentas, 'cuentas_estaban', n_cuentas_estaban, 'proveedores_nuevos', n_prov, 'clientes_nuevos', n_cli,
-    'enlazados', n_enlazados, 'sin_tipo', v_sin_tipo, 'aprendido', v_aprendidas,
-    'fuera_asientos', v_fuera_a, 'fuera_facturas', v_fuera_f, 'mirar', jsonb_array_length(v_mirar));
-  v_texto := format('Traído en prueba: %s (%s apuntes, %s al debe y al haber) y %s, %s con su asiento.',
-    case when jsonb_array_length(v_asientos) = 1 then '1 asiento' else jsonb_array_length(v_asientos) || ' asientos' end, v_apuntes,
-    public._conta_traer_euros(v_tot_debe), case when n_rec + n_emi = 1 then '1 factura' else (n_rec + n_emi) || ' facturas' end, n_casadas)
-    || case when n_cuentas + n_prov + n_cli > 0 then format(' Nuevos en Sumied: %s, %s y %s.', public._conta_traer_cuantos(n_cuentas, 'cuenta', 'cuentas'),
-              public._conta_traer_cuantos(n_prov, 'proveedor', 'proveedores'), public._conta_traer_cuantos(n_cli, 'cliente', 'clientes')) else '' end
-    || case when v_inicio is not null and v_fuera_a + v_fuera_f > 0
-         then format(' Del %s en adelante lo lleva ya Sumied: se han dejado fuera %s y %s.', to_char(v_inicio, 'DD/MM/YYYY'),
-                     public._conta_traer_cuantos(v_fuera_a, 'asiento', 'asientos'), public._conta_traer_cuantos(v_fuera_f, 'factura', 'facturas'))
-         when v_inicio is null and v_hasta is not null then format(' Sumied empieza a llevar la contabilidad el %s.', to_char(v_hasta + 1, 'DD/MM/YYYY')) else '' end
-    || ' Nada está validado: repásalo y dalo por bueno, o deshazlo.';
-  -- N06b · Solo cuentas y terceros: lo que se ha traído y que lo de antes sigue sin traer.
-  if jsonb_array_length(v_asientos) = 0 and jsonb_array_length(v_facturas) = 0 then
-    v_texto := format('He traído %s, %s y %s.', public._conta_traer_cuantos(n_cuentas + n_cuentas_estaban, 'cuenta', 'cuentas'),
-                      public._conta_traer_cuantos((select count(*)::int from jsonb_array_elements(coalesce(p_datos->'terceros', '[]')) z where z->>'clase' = 'proveedor'), 'proveedor', 'proveedores'),
-                      public._conta_traer_cuantos((select count(*)::int from jsonb_array_elements(coalesce(p_datos->'terceros', '[]')) z where z->>'clase' = 'cliente'), 'cliente', 'clientes'))
-      || case when v_inicio is not null then format(' Lo anterior al %s sigue sin traer.', to_char(v_inicio, 'DD/MM/YYYY')) else ' Lo de antes sigue sin traer.' end;
-  end if;
-  update public.import_run set counts = v_counts,
-         detail = jsonb_build_object('mirar', v_mirar, 'aprendido', coalesce(p_datos->'aprendido', '[]'),
-                                     'pendientesNoExactos', coalesce(p_datos->'pendientesNoExactos', '[]'), 'inmovilizado', p_datos->'inmovilizado',
-                                     'frases', coalesce(p_datos->'frases', '[]'), 'dia_de_inicio', coalesce(v_inicio, v_hasta + 1),
-                                     'sumas', p_datos->'sumas', 'emitidas', v_emitidas, 'proveedores', v_provs, 'solo_plan', jsonb_array_length(v_asientos) = 0,
-                                     'texto', v_texto,
-                                     'deshacer', v_deshacer || jsonb_build_object('corte', v_corte, 'fichas', v_fichas))
-   where id = v_carga;
-  return jsonb_build_object('carga', v_carga, 'cuentas', v_counts, 'mirar', v_mirar, 'texto', v_texto,
-                            'dia_de_inicio', coalesce(v_inicio, v_hasta + 1));
+  -- Lo que quepa, ya: una carga pequeña entra entera en esta misma llamada, como antes.
+  v_r2 := public._conta_traer_seguir(v_carga, v_empieza + public._conta_traer_margen());
+  return v_r2;
 end $_$;
 
 
@@ -67032,7 +67135,7 @@ begin
     raise exception 'Esta carga ya está deshecha (el %, por %).', to_char(((v_r.detail->'deshecha'->>'el')::timestamptz) at time zone 'Europe/Madrid', 'DD/MM/YYYY'),
       v_r.detail->'deshecha'->>'por' using errcode = '23514', hint = 'deshecha';
   end if;
-  if v_r.status <> 'en_prueba' then raise exception 'Esta carga no está en prueba: no se deshace.' using errcode = '23514'; end if;
+  if v_r.status not in ('en_prueba', 'cargando') then raise exception 'Esta carga no está en prueba: no se deshace.' using errcode = '23514'; end if;   -- X14 · también a medias
   if exists (select 1 from public.journal_entry e where e.import_run_id = p_carga and e.status <> 'borrador') then
     raise exception 'Hay asientos de esta carga que ya no están en borrador: no se deshace nada.' using errcode = '23514';
   end if;
@@ -67040,7 +67143,11 @@ begin
     raise exception 'Hay facturas traídas de esta carga con un pago apuntado en Sumied: quita ese pago antes de deshacer.' using errcode = '23514', hint = 'con_pago';
   end if;
   v_quien := coalesce(nullif(trim(p_quien_nombre), ''), public.conta_nombre_actor());
-  v_d := coalesce(v_r.detail->'deshacer', '{}');
+  -- X14 · Una carga a medias guarda lo que hay que deshacer en su estado; y su cola se va.
+  v_d := case when v_r.status = 'cargando'
+              then coalesce(v_r.detail->'estado'->'deshacer', '{}') || jsonb_build_object('corte', v_r.detail->'estado'->'corte', 'fichas', v_r.detail->'estado'->'fichas')
+              else coalesce(v_r.detail->'deshacer', '{}') end;
+  delete from public.conta_traer_trozo where carga = p_carga;
 
   delete from public.supplier_learning where id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_d->'aprendido', '[]')));
   get diagnostics n_aprendido = row_count;
@@ -67103,6 +67210,41 @@ begin
   return jsonb_build_object('carga', p_carga, 'asientos', n_asientos, 'recibidas', n_rec, 'emitidas', n_emi, 'cuentas', n_cuentas,
                             'proveedores', n_prov, 'clientes', n_cli, 'quedan', q_cuentas + q_prov + q_cli, 'texto', v_texto);
 end $$;
+
+
+--
+-- Name: conta_traer_seguir(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_traer_seguir(p_carga uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_r public.import_run;
+begin
+  select * into v_r from public.import_run where id = p_carga;
+  if v_r.id is null or v_r.kind <> 'carga' then raise exception 'Esa carga no existe.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_of(v_r.account_id) then
+    raise exception 'Solo un administrador de la cuenta trae la contabilidad de otro programa.' using errcode = '42501';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('conta_traer:' || v_r.company_id::text, 0));
+  select * into v_r from public.import_run where id = p_carga;
+  if v_r.status = 'en_prueba' then   -- ya acabó (otra pestaña, o la vuelta de antes): lo de siempre
+    return jsonb_build_object('carga', p_carga, 'acabado', true, 'texto', v_r.detail->>'texto', 'cuentas', v_r.counts,
+      'asientos', jsonb_build_object('hechos', coalesce((v_r.counts->>'asientos')::int, 0), 'de', coalesce((v_r.counts->>'asientos')::int, 0)),
+      'facturas', jsonb_build_object('hechos', coalesce((v_r.counts->>'facturas_recibidas')::int, 0) + coalesce((v_r.counts->>'facturas_emitidas')::int, 0),
+                                     'de', coalesce((v_r.counts->>'facturas_recibidas')::int, 0) + coalesce((v_r.counts->>'facturas_emitidas')::int, 0)));
+  end if;
+  if v_r.status <> 'cargando' then raise exception 'Esta carga no está a medias: no hay nada que seguir.' using errcode = '23514'; end if;
+  return public._conta_traer_seguir(p_carga, clock_timestamp() + public._conta_traer_margen());
+end $$;
+
+
+--
+-- Name: FUNCTION conta_traer_seguir(p_carga uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_traer_seguir(p_carga uuid) IS 'X14 · Sigue con una carga a medias: mete en prueba lo que quepa en unos 4 s y dice cuántos asientos y facturas lleva de cuántos.';
 
 
 --
@@ -125232,6 +125374,29 @@ COMMENT ON TABLE public.conta_tpv_subida IS 'R15. Cada subida de ventas del TPV,
 
 
 --
+-- Name: conta_traer_trozo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_traer_trozo (
+    carga uuid NOT NULL,
+    orden integer NOT NULL,
+    tipo text NOT NULL,
+    dato jsonb NOT NULL,
+    clave text,
+    entrada uuid,
+    hecho boolean DEFAULT false NOT NULL,
+    CONSTRAINT conta_traer_trozo_tipo_check CHECK ((tipo = ANY (ARRAY['asiento'::text, 'factura'::text])))
+);
+
+
+--
+-- Name: TABLE conta_traer_trozo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_traer_trozo IS 'X14 · La cola de una carga de «Traer» a medias: sus asientos y sus facturas, en orden, hasta que entran (_conta_traer_seguir). Solo la tocan las funciones de la carga.';
+
+
+--
 -- Name: conta_user_pref; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -128285,7 +128450,7 @@ CREATE TABLE public.import_run (
     CONSTRAINT import_run_counts_check CHECK ((jsonb_typeof(counts) = 'object'::text)),
     CONSTRAINT import_run_kind_check CHECK ((kind = ANY (ARRAY['historico'::text, 'al_dia'::text, 'documentos'::text, 'sumas_saldos'::text, 'plan_cuentas'::text, 'terceros'::text, 'inmovilizado'::text, 'diario'::text, 'recibidas'::text, 'emitidas'::text, 'declaraciones'::text, 'carga'::text]))),
     CONSTRAINT import_run_program_check CHECK ((program = ANY (ARRAY['diez'::text, 'erp10'::text, 'otro'::text]))),
-    CONSTRAINT import_run_status_check CHECK ((status = ANY (ARRAY['en_curso'::text, 'hecho'::text, 'fallido'::text, 'en_prueba'::text, 'dada_por_buena'::text, 'deshecha'::text])))
+    CONSTRAINT import_run_status_check CHECK ((status = ANY (ARRAY['en_curso'::text, 'hecho'::text, 'fallido'::text, 'en_prueba'::text, 'dada_por_buena'::text, 'deshecha'::text, 'cargando'::text])))
 );
 
 
@@ -140854,6 +141019,14 @@ ALTER TABLE ONLY public.conta_tpv_subida
 
 
 --
+-- Name: conta_traer_trozo conta_traer_trozo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_traer_trozo
+    ADD CONSTRAINT conta_traer_trozo_pkey PRIMARY KEY (carga, orden);
+
+
+--
 -- Name: conta_user_pref conta_user_pref_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -146630,6 +146803,13 @@ CREATE INDEX conta_tpv_dia_asiento ON public.conta_tpv_dia USING btree (entry_id
 --
 
 CREATE INDEX conta_tpv_documento_dia ON public.conta_tpv_documento USING btree (dia_id);
+
+
+--
+-- Name: conta_traer_trozo_clave_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_traer_trozo_clave_idx ON public.conta_traer_trozo USING btree (carga, clave) WHERE (clave IS NOT NULL);
 
 
 --
@@ -158574,6 +158754,14 @@ ALTER TABLE ONLY public.conta_tpv_subida
 
 
 --
+-- Name: conta_traer_trozo conta_traer_trozo_carga_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_traer_trozo
+    ADD CONSTRAINT conta_traer_trozo_carga_fkey FOREIGN KEY (carga) REFERENCES public.import_run(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_user_pref conta_user_pref_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -170349,6 +170537,12 @@ CREATE POLICY conta_tpv_subida_leer ON public.conta_tpv_subida FOR SELECT TO aut
 
 
 --
+-- Name: conta_traer_trozo; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_traer_trozo ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: conta_user_pref; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -179712,11 +179906,27 @@ GRANT ALL ON FUNCTION public._conta_traer_kind(p_tipo text) TO service_role;
 
 
 --
+-- Name: FUNCTION _conta_traer_margen(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_traer_margen() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_traer_margen() TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_traer_ocupada(p_cta uuid, p_entity text, p_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public._conta_traer_ocupada(p_cta uuid, p_entity text, p_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_traer_ocupada(p_cta uuid, p_entity text, p_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_traer_seguir(p_carga uuid, p_hasta timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_traer_seguir(p_carga uuid, p_hasta timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_traer_seguir(p_carga uuid, p_hasta timestamp with time zone) TO service_role;
 
 
 --
@@ -190248,6 +190458,15 @@ GRANT ALL ON FUNCTION public.conta_traer_deshacer(p_carga uuid, p_quien_nombre t
 
 
 --
+-- Name: FUNCTION conta_traer_seguir(p_carga uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_traer_seguir(p_carga uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_traer_seguir(p_carga uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_traer_seguir(p_carga uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_traspaso_apuntar(p_traspaso uuid, p_llegaron integer, p_no_llegaron integer, p_detalle jsonb); Type: ACL; Schema: public; Owner: -
 --
 
@@ -200612,6 +200831,13 @@ GRANT SELECT ON TABLE public.conta_tpv_libro_antes TO authenticated;
 
 GRANT ALL ON TABLE public.conta_tpv_subida TO service_role;
 GRANT SELECT ON TABLE public.conta_tpv_subida TO authenticated;
+
+
+--
+-- Name: TABLE conta_traer_trozo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_traer_trozo TO service_role;
 
 
 --
