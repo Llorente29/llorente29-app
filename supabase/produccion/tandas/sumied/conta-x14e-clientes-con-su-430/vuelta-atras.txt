@@ -1,0 +1,5 @@
+# X14 · 2 · la vuelta atrás, en orden inverso: el ajuste del 2024, como estaba; y conta_traer_cargar y conta_traer_deshacer de
+# sus respaldos, sin las piezas nuevas.
+cuenta: scripts/conta/produccion/cuentas/x14e-codigos.sql
+supabase/vuelta-atras/20261125T1649_x14e_ajustar_a_erp10.down.sql
+supabase/vuelta-atras/20261125T1415_x14e_clientes_con_su_430.down.sql
