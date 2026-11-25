@@ -1,0 +1,11 @@
+[
+ {
+  "id": "822-1",
+  "pr": 822,
+  "fecha": "2026-11-25T18:54:40Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "una factura puede llevar varios cobros de GoCardless; cada cobro lleva su asiento, y el que pasa de su total queda en «Pendiente de revisar».",
+  "ruta": null
+ }
+]
