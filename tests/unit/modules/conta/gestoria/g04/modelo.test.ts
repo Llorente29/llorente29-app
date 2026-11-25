@@ -102,7 +102,7 @@ describe('G04 · el modelo de Clientes', () => {
   it('«Lo que tienes que hacer»: primero los cobros sin cliente; después, por el dinero que mueve', () => {
     const t = modeloClientes(datos(), EMPRESAS, [Q, A], '2026-11-08').tareas
     expect(t.map((x) => [x.id, x.n])).toEqual([['sin-cliente', 4], ['devueltos', 1], ['activos-sin-cuota', 1]])
-    expect(t[0].texto).toBe('4 suscripciones de GoCardless (250,00 € al mes) que aún no están unidas a su cliente en Sumied.')
+    expect(t[0].texto).toBe('4 suscripciones de GoCardless (250,00 € este mes) que aún no están atadas a su ficha en Sumied.')
   })
   it('el panel: la situación del cliente, el último cobro de verdad y la acción concreta del aviso', () => {
     const fs = modeloClientes(datos(), EMPRESAS, [Q], '2026-11-08').filas

@@ -191,6 +191,7 @@ export function pantallas(d: Record<string, Fila[]>): Record<string, (cuerpo: Fi
 export const FRASES: Record<string, (cuerpo: Fila) => Fila> = {
   conta_gc_cobro_otra_via: () => ({ frase: 'Guardado: ese cargo ya no sale en «Te deben». En GoCardless no cambia nada.' }),
   conta_gestoria_enlazar: () => ({ frase: 'Enlazado: TRANSPORTES DE EJEMPLO SL de GoCardless es Transportes de Ejemplo, S.L.. Desde ahora sus cobros salen en su ficha.' }),
+  conta_gc_enlace_confirmar: () => ({ frase: 'Enlazado: TRANSPORTES DE EJEMPLO SL de GoCardless es Transportes de Ejemplo, S.L.. Desde ahora sus cobros salen en su ficha.', deshacer_hasta: new Date(Date.now() + 10_000).toISOString() }),
   conta_tarifa_precio_guardar: () => ({ id: 'x', frase: 'Guardado Gestoría mensual · Estándar (precio de tarifa): 62,00 € al mes desde diciembre de 2026.' }),
   conta_tarifa_servicio_crear: (c) => ({ id: 'nuevo', frase: `Creado el servicio «${String(c.p_nombre)}», que se cobra un precio fijo cada mes. Guardado ${String(c.p_nombre)} (precio de tarifa): 30,00 € al mes desde diciembre de 2026.` }),
   conta_tarifa_cambio_ensayar: () => ({ id: 'cambio-1', ensayo: true, frase: 'Ensayo guardado.' }),

@@ -6,6 +6,7 @@
 // prueban y se capturan con datos inventados).
 
 import { BotonCopiaGc } from './CopiaGc'
+import { descargaXlsx } from '@/lib/descargaXlsx'
 import { useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { rutaClienteGestoria, rutaClientesCuotas, rutaCobroGestoria, rutaFacturaVenta, rutaTarifasGestoria } from '@/config/navegacion'
@@ -27,7 +28,7 @@ import { Asignar } from './Asignar'
 import { BotonDecisionesQbo, ResultadoDecisionesQbo, type EstadoDecisiones } from './DecisionesQbo'
 import { cargarDecisionesQbo } from '@/modules/conta/services/decisionesQboService'
 import { useAlDiaConLasLecturas } from '../useAlDia'
-import { clientesParaCasar, porAsignar } from './asignar'
+import { apuntadosParaQbo, clientesParaCasar, porAsignar } from './asignar'
 import { formaParaGuardar, formaEnPalabras, modeloTarifa } from './modeloTarifa'
 import { euros, type Forma, type Objetivo } from '../../../../../supabase/functions/_shared/tarifa/precio'
 
@@ -114,10 +115,19 @@ function AsignarG04({ accountId, datos, empresas, elegidas, lasDos, recargar, ru
   const gc = useLeer(() => leerAsignar(accountId), `${accountId}:g04-asignar`)
   if (gc.error) return <ErrorConReintento mensaje={`No se han podido leer los clientes de GoCardless: ${gc.error}`} reintentar={gc.recargar} />
   if (!gc.datos) return <TarjetaCargando />
+  // R19 · Lo apuntado para QBO, con su Excel; y el mes que se cuenta (la forma de contar de la copia).
+  const apuntados = apuntadosParaQbo(gc.datos.suscripciones, gc.datos.gcClientes, empresas, elegidas)
+  const mesQueCuenta = gc.datos.meses.map((m) => String(m.mes ?? '')).filter((m) => m && elegidas.includes(String(gc.datos!.meses.find((x) => String(x.mes) === m)?.company_id))).sort()[0]
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
   return (
     <Asignar lista={porAsignar(datos, gc.datos.suscripciones, gc.datos.gcClientes, empresas, elegidas, gc.datos.pendientesQbo, gc.datos.mandatos)} clientes={clientesParaCasar(datos)} lasDos={lasDos} rutaVolver={rutaVolver}
+      mes={mesQueCuenta ? MESES[Number(mesQueCuenta.slice(5, 7)) - 1] : undefined}
       alUnir={async (empresa, gcCliente, cliente) => { const r = await acciones.enlazar(empresa, gcCliente, cliente); recargar(); return r.frase }}
-      alConfirmar={async (empresa, gcCliente, cliente) => { const r = await acciones.confirmarEnlace(empresa, gcCliente, cliente); recargar(); gc.recargar(); return r.frase }} />
+      alConfirmar={async (empresa, gcCliente, cliente) => { const r = await acciones.confirmarEnlace(empresa, gcCliente, cliente); recargar(); gc.recargar(); return r.frase }}
+      alSinFicha={async (empresa, gcCliente) => { const r = await acciones.sinFicha(empresa, gcCliente); recargar(); gc.recargar(); return r.frase }}
+      apuntados={apuntados}
+      alBajarApuntados={() => descargaXlsx(apuntados.map((a) => ({ Empresa: a.empresa, 'Cliente de GoCardless': a.nombre, 'Su código en GoCardless': a.gcClienteId,
+        Correo: a.correo ?? '', NIF: a.nif ?? '', 'Cobrará este mes': a.alMesCent / 100, 'Lo apuntó': a.quien ?? '' })), `sumied-sin-ficha-para-qbo-${hoyEnMadrid()}.xlsx`, 'Sin ficha para QBO')} />
   )
 }
 

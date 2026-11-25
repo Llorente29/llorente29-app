@@ -108,7 +108,7 @@ test('Clientes: la banda, lo que tienes que hacer, «Las dos», el panel y «Cob
   await expect(banda).toContainText(/\d+ cobros · [\d.]+,\d\d €/)
   const hacer = page.getByRole('region', { name: 'Lo que tienes que hacer' })
   await expect(hacer).toContainText('Cobros de GoCardless sin cliente')
-  await expect(hacer).toContainText('que aún no están unidas a su cliente en Sumied')
+  await expect(hacer).toContainText('que aún no están atadas a su ficha en Sumied')
   const tabla = page.getByRole('table', { name: 'Tus clientes' })
   for (const n of ['Transportes de Ejemplo, S.L.', 'Cliente Ejemplo Dos', 'Panadería Muestra, S.L.']) await expect(tabla.getByRole('row', { name: `Abrir ${n}` })).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
@@ -147,7 +147,8 @@ test('«Asignar a un cliente»: propone por NIF y une, sin tocar GoCardless', as
   await page.screenshot({ path: `${DIR}/asignar-${lado(page)}.png`, fullPage: true })
   await uno.getByRole('button', { name: 'Unir a Transportes de Ejemplo, S.L.' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Enlazado: TRANSPORTES DE EJEMPLO SL de GoCardless es Transportes de Ejemplo, S.L.' })).toBeVisible()
-  expect(llamadas).toEqual([{ f: 'conta_gestoria_enlazar', cuerpo: { p_company: Q, p_gc_cliente: 'CU1x', p_party: 'c8' } }])
+  // R19 · Unir confirma el atado (conta_gc_enlace_confirmar): así deja de contar como «sin cliente».
+  expect(llamadas).toEqual([{ f: 'conta_gc_enlace_confirmar', cuerpo: { p_company: Q, p_gc_cliente: 'CU1x', p_party: 'c8' } }])
   expect(errores).toEqual([])
 })
 

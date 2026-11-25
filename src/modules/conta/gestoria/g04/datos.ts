@@ -83,7 +83,7 @@ export async function leerFicha(accountId: string, cliente: string): Promise<Dat
 }
 
 /** «Asignar a un cliente»: las suscripciones activas de GoCardless y los clientes de GoCardless que las pagan. */
-export async function leerAsignar(accountId: string): Promise<{ suscripciones: Fila[]; gcClientes: Fila[]; pendientesQbo: Fila[]; mandatos: Fila[] }> {
+export async function leerAsignar(accountId: string): Promise<{ suscripciones: Fila[]; gcClientes: Fila[]; pendientesQbo: Fila[]; mandatos: Fila[]; meses: Fila[] }> {
   // Q08 · Lo que QBO dejó pendiente en su Excel (conta_gc_enlace: company_id, gc_cliente_id, estado, por, porque, quien_name; regla 40, comprobado el 25/11).
   const [d, pend] = await Promise.all([
     rpc<Fila | null>('conta_pantalla_asignar', { p_cuenta: accountId }),
@@ -99,7 +99,7 @@ export async function leerAsignar(accountId: string): Promise<{ suscripciones: F
     mandatos.push(...f)
     if (f.length < 1000) break
   }
-  return { suscripciones: filas((d ?? {}).suscripciones), gcClientes: filas((d ?? {}).gc_clientes), pendientesQbo: (pend.data ?? []) as Fila[], mandatos }
+  return { suscripciones: filas((d ?? {}).suscripciones), gcClientes: filas((d ?? {}).gc_clientes), pendientesQbo: (pend.data ?? []) as Fila[], mandatos, meses: filas((d ?? {}).meses) }
 }
 
 type Respuesta = { frase: string; id?: string; ensayo?: boolean }
@@ -134,4 +134,6 @@ export const acciones = {
   enlazar: (empresa: string, gcCliente: string, cliente: string) => hacer('conta_gestoria_enlazar', { p_company: empresa, p_gc_cliente: gcCliente, p_party: cliente }),
   /** G06 · «Es esta»: lo confirma una persona y manda sobre lo automático (y sobre lo que dejó pendiente QBO). */
   confirmarEnlace: (empresa: string, gcCliente: string, cliente: string) => hacer('conta_gc_enlace_confirmar', { p_company: empresa, p_gc_cliente: gcCliente, p_party: cliente }),
+  /** R19 · «No tiene ficha: apuntar para QBO» (G06, conta_gc_enlace_sin_ficha): queda en la lista que se da a QBO. */
+  sinFicha: (empresa: string, gcCliente: string) => hacer('conta_gc_enlace_sin_ficha', { p_company: empresa, p_gc_cliente: gcCliente }),
 }

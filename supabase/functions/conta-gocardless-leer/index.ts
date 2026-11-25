@@ -26,6 +26,7 @@ import type { FichaParaCasar } from './casado.ts'
 import { puedeLeer } from './salida.ts'
 import { leerTodas } from './paginas.ts'
 import { planEnlaces, personasDeDecisiones, type EstadoEnlace, type PorEnlace } from './enlace.ts'
+import { planIgualar } from './igualar.ts'
 import { refDeFicha } from '../_shared/crm/ficha.ts'
 import { jsPDF } from 'npm:jspdf@4.2.1'
 import { rematarFacturasDeRecibos } from '../_shared/cobro/facturaRecibo.ts'
@@ -199,6 +200,47 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
       gc_cliente_id: n.clienteGcId, party_id: n.partyId, nombre: n.nombre, importe: aEuros(n.importeCent), resultado: 'no_convertida',
       porque_codigo: n.codigo, porque: n.porque })), 'company_id,suscripcion_gc_id')
 
+    // 2b · R19 · paso 1 · Sumied igual a GoCardless: las líneas que salieron de una suscripción, de un cliente ATADO a
+    // esa misma ficha, se dan de baja si GoCardless ya no la cobra y llevan el importe que cobra GoCardless. Lo no atado,
+    // a «Pendiente de revisar» (abajo, con las diferencias). Cada cambio queda apuntado con su copia (conta_gc_igualado).
+    const elegidos = await leerTodas<{ gc_cliente_id: string; party_id: string }>((d, h) => db.from('conta_gc_enlace_elegido')
+      .select('gc_cliente_id, party_id').eq('company_id', empresa).order('gc_cliente_id').range(d, h), 'los clientes atados')
+    const atado = new Map(elegidos.map((e) => [e.gc_cliente_id, e.party_id]))
+    const clienteDeMandatoGc = new Map(datos.mandatos.map((m) => [m.id, m.clienteId]))
+    const nombreDeClienteGc = new Map(datos.clientes.map((c) => [c.id, c.nombre]))
+    const proximos = datos.suscripciones.filter((x) => x.estado === 'active' && x.proximoCobro && x.proximoCobro.fecha >= hoy).map((x) => x.proximoCobro!.fecha).sort()
+    const mesQueCuenta = (proximos[0] ?? hoy).slice(0, 7)
+    const lineasAntes = await leerTodas<Record<string, unknown>>((d, h) => db.from('conta_linea')
+      .select('id, party_id, servicio_id, detalle, empleado_nombre, importe_propio, periodo, desde, hasta, suscripcion_gc_id').eq('company_id', empresa).not('suscripcion_gc_id', 'is', null).order('id').range(d, h), 'las líneas de GoCardless')
+    const tarifasAntes = await leerTodas<Record<string, unknown>>((d, h) => db.from('conta_tarifa').select('servicio_id, party_id, importe, periodo, desde, hasta').eq('company_id', empresa).order('id').range(d, h), 'las tarifas')
+    const nombreDeServicio = new Map(servicios.map((x) => [x.id, x.nombre]))
+    const igual = planIgualar(empresa, hoy, mesQueCuenta,
+      lineasAntes.filter((l) => l.periodo !== 'unidad').map((l) => ({ id: String(l.id), partyId: String(l.party_id), emisor: empresa, servicio: String(l.servicio_id),
+        nombreServicio: nombreDeServicio.get(String(l.servicio_id)) ?? '', detalle: (l.detalle as string | null) ?? null, empleado: (l.empleado_nombre as string | null) ?? null,
+        importePropioCent: l.importe_propio === null ? null : Math.round(Number(l.importe_propio) * 100), periodo: l.periodo as 'mes' | 'anio',
+        desde: mes(l.desde), hasta: l.hasta ? mes(l.hasta) : null, suscripcionId: String(l.suscripcion_gc_id) })),
+      tarifasAntes.filter((t) => t.periodo !== 'unidad').map((t) => ({ emisor: empresa, servicio: String(t.servicio_id), clienteId: (t.party_id as string | null) ?? null,
+        importeCent: Math.round(Number(t.importe) * 100), periodo: t.periodo as 'mes' | 'anio', desde: mes(t.desde), hasta: t.hasta ? mes(t.hasta) : null })),
+      datos.suscripciones.map((x) => {
+        const cliente = x.mandatoId ? clienteDeMandatoGc.get(x.mandatoId) ?? null : null
+        return { id: x.id, clienteGcId: cliente, nombreCliente: cliente ? nombreDeClienteGc.get(cliente) ?? null : null, nombre: x.nombre, importeCent: x.importeCent,
+          estado: x.estado, fin: x.fin, periodo: x.intervalo === 'yearly' ? 'anio' as const : 'mes' as const, cobraEnElMes: !!x.proximoCobro && x.proximoCobro.fecha.slice(0, 7) === mesQueCuenta }
+      }), atado, new Set())
+    const copiaId = (copia as { copia?: string } | null)?.copia ?? null
+    const quienIguala = `GoCardless (lectura ${por === 'persona' ? `de ${quien ?? 'una persona'}` : 'de cada noche'})`
+    for (const c of igual.cambios) {
+      const campos = c.que === 'baja' ? { hasta: c.hasta } : { importe_propio: aEuros(c.importePropioCent ?? null) }
+      const { error } = await db.from('conta_linea').update({ ...campos, updated_at: new Date().toISOString(), updated_by_name: quienIguala }).eq('id', c.lineaId).eq('company_id', empresa)
+      if (error) throw new Error(`No se ha podido igualar una línea a GoCardless: ${error.message}`)
+    }
+    if (igual.cambios.length) {
+      const { error } = await db.from('conta_gc_igualado').insert(igual.cambios.map((c) => ({ account_id: cuenta, company_id: empresa, lectura_id: lectura, copia_id: copiaId,
+        linea_id: c.lineaId, party_id: c.partyId, que: c.que, antes: c.antes, despues: c.que === 'baja' ? { hasta: c.hasta } : { importe_propio_cent: c.importePropioCent }, porque: c.porque })))
+      if (error) throw new Error(`No se ha podido apuntar lo igualado a GoCardless: ${error.message}`)
+    }
+    console.log(JSON.stringify({ r19: 'igualar', empresa, bajas: igual.cambios.filter((c) => c.que === 'baja').length,
+      importes: igual.cambios.filter((c) => c.que === 'importe').length, pendientes: igual.pendientes.length }))
+
     // 3 · Las diferencias, con las líneas y tarifas como quedan ahora.
     const sinConvertir = await leerTodas<Record<string, string | null>>((d, h) => db.from('conta_gc_importacion')
       .select('suscripcion_gc_id, gc_cliente_id, party_id, nombre, porque_codigo, porque').eq('company_id', empresa).eq('resultado', 'no_convertida').order('suscripcion_gc_id').range(d, h), 'lo no convertido')
@@ -223,6 +265,9 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     // Las de antes de esta empresa, y las del casado (de la cuenta), dejan de ser las vigentes.
     await db.from('conta_gestoria_diferencia').update({ vigente: false }).eq('account_id', cuenta).eq('vigente', true).eq('company_id', empresa)
     await db.from('conta_gestoria_diferencia').update({ vigente: false }).eq('account_id', cuenta).eq('vigente', true).in('tipo', TIPOS_DEL_CASADO)
+    // R19 · paso 1 · Lo no atado, a «Pendiente de revisar» (sin repetir a quien ya sale como «GoCardless sin ficha»).
+    const sinFicha = new Set(dif.diferencias.filter((d) => d.tipo === 'gocardless_sin_ficha' && d.gc_cliente_id).map((d) => String(d.gc_cliente_id)))
+    dif.diferencias.push(...igual.pendientes.filter((p) => !(p.tipo === 'gc_sin_atar' && p.gc_cliente_id && sinFicha.has(p.gc_cliente_id))) as typeof dif.diferencias)
     // Lo revisado no vuelve a salir mientras diga lo mismo.
     dif.diferencias = dif.diferencias.filter((d) => !revisadas.has(`${d.tipo}|${d.party_id ?? d.gc_cliente_id}|${d.porque}`))
     // Sin un CRM conectado (cada conector va aparte), no hay fichas con las que casar: lo del casado no se dice.
