@@ -4,6 +4,8 @@
 -- transacción con ROLLBACK: staging no cambia. Lo que añade: public._conta_traer_clase_apunte.
 --   1. Las seis clases, con un ejemplo inventado de cada una (y un nulo, que cuenta como 0).
 --   2. La vuelta atrás la quita.
+-- sin usuario: la función no lee ninguna tabla ni depende de quién llama, y solo la ejecuta service_role (la llamará
+-- conta_traer_seguir, que es security definer); como usuario no hay nada que probar.
 
 begin;
 do $$ begin
