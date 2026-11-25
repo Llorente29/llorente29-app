@@ -32,7 +32,8 @@
 import { useState } from 'react'
 import { urlDocumento } from '@/modules/conta/services/conDiezService'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { rutaAsiento, rutaDiaTpv, rutaFacturaVenta, rutaLiquidacionesVentas, rutaNuevaFacturaVenta, rutaConta, CONTA } from '@/config/navegacion'
+import { rutaAsiento, rutaDiaTpv, rutaFacturaVenta, rutaFacturasCuotas, rutaLiquidacionesVentas, rutaNuevaFacturaVenta, rutaConta, CONTA } from '@/config/navegacion'
+import { useGestoria } from '@/modules/conta/marco/nuevo/contexto'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -91,6 +92,8 @@ export default function FacturasPage() {
   const cambiar = (c: Record<string, string | null>) => setQuery(new URLSearchParams(conCambio(search, c)), { replace: true })
 
   const nueva = <BotonEnlace a={rutaNuevaFacturaVenta()} variante="principal" icono="nuevo">Nueva factura</BotonEnlace>
+  // Q10 · En una gestoría, las facturas de las cuotas que ya cobró GoCardless (en borrador hasta emitirlas).
+  const gestoria = useGestoria()
   const encabezado = (
     <EncabezadoPagina titulo="Facturas"
       frase={hacienda.datos && hacienda.datos.modo !== 'apagado'
@@ -232,6 +235,11 @@ export default function FacturasPage() {
       <BandaPruebas />
       {encabezado}
       {dialogoComprobar}
+      {gestoria && activa && (
+        <p className="s-aviso-lista" data-tono="duda" data-prueba="facturas-cuotas">
+          Las cuotas que ya cobró GoCardless llevan su factura: <BotonEnlace a={rutaFacturasCuotas(activa.id)} variante="enlace">Las facturas de las cuotas del mes</BotonEnlace>
+        </p>
+      )}
       {errorPdf && <p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido abrir el PDF del día: {errorPdf}</p>}
       {datos.error && (
         <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer las facturas: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p>

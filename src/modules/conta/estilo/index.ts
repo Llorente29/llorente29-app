@@ -25,6 +25,7 @@ import './diario.css'
 import './gestoria.css'
 import './clientesG04.css' // G04 · Clientes, ficha y «Tarifa y paquetes» (la maqueta del 08/11)
 import './cobroG05.css' // G05 · «Revisar el cobro» (la maqueta aprobada del 09/11)
+import './facturasQ10.css' // Q10 · «Las facturas de noviembre» (con el estilo de Clientes y cuotas)
 import './libros.css'
 import './compras.css'
 import './documentos.css'
