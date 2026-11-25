@@ -5,6 +5,7 @@
 // por pantalla, ya agregada en la base: la 2308) y pintan con las piezas de esta carpeta, que no leen nada (así se
 // prueban y se capturan con datos inventados).
 
+import { BotonCopiaGc } from './CopiaGc'
 import { useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { rutaClienteGestoria, rutaClientesCuotas, rutaCobroGestoria, rutaFacturaVenta, rutaTarifasGestoria } from '@/config/navegacion'
@@ -94,6 +95,7 @@ export function ClientesG04Page() {
       portal={(otras) => <PortalPendiente cuenta={accountId!} otras={otras} rutaFicha={(c) => `${rutaClienteGestoria(c, lasDos ? null : activa.id)}${lasDos ? '?' : '&'}pestana=portal`} />}
       decisiones={d.datos.cuotasGc.length > 0 || d.datos.gcDelMes.length > 0
         ? { boton: <BotonDecisionesQbo cargando={qbo.cargando} alElegir={(f) => void cargarQbo(f)} />, resultado: <ResultadoDecisionesQbo {...qbo} /> } : undefined}
+      copiaGc={d.datos.cuotasGc.length > 0 || d.datos.gcDelMes.length > 0 ? <BotonCopiaGc empresas={lista.filter((e) => elegidas.includes(e.id))} /> : undefined}
       hoy={hoy} rutaPonerCuota={(cliente, empresa) => `${rutaClienteGestoria(cliente, empresa)}${empresa ? '&' : '?'}anadir=1`}
       rutaCobro={lasDos ? null : rutaCobroGestoria(activa.id)}
       alCobradoPorOtraVia={async (empresa, cargos, via, fecha) => {

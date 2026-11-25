@@ -53,3 +53,24 @@ export function descargaXlsx(
 export function nombreXlsxConFecha(base: string, ymd: string): string {
   return `folvy-${base}-${ymd}.xlsx`
 }
+
+/**
+ * R19 · Un libro con varias hojas (la copia de GoCardless: resumen, clientes, mandatos, suscripciones y cobros), con
+ * el mismo ancho de columna que `descargaXlsx`. Una hoja sin filas sale con su cabecera, para que se vea que no había
+ * nada; false (y ningún fichero) solo si no hay ninguna fila en ninguna hoja.
+ */
+export function descargaXlsxLibro(
+  hojas: { nombre: string; filas: Record<string, unknown>[]; columnas?: string[] }[],
+  nombreFichero: string,
+): boolean {
+  if (!hojas.some((h) => h.filas.length)) return false
+  const libro = XLSX.utils.book_new()
+  for (const h of hojas) {
+    const cols = h.columnas ?? Object.keys(h.filas[0] ?? {})
+    const hoja = h.filas.length ? XLSX.utils.json_to_sheet(h.filas, { header: cols }) : XLSX.utils.aoa_to_sheet([cols])
+    hoja['!cols'] = cols.map((c) => ({ wch: Math.min(Math.max(Math.max(c.length, ...h.filas.map((r) => String(r[c] ?? '').length)) + 2, 10), 40) }))
+    XLSX.utils.book_append_sheet(libro, hoja, h.nombre.replace(/[:\\/?*[\]]/g, '-').slice(0, 31))
+  }
+  XLSX.writeFile(libro, nombreFichero)
+  return true
+}

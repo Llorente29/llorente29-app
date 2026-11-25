@@ -39,6 +39,8 @@ export interface PropsClientes {
   portal?: (otras: number) => ReactNode
   /** Q08 · «Cargar decisiones de QBO»: el botón, al lado de «Exportar», y lo que ha pasado, debajo de la cabecera. Sin él, no sale. */
   decisiones?: { boton: ReactNode; resultado: ReactNode }
+  /** R19 · «Bajar la copia de GoCardless», al lado de «Exportar». Sin ella, no sale. */
+  copiaGc?: ReactNode
 }
 
 const FILTROS: { id: Filtro; texto: string }[] = [
@@ -89,6 +91,7 @@ export function Clientes(p: PropsClientes) {
             <div className="g4-pequeno">La empresa activa de Sumied · cada una con su contabilidad</div>
           </div>
           {p.decisiones?.boton}
+          {p.copiaGc}
           <button type="button" className="g4-boton" onClick={() => p.alExportar(filas)}>Exportar</button>
         </div>
       </header>

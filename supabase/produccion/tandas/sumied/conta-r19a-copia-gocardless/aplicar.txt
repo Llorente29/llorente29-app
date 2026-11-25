@@ -1,0 +1,10 @@
+# R19 · paso 0 · La copia de GoCardless (Julio, 25/11). Rama conta/r19a-copia-gocardless. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   1115  Solo añade: dos tablas nuevas (la copia y lo copiado, sin poder cambiarse) y tres funciones nuevas (tomarla,
+#         solo el servidor; LA forma de contar lo que GoCardless cobrará en un mes; y la lista de copias). No toca lo
+#         que existe. La lectura de GoCardless (conta-gocardless-leer) la toma antes de tocar nada de Sumied.
+#
+# Nada en el camino del pedido, ni de cobros ni de facturas. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r19a-copia-gocardless.sql
+supabase/migrations/20261125T1115_r19a_copia_gocardless.sql
