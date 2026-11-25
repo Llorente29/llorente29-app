@@ -196,6 +196,20 @@ test('K12 · 7 · X14 · 2 · un asiento en negativo (un abono, como en ERP10): 
   const errores = vigilar(page)
   const s = await entrarComo(page, NUCLEO.email)
   const e = await crearEmpresa(s, '7')
+  // Staging recibe la 1132 (journal_line admite negativos) de verdad al fusionar: desde la rama solo se prueba en ROLLBACK
+  // (cambia y quita restricciones). Hasta entonces, esta prueba se salta y lo dice; la de la noche sobre main la corre.
+  const [cta] = (await rest<{ id: string }[]>(s, 'GET', `company_account?select=id&company_id=eq.${e.id}&code=eq.${e.banco}`)).datos
+  const [ej] = (await rest<{ id: string }[]>(s, 'GET', `fiscal_year?select=id&company_id=eq.${e.id}&code=eq.2026`)).datos
+  const sonda = await rest<{ id: string }[]>(s, 'POST', 'journal_entry', { account_id: NUCLEO.id, company_id: e.id, fiscal_year_id: ej.id, series: 4,
+    entry_date: '2026-11-12', concept: 'Sonda K12 · 7', source_type: 'manual', status: 'borrador', created_by_name: 'Prueba e2e K12' })
+  expect(sonda.status, `la sonda: ${JSON.stringify(sonda.datos).slice(0, 200)}`).toBe(201)
+  const linea = await rest(s, 'POST', 'journal_line', { account_id: NUCLEO.id, company_id: e.id, entry_id: sonda.datos[0].id, position: 1,
+    company_account_id: cta.id, debit: -1, credit: 0, concept: 'Sonda', is_common: true })
+  await rest(s, 'DELETE', `journal_line?entry_id=eq.${sonda.datos[0].id}`, undefined, 'return=minimal')
+  await rest(s, 'DELETE', `journal_entry?id=eq.${sonda.datos[0].id}`, undefined, 'return=minimal')
+  test.skip(linea.status !== 201 && JSON.stringify(linea.datos).includes('journal_line_debe_o_haber'),
+    'Staging aún no admite líneas en negativo: la 1132 (X14 · 2) llega a staging al fusionar. La base la prueba la de staging.')
+  expect(linea.status, `una línea en negativo en staging: ${JSON.stringify(linea.datos).slice(0, 200)}`).toBe(201)
   await elegirEmpresa(page, NUCLEO.id, e.id)
   await abrirNuevo(page)
   await pagoConElTeclado(page, e, '', '-63,60', 'Abono en negativo de prueba K12')
