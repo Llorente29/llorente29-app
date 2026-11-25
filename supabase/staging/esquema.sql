@@ -11379,8 +11379,7 @@ begin
               public._conta_traer_cuantos(n_prov, 'proveedor', 'proveedores'), public._conta_traer_cuantos(n_cli, 'cliente', 'clientes')) else '' end
     || case when v_inicio is not null and v_fuera_a + v_fuera_f > 0
          then format(' Del %s en adelante lo lleva ya Sumied: se han dejado fuera %s y %s.', to_char(v_inicio, 'DD/MM/YYYY'),
-                     public._conta_traer_cuantos(v_fuera_a, 'asiento', 'asientos'), public._conta_traer_cuantos(v_fuera_f, 'factura', 'facturas'))
-         when v_inicio is null and v_hasta is not null then format(' Sumied empieza a llevar la contabilidad el %s.', to_char(v_hasta + 1, 'DD/MM/YYYY')) else '' end
+                     public._conta_traer_cuantos(v_fuera_a, 'asiento', 'asientos'), public._conta_traer_cuantos(v_fuera_f, 'factura', 'facturas')) else '' end   -- X14 · 2: lo traído no fija el día de inicio; no se dice que empieza
     || ' Nada está validado: repásalo y dalo por bueno, o deshazlo.';
   -- N06b · Solo cuentas y terceros: lo que se ha traído y que lo de antes sigue sin traer.
   if n_asientos = 0 and n_facturas = 0 then
@@ -11392,13 +11391,13 @@ begin
   update public.import_run set status = 'en_prueba', finished_at = now(), counts = v_counts,
          detail = jsonb_build_object('mirar', v_mirar, 'aprendido', coalesce(st->'aprendido', '[]'),
                                      'pendientesNoExactos', coalesce(st->'pendientesNoExactos', '[]'), 'inmovilizado', st->'inmovilizado',
-                                     'frases', coalesce(st->'frases', '[]'), 'dia_de_inicio', coalesce(v_inicio, v_hasta + 1),
+                                     'frases', coalesce(st->'frases', '[]'), 'dia_de_inicio', v_inicio,
                                      'sumas', st->'sumas', 'emitidas', v_emitidas, 'proveedores', v_provs, 'solo_plan', n_asientos = 0,
                                      'texto', v_texto,
                                      'deshacer', v_deshacer || jsonb_build_object('corte', v_corte, 'fichas', v_fichas))
    where id = v_carga;
   return jsonb_build_object('carga', v_carga, 'cuentas', v_counts, 'mirar', v_mirar, 'texto', v_texto,
-                            'dia_de_inicio', coalesce(v_inicio, v_hasta + 1), 'acabado', true,
+                            'dia_de_inicio', v_inicio, 'acabado', true,
                             'asientos', jsonb_build_object('hechos', n_asientos, 'de', n_asientos), 'facturas', jsonb_build_object('hechos', n_facturas, 'de', n_facturas));
 end $_$;
 
@@ -45933,15 +45932,25 @@ CREATE FUNCTION public.conta_fijar_corte(p_company uuid, p_hasta date, p_program
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare v_cuenta uuid; v_n int := 0; r record; m date;
+declare v_cuenta uuid; v_n int := 0; r record; m date; v_tras int; v_ult date;
 begin
   select account_id into v_cuenta from public.company where id = p_company;
   if v_cuenta is null or not public.current_user_is_admin_of(v_cuenta) then
     raise exception 'Solo un administrador de la cuenta fija la fecha de corte.' using errcode = '42501';
   end if;
   if p_programa is null or length(trim(p_programa)) = 0 then raise exception 'Hay que decir de qué programa se trae.' using errcode = '23514'; end if;
-  if exists (select 1 from public.journal_entry where company_id = p_company and source_type = 'migrated') then
-    raise exception 'Ya hay asientos traídos: la fecha de corte no se cambia.' using errcode = '23514';
+  -- X14 · 2 · Con asientos traídos también se fija, si todo lo traído queda antes del día de inicio. Si alguno quedaría
+  -- desde ese día (lo llevaría Sumied y está traído), para y dice cuántos y hasta cuándo llega lo traído.
+  select count(*) filter (where p_hasta is null or e.entry_date > p_hasta), max(e.entry_date) into v_tras, v_ult
+    from public.journal_entry e where e.company_id = p_company and e.source_type = 'migrated';
+  if v_tras > 0 then
+    raise exception '%', case when p_hasta is null
+      then format('No se puede quitar el día de inicio: hay %s traídos, el último del %s. Sin día de inicio los llevaría Sumied.',
+                  case when v_tras = 1 then '1 asiento' else v_tras || ' asientos' end, to_char(v_ult, 'DD/MM/YYYY'))
+      else format('El día de inicio no puede ser el %s: hay %s traídos de ese día en adelante, el último del %s. Como pronto, el %s.',
+                  to_char(p_hasta + 1, 'DD/MM/YYYY'), case when v_tras = 1 then '1 asiento' else v_tras || ' asientos' end,
+                  to_char(v_ult, 'DD/MM/YYYY'), to_char(v_ult + 1, 'DD/MM/YYYY')) end
+      using errcode = '23514', hint = 'traido_despues';
   end if;
   -- Lo que dejó un corte anterior se quita (solo los cierres de mes «traídos»).
   delete from public.fiscal_period_lock where company_id = p_company and kind = 'migrated';
@@ -66802,14 +66811,9 @@ begin
     from jsonb_array_elements(coalesce(p_datos->'ficheros', '[]')) fi(v)
    where public._conta_traer_kind(fi.v->>'tipo') is not null;
 
-  -- ── El día de inicio: si no lo tiene, el siguiente al último traído ──
-  if v_inicio is null and jsonb_array_length(v_asientos) > 0 then   -- N06b · solo cuentas y terceros: no fija nada
-    select coalesce(jsonb_agg(jsonb_build_object('id', y.id, 'origin', y.origin, 'origin_program', y.origin_program, 'imported_until', y.imported_until)), '[]')
-      into v_corte from public.fiscal_year y where y.company_id = p_company;
-    select coalesce(jsonb_agg(l.id), '[]') into v_locks from public.fiscal_period_lock l where l.company_id = p_company;
-    perform public.conta_fijar_corte(p_company, v_hasta, v_nombre_prog);
-    v_corte := jsonb_build_object('ejercicios', v_corte, 'cierres', v_locks);
-  end if;
+  -- ── X14 · 2 · El día de inicio NO lo fija lo traído (Julio, 25/11): lo fija una persona, a mano, en Empresa › Ejercicio. ──
+  -- Antes, sin día de inicio, se fijaba en el siguiente al último traído: traer 2024 primero dejaba 2025 fuera de toda carga.
+  -- v_corte se queda nulo: deshacer esta carga no tiene corte que devolver.
 
   -- ── Las subcuentas: las que faltan, con sus números ──
   for x in select * from jsonb_array_elements(coalesce(p_datos->'cuentas', '[]')) loop
@@ -76372,8 +76376,12 @@ CREATE FUNCTION public.fiscal_year_corte_cambiable() RETURNS trigger
     AS $$
 begin
   if (new.origin, new.origin_program, new.imported_until) is distinct from (old.origin, old.origin_program, old.imported_until)
-     and exists (select 1 from public.journal_entry e where e.fiscal_year_id = old.id and e.source_type = 'migrated') then
-    raise exception 'El ejercicio % ya tiene asientos traídos: la fecha de corte no se cambia (se deshace lo traído y se vuelve a traer).', old.code
+     -- X14 · 2 · Solo para si lo traído de este ejercicio quedaría en la parte que lleva Sumied: el ejercicio entero
+     -- (deja de ser traído) o, si es mixto, del día siguiente al corte en adelante. Moverlo dejando lo traído antes, pasa.
+     and exists (select 1 from public.journal_entry e where e.fiscal_year_id = old.id and e.source_type = 'migrated'
+                  and (new.origin is distinct from 'migrated')
+                  and (new.origin is distinct from 'mixed' or new.imported_until is null or e.entry_date > new.imported_until)) then
+    raise exception 'El ejercicio % tiene asientos traídos después de ese día: el día de inicio no puede ir antes de lo traído (o se deshace lo traído y se vuelve a traer).', old.code
       using errcode = '23514';
   end if;
   return new;
