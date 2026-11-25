@@ -39,7 +39,8 @@ select clave, valor from (
          (select count(*) from c) || ' · ' || (select count(*) from l) valor
   union all
   select -2, 'tabla entera · líneas del diario en negativo (cuántas · en cuántos asientos)',
-         count(*) || ' · ' || count(distinct entry_id) from public.journal_line where debit < 0 or credit < 0
+         count(*) || ' · ' || count(distinct entry_id) from public.journal_line
+   where (debit < 0 or credit < 0) and created_at < timestamptz '2026-11-25 11:00:00+01'
   union all
   select 0 o, 'cuenta ' || cuenta || ' · carga ' || carga || ' · asientos en la cola (cuántos · ya pasados)' clave,
          count(distinct orden) || ' · ' || count(distinct orden) filter (where hecho) valor
