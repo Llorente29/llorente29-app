@@ -13,7 +13,7 @@ import { modeloFicha, type Tono } from '../modules/conta/gestoria/g04/modelo'
 import type { DatosClientes, DatosFicha, Fila } from '../modules/conta/gestoria/g04/datos'
 import { mesSiguiente, totalDelRecibo } from '../../supabase/functions/conta-bitrix-pestana/escribir'
 
-export type Estado = 'ok' | 'sin_acceso' | 'sin_enlazar' | 'portal_desconocido' | 'portal_no_permitido' | 'no_es_sumied' | 'ficha_rara' | 'varias_cuentas' | 'error'
+export type Estado = 'ok' | 'sin_acceso' | 'sin_enlazar' | 'portal_desconocido' | 'portal_no_permitido' | 'portal_sin_unir' | 'cuenta_sin_administradora' | 'no_es_sumied' | 'ficha_rara' | 'varias_cuentas' | 'solo_lectura' | 'error'
 
 const filas = (x: unknown): Fila[] => (Array.isArray(x) ? (x as Fila[]) : [])
 const objeto = (x: unknown): Fila => (x && typeof x === 'object' && !Array.isArray(x) ? (x as Fila) : {})
@@ -134,15 +134,27 @@ export function euros(cent: number): string {
 }
 
 /** Lo que dice la pestaña cuando no enseña nada (si el servidor no ha mandado su frase). */
+// R18d · Las mismas frases que la función (conta-bitrix-pestana/puro.ts · FRASES): cada una dice a quién avisar.
 export const FRASE_DE: Record<Exclude<Estado, 'ok'>, string> = {
-  sin_acceso: 'Pide acceso a Sumied a tu administrador.',
+  sin_acceso: 'Tu usuario de Bitrix24 aún no puede ver Sumied. Avisa a quien administra Bitrix24 en tu empresa.',
   sin_enlazar: 'Esta ficha no está enlazada con ningún cliente de Sumied.',
-  portal_desconocido: 'Este Bitrix24 no está conectado con ninguna cuenta de Sumied.',
-  portal_no_permitido: 'La pestaña de Sumied no está activada en este Bitrix24.',
-  no_es_sumied: 'No se ha podido comprobar que eres tú. Cierra la ficha y vuelve a abrirla.',
+  portal_desconocido: 'Este Bitrix24 no está conectado con ninguna cuenta de Sumied. Avisa a quien administra Sumied en tu empresa.',
+  portal_no_permitido: 'La pestaña de Sumied no está activada en este Bitrix24. Avisa a quien administra Bitrix24 en tu empresa.',
+  portal_sin_unir: 'La pestaña de Sumied aún no está activada para todo este Bitrix24. Quien administra Bitrix24 tiene que reinstalar la aplicación «Sumied».',
+  cuenta_sin_administradora: 'La cuenta de Sumied unida a este Bitrix24 no tiene ninguna administradora activa. Avisa a quien administra Sumied en tu empresa.',
+  no_es_sumied: 'No se ha podido comprobar que eres tú. Cierra la ficha y vuelve a abrirla; si sigue, avisa a quien administra Bitrix24 en tu empresa.',
   ficha_rara: 'Esta pestaña solo funciona en la ficha de una empresa o de un contacto.',
-  varias_cuentas: 'Tu correo está en más de una cuenta de Sumied con este Bitrix24. Pide a tu administrador que lo revise.',
+  varias_cuentas: 'Este Bitrix24 está unido a más de una cuenta de Sumied. Avisa a quien administra Sumied en tu empresa para que lo revise.',
+  solo_lectura: 'Desde aquí solo se puede mirar. Para cambiar algo, entra en Sumied.',
   error: 'No se ha podido leer Sumied. Vuelve a abrir la pestaña en un momento.',
+}
+
+/** R18d · El título del mensaje cuando la pestaña no enseña nada: dice qué pasa, nunca «Sin acceso a Sumied» a secas. */
+export function tituloDeEstado(estado: Exclude<Estado, 'ok'>): string {
+  if (estado === 'sin_enlazar') return 'Ficha sin enlazar'
+  if (estado === 'error') return 'No se ha podido leer Sumied'
+  if (estado === 'ficha_rara') return 'Esta ficha no es de un cliente'
+  return 'No puedes ver Sumied desde aquí'
 }
 
 /** Lo que llega detrás del «#»: el token, el portal y la ficha (o la instalación). */

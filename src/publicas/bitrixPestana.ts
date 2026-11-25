@@ -15,7 +15,7 @@
 
 import { rutaClienteGestoria } from '../config/navegacion'
 import { hoyEnMadrid } from '../modules/conta/lib/formato'
-import { AREA_DE, areasDe, FRASE_DE, modeloDevueltos, leerAlmohadilla, modeloPestana, documentoDe, diaCorto, modeloMensajes, modeloPortal, modeloSueltos, nombreDelMes, pendientesDe, reciboPrevisto, sueltoPrevisto, type Area, type Cambio, type Devueltos, type Estado, type Mensajes, type Pestana, type Portal, type Sueltos } from './bitrixPestanaModelo'
+import { AREA_DE, areasDe, FRASE_DE, modeloDevueltos, leerAlmohadilla, modeloPestana, documentoDe, diaCorto, modeloMensajes, modeloPortal, modeloSueltos, nombreDelMes, pendientesDe, reciboPrevisto, sueltoPrevisto, tituloDeEstado, type Area, type Cambio, type Devueltos, type Estado, type Mensajes, type Pestana, type Portal, type Sueltos } from './bitrixPestanaModelo'
 
 const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const CLAVE = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -50,7 +50,9 @@ const vista: {
   mensajes: Mensajes | null
   hecho: null | { titulo: string; texto: string; bitrix: string; tono: 'bien' | 'aviso' | 'mal'; deshacer?: { cuando: string } | null }
   guardando: boolean
-} = { ficha: null, r: null, abierto: null, hecho: null, guardando: false, portal: null, portalLeido: false, area: 'resumen', devueltos: null, sueltos: null, mensajes: null }
+  /** R18d · Quien mira no tiene usuario de Sumied: entra como su Bitrix24 y solo mira (sin botones de cambiar). */
+  soloLectura: boolean
+} = { ficha: null, r: null, abierto: null, hecho: null, guardando: false, portal: null, portalLeido: false, area: 'resumen', devueltos: null, sueltos: null, mensajes: null, soloLectura: false }
 
 function cabeza(texto: string, chip?: { texto: string; tono: string }): HTMLElement {
   return h('div', { class: 'cabeza' }, h('span', { class: 'logo' }, 'Sumied'), h('span', { class: 'cabeza-texto' }, texto),
@@ -100,6 +102,7 @@ function pintar(p: Pestana) {
           vista.hecho.deshacer && p.empresaId ? ' · ' : null,
           vista.hecho.deshacer && p.empresaId ? enlaceBoton('Deshacer', () => void deshacerCambio(vista.hecho!.deshacer!.cuando, p.empresaId!)) : null)) : null,
       p.aviso ? h('div', { class: 'aviso', role: 'status', 'data-tono': p.aviso.tono }, p.aviso.texto) : null,
+      vista.soloLectura ? h('div', { class: 'aviso', role: 'status', 'data-tono': 'neutro', 'data-prueba': 'solo-lectura' }, FRASE_DE.solo_lectura) : null,
       h('div', { class: 'rejilla' }, h('div', { class: 'columna' }, ...izquierda), h('div', { class: 'columna' }, ...derecha, abrir))))
   // Lo que mide la e2e: cuánto tarda en estar pintada desde que se abre (menos de 1 s).
   performance.mark('gb-pintada')
@@ -648,13 +651,15 @@ async function arrancar() {
   if (estado === 'ok') {
     vista.ficha = { a: x.a, p: x.p, t: x.t, id: x.id }
     vista.r = r
+    // R18d · Sin usuario de Sumied: solo mirar. Ni botones de cambiar ni lo que necesita su usuario («Su portal»).
+    vista.soloLectura = r.solo_lectura === true
+    document.body.classList.toggle('solo-lectura', vista.soloLectura)
     const m = modeloPestana(r, hoyEnMadrid())
-    if (m) { pintar(m); void leerPortal() }
+    if (m) { pintar(m); if (!vista.soloLectura) void leerPortal() }
     else pintarMensaje('Sin datos en Sumied', 'Este cliente está enlazado, pero todavía no tiene nada en Clientes y cuotas.', 'sin_datos')
   } else {
     const frase = typeof r.frase === 'string' ? r.frase : FRASE_DE[estado] ?? FRASE_DE.error
-    const titulo = estado === 'sin_acceso' ? 'Sin acceso a Sumied' : estado === 'sin_enlazar' ? 'Ficha sin enlazar' : 'No se puede enseñar'
-    pintarMensaje(titulo, frase, estado)
+    pintarMensaje(tituloDeEstado(estado), frase, estado)
   }
   if (window.name.includes('|')) conBitrix((bx) => bx.fitWindow?.())
 }

@@ -1,0 +1,4 @@
+# R18d · La pestaña de Sumied sin usuario de Sumied.
+# 2311 (solo añade: desde la rama, de verdad, W05), con su prueba.
+supabase/migrations/20261124T2311_r18d_pestana_sin_usuario.sql
+supabase/staging/sql/20261124_r18d_pestana_sin_usuario_prueba.sql

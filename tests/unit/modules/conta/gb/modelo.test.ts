@@ -60,7 +60,7 @@ describe('GB · lo que llega detrás del «#» y las frases', () => {
       .toEqual({ a: 'abcdef0123456789', p: 'b24-s3mr2y.bitrix24.es', t: 'empresa', id: '123', instalar: null, que: null })
   })
   it('sin acceso, lo dice el encargo, palabra por palabra; y ningún código interno', () => {
-    expect(FRASE_DE.sin_acceso).toBe('Pide acceso a Sumied a tu administrador.')
+    expect(FRASE_DE.sin_acceso).toBe('Tu usuario de Bitrix24 aún no puede ver Sumied. Avisa a quien administra Bitrix24 en tu empresa.')
     for (const f of Object.values(FRASE_DE)) expect(f).not.toMatch(/_|rpc|jwt|token|uuid|placement/i)
   })
 })

@@ -1,0 +1,11 @@
+# R18d · La pestaña de Sumied en Bitrix24 para todas las personas del portal, sin usuario de Sumied (Julio, 24/11).
+# Rama conta/r18d-pestana-sin-usuario. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2311  Solo añade: cuándo se unió el portal a su cuenta (conta_crm.pestana_portal_at y _por, admiten nulos), la
+#         tabla de quién ha mirado sin usuario de Sumied (id y nombre de Bitrix24, nunca el correo) y dos funciones
+#         solo del servidor: unir el portal al instalar la aplicación y leer la ficha como el portal, solo leyendo.
+#
+# Nada en el camino del pedido, ni de cobros ni de facturas. No cambia ningún permiso de lo que existe. El real lo
+# lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r18d-pestana-sin-usuario.sql
+supabase/migrations/20261124T2311_r18d_pestana_sin_usuario.sql
