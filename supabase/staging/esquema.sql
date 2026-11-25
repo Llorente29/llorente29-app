@@ -44036,6 +44036,7 @@ begin
      and e.validated_at < now() - interval '1 hour'
      and e.source_type not in ('migrated', 'opening', 'closing', 'template', 'reversal')
      and e.external_program is null and e.import_run_id is null
+     and not public._conta_erp10_factura_frenada(e.company_id, e.id)
      and not exists (select 1 from public.conta_erp10_salida_partida p where p.entry_id = e.id and p.estado = 'salida')
      and not exists (select 1 from public.vat_book_entry b where b.entry_id = e.id and b.account_id = e.account_id and b.import_run_id is not null)
      and not exists (select 1 from public.supplier_invoice si where si.journal_entry_id = e.id and si.account_id = e.account_id and si.source = 'traida')
@@ -44144,6 +44145,7 @@ CREATE FUNCTION public.conta_erp10_cola(p_limite integer DEFAULT 10) RETURNS TAB
      and e.entry_date >= z.desde
      and e.source_type not in ('migrated', 'opening', 'closing', 'template', 'reversal')
      and e.external_program is null and e.import_run_id is null
+     and not public._conta_erp10_factura_frenada(e.company_id, e.id)
      and not exists (select 1 from public.conta_erp10_salida_partida p where p.entry_id = e.id and p.estado = 'salida')
      and not exists (select 1 from public.vat_book_entry v where v.entry_id = e.id and v.account_id = e.account_id and v.import_run_id is not null)
      and not exists (select 1 from public.supplier_invoice si where si.journal_entry_id = e.id and si.account_id = e.account_id and si.source = 'traida')
@@ -45007,6 +45009,7 @@ begin
        and e.entry_date >= v_z.desde and e.entry_date < v_fin
        and e.source_type not in ('migrated', 'opening', 'closing', 'template', 'reversal')
        and e.external_program is null and e.import_run_id is null
+     and not public._conta_erp10_factura_frenada(e.company_id, e.id)
        and not exists (select 1 from public.conta_erp10_salida_partida p where p.entry_id = e.id and p.estado = 'salida')
        and not exists (select 1 from public.vat_book_entry v where v.entry_id = e.id and v.account_id = e.account_id and v.import_run_id is not null)
        and not exists (select 1 from public.supplier_invoice si where si.journal_entry_id = e.id and si.account_id = e.account_id and si.source = 'traida')
