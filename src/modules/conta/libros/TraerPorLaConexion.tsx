@@ -26,7 +26,11 @@ import {
 import { PARADO, lectorDe, type LectorTraer, type VistaLector } from '@/modules/conta/erp10/lectorTraer'
 import { almacenDelNavegador } from '@/modules/conta/erp10/almacenTraer'
 import { traerPaginaErp10, type ConexionErp10 } from '@/modules/conta/services/erp10ApiService'
-import { antesDeDarlo, darPorBueno, deshacer, leerAMedias, leerEnPrueba, leerUltima, ponerSumas, seguirCarga, traer, type AvanceCarga, type Ultima } from '@/modules/conta/services/traerService'
+import { antesDeDarlo, darPorBueno, deshacer, diaDeInicio, leerAMedias, leerEnPrueba, leerUltima, ponerSumas, seguirCarga, traer, type AvanceCarga, type Ultima } from '@/modules/conta/services/traerService'
+import { fijarCorte } from '@/modules/conta/services/corteService'
+import { diaAnterior } from '@/modules/conta/lib/proponer'
+import { rutaAjustes } from '@/config/navegacion'
+import { Link } from 'react-router-dom'
 
 const hoyMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
 const SIN_LECTOR = () => () => undefined
@@ -37,6 +41,9 @@ const METIENDO = new Set<string>()
 function useLector(l: LectorTraer | null): VistaLector | null {
   return useSyncExternalStore(l ? (f) => l.oir(f) : SIN_LECTOR, () => l?.estado ?? null)
 }
+
+/** 2026-11-01 → 01/11/2026. */
+const dmaa = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 
 export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: ConexionErp10; alFicheros: () => void }) {
   const L = useLibros()
@@ -63,6 +70,9 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
   const [haciendo, setHaciendo] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   const [comparado, setComparado] = useState<string | null>(null)
+  // X14 · 2 · El día de inicio, aquí mismo, antes de traer el año en curso (Julio, 25/11: «es donde lo espera»).
+  const inicio = useLeer(async () => ({ dia: await diaDeInicio(L.companyId) }), `${L.companyId}:${vuelta}:${L.vuelta}:inicio`)
+  const [desdeInicio, setDesdeInicio] = useState(() => `${hoyMadrid().slice(0, 7)}-01`)
   // Julio (20/11): si la cabecera no cabe en una línea (a 1366), la pastilla baja a una segunda, debajo del título.
   // Nada cortado ni escondido. Se mide lo que pide cada pieza en una sola línea, quepa o no.
   const cabeza = useRef<HTMLDivElement | null>(null)
@@ -128,6 +138,19 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
     } catch (e) {
       setFallo(e instanceof Error ? e.message : 'No ha contestado.')
     } finally { setHaciendo(null); setConfirmar(null) }
+  }
+  // X14 · 2 · Fijar el día de inicio desde aquí (lo mismo que Ajustes › Ejercicio › «Cambiar»): lo de ese día en adelante ya no
+  // se trae. Lo dice al acabar, con el día y hasta dónde se trae (regla 8).
+  async function fijarInicio() {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desdeInicio)) { setFallo('Elige el día de inicio.'); return }
+    setHaciendo('Fijando el día de inicio…'); setFallo(null); setComparado(null)
+    try {
+      await fijarCorte(L.companyId, diaAnterior(desdeInicio), 'ERP10')
+      setComparado(`Fijado: desde el ${dmaa(desdeInicio)} contabiliza Sumied; de ERP10 se trae hasta el ${dmaa(diaAnterior(desdeInicio))}.`)
+      setVuelta((v) => v + 1)
+    } catch (e) {
+      setFallo(e instanceof Error ? e.message : 'No ha contestado.')
+    } finally { setHaciendo(null) }
   }
   // X14 · 2 · El sumas y saldos de ERP10, de su fichero: la base lo compara cuenta a cuenta y lo dice (regla 8).
   async function compararCon(fi: File) {
@@ -230,6 +253,21 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
         </div>
         <aside className="cxe-der cxu-der" aria-label="Lo que pasa">
           <div className="cxe-der-cuerpo">
+            {estado === 'antes' && ejercicioVisto === String(anioHoy) && inicio.datos && (
+              <div className="cxe-nota cxu-caja" role="region" aria-label="Día de inicio en Sumied">
+                <p><strong>Día de inicio en Sumied</strong></p>
+                {inicio.datos.dia ? (
+                  <p data-testid="inicio-fijado">Desde el {dmaa(inicio.datos.dia)} contabiliza Sumied: de {ejercicioVisto} se trae hasta el {dmaa(diaAnterior(inicio.datos.dia))}.{' '}
+                    <Link className="cxe-enlace" to={rutaAjustes('ejercicio')}>Cambiarlo en Ajustes › Ejercicio</Link></p>
+                ) : (<>
+                  <p data-testid="inicio-sin-fijar">Sin fijar: se trae todo lo que tenga ERP10 de {ejercicioVisto}. Si desde un día contabiliza Sumied, fíjalo antes de traer: lo de ese día en adelante no se trae.</p>
+                  <div className="cxe-aviso-botones">
+                    <input className="cx-input" type="date" aria-label="Día de inicio" value={desdeInicio} onChange={(e) => setDesdeInicio(e.target.value)} disabled={!!haciendo} />
+                    <button type="button" className="cxe-sec" disabled={!!haciendo} onClick={() => { void fijarInicio() }}>Fijar el día de inicio</button>
+                  </div>
+                </>)}
+              </div>
+            )}
             {estado === 'antes' && <>{caja('Un botón y listo', FRASES_UN_BOTON.unBoton)}{caja('En ERP10 no cambia nada', FRASES_UN_BOTON.soloLee)}</>}
             {(estado === 'trayendo' || estado === 'parado' || estado === 'metiendo') && <>
               {caja('Qué está pasando', estado === 'parado' ? (vista?.fallo && vista.fallo !== PARADO ? `Se ha cortado: ${vista.fallo} Lo leído se queda: «Seguir trayendo de ERP10» sigue donde se quedó.` : FRASES_UN_BOTON.parado)
