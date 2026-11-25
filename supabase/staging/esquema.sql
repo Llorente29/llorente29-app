@@ -6475,8 +6475,8 @@ begin
     else
       v_cta := v_pre || lpad(v_x.codigo_cliente::text, v_d - length(v_pre), '0');
     end if;
-    v_num := case when v_x.party_id is null then null else public._conta_gc_factura_del_cobro(p_company, v_x.party_id, v_x.importe, v_x.fecha) end;
-    if v_num is null then v_pen := v_pen || 'Falta el número de factura'::text; end if;
+    v_num := case when v_x.party_id is null then null else (select f.numero from public._conta_gc_factura_de_cobro(p_company, v_x.gc_id) f) end;
+    if v_num is null then v_pen := v_pen || 'Sin factura atada'::text; end if;
     v_con := coalesce(v_num, '—') || '-' || coalesce(v_x.nombre, 'sin nombre');
     if v_x.importe is null or v_x.importe <= 0 then v_pen := v_pen || 'El cobro tiene que ser mayor que cero'::text; end if;
     clase := 'cobro'; gc_id := v_x.gc_id; fecha := v_x.fecha; importe := v_x.importe; party_id := v_x.party_id; nombre := v_x.nombre;
@@ -6559,6 +6559,22 @@ end $$;
 --
 
 COMMENT ON FUNCTION public._conta_gc_enlace_guardar(p_filas jsonb) IS 'G06 · Lo que escribe conta-gocardless-leer en conta_gc_enlace. Lo automático no pisa lo de una persona ni un conflicto; lo de una persona solo pisa una decisión más antigua. Devuelve las filas escritas.';
+
+
+--
+-- Name: _conta_gc_factura_de_cobro(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_gc_factura_de_cobro(p_company uuid, p_gc_id text) RETURNS TABLE(id uuid, numero text, total numeric, cobrado numeric)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select ci.id, coalesce(nullif(btrim(ci.number_text), ''), nullif(concat_ws('/', ci.series_code, ci.number::text), '')), ci.total,
+         coalesce((select sum(p.amount) from public.customer_invoice_payment p where p.invoice_id = ci.id), 0)
+    from public.conta_gc_cobro_factura cf
+    join public.customer_invoice ci on ci.id = cf.invoice_id and ci.company_id = cf.company_id
+   where cf.company_id = p_company and cf.gc_id = p_gc_id and ci.status = 'emitida'
+$$;
 
 
 --
@@ -41371,6 +41387,159 @@ COMMENT ON FUNCTION public.conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe 
 
 
 --
+-- Name: conta_cuotas_emitir(uuid, text, integer, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_cuotas_emitir(p_company uuid, p_mes text, p_desde integer, p_ultimo_erp10 text, p_facturas jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_cuenta uuid; v_hoy date := (now() at time zone 'Europe/Madrid')::date; v_anio int; v_m text[]; v_ult_erp int; v_ult_sumied int;
+  v_x jsonb; v_c public.conta_gc_cobro; v_sus text; v_gcc text; v_party uuid; v_nif text; v_nombre text; v_total int; v_ret numeric;
+  v_base int; v_iva int; v_retc int; v_ok boolean; v_k int; v_tipo uuid; v_705 uuid; v_wh uuid; v_430 text; v_cta text; v_otro text; v_d int;
+  v_g jsonb; v_id uuid; v_numero text; v_emitidas jsonb := '[]'::jsonb; v_suma numeric := 0; v_quien text := public.conta_nombre_actor();
+  v_mes_nombre text; v_ultima_fecha date;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null or not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'Solo un administrador o un encargado de la cuenta emite facturas.' using errcode = '42501';
+  end if;
+  if to_regclass('public.conta_gc_cobro_factura') is null then
+    raise exception 'Aún no está la tabla que ata cada factura a su cobro (conta_gc_cobro_factura, del #816): no se emite ninguna.' using errcode = '55000';
+  end if;
+  if p_mes !~ '^\d{4}-(0[1-9]|1[0-2])$' then raise exception 'El mes «%» no vale (AAAA-MM).', p_mes using errcode = '22023'; end if;
+  if jsonb_typeof(p_facturas) <> 'array' or jsonb_array_length(p_facturas) = 0 then raise exception 'No hay facturas que emitir.' using errcode = '22023'; end if;
+  if jsonb_array_length(p_facturas) > 25 then raise exception 'Como mucho 25 facturas de una vez (se mandan por trozos).' using errcode = '22023'; end if;
+  v_mes_nombre := (array['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'])[substr(p_mes, 6, 2)::int]
+                  || ' de ' || left(p_mes, 4);
+
+  -- La serie: una emisión a la vez por empresa; la última de ERP10 y la de Sumied.
+  perform pg_advisory_xact_lock(hashtext('conta_cuotas_emitir:' || p_company::text));
+  v_anio := extract(year from v_hoy)::int;
+  v_m := regexp_match(coalesce(p_ultimo_erp10, ''), '^\s*(\d{4})\s*/\s*1\s*/\s*0*(\d+)\s*$');
+  if v_m is null or v_m[1]::int <> v_anio then
+    raise exception 'No se sabe cuál es la última factura de la serie %/1 en ERP10 («%»): léela antes de emitir.', v_anio, coalesce(p_ultimo_erp10, '') using errcode = '23514';
+  end if;
+  v_ult_erp := v_m[2]::int;
+  select last_number into v_ult_sumied from public.customer_invoice_counter where company_id = p_company and series_code = '1' and fiscal_year = v_anio;
+  if v_ult_sumied is null then
+    if p_desde <> v_ult_erp + 1 then
+      raise exception 'La última factura en ERP10 es la %/1/% y la primera de Sumied sería la %/1/%: tienen que ir seguidas. No se emite.', v_anio, v_ult_erp, v_anio, p_desde using errcode = '23514';
+    end if;
+  else
+    if v_ult_erp > v_ult_sumied then
+      raise exception 'En ERP10 ya está la %/1/% y Sumied iba por la %/1/%: alguien ha numerado en ERP10. No se emite hasta que cuadre.', v_anio, v_ult_erp, v_anio, v_ult_sumied using errcode = '23514';
+    end if;
+    if p_desde <> v_ult_sumied + 1 then
+      raise exception 'La siguiente de la serie es la %/1/% y la pantalla esperaba la %/1/%: vuelve a leer y a preparar.', v_anio, v_ult_sumied + 1, v_anio, p_desde using errcode = '23514';
+    end if;
+  end if;
+  select max(issue_date) into v_ultima_fecha from public.customer_invoice where company_id = p_company and series_code = '1' and status <> 'borrador';
+  if v_ultima_fecha > v_hoy then
+    raise exception 'La última factura de la serie es del % y hoy es %: no se emite con fecha anterior.', to_char(v_ultima_fecha, 'DD/MM/YYYY'), to_char(v_hoy, 'DD/MM/YYYY') using errcode = '23514';
+  end if;
+  if not exists (select 1 from public.invoice_series where company_id = p_company and code = '1') then
+    insert into public.invoice_series (account_id, company_id, code, name, doc_type, digits, reset_yearly, starts_at, is_default, is_active, formato)
+    values (v_cuenta, p_company, '1', 'Facturas (la serie de Cegid)', 'invoice', 1, true, p_desde, false, true, '{año}/{serie}/{número}');
+  elsif not exists (select 1 from public.invoice_series where company_id = p_company and code = '1' and is_active and formato = '{año}/{serie}/{número}') then
+    raise exception 'La serie «1» de la empresa no tiene el formato de Cegid ({año}/{serie}/{número}) o no está activa: no se emite.' using errcode = '23514';
+  end if;
+
+  -- Las cuentas de siempre: la 705 y la 477 del IVA general al 21 %.
+  v_705 := public._conta_cobro_cuenta(p_company, '70500000', 'Prestaciones de servicios', v_quien);
+  select id into v_tipo from public.tax_rate where is_system and code = 'iva_general' and rate = 21 limit 1;
+  if v_tipo is null then raise exception 'No encuentro el IVA general al 21 %%.' using errcode = '23514'; end if;
+  insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+  values (v_cuenta, p_company, public._conta_cobro_cuenta(p_company, '47700021', 'IVA repercutido 21 %', v_quien), 'tax_rate', v_tipo::text, 'repercutido', 'manual')
+  on conflict (company_id, entity, entity_id, role) do nothing;
+  select length(code) into v_d from public.company_account where company_id = p_company limit 1;
+
+  v_k := 0;
+  for v_x in select * from jsonb_array_elements(p_facturas) loop
+    v_k := v_k + 1;
+    -- El cobro, cobrado y del mes, sin factura.
+    select * into v_c from public.conta_gc_cobro where company_id = p_company and gc_id = v_x->>'gc_id';
+    if v_c.gc_id is null then raise exception 'La % · el cobro % no es de esta empresa.', v_k, v_x->>'gc_id' using errcode = '22023'; end if;
+    if v_c.estado not in ('confirmed', 'paid_out') then raise exception 'La % · el cobro % no está cobrado («%»): no lleva factura.', v_k, v_c.gc_id, v_c.estado using errcode = '23514'; end if;
+    if to_char(v_c.fecha, 'YYYY-MM') <> p_mes then raise exception 'La % · el cobro % es del %, no de %.', v_k, v_c.gc_id, to_char(v_c.fecha, 'DD/MM/YYYY'), v_mes_nombre using errcode = '23514'; end if;
+    if exists (select 1 from public.conta_gc_cobro_factura where company_id = p_company and gc_id = v_c.gc_id) then
+      raise exception 'La % · el cobro % ya tiene su factura: un cobro, una factura.', v_k, v_c.gc_id using errcode = '23505';
+    end if;
+    -- Su suscripción (la línea) y su cliente atado, con NIF.
+    select s.nombre, s.gc_cliente_id into v_sus, v_gcc from public.conta_gc_suscripcion s where s.company_id = p_company and s.gc_id = v_c.suscripcion_gc_id;
+    if nullif(btrim(v_sus), '') is null then raise exception 'La % · el cobro % no tiene suscripción: no se sabe qué servicio es.', v_k, v_c.gc_id using errcode = '23514'; end if;
+    select e.party_id into v_party from public.conta_gc_enlace e where e.company_id = p_company and e.gc_cliente_id = v_gcc and e.estado = 'atado';
+    if v_party is null then raise exception 'La % · el cobro % no tiene su cliente atado a una ficha.', v_k, v_c.gc_id using errcode = '23514'; end if;
+    select nullif(btrim(p.tax_id), ''), p.name into v_nif, v_nombre from public.party p where p.id = v_party and p.account_id = v_cuenta;
+    if v_nif is null then raise exception 'La % · % no tiene NIF.', v_k, coalesce(v_nombre, 'el cliente') using errcode = '23514'; end if;
+
+    -- La base que da EXACTAMENTE el cobro.
+    v_total := round(v_c.importe * 100)::int;
+    v_ret := coalesce((v_x->>'retencion_pct')::numeric, 0);
+    if v_ret not in (0, 7, 15) then raise exception 'La % · una retención del % %% no se emite aquí (0, 7 o 15).', v_k, v_ret using errcode = '22023'; end if;
+    v_ok := false;
+    foreach v_base in array array[round(v_total / (1 + 0.21 - v_ret / 100))::int, round(v_total / (1 + 0.21 - v_ret / 100))::int - 1, round(v_total / (1 + 0.21 - v_ret / 100))::int + 1] loop
+      v_iva := round(v_base * 21 / 100.0)::int; v_retc := round(v_base * v_ret / 100.0)::int;
+      if v_base > 0 and v_base + v_iva - v_retc = v_total then v_ok := true; exit; end if;
+    end loop;
+    if not v_ok then raise exception 'La % · con el IVA y la retención, ninguna base da % € (el cobro %).', v_k, v_c.importe, v_c.gc_id using errcode = '23514'; end if;
+    v_wh := null;
+    if v_ret > 0 then
+      select id into v_wh from public.withholding_rate where is_system and code like 'profesional%' and rate = v_ret limit 1;
+      if v_wh is null then raise exception 'No encuentro la retención profesional del % %%.', v_ret using errcode = '23514'; end if;
+    end if;
+
+    -- La 430: la suya, o la de ERP10 (de su última factura), dada de alta y atada.
+    select a.code into v_430 from public.company_account_link k join public.company_account a on a.id = k.company_account_id
+     where k.company_id = p_company and k.entity = 'customer' and k.entity_id = v_party::text and k.role = 'principal' limit 1;
+    if v_430 is null then
+      v_cta := regexp_replace(coalesce(v_x->>'cuenta_cliente', ''), '\D', '', 'g');
+      if v_cta = '' then raise exception 'La % · % no tiene subcuenta de cliente en Sumied ni en ERP10.', v_k, v_nombre using errcode = '23514'; end if;
+      if v_cta !~ '^430' or length(v_cta) <> coalesce(v_d, 8) then
+        raise exception 'La % · la subcuenta de ERP10 de % (%) no es una 430 de % cifras.', v_k, v_nombre, v_cta, coalesce(v_d, 8) using errcode = '23514';
+      end if;
+      select k.entity_id into v_otro from public.company_account_link k join public.company_account a on a.id = k.company_account_id
+       where k.company_id = p_company and a.code = v_cta and k.entity = 'customer' and k.role = 'principal' and k.entity_id <> v_party::text limit 1;
+      if v_otro is not null then raise exception 'La % · la subcuenta % (la de % en ERP10) ya es de otro cliente en Sumied.', v_k, v_cta, v_nombre using errcode = '23514'; end if;
+      insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+      values (v_cuenta, p_company, public._conta_cobro_cuenta(p_company, v_cta, coalesce(v_nombre, 'Cliente'), v_quien), 'customer', v_party::text, 'principal', 'manual');
+    end if;
+
+    -- La factura, emitida con las de siempre, y atada a su cobro.
+    v_g := public.conta_venta_guardar(p_company, null, jsonb_build_object('cliente_id', v_party, 'fecha', v_hoy, 'serie', '1', 'retencion_id', v_wh,
+             'notas', format('Cuota de %s · cobrada el %s', v_mes_nombre, to_char(v_c.fecha, 'DD/MM/YYYY'))),
+           jsonb_build_array(jsonb_build_object('concepto', regexp_replace(btrim(v_sus), '\s+', ' ', 'g'), 'cantidad', 1, 'precio', v_base / 100.0, 'descuento', 0,
+             'tipo_id', v_tipo, 'cuenta_id', v_705)), v_quien);
+    v_id := (v_g->>'id')::uuid;
+    if round((v_g->>'total')::numeric * 100) <> v_total then
+      raise exception 'La % · la factura saldría por % € y el cobro fue de % €: no se emite.', v_k, v_g->>'total', v_c.importe using errcode = '23514';
+    end if;
+    perform public.conta_venta_emitir(v_id, v_quien);
+    select number_text into v_numero from public.customer_invoice where id = v_id;
+    if v_numero is distinct from public._conta_numero_con_formato('{año}/{serie}/{número}', v_anio, '1', p_desde + v_k - 1) then
+      raise exception 'La % · ha salido la % y tocaba la %/1/%: no se emite el trozo.', v_k, v_numero, v_anio, p_desde + v_k - 1 using errcode = '23514';
+    end if;
+    insert into public.conta_gc_cobro_factura (company_id, account_id, gc_id, invoice_id) values (p_company, v_cuenta, v_c.gc_id, v_id);
+    v_emitidas := v_emitidas || jsonb_build_array(jsonb_build_object('gc_id', v_c.gc_id, 'factura', v_id, 'numero', v_numero, 'total', v_total / 100.0));
+    v_suma := v_suma + v_total / 100.0;
+  end loop;
+
+  return jsonb_build_object(
+    'emitidas', v_emitidas, 'siguiente', p_desde + v_k, 'fecha', v_hoy,
+    'frase', format('Emitidas %s %s de %s, del %s: de la %s a la %s, %s €.', v_k, case when v_k = 1 then 'factura' else 'facturas' end, v_mes_nombre,
+      to_char(v_hoy, 'DD/MM/YYYY'), v_emitidas->0->>'numero', v_emitidas->(v_k - 1)->>'numero', replace(to_char(v_suma, 'FM999999990.00'), '.', ',')));
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_cuotas_emitir(p_company uuid, p_mes text, p_desde integer, p_ultimo_erp10 text, p_facturas jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_cuotas_emitir(p_company uuid, p_mes text, p_desde integer, p_ultimo_erp10 text, p_facturas jsonb) IS 'Q10 · Emite un trozo (hasta 25) de las facturas de las cuotas ya cobradas por GoCardless de un mes, en su orden, con la serie de Cegid y la fecha de hoy, y ata cada una a su cobro (conta_gc_cobro_factura). Todo el trozo o nada.';
+
+
+--
 -- Name: conta_de_quien_es(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -46362,7 +46531,7 @@ begin
     'por_preparar', (select count(*) from public._conta_gc_asientos_plan(v_c.id, p_mes) x
                       where not exists (select 1 from public.conta_gc_asiento a where a.company_id = v_c.id and a.clase = x.clase and a.gc_id = x.gc_id)),
     'filas', coalesce((select jsonb_agg(jsonb_build_object('clase', a.clase, 'gc_id', a.gc_id, 'fecha', a.fecha, 'importe', a.importe,
-        'nombre', a.nombre, 'cuenta', a.cuenta, 'concepto', a.concepto, 'pendiente', to_jsonb(a.pendiente), 'entry_id', a.entry_id,
+        'nombre', a.nombre, 'cuenta', a.cuenta, 'concepto', a.concepto, 'pendiente', to_jsonb(a.pendiente), 'entry_id', a.entry_id, 'nota', a.nota, 'factura_id', a.factura_id,
         'numero', case when e.id is null then null else e.series || '/' || coalesce(e.number::text, '—') end, 'estado', e.status)
         order by cardinality(a.pendiente) > 0 desc, a.fecha, a.clase, a.gc_id)
       from public.conta_gc_asiento a left join public.journal_entry e on e.id = a.entry_id
@@ -46389,9 +46558,11 @@ declare
   v_c public.company;
   v_quien text;
   v_x record;
+  v_f record;
   v_ya public.conta_gc_asiento;
   v_r jsonb;
   v_entry uuid;
+  v_nota text;
   v_aj public.conta_gestoria_ajustes;
   v_pla text;
   v_preparados int := 0; v_seguian int := 0; v_pendientes int := 0;
@@ -46407,7 +46578,6 @@ begin
   v_quien := nullif(btrim(coalesce(p_quien_nombre, public.conta_nombre_actor(), '')), '');
   select * into v_aj from public.conta_gestoria_ajustes a where a.company_id = v_c.id;
   v_pla := coalesce(nullif(v_aj.cuenta_plataforma, ''), '57200002');
-  -- Dos a la vez sobre la misma empresa y el mismo mes no se cruzan.
   perform pg_advisory_xact_lock(hashtextextended('conta_gc_asientos:' || v_c.id::text || ':' || to_char(p_mes, 'YYYY-MM'), 0));
 
   for v_x in select * from public._conta_gc_asientos_plan(v_c.id, p_mes) loop
@@ -46416,8 +46586,18 @@ begin
     if v_ya.entry_id is not null and exists (select 1 from public.journal_entry e where e.id = v_ya.entry_id and e.status in ('propuesto', 'borrador', 'validado')) then
       v_seguian := v_seguian + 1; continue;
     end if;
-    v_entry := null;
-    if cardinality(v_x.pendiente) = 0 then
+    v_entry := null; v_nota := null; v_f := null;
+    if v_x.clase = 'cobro' and v_x.party_id is not null then
+      select * into v_f from public._conta_gc_factura_de_cobro(v_c.id, v_x.gc_id);
+    end if;
+    if cardinality(v_x.pendiente) = 0 and v_f.id is not null and v_f.cobrado + v_x.importe > v_f.total then
+      -- Una factura con cobro nunca lleva dos asientos de cobro: la fila señala el que ya tiene.
+      select p.entry_id into v_entry from public.customer_invoice_payment p
+       where p.invoice_id = v_f.id and p.entry_id is not null order by p.paid_on desc, p.created_at desc limit 1;
+      v_nota := format('La factura %s ya está cobrada en Sumied: su cobro %s y no se escribe otro.', v_f.numero,
+        case when v_entry is null then 'no lleva asiento aquí' else 'ya tiene su asiento' end);
+      v_seguian := v_seguian + 1;
+    elsif cardinality(v_x.pendiente) = 0 then
       perform public._conta_cobro_cuenta(v_c.id, v_pla, 'Plataforma GoCardless', v_quien);
       if v_x.clase = 'cobro' then perform public._conta_cobro_cuenta(v_c.id, v_x.cuenta, coalesce(v_x.nombre, 'Cliente'), v_quien); end if;
       if v_x.clase = 'ingreso' then perform public._conta_cobro_cuenta(v_c.id, v_x.cuenta, 'Banco', v_quien); end if;
@@ -46428,17 +46608,24 @@ begin
           'porque', case v_x.clase when 'cobro' then 'Cobro de GoCardless (X33).' else 'Ingreso de GoCardless en el banco (X33).' end),
         v_x.lineas, null, v_quien, auth.uid());
       v_entry := (v_r->>'id')::uuid;
+      -- El cobro, apuntado en su factura con este asiento: ningún otro camino la vuelve a cobrar.
+      if v_f.id is not null then
+        perform public.conta_venta_cobrar(v_f.id, v_x.fecha, v_x.importe, 'GoCardless', 'GoCardless ' || v_x.gc_id, v_quien);
+        update public.customer_invoice_payment p set entry_id = v_entry
+         where p.invoice_id = v_f.id and p.note = 'GoCardless ' || v_x.gc_id and p.entry_id is null;
+      end if;
       v_preparados := v_preparados + 1;
     else
       v_pendientes := v_pendientes + 1;
     end if;
     insert into public.conta_gc_asiento (company_id, account_id, clase, gc_id, fecha, importe, nombre, cuenta, concepto, entry_id, pendiente,
-                                         preparado_en, preparado_por_nombre)
+                                         preparado_en, preparado_por_nombre, factura_id, nota)
     values (v_c.id, v_c.account_id, v_x.clase, v_x.gc_id, v_x.fecha, v_x.importe, v_x.nombre, v_x.cuenta, v_x.concepto, v_entry, v_x.pendiente,
-            now(), v_quien)
+            now(), v_quien, v_f.id, v_nota)
     on conflict (company_id, clase, gc_id) do update set fecha = excluded.fecha, importe = excluded.importe, nombre = excluded.nombre,
       cuenta = excluded.cuenta, concepto = excluded.concepto, entry_id = excluded.entry_id, pendiente = excluded.pendiente,
-      preparado_en = excluded.preparado_en, preparado_por_nombre = excluded.preparado_por_nombre;
+      preparado_en = excluded.preparado_en, preparado_por_nombre = excluded.preparado_por_nombre,
+      factura_id = excluded.factura_id, nota = excluded.nota;
   end loop;
 
   return jsonb_build_object('preparados', v_preparados, 'ya_estaban', v_seguian, 'pendientes', v_pendientes,
@@ -123088,6 +123275,8 @@ CREATE TABLE public.conta_gc_asiento (
     pendiente text[] DEFAULT '{}'::text[] NOT NULL,
     preparado_en timestamp with time zone DEFAULT now() NOT NULL,
     preparado_por_nombre text,
+    factura_id uuid,
+    nota text,
     CONSTRAINT conta_gc_asiento_clase_check CHECK ((clase = ANY (ARRAY['cobro'::text, 'devolucion'::text, 'ingreso'::text])))
 );
 
@@ -123097,6 +123286,40 @@ CREATE TABLE public.conta_gc_asiento (
 --
 
 COMMENT ON TABLE public.conta_gc_asiento IS 'X33 · Los asientos de GoCardless preparados desde conta_gc_cobro y conta_gc_payout: uno por cobro, devolución o ingreso. Con asiento (entry_id) o en «Pendiente de revisar» con su motivo.';
+
+
+--
+-- Name: COLUMN conta_gc_asiento.factura_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gc_asiento.factura_id IS 'X33b · La factura emitida que cobra este cobro (del mismo cliente, importe y mes).';
+
+
+--
+-- Name: COLUMN conta_gc_asiento.nota; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gc_asiento.nota IS 'X33b · Lo que se dice de la fila sin ser un pendiente (por ejemplo, que la factura ya estaba cobrada en Sumied).';
+
+
+--
+-- Name: conta_gc_cobro_factura; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_cobro_factura (
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    gc_id text NOT NULL,
+    invoice_id uuid NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_gc_cobro_factura; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_cobro_factura IS 'X33b · La factura emitida de cada cobro de GoCardless (Q10: una por cobro). La escribe la emisión; la lee «Preparar» los asientos de GoCardless para no cobrar dos veces una factura.';
 
 
 --
@@ -140773,6 +140996,22 @@ ALTER TABLE ONLY public.conta_gc_cliente
 
 
 --
+-- Name: conta_gc_cobro_factura conta_gc_cobro_factura_invoice_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cobro_factura
+    ADD CONSTRAINT conta_gc_cobro_factura_invoice_id_key UNIQUE (invoice_id);
+
+
+--
+-- Name: conta_gc_cobro_factura conta_gc_cobro_factura_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cobro_factura
+    ADD CONSTRAINT conta_gc_cobro_factura_pkey PRIMARY KEY (company_id, gc_id);
+
+
+--
 -- Name: conta_gc_cobro_otra_via conta_gc_cobro_otra_via_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -157654,6 +157893,14 @@ ALTER TABLE ONLY public.conta_gc_asiento
 
 
 --
+-- Name: conta_gc_asiento conta_gc_asiento_factura_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_asiento
+    ADD CONSTRAINT conta_gc_asiento_factura_id_fkey FOREIGN KEY (factura_id) REFERENCES public.customer_invoice(id) ON DELETE SET NULL;
+
+
+--
 -- Name: conta_gc_cliente conta_gc_cliente_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -157691,6 +157938,30 @@ ALTER TABLE ONLY public.conta_gc_cobro
 
 ALTER TABLE ONLY public.conta_gc_cobro
     ADD CONSTRAINT conta_gc_cobro_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_cobro_factura conta_gc_cobro_factura_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cobro_factura
+    ADD CONSTRAINT conta_gc_cobro_factura_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_cobro_factura conta_gc_cobro_factura_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cobro_factura
+    ADD CONSTRAINT conta_gc_cobro_factura_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_cobro_factura conta_gc_cobro_factura_invoice_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cobro_factura
+    ADD CONSTRAINT conta_gc_cobro_factura_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.customer_invoice(id) ON DELETE CASCADE;
 
 
 --
@@ -170275,6 +170546,19 @@ CREATE POLICY conta_gc_cliente_leer ON public.conta_gc_cliente FOR SELECT TO aut
 ALTER TABLE public.conta_gc_cobro ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: conta_gc_cobro_factura; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_cobro_factura ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_cobro_factura conta_gc_cobro_factura_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_cobro_factura_leer ON public.conta_gc_cobro_factura FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_gc_cobro conta_gc_cobro_leer; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -179690,6 +179974,14 @@ GRANT ALL ON FUNCTION public._conta_gc_enlace_guardar(p_filas jsonb) TO service_
 
 
 --
+-- Name: FUNCTION _conta_gc_factura_de_cobro(p_company uuid, p_gc_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_gc_factura_de_cobro(p_company uuid, p_gc_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_gc_factura_de_cobro(p_company uuid, p_gc_id text) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_gc_factura_del_cobro(p_company uuid, p_party uuid, p_importe numeric, p_fecha date); Type: ACL; Schema: public; Owner: -
 --
 
@@ -186665,6 +186957,15 @@ GRANT ALL ON FUNCTION public.conta_crm_secreto(p_account uuid, p_crm text) TO se
 GRANT ALL ON FUNCTION public.conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe numeric) TO anon;
 GRANT ALL ON FUNCTION public.conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe numeric) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_cuotas_emitir(p_company uuid, p_mes text, p_desde integer, p_ultimo_erp10 text, p_facturas jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_cuotas_emitir(p_company uuid, p_mes text, p_desde integer, p_ultimo_erp10 text, p_facturas jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_cuotas_emitir(p_company uuid, p_mes text, p_desde integer, p_ultimo_erp10 text, p_facturas jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_cuotas_emitir(p_company uuid, p_mes text, p_desde integer, p_ultimo_erp10 text, p_facturas jsonb) TO service_role;
 
 
 --
@@ -200999,6 +201300,14 @@ GRANT SELECT ON TABLE public.conta_gasto_por_venta TO authenticated;
 
 GRANT ALL ON TABLE public.conta_gc_asiento TO authenticated;
 GRANT ALL ON TABLE public.conta_gc_asiento TO service_role;
+
+
+--
+-- Name: TABLE conta_gc_cobro_factura; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_cobro_factura TO authenticated;
+GRANT ALL ON TABLE public.conta_gc_cobro_factura TO service_role;
 
 
 --
