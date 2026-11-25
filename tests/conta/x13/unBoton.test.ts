@@ -34,7 +34,7 @@ const EN_PRUEBA: EnPruebaVisto = {
   mirar: [{ frase: '40000000 · Proveedores varios: no trae NIF.' }],
   sumas: [{ debe: 500000, haber: 0 }, { debe: 0, haber: 500000 }, { debe: 100, haber: 100 }],
 }
-const CUADRA: AntesVisto = { puede: true, texto: 'Vas a dar por bueno lo traído de ERP10: 10 asientos y 5 facturas, hasta el 31/03/2026. Cuadra con el sumas y saldos. Después ya no se podrá deshacer.', comparado: true, diferencias: [] }
+const CUADRA: AntesVisto = { puede: true, texto: 'Vas a dar por bueno lo traído de ERP10: 10 asientos y 5 facturas, hasta el 31/03/2026. Cuadra con el sumas y saldos. Después ya no se podrá deshacer.', comparado: true, cuentas: 2, diferencias: [] }
 
 async function leido() {
   const l = new LectorTraer('s:2026', '2026', pedirDe(EMPRESA), almacenEnMemoria(), { hoy: HOY, reintentosMs: [] })
@@ -111,7 +111,7 @@ describe('al acabar', () => {
       ['Diario', 'hecho', '10 asientos', 'igual que en ERP10, mes a mes'],
       ['Facturas emitidas', 'hecho', '2 facturas', 'todas con su asiento'],
       ['Facturas recibidas', 'hecho', '3 facturas', 'todas con su asiento'],
-      ['Sumas y saldos', 'hecho', 'Cuadra', 'las 2 cuentas con saldo, igual en Sumied que en ERP10'],
+      ['Sumas y saldos', 'hecho', 'Cuadra', 'las 2 cuentas, iguales en Sumied y en ERP10 al céntimo, debe y haber'],
     ])
     expect(filas[1].verlos).toEqual({ titulo: 'Proveedores y acreedores: 1 sin NIF', lista: ['40000000 · Proveedores varios'] })
     expect(loQueMirar(e, filas)).toMatchObject({ titulo: '2 cosas que mirar · no paran nada', lista: ['40000000 · Proveedores varios: no trae NIF.'] })
@@ -142,7 +142,7 @@ describe('al acabar', () => {
 
   it('no cuadra con el sumas y saldos (la base): la fila con las dos cifras de cada cuenta, y la base no deja darlo por bueno', async () => {
     const { l, carga } = await leido()
-    const antes: AntesVisto = { puede: false, texto: 'No cuadra con el sumas y saldos de ERP10 en 1 cuenta. Míralas antes de darlo por bueno.', comparado: true,
+    const antes: AntesVisto = { puede: false, texto: 'No cuadra con el sumas y saldos de ERP10 en 1 cuenta. Míralas antes de darlo por bueno.', comparado: true, cuentas: 2,
       diferencias: [{ cuenta: '57200001', nombre: 'Banco de ejemplo', alli_debe: 6100, alli_haber: 1200, traido_debe: 6090, traido_haber: 1200 }] }
     const e = entrada({ lector: l.estado, carga, enPrueba: EN_PRUEBA, antes })
     expect(pastillaUnBoton(e)?.tono).toBe('ambar')

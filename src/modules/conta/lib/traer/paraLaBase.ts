@@ -158,7 +158,10 @@ export function paraLaBase(carga: Carga, programa = 'erp10'): DatosDeLaCarga {
     pendientesNoExactos: carga.aprendido.pendientes.filter((p) => !p.cuadraExacto).map((p) => ({ codigo: p.codigo, nombre: p.nombre, saldo: p.saldo, frase: p.frase,
       facturasSinCasar: p.facturasSinCasar ?? [], cuadraConSaldo: p.cuadraConSaldo ?? p.cuadraExacto })),
     raros: carga.comprobado.tercerosRaros.map((r) => ({ que: r.que, cuentas: r.cuentas, nif: r.nif, frase: r.frase })),
-    sumas: (carga.sumas?.filas ?? []).map((x) => ({ cuenta: x.subcuenta, nombre: x.nombre, debe: x.debe, haber: x.haber })),
+    // X14 · 2 · Solo el sumas y saldos que viene de ERP10 (su fichero). El calculado de los mismos asientos (la conexión) no
+    // es un testigo: con él la base comparaba lo traído consigo mismo y decía «Cuadra» siempre.
+    sumas: carga.ficheros.find((f) => f.tipo === 'sumas_saldos')?.origen === 'fichero'
+      ? (carga.sumas?.filas ?? []).map((x) => ({ cuenta: x.subcuenta, nombre: x.nombre, debe: x.debe, haber: x.haber })) : [],
     inmovilizado: carga.inmovilizado,
     frases: carga.comprobado.frases,
   }
