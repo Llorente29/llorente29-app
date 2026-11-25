@@ -66753,6 +66753,28 @@ begin
   select min((s.v->>'fecha')::date), max((s.v->>'fecha')::date) into v_desde, v_hasta
     from (select value v from jsonb_array_elements(v_asientos) union all select value from jsonb_array_elements(v_facturas)) s;
 
+  -- X14 · 1b · Los ejercicios que falten antes del primero de la empresa: años naturales, encadenados (2024 → 2025 → 2026).
+  -- «Traer» los crea en vez de pararse (Julio, 25/11). Solo si el primero es un año natural sin anterior; si no, para como antes.
+  declare v_x14_prim public.fiscal_year; v_x14_desde int; v_x14_ant uuid; v_x14_id uuid; v_x14_nuevos jsonb := '[]'; v_x14_y int;
+  begin
+    select min(left(j.value->>'fecha', 4))::int into v_x14_desde from jsonb_array_elements(v_asientos) j;
+    select * into v_x14_prim from public.fiscal_year where company_id = p_company order by starts_on limit 1;
+    if v_x14_desde is not null and v_x14_prim.id is not null and v_x14_prim.previous_year_id is null
+       and v_x14_desde < extract(year from v_x14_prim.starts_on)::int
+       and v_x14_prim.starts_on = make_date(extract(year from v_x14_prim.starts_on)::int, 1, 1)
+       and v_x14_prim.ends_on = make_date(extract(year from v_x14_prim.starts_on)::int, 12, 31) then
+      for v_x14_y in v_x14_desde .. extract(year from v_x14_prim.starts_on)::int - 1 loop
+        insert into public.fiscal_year (account_id, company_id, code, starts_on, ends_on, previous_year_id, created_by)
+        values (v_cuenta, p_company, v_x14_y::text, make_date(v_x14_y, 1, 1), make_date(v_x14_y, 12, 31), v_x14_ant, auth.uid())
+        returning id into v_x14_id;
+        v_x14_nuevos := v_x14_nuevos || to_jsonb(v_x14_id);
+        v_x14_ant := v_x14_id;
+      end loop;
+      update public.fiscal_year set previous_year_id = v_x14_ant where id = v_x14_prim.id;
+      v_deshacer := v_deshacer || jsonb_build_object('ejercicios_nuevos', v_x14_nuevos, 'ejercicio_enganchado', v_x14_prim.id);
+    end if;
+  end;
+
   -- Cada día traído, con su ejercicio en la empresa.
   select min(s.d) into v_primero from (select (j.value->>'fecha')::date d from jsonb_array_elements(v_asientos) j) s
    where not exists (select 1 from public.fiscal_year y where y.company_id = p_company and s.d between y.starts_on and y.ends_on);
@@ -67168,6 +67190,12 @@ begin
     end loop;
   end if;
 
+  -- X14 · 1b · Los ejercicios que creó esta carga se van (sus asientos ya no están), y el primero de antes vuelve a no tener anterior.
+  if jsonb_typeof(v_d->'ejercicios_nuevos') = 'array' and jsonb_array_length(v_d->'ejercicios_nuevos') > 0 then
+    update public.fiscal_year set previous_year_id = null where id = (v_d->>'ejercicio_enganchado')::uuid;
+    delete from public.fiscal_period_lock where fiscal_year_id in (select (value #>> '{}')::uuid from jsonb_array_elements(v_d->'ejercicios_nuevos'));
+    delete from public.fiscal_year where id in (select (value #>> '{}')::uuid from jsonb_array_elements(v_d->'ejercicios_nuevos'));
+  end if;
   update public.supplier set legal_name = null where id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_d->'fichas', '[]')));   -- N06b
   delete from public.company_account_link where id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_d->'enlaces', '[]')));
   get diagnostics n_enlaces = row_count;
