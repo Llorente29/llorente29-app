@@ -11252,11 +11252,15 @@ CREATE FUNCTION public._conta_traer_comparar(p_carga uuid) RETURNS jsonb
     select coalesce(t.cuenta, x.cuenta) cuenta, coalesce(x.nombre, t.nombre) nombre,
            coalesce(x.debe, 0) alli_debe, coalesce(x.haber, 0) alli_haber, coalesce(t.debe, 0) traido_debe, coalesce(t.haber, 0) traido_haber
       from traido t full join alli x on x.cuenta = t.cuenta)
+  -- X14 · 2 · Solo se compara con un sumas y saldos de ERP10 (su fichero: detail.sumas_de = 'fichero'). El calculado de los
+  -- mismos asientos (la conexión) no compara nada: daba «Cuadra» siempre.
+  , vale as (select coalesce((select detail->>'sumas_de' from r) = 'fichero', false) and jsonb_array_length(coalesce((select detail->'sumas' from r), '[]')) > 0 ok)
   select jsonb_build_object(
-    'comparado', jsonb_array_length(coalesce((select detail->'sumas' from r), '[]')) > 0,
+    'comparado', (select ok from vale),
+    'cuentas', case when (select ok from vale) then (select count(*) from todo) else 0 end,
     'diferencias', coalesce((select jsonb_agg(jsonb_build_object('cuenta', cuenta, 'nombre', nombre, 'alli_debe', alli_debe, 'alli_haber', alli_haber,
                                                                  'traido_debe', traido_debe, 'traido_haber', traido_haber) order by cuenta)
-                               from todo where jsonb_array_length(coalesce((select detail->'sumas' from r), '[]')) > 0
+                               from todo where (select ok from vale)
                                 and (round(alli_debe, 2) <> round(traido_debe, 2) or round(alli_haber, 2) <> round(traido_haber, 2))), '[]'))
 $$;
 
@@ -67103,6 +67107,10 @@ begin
   if n_a = 0 and n_f = 0 then
     v_texto := format('Vas a dar por bueno lo traído de %s: %s. Después ya no se podrá deshacer.', v_prog, coalesce(nullif(regexp_replace(
                  coalesce(v_r.detail->>'texto', ''), '^He traído (.*)\. Lo .*$', '\1'), coalesce(v_r.detail->>'texto', '')), 'las cuentas y los terceros'));
+  elsif not coalesce((v_c->>'comparado')::boolean, false) then
+    -- X14 · 2 · Sin comparar con el sumas y saldos de ERP10, cuenta a cuenta, no se da por bueno (Julio, 25/11).
+    v_puede := false;
+    v_texto := format('No se ha podido comparar con el sumas y saldos de %s: suelta su fichero (el sumas y saldos del ejercicio) en «Sumas y saldos». Sin compararlo no se da por bueno.', v_prog);
   elsif jsonb_array_length(v_c->'diferencias') > 0 then
     v_puede := false;
     v_texto := format('No cuadra con el sumas y saldos de %s en %s. Míralas antes de darlo por bueno.', v_prog,
@@ -67114,7 +67122,7 @@ begin
                       case when (v_c->>'comparado')::boolean then 'Cuadra con el sumas y saldos.'
                            else 'No se ha podido comparar con el sumas y saldos, porque no se trajo.' end);
   end if;
-  return jsonb_build_object('puede', v_puede, 'texto', v_texto, 'comparado', (v_c->>'comparado')::boolean, 'diferencias', v_c->'diferencias',
+  return jsonb_build_object('puede', v_puede, 'texto', v_texto, 'comparado', (v_c->>'comparado')::boolean, 'cuentas', coalesce((v_c->>'cuentas')::int, 0), 'diferencias', v_c->'diferencias',
                             'asientos', n_a, 'facturas', n_f,
                             'si_hay_un_error', 'Si después ves un error en lo traído, corrígelo con un asiento a mano: lo traído ya no se deshace ni se anula.');
 end $_$;
@@ -67458,6 +67466,12 @@ begin
 
   -- Antes, el sumas y saldos: con diferencias, no.
   v_c := public._conta_traer_comparar(p_carga);
+  -- X14 · 2 · Sin comparar con el sumas y saldos de ERP10 (su fichero), no: si trae asientos, primero se compara.
+  if not coalesce((v_c->>'comparado')::boolean, false)
+     and exists (select 1 from public.journal_entry where import_run_id = p_carga and source_type = 'migrated') then
+    raise exception 'No se ha podido comparar con el sumas y saldos de %: suelta su fichero en «Sumas y saldos» antes de darlo por bueno.', v_prog
+      using errcode = '23514', hint = 'sin_comparar';
+  end if;
   if jsonb_array_length(v_c->'diferencias') > 0 then
     raise exception 'No cuadra con el sumas y saldos de % en %. Míralas antes de darlo por bueno.', v_prog,
       public._conta_traer_cuantos(jsonb_array_length(v_c->'diferencias'), 'cuenta', 'cuentas') using errcode = '23514', hint = 'no_cuadra';
@@ -67703,6 +67717,54 @@ begin
   return jsonb_build_object('carga', p_carga, 'asientos', n_asientos, 'recibidas', n_rec, 'emitidas', n_emi, 'cuentas', n_cuentas,
                             'proveedores', n_prov, 'clientes', n_cli, 'quedan', q_cuentas + q_prov + q_cli, 'texto', v_texto);
 end $$;
+
+
+--
+-- Name: conta_traer_poner_sumas(uuid, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_traer_poner_sumas(p_carga uuid, p_sumas jsonb, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare v_r public.import_run; v_quien text; v_c jsonb; v_prog text; v_n int;
+begin
+  select * into v_r from public.import_run where id = p_carga;
+  if v_r.id is null or v_r.kind <> 'carga' then raise exception 'Esa carga no existe.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_of(v_r.account_id) then
+    raise exception 'Solo un administrador de la cuenta compara lo traído con el sumas y saldos.' using errcode = '42501';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('conta_traer:' || v_r.company_id::text, 0));
+  select * into v_r from public.import_run where id = p_carga for update;
+  if v_r.status <> 'en_prueba' then raise exception 'Esta carga no está en prueba: ya no se compara.' using errcode = '23514'; end if;
+  v_prog := case v_r.program when 'erp10' then 'ERP10' when 'diez' then 'Diez' else 'el programa de antes' end;
+  if jsonb_typeof(p_sumas) <> 'array' or jsonb_array_length(p_sumas) = 0 then
+    raise exception 'El fichero no trae ninguna cuenta: no es el sumas y saldos de %.', v_prog using errcode = '22023', hint = 'sumas_vacias';
+  end if;
+  select count(*) into v_n from jsonb_array_elements(p_sumas) s
+   where coalesce(s->>'cuenta', '') !~ '^[0-9]+$' or (s->>'debe') !~ '^-?[0-9]+$' or (s->>'haber') !~ '^-?[0-9]+$';
+  if v_n > 0 then
+    raise exception 'El sumas y saldos trae % sin cuenta o sin importe en céntimos: no se ha comparado.', public._conta_traer_cuantos(v_n, 'fila', 'filas')
+      using errcode = '22023', hint = 'sumas_mal';
+  end if;
+  v_quien := coalesce(nullif(trim(p_quien_nombre), ''), public.conta_nombre_actor());
+  update public.import_run set detail = coalesce(detail, '{}') || jsonb_build_object('sumas', p_sumas, 'sumas_de', 'fichero',
+           'sumas_puestas', jsonb_build_object('por', v_quien, 'el', now(), 'cuentas', jsonb_array_length(p_sumas)))
+   where id = p_carga;
+  v_c := public._conta_traer_comparar(p_carga);
+  return v_c || jsonb_build_object('texto', case when jsonb_array_length(v_c->'diferencias') = 0
+    then format('Comparado con el sumas y saldos de %s: las %s cuentas, iguales al céntimo en el debe y en el haber.', v_prog, (v_c->>'cuentas'))
+    else format('Comparado con el sumas y saldos de %s: %s de %s %s.', v_prog,
+                public._conta_traer_cuantos(jsonb_array_length(v_c->'diferencias'), 'cuenta', 'cuentas'), (v_c->>'cuentas'),
+                case when jsonb_array_length(v_c->'diferencias') = 1 then 'no queda igual' else 'no quedan iguales' end) end);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_traer_poner_sumas(p_carga uuid, p_sumas jsonb, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_traer_poner_sumas(p_carga uuid, p_sumas jsonb, p_quien_nombre text) IS 'X14 · 2: guarda en una carga en prueba el sumas y saldos de ERP10 (su fichero: cuenta, nombre, debe y haber en céntimos) y la compara, cuenta a cuenta, debe y haber. Solo un administrador.';
 
 
 --
@@ -191329,6 +191391,15 @@ GRANT ALL ON FUNCTION public.conta_traer_dejar_fuera(p_carga uuid, p_facturas uu
 REVOKE ALL ON FUNCTION public.conta_traer_deshacer(p_carga uuid, p_quien_nombre text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_traer_deshacer(p_carga uuid, p_quien_nombre text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_traer_deshacer(p_carga uuid, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_traer_poner_sumas(p_carga uuid, p_sumas jsonb, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_traer_poner_sumas(p_carga uuid, p_sumas jsonb, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_traer_poner_sumas(p_carga uuid, p_sumas jsonb, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_traer_poner_sumas(p_carga uuid, p_sumas jsonb, p_quien_nombre text) TO service_role;
 
 
 --
