@@ -54285,10 +54285,17 @@ CREATE FUNCTION public.conta_lista_que_hacer(p_cuenta uuid) RETURNS TABLE(cuenta
     AS $$
   with permiso as (
     select p_cuenta as cuenta where public.belongs_to_account(p_cuenta)
+  ), mes_que_cuenta as (
+    -- R19 · El mes del próximo cobro de cada empresa (la forma de contar de la copia, conta_gc_contar_copia).
+    select s.company_id, date_trunc('month', min(s.proximo_cobro_fecha))::date as mes from public.conta_gc_suscripcion s
+     where s.account_id = (select cuenta from permiso) and s.estado = 'active' and s.proximo_cobro_fecha >= (now() at time zone 'Europe/Madrid')::date
+     group by s.company_id
   ), gc_sin_cliente as (
-    select s.account_id, s.company_id, count(*) as n, sum(s.al_mes) as eur from public.conta_gc_suscripcion s
-     where s.account_id = (select cuenta from permiso) and s.estado = 'active'
-       and not exists (select 1 from public.conta_cobro_cliente cc where cc.company_id = s.company_id and cc.gc_cliente_id = s.gc_cliente_id)
+    -- R19 · Sin cliente = sin ATAR (conta_gc_enlace en «atado»): lo propuesto por correo sin confirmar, también.
+    select s.account_id, s.company_id, count(*) as n, sum(s.proximo_cobro_importe) as eur from public.conta_gc_suscripcion s
+      join mes_que_cuenta m on m.company_id = s.company_id
+     where s.account_id = (select cuenta from permiso) and s.estado = 'active' and date_trunc('month', s.proximo_cobro_fecha)::date = m.mes
+       and not exists (select 1 from public.conta_gc_enlace e where e.company_id = s.company_id and e.gc_cliente_id = s.gc_cliente_id and e.estado = 'atado')
      group by s.account_id, s.company_id
   ), gc_varios as (
     select cc.account_id, cc.company_id, count(*) as n from (
@@ -56925,12 +56932,23 @@ CREATE FUNCTION public.conta_pantalla_asignar(p_cuenta uuid) RETURNS jsonb
   with permiso as (
     select p_cuenta as cuenta where public.belongs_to_account(p_cuenta)
   ), activas as (
-    select s.company_id, s.gc_id, s.gc_cliente_id, s.nombre, s.al_mes, s.estado from public.conta_gc_suscripcion s
+    select s.company_id, s.gc_id, s.gc_cliente_id, s.nombre, s.al_mes, s.estado, s.mandato_gc_id, s.intervalo, s.proximo_cobro_fecha, s.proximo_cobro_importe
+      from public.conta_gc_suscripcion s
      where s.account_id = (select cuenta from permiso) and s.estado = 'active'
+  ), mes_que_cuenta as (
+    select a.company_id, date_trunc('month', min(a.proximo_cobro_fecha))::date as mes from activas a
+     where a.proximo_cobro_fecha >= (now() at time zone 'Europe/Madrid')::date group by a.company_id
   )
   select jsonb_build_object(
-    'suscripciones', coalesce((select jsonb_agg(to_jsonb(a) order by a.company_id, a.gc_id) from activas a), '[]'::jsonb),
-    'gc_clientes', coalesce((select jsonb_agg(jsonb_build_object('company_id', g.company_id, 'gc_id', g.gc_id, 'nombre', g.nombre, 'correo', g.correo, 'nif', g.nif) order by g.company_id, g.gc_id)
+    'suscripciones', coalesce((select jsonb_agg(to_jsonb(a) || jsonb_build_object('cobra_en_el_mes', date_trunc('month', a.proximo_cobro_fecha)::date = m.mes) order by a.company_id, a.gc_id)
+        from activas a left join mes_que_cuenta m on m.company_id = a.company_id), '[]'::jsonb),
+    'meses', coalesce((select jsonb_agg(jsonb_build_object('company_id', m.company_id, 'mes', to_char(m.mes, 'YYYY-MM')) order by m.company_id) from mes_que_cuenta m), '[]'::jsonb),
+    'gc_clientes', coalesce((select jsonb_agg(jsonb_build_object('company_id', g.company_id, 'gc_id', g.gc_id, 'nombre', g.nombre, 'correo', g.correo, 'nif', g.nif,
+          'enlace', (select jsonb_build_object('estado', e.estado, 'por', e.por, 'party_id', e.party_id, 'candidatas', to_jsonb(e.candidatas), 'porque', e.porque)
+                       from public.conta_gc_enlace e where e.company_id = g.company_id and e.gc_cliente_id = g.gc_id),
+          'mandatos', coalesce((select jsonb_agg(jsonb_build_object('estado', md.estado, 'banco', md.banco, 'cuenta_final', md.cuenta_final) order by md.gc_id)
+                       from public.conta_gc_mandato md where md.company_id = g.company_id and md.gc_cliente_id = g.gc_id), '[]'::jsonb))
+        order by g.company_id, g.gc_id)
         from public.conta_gc_cliente g
        where g.account_id = (select cuenta from permiso) and (g.company_id, g.gc_id) in (select company_id, gc_cliente_id from activas)), '[]'::jsonb))
 $$;
@@ -121888,7 +121906,7 @@ CREATE TABLE public.conta_gestoria_diferencia (
     tipo_ficha text,
     id_externo text,
     CONSTRAINT conta_gestoria_diferencia_ficha_check CHECK ((((id_externo IS NULL) AND (tipo_ficha IS NULL)) OR ((id_externo IS NOT NULL) AND (crm IS NOT NULL) AND (tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text]))))),
-    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['crm_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_crm'::text, 'correo_repetido_en_crm'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text, 'contacto_solo_negociacion'::text, 'contacto_empresa_con_datos'::text, 'ya_no_es_cliente_en_crm'::text, 'falta_codigo_cliente'::text, 'cliente_no_de_acuerdo'::text, 'falta_cuenta_stripe'::text, 'bitrix_cambiado'::text])))
+    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['crm_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_crm'::text, 'correo_repetido_en_crm'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text, 'contacto_solo_negociacion'::text, 'contacto_empresa_con_datos'::text, 'ya_no_es_cliente_en_crm'::text, 'falta_codigo_cliente'::text, 'cliente_no_de_acuerdo'::text, 'falta_cuenta_stripe'::text, 'bitrix_cambiado'::text, 'linea_sin_atar'::text, 'linea_en_otra_ficha'::text, 'gc_sin_atar'::text])))
 );
 
 
@@ -123933,6 +123951,34 @@ CREATE VIEW public.conta_gc_enlace_elegido WITH (security_invoker='true') AS
 --
 
 COMMENT ON VIEW public.conta_gc_enlace_elegido IS 'G06 · El cliente de GoCardless de cada ficha y empresa, uno solo: el de una persona; si no, el de más mandatos vivos, más suscripciones activas y, si empatan, el de id menor (la regla de conta-gocardless-leer/plan.ts).';
+
+
+--
+-- Name: conta_gc_igualado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_igualado (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    lectura_id uuid,
+    copia_id uuid,
+    linea_id uuid NOT NULL,
+    party_id uuid,
+    que text NOT NULL,
+    antes jsonb NOT NULL,
+    despues jsonb NOT NULL,
+    porque text NOT NULL,
+    hecho_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_gc_igualado_que_check CHECK ((que = ANY (ARRAY['baja'::text, 'importe'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gc_igualado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_igualado IS 'R19 · Lo que cada lectura de GoCardless cambia en una línea de Sumied para que sea igual a lo que cobra GoCardless (baja o importe), con cómo estaba, cómo queda y de qué copia.';
 
 
 --
@@ -141576,6 +141622,14 @@ ALTER TABLE ONLY public.conta_gc_enlace
 
 
 --
+-- Name: conta_gc_igualado conta_gc_igualado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_igualado
+    ADD CONSTRAINT conta_gc_igualado_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_gc_importacion conta_gc_importacion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -147871,6 +147925,20 @@ CREATE INDEX conta_gc_enlace_estado_idx ON public.conta_gc_enlace USING btree (a
 --
 
 CREATE INDEX conta_gc_enlace_party_idx ON public.conta_gc_enlace USING btree (account_id, party_id);
+
+
+--
+-- Name: conta_gc_igualado_empresa_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_igualado_empresa_idx ON public.conta_gc_igualado USING btree (company_id, hecho_at DESC);
+
+
+--
+-- Name: conta_gc_igualado_linea_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_igualado_linea_idx ON public.conta_gc_igualado USING btree (linea_id);
 
 
 --
@@ -171240,6 +171308,19 @@ ALTER TABLE public.conta_gc_enlace ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_gc_enlace_leer ON public.conta_gc_enlace FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gc_igualado; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_igualado ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_igualado conta_gc_igualado_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_igualado_leer ON public.conta_gc_igualado FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -202064,6 +202145,14 @@ GRANT SELECT ON TABLE public.conta_gc_enlace TO authenticated;
 
 GRANT ALL ON TABLE public.conta_gc_enlace_elegido TO service_role;
 GRANT SELECT ON TABLE public.conta_gc_enlace_elegido TO authenticated;
+
+
+--
+-- Name: TABLE conta_gc_igualado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_igualado TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_igualado TO authenticated;
 
 
 --
