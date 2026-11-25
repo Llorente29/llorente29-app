@@ -2,7 +2,7 @@
  "_que": "X14 · 2 · Dar por bueno el 2024 de QBO desde Aplicar SQL · contexto medido en la BASE LOCAL (como en producción), en SOLO LECTURA. Solo llama a conta_traer_dar_por_bueno (sin cambiarla). El contexto de verdad lo mide el workflow en el ensayo.",
  "medido": "2026-11-25T20:20Z",
  "tanda": {
-  "supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql": "3201f87df8bcb4fb6cbcab34e88e7903"
+  "supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql": "4f55a7a3dd151caef4aca85c82bcd1e2"
  },
  "contexto": {
   "tablas": [],
