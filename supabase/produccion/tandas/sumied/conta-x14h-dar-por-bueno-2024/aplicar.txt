@@ -12,3 +12,8 @@ sin-vuelta-atras: supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql 
 esperado: x14h-dar-por-bueno · carga del 2024 de QBO · estado = dada_por_buena
 esperado: x14h-dar-por-bueno · carga del 2024 de QBO · asientos traídos sin validar = 0
 esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas de la carga sin crear = 0
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas dentro de la carga = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas dentro de la carga con distinto número escrito = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas sin número = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas que ya están en Sumied, traídas de otra carga = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas que ya están en Sumied, hechas en Sumied = como antes

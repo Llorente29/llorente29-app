@@ -17,4 +17,31 @@ select clave, valor from (
          ((select count(*) from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera')
           - (select count(*) from public.customer_invoice c where c.import_run_id = r.id))::text   -- quieta: solo las crea darla por buena
     from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  -- Por qué para en las emitidas (XH004): cuántas de la carga repiten serie, número y ejercicio dentro de la propia carga, y
+  -- cuántas ya están en Sumied fuera de ella (traídas de otra carga o hechas en Sumied). Solo números.
+  select 4, 'carga del 2024 de QBO · emitidas repetidas dentro de la carga',
+         (select count(*) - count(distinct (x->>'serie', x->>'ejercicio', x->>'numero')) from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera')::text   -- quieta: el detalle de una carga en prueba no cambia
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 5, 'carga del 2024 de QBO · emitidas repetidas dentro de la carga con distinto número escrito',
+         (select count(*) from (select x->>'serie' s, x->>'ejercicio' y, x->>'numero' n from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera'
+                                 group by 1, 2, 3 having count(distinct x->>'numero_texto') > 1) d)::text   -- quieta: el detalle de una carga en prueba no cambia
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 6, 'carga del 2024 de QBO · emitidas sin número',
+         (select count(*) from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' and nullif(x->>'numero', '') is null)::text   -- quieta: el detalle de una carga en prueba no cambia
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 7, 'carga del 2024 de QBO · emitidas que ya están en Sumied, traídas de otra carga',
+         (select count(*) from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' and exists (select 1 from public.customer_invoice c   -- quieta: la empresa no factura en Sumied (lleva la contabilidad en ERP10)
+            where c.company_id = r.company_id and c.series_code = x->>'serie' and c.fiscal_year = (x->>'ejercicio')::int
+              and c.number = (x->>'numero')::int and c.import_run_id is not null and c.import_run_id <> r.id))::text
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 8, 'carga del 2024 de QBO · emitidas que ya están en Sumied, hechas en Sumied',
+         (select count(*) from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' and exists (select 1 from public.customer_invoice c   -- quieta: la empresa no factura en Sumied (lleva la contabilidad en ERP10)
+            where c.company_id = r.company_id and c.series_code = x->>'serie' and c.fiscal_year = (x->>'ejercicio')::int
+              and c.number = (x->>'numero')::int and c.import_run_id is null))::text
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
 ) t order by o, clave;
