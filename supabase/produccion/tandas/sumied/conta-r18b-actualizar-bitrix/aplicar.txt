@@ -1,0 +1,10 @@
+# R18b · «Actualizar Bitrix24» (encargo R18, 24/11). Rama conta/r18b-actualizar-bitrix. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   1730  Solo añade: el interruptor «Actualizar Bitrix24» (apagado de serie; lo enciende solo un administrador de
+#         la plataforma) y la clave para escribir en Vault, aparte de la de leer, con sus funciones. No toca nada de
+#         lo que existe. En qué fichas se escribe lo decide el código (conta-bitrix-pestana/puro.ts: la 1495).
+#
+# Nada en el camino del pedido, ni de cobros ni de facturas. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r18b-actualizar-bitrix.sql
+supabase/migrations/20261124T1730_r18b_actualizar_bitrix.sql

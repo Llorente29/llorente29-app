@@ -15,9 +15,10 @@
 // Cada botón dice lo que ha hecho, con su contenido (regla 8): «Conectada la
 // cuenta de GoCardless de QBO INTEGRITY S.L.: 208 mandatos activos y …».
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Boton, Campo, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
-import type { ConexionBitrix, ConexionGc } from '@/modules/conta/services/gestoriaService'
+import { guardarClaveEscribir, leerActualizarBitrix, ponerActualizarBitrix, type ConexionBitrix, type ConexionGc, type EstadoActualizar } from '@/modules/conta/services/gestoriaService'
+import { textosActualizar } from './actualizarBitrix'
 import type { MapaBitrix } from './queEsCadaCampo'
 import { CamposDeBitrix } from './CamposDeBitrix'
 import { UnionDeFichas } from './UnionDeFichas'
@@ -69,6 +70,48 @@ function Estado({ conectada, entorno }: { conectada: boolean; entorno: 'real' | 
   return conectada
     ? <span className="cxg-estado" data-tono="verde">Conectada{entorno === 'pruebas' ? ' · de pruebas' : ''}</span>
     : <span className="cxg-estado" data-tono="gris">Sin conectar</span>
+}
+
+/**
+ * R18 · «Actualizar Bitrix24», en la tarjeta del CRM conectado: arriba, si está apagado, «Bitrix24 no se actualiza:
+ * lo enciende Julio en Ajustes». La clave para escribir se pega aquí (nunca se enseña). Encender, solo Julio
+ * (un administrador de la plataforma) y con la clave; apagar, también la administradora de la cuenta.
+ */
+function ActualizarBitrix({ cuenta }: { cuenta: string }) {
+  const { userName } = useCuentaConta()
+  const [e, setE] = useState<{ de: string; v: EstadoActualizar | null } | null>(null)
+  const [vuelta, setVuelta] = useState(0)
+  const [clave, setClave] = useState('')
+  const [ocupado, setOcupado] = useState(false)
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
+  useEffect(() => {
+    let vivo = true
+    leerActualizarBitrix(cuenta).then((v) => { if (vivo) setE({ de: cuenta, v }) }).catch((x) => { if (vivo) { setE({ de: cuenta, v: null }); setAviso({ ok: false, texto: msg(x) }) } })
+    return () => { vivo = false }
+  }, [cuenta, vuelta])
+  const v = e?.de === cuenta ? e.v : null
+  if (!v) return <Aviso a={aviso} />
+  const t = textosActualizar(v)
+  const hacer = async (f: () => Promise<string>) => {
+    setOcupado(true); setAviso(null)
+    try { setAviso({ ok: true, texto: await f() }); setClave(''); setVuelta((n) => n + 1) } catch (x) { setAviso({ ok: false, texto: msg(x) }) } finally { setOcupado(false) }
+  }
+  return (
+    <div className="pg-dialogo-campos" data-prueba="actualizar-bitrix" data-tono={t.tono}>
+      <p className="s-aviso-lista" data-tono={t.tono === 'encendido' ? 'seguro' : 'falta'} data-prueba="actualizar-linea">{t.linea}</p>
+      <div className="cxg-fila-campos">
+        <span className="cxg-apoyo" data-prueba="actualizar-clave">{t.clave}</span>
+        {t.boton && <Boton onClick={() => void hacer(() => ponerActualizarBitrix(cuenta, t.boton!.on, userName ?? null))} disabled={ocupado}>{t.boton.texto}</Boton>}
+      </div>
+      <div className="cxg-fila-campos">
+        <Campo etiqueta="Clave para actualizar Bitrix24">{(x) => (
+          <Texto {...x} valor={clave} alCambiar={setClave} autoComplete="off" spellCheck={false} placeholder="https://crm.tu-asesoria.es/rest/…" />
+        )}</Campo>
+        <Boton onClick={() => void hacer(() => guardarClaveEscribir(cuenta, clave, userName ?? null))} disabled={ocupado || !/^https:\/\//.test(clave.trim())}>Guardar la clave</Boton>
+      </div>
+      <Aviso a={aviso} />
+    </div>
+  )
 }
 
 function ConectarGc({ emisor, nombre, alConectar }: { emisor: string; nombre: string; alConectar: AccionesGestoria['conectarGc'] }) {
@@ -147,7 +190,7 @@ export function TarjetaGocardless({ emisor, nombre, c, acciones }: { emisor: str
 
 export function TarjetaBitrix({ c, acciones }: { c: ConexionBitrix | null; acciones: AccionesGestoria }) {
   // GD · Una cuenta de demostración solo lee los sistemas de pruebas: el entorno sale ya en «pruebas».
-  const { esDemo } = useCuentaConta()
+  const { esDemo, accountId: cuenta } = useCuentaConta()
   const [elegido, setEntorno] = useState<'real' | 'pruebas' | null>(null)
   const entorno: 'real' | 'pruebas' = elegido ?? (esDemo ? 'pruebas' : 'real')
   const [url, setUrl] = useState('')
@@ -170,6 +213,8 @@ export function TarjetaBitrix({ c, acciones }: { c: ConexionBitrix | null; accio
             <div><dt>Clientes leídos</dt><dd className="cxg-cifra">{c!.empresasLeidas == null ? '—' : miles(c!.empresasLeidas)}</dd></div>
           </dl>
           <div><Boton onClick={() => void hacer(acciones.leerBitrix)} disabled={ocupado}>{ocupado ? 'Leyendo…' : 'Leer ahora'}</Boton></div>
+          {/* R18 · «Actualizar Bitrix24»: el interruptor y la clave para escribir. */}
+          {cuenta && <ActualizarBitrix cuenta={cuenta} />}
           <AlInstante origen="crm" crm={c!.crm} nombre={c!.nombre} />
           <CamposDeBitrix empresas={{ mapa: c!.mapa, medidos: c!.medidos, alConfirmar: acciones.confirmarMapa }}
             contactos={{ mapa: c!.contactos?.mapa ?? null, medidos: c!.contactos?.medidos ?? null, resumen: c!.contactos?.resumen ?? null, leidos: c!.contactos?.leidos ?? null,
