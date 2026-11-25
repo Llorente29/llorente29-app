@@ -220,7 +220,8 @@ for (const tam of TAMANOS) {
       await page.goto(RUTA, { waitUntil: 'load' })
       const p = pantalla(page)
       await p.getByRole('button', { name: 'Traerlo todo de ERP10' }).click({ timeout: 40_000 })
-      await expect(p.getByRole('status').filter({ hasText: '✓ Leído y cuadra con ERP10' })).toBeVisible({ timeout: 90_000 })
+      // X14 · 2 · Sin el sumas y saldos de ERP10 soltado no ha comparado nada, y lo dice (con la base de antes, en la rama, cuadra).
+      await expect(p.getByRole('status').filter({ hasText: /^(En prueba · falta comparar el sumas y saldos|✓ Leído y cuadra con ERP10)$/ })).toBeVisible({ timeout: 90_000 })
       await p.getByRole('button', { name: 'Descartar lo traído' }).click()
       const dialogo = page.getByRole('dialog', { name: 'Descartar lo traído' })
       await expect(dialogo).toContainText(/Vas a descartar lo traído: se quita todo lo que entró en prueba \(10 asientos, \d+ facturas?/)
