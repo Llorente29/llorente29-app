@@ -1,0 +1,6 @@
+{
+ "_que": "R18b · «Actualizar Bitrix24» · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: esta sesión no lee producción. 1730 solo añade (columnas que admiten nulos y funciones nuevas). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-24T16:50Z",
+ "tanda": { "supabase/migrations/20261124T1730_r18b_actualizar_bitrix.sql": "70d754e9c1ce120a74a86cbce3de3528" },
+ "contexto": { "tablas": ["public.conta_crm", "public.platform_admins"], "funciones": [], "filas": {}, "otras": {}, "camino": { "tablas": [], "funciones": [] }, "usos": {}, "registro": [] }
+}

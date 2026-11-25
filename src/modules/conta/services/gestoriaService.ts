@@ -297,3 +297,33 @@ export const noContar = (empresa: string, suscripcion: string, motivo: string | 
 export const enlazar = (empresa: string, gcCliente: string, cliente: string) =>
   frase('conta_gestoria_enlazar', { p_company: empresa, p_gc_cliente: gcCliente, p_party: cliente })
 export const revisada = (diferencia: string, motivo: string) => frase('conta_gestoria_revisada', { p_diferencia: diferencia, p_motivo: motivo })
+
+// ── R18 · «Actualizar Bitrix24»: el interruptor y la clave para escribir ──────────
+
+/** Lo que ve Ajustes del interruptor (conta_crm_actualizar_estado). Nunca trae la clave. */
+export interface EstadoActualizar {
+  actualizar: boolean; quien: string | null; cuando: string | null
+  clave: boolean; claveQuien: string | null; claveCuando: string | null; puedeEncender: boolean
+}
+
+export async function leerActualizarBitrix(cuenta: string): Promise<EstadoActualizar | null> {
+  const r = await rpc<Record<string, unknown> | null>('conta_crm_actualizar_estado', { p_account: cuenta, p_crm: 'bitrix24' })
+  if (!r) return null
+  const t = (x: unknown) => (typeof x === 'string' && x.trim() ? x : null)
+  return {
+    actualizar: r.actualizar === true, quien: t(r.quien), cuando: t(r.cuando),
+    clave: r.clave === true, claveQuien: t(r.clave_quien), claveCuando: t(r.clave_cuando), puedeEncender: r.puede_encender === true,
+  }
+}
+
+/** Enciende (solo un administrador de la plataforma) o apaga «Actualizar Bitrix24». Devuelve la frase de lo hecho. */
+export async function ponerActualizarBitrix(cuenta: string, on: boolean, quien: string | null): Promise<string> {
+  const r = await rpc<{ frase: string }>('conta_crm_actualizar_poner', { p_account: cuenta, p_crm: 'bitrix24', p_on: on, p_quien: quien })
+  return r.frase
+}
+
+/** Guarda la clave para escribir (el webhook entrante de QBO, del mismo portal). Devuelve la frase de lo hecho. */
+export async function guardarClaveEscribir(cuenta: string, url: string, quien: string | null): Promise<string> {
+  const r = await rpc<{ frase: string }>('conta_crm_clave_escribir_guardar', { p_account: cuenta, p_crm: 'bitrix24', p_url: url.trim(), p_quien: quien })
+  return r.frase
+}

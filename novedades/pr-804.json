@@ -1,0 +1,20 @@
+[
+ {
+  "id": "804-1",
+  "pr": 804,
+  "fecha": "2026-11-25T06:58:22Z",
+  "producto": "sumied",
+  "apartado": "Ajustes › Cobros",
+  "frase": "«Actualizar Bitrix24», apagado de serie; solo lo enciende Julio, y con la clave para escribir puesta.",
+  "ruta": null
+ },
+ {
+  "id": "804-2",
+  "pr": 804,
+  "fecha": "2026-11-25T06:58:22Z",
+  "producto": "sumied",
+  "apartado": "Bitrix24",
+  "frase": "la pestaña solo escribe con ese interruptor encendido, y solo en la ficha de prueba.",
+  "ruta": null
+ }
+]
