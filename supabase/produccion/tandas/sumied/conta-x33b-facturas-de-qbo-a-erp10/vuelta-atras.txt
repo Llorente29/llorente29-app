@@ -1,0 +1,3 @@
+# X33b · la vuelta atrás: las tres funciones desde su respaldo, sin la función ni las dos columnas nuevas.
+cuenta: scripts/conta/produccion/cuentas/x33b-un-cobro-por-factura.sql
+supabase/vuelta-atras/20261125T1320_x33b_un_cobro_por_factura.down.sql
