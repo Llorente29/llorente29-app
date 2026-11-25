@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ClienteParaCasar } from '../../../../../supabase/functions/_shared/tarifa/lista'
 import { euros } from '../../../../../supabase/functions/_shared/tarifa/precio'
-import { textoDePropuesta, textoDeQbo, type PorAsignar } from './asignar'
+import { textoDeMandato, textoDePropuesta, textoDeQbo, type PorAsignar } from './asignar'
 
 export interface PropsAsignar {
   lista: PorAsignar[]
@@ -73,6 +73,8 @@ function Uno({ x, clientes, lasDos, alUnir, alConfirmar, nombreDe, setAviso }: P
         <div className="g4-as-importe"><b>{euros(x.alMesCent)}</b> <span className="g4-pequeno">al mes</span></div>
       </div>
       <div className="g4-pequeno">{x.suscripciones.map((s) => `${s.nombre} · ${euros(s.alMesCent)}`).join(' · ')}</div>
+      {x.mandatos.length > 0 && <div className="g4-pequeno" data-prueba="mandatos">{x.mandatos.length === 1 ? 'Mandato' : 'Mandatos'}: {x.mandatos.map(textoDeMandato).join(' · ')}</div>}
+      {x.correoEnVarios > 1 && <div className="g4-pequeno" data-prueba="correo-en-varios">Su email está en {x.correoEnVarios} clientes de GoCardless: no se propone por email. Mira la cuenta y la referencia para elegir.</div>}
       {deQbo
         ? <div className="g4-as-propuesta" data-hay={deQbo.clienteIds.length ? '' : undefined} data-qbo={deQbo.como}>{textoDeQbo(deQbo, nombreDe)}</div>
         : <div className="g4-as-propuesta" data-hay={x.propuesta.tipo !== 'ninguna' ? '' : undefined}>{textoDePropuesta(x.propuesta, nombreDe)}</div>}

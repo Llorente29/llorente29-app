@@ -59,6 +59,10 @@ async function simular(page: Page, Q: string, A: string) {
   await page.route(/\/rest\/v1\/conta_gc_enlace\?/, (r) => json(r, [
     { company_id: Q, gc_cliente_id: 'CU2x', porque: 'Pendiente de revisar. QBO, Excel del 12/11 escribió: «Construcciones Ficticias».' },
   ]))
+  // Su mandato, para distinguirlo de otro con el mismo email (lo que guarde GoCardless del final de la cuenta: hoy, 2 cifras).
+  await page.route(/\/rest\/v1\/conta_gc_mandato\?/, (r) => json(r, [
+    { company_id: Q, gc_cliente_id: 'CU2x', estado: 'active', referencia: 'PRUEBA-0001', cuenta_final: '53', banco: 'Banco Ejemplo' },
+  ]))
   const LECTURAS = pantallas(datos)
   const ATAR: Record<string, (c: Record<string, unknown>) => unknown> = {
     conta_gc_enlace_confirmar: () => ({ frase: 'Enlazado: Persona Inventada de GoCardless es Construcciones Ficticias, S.A.. Desde ahora sus cobros salen en su ficha.', deshacer_hasta: null }),
@@ -91,6 +95,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     const uno = page.getByRole('region', { name: 'Persona Inventada' })
     await expect(page.locator('.g4-as-uno').first()).toHaveAttribute('aria-label', 'Persona Inventada')
     await expect(uno.locator('[data-qbo]')).toHaveText('QBO escribió «Construcciones Ficticias»: ninguna ficha se llama exactamente así; «Construcciones Ficticias, S.A.» lleva ese nombre. Mira que sea ella antes de unir.')
+    await expect(uno.locator('[data-prueba="mandatos"]')).toHaveText('Mandato: Banco Ejemplo ··53 · ref. PRUEBA-0001 (activo)')
     // Los demás, como antes.
     await expect(page.getByRole('region', { name: 'TRANSPORTES DE EJEMPLO SL' })).toContainText('Propuesto por NIF: Transportes de Ejemplo, S.L.')
     mkdirSync(DIR, { recursive: true })

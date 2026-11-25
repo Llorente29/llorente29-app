@@ -115,7 +115,7 @@ function AsignarG04({ accountId, datos, empresas, elegidas, lasDos, recargar, ru
   if (gc.error) return <ErrorConReintento mensaje={`No se han podido leer los clientes de GoCardless: ${gc.error}`} reintentar={gc.recargar} />
   if (!gc.datos) return <TarjetaCargando />
   return (
-    <Asignar lista={porAsignar(datos, gc.datos.suscripciones, gc.datos.gcClientes, empresas, elegidas, gc.datos.pendientesQbo)} clientes={clientesParaCasar(datos)} lasDos={lasDos} rutaVolver={rutaVolver}
+    <Asignar lista={porAsignar(datos, gc.datos.suscripciones, gc.datos.gcClientes, empresas, elegidas, gc.datos.pendientesQbo, gc.datos.mandatos)} clientes={clientesParaCasar(datos)} lasDos={lasDos} rutaVolver={rutaVolver}
       alUnir={async (empresa, gcCliente, cliente) => { const r = await acciones.enlazar(empresa, gcCliente, cliente); recargar(); return r.frase }}
       alConfirmar={async (empresa, gcCliente, cliente) => { const r = await acciones.confirmarEnlace(empresa, gcCliente, cliente); recargar(); gc.recargar(); return r.frase }} />
   )
