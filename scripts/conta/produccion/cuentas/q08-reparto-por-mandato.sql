@@ -28,7 +28,8 @@ select clave, valor from (
     from tres t
   union all
   select 4, 'decisiones de enlace · ' || t.gc,
-    -- quieta: de estos tres no hay ninguna (0); solo las escribe «Es esta» en pantalla o esta tanda (select count(*) from public.conta_gestoria_decision d join cuenta c on c.company_id = d.company_id
+    -- quieta: de estos tres no hay ninguna (0); solo las escribe «Es esta» en pantalla o esta tanda
+         (select count(*) from public.conta_gestoria_decision d join cuenta c on c.company_id = d.company_id
                                                   where d.gc_cliente_id = t.gc and d.tipo = 'enlace')::text
     from tres t
   union all
