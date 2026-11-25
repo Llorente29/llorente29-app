@@ -5828,6 +5828,18 @@ COMMENT ON FUNCTION public._conta_entrega_mercancia(p_supplier uuid) IS 'S01o·2
 
 
 --
+-- Name: _conta_es_admin_plataforma(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_es_admin_plataforma() RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select auth.uid() is not null and exists (select 1 from public.platform_admins p where p.user_id = auth.uid() and p.active)
+$$;
+
+
+--
 -- Name: _conta_factura_apuntar(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -37231,6 +37243,67 @@ COMMENT ON FUNCTION public.conta_bitrix_pestana_leer(p_portal text, p_correo tex
 
 
 --
+-- Name: conta_bitrix_pestana_leer_portal(text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_pestana_leer_portal(p_portal text, p_usuario text, p_nombre text, p_tipo text, p_id text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_portal text := lower(trim(coalesce(p_portal, '')));
+  v_id text := trim(coalesce(p_id, ''));
+  v_usuario text := trim(coalesce(p_usuario, ''));
+  v_nombre text := nullif(left(trim(coalesce(p_nombre, '')), 120), '');
+  v_n int; v_cuenta uuid; v_unido timestamptz; v_admin uuid; v_cliente uuid; v_de_empresa text;
+begin
+  if p_tipo is null or p_tipo not in ('empresa', 'contacto') or v_id !~ '^[0-9]{1,18}$' then return jsonb_build_object('estado', 'ficha_rara'); end if;
+  if v_usuario !~ '^[0-9]{1,18}$' then return jsonb_build_object('estado', 'no_es_sumied'); end if;
+  select count(*), min(c.account_id::text)::uuid, max(c.pestana_portal_at) into v_n, v_cuenta, v_unido
+    from public.conta_crm c where c.crm = 'bitrix24' and lower(c.portal) = v_portal;
+  if v_n = 0 then return jsonb_build_object('estado', 'portal_desconocido'); end if;
+  if v_n > 1 then return jsonb_build_object('estado', 'varias_cuentas'); end if;
+  if v_unido is null then return jsonb_build_object('estado', 'portal_sin_unir'); end if;
+
+  -- Con los permisos de la primera administradora activa de la cuenta, solo para LEER y solo en esta transacción.
+  select up.user_id into v_admin from public.user_profiles up
+   where up.account_id = v_cuenta and up.active and up.role = 'admin' order by up.created_at limit 1;
+  if v_admin is null then return jsonb_build_object('estado', 'cuenta_sin_administradora'); end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', v_admin::text || ':' || v_cuenta::text, true);
+
+  insert into public.conta_bitrix_pestana_persona (account_id, portal, usuario_id, nombre)
+  values (v_cuenta, v_portal, v_usuario, v_nombre)
+  on conflict (account_id, portal, usuario_id) do update set nombre = coalesce(excluded.nombre, conta_bitrix_pestana_persona.nombre), ultima_at = now(),
+     veces = conta_bitrix_pestana_persona.veces + 1;
+
+  select f.party_id, f.de_empresa into v_cliente, v_de_empresa
+    from public.conta_gestoria_ficha f
+   where f.account_id = v_cuenta and f.crm = 'bitrix24' and f.tipo_ficha = p_tipo and f.id_externo = v_id
+   order by (f.de_empresa = '') desc, f.de_empresa limit 1;
+  if v_cliente is null then
+    select g.party_id, '' into v_cliente, v_de_empresa from public.conta_gestoria_cliente g
+     where g.account_id = v_cuenta and g.crm = 'bitrix24' and g.tipo_ficha = p_tipo and g.id_externo = v_id;
+  end if;
+  if v_cliente is null then
+    return jsonb_build_object('estado', 'sin_enlazar', 'solo_lectura', true, 'cuenta', v_cuenta, 'quien', v_nombre,
+      'cuenta_nombre', (select a.name from public.accounts a where a.id = v_cuenta));
+  end if;
+  return jsonb_build_object(
+    'estado', 'ok', 'solo_lectura', true,
+    'cuenta', v_cuenta, 'cuenta_nombre', (select a.name from public.accounts a where a.id = v_cuenta),
+    'quien', v_nombre,
+    'cliente', v_cliente,
+    'cliente_nombre', (select p.name from public.party p where p.id = v_cliente and p.account_id = v_cuenta),
+    'de_empresa', nullif(v_de_empresa, ''),
+    'empresas', coalesce((select jsonb_agg(jsonb_build_object('id', c.id, 'nombre', coalesce(nullif(c.trade_name, ''), c.legal_name)) order by c.created_at)
+        from public.company c where c.account_id = v_cuenta and c.is_active), '[]'::jsonb),
+    'clientes', public.conta_pantalla_clientes(v_cuenta),
+    'ficha', public.conta_pantalla_ficha(v_cuenta, v_cliente));
+end $_$;
+
+
+--
 -- Name: conta_bitrix_pestana_mensajes(text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -37416,6 +37489,26 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_bitrix_pestana_sueltos(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid) IS 'GB (nº 17) · Los servicios «cada vez» con su precio y los trabajos sueltos del cliente de la ficha abierta en Bitrix24 (conta_trabajos_sueltos, de Code 1), como la persona. Solo el servidor, DESPUÉS de comprobar con Bitrix24 al usuario y la aplicación.';
+
+
+--
+-- Name: conta_bitrix_portal_unir(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_portal_unir(p_portal text, p_quien text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_portal text := lower(trim(coalesce(p_portal, ''))); v_n int;
+begin
+  select count(*) into v_n from public.conta_crm c where c.crm = 'bitrix24' and lower(c.portal) = v_portal;
+  if v_n = 0 then return jsonb_build_object('estado', 'portal_desconocido'); end if;
+  if v_n > 1 then return jsonb_build_object('estado', 'varias_cuentas'); end if;
+  update public.conta_crm c set pestana_portal_at = coalesce(c.pestana_portal_at, now()),
+         pestana_portal_por = coalesce(c.pestana_portal_por, nullif(trim(coalesce(p_quien, '')), '')), updated_at = now()
+   where c.crm = 'bitrix24' and lower(c.portal) = v_portal;
+  return jsonb_build_object('estado', 'ok');
+end $$;
 
 
 --
@@ -40294,6 +40387,50 @@ COMMENT ON FUNCTION public.conta_crear_cuenta_sola(p_nombre text, p_slug text, p
 
 
 --
+-- Name: conta_crm_actualizar_estado(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_actualizar_estado(p_account uuid, p_crm text) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select case when not (public.belongs_to_account(p_account) or public._conta_es_admin_plataforma()) then null else (
+    select jsonb_build_object('actualizar', coalesce(c.actualizar, false), 'quien', c.actualizar_por_name, 'cuando', c.actualizar_at,
+             'clave', c.escribir_ref is not null, 'clave_quien', c.escribir_por_name, 'clave_cuando', c.escribir_at,
+             'puede_encender', public._conta_es_admin_plataforma())
+      from public.conta_crm c where c.account_id = p_account and c.crm = p_crm) end
+$$;
+
+
+--
+-- Name: conta_crm_actualizar_poner(uuid, text, boolean, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_actualizar_poner(p_account uuid, p_crm text, p_on boolean, p_quien text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_fila public.conta_crm; v_nombre text := coalesce(nullif(trim(p_quien), ''), 'una persona de la cuenta');
+begin
+  select * into v_fila from public.conta_crm where account_id = p_account and crm = p_crm for update;
+  if v_fila.account_id is null then raise exception 'Esta cuenta no tiene conectado ese CRM.' using errcode = 'P0002'; end if;
+  if p_on is true and not public._conta_es_admin_plataforma() then
+    raise exception 'Solo Julio enciende «Actualizar Bitrix24».' using errcode = '42501';
+  end if;
+  if p_on is not true and not (public._conta_es_admin_plataforma() or public.current_user_is_admin_or_manager_of(p_account)) then
+    raise exception 'Solo la administradora o la encargada de la cuenta lo apaga.' using errcode = '42501';
+  end if;
+  if p_on is true and v_fila.escribir_ref is null then
+    raise exception 'Antes de encenderlo, pega la clave para actualizar Bitrix24.' using errcode = '22023';
+  end if;
+  update public.conta_crm set actualizar = coalesce(p_on, false), actualizar_por_name = v_nombre, actualizar_at = now(), updated_at = now()
+   where account_id = p_account and crm = p_crm;
+  return jsonb_build_object('actualizar', coalesce(p_on, false),
+    'frase', case when p_on then 'Encendido: Sumied actualiza Bitrix24 (solo en la ficha de prueba).' else 'Apagado: Bitrix24 no se actualiza.' end);
+end $$;
+
+
+--
 -- Name: conta_crm_aplicar_union(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -40323,6 +40460,38 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_crm_aplicar_union(p_account uuid, p_crm text) IS 'G01c · Una persona administradora o encargada aplica la unión de las fichas de su CRM (mismo NIF = un cliente).';
+
+
+--
+-- Name: conta_crm_clave_escribir_guardar(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_clave_escribir_guardar(p_account uuid, p_crm text, p_url text, p_quien text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'vault'
+    AS $_$
+declare v_fila public.conta_crm; v_ref uuid; v_nombre text := 'conta_crm:' || p_crm || ':' || p_account::text || ':escribir';
+  v_portal text := lower(substring(coalesce(trim(p_url), '') from '^https://([A-Za-z0-9.-]+)/rest/'));
+begin
+  if not (public.current_user_is_admin_or_manager_of(p_account) or coalesce(auth.role(), '') = 'service_role') then
+    raise exception 'Solo la administradora o la encargada de la cuenta.' using errcode = '42501';
+  end if;
+  select * into v_fila from public.conta_crm where account_id = p_account and crm = p_crm for update;
+  if v_fila.account_id is null then raise exception 'Primero conecta el CRM.' using errcode = 'P0002'; end if;
+  if p_crm <> 'bitrix24' or coalesce(trim(p_url), '') !~ '^https://[A-Za-z0-9.-]+/rest/[0-9]+/[A-Za-z0-9]+/?$' then
+    raise exception 'La clave de Bitrix24 es como https://<tu portal>/rest/<número>/<clave>/ (Webhook entrante, con permiso de CRM).' using errcode = '22023';
+  end if;
+  if v_portal is distinct from lower(v_fila.portal) then
+    raise exception 'Esa clave es de otro portal (%), no del conectado (%).', v_portal, v_fila.portal using errcode = '22023';
+  end if;
+  v_ref := v_fila.escribir_ref;
+  if v_ref is null or not exists (select 1 from vault.secrets where id = v_ref) then select id into v_ref from vault.secrets where name = v_nombre; end if;
+  if v_ref is not null then perform vault.update_secret(v_ref, trim(p_url), v_nombre, 'Clave para escribir en el CRM de una cuenta de Sumied');
+  else v_ref := vault.create_secret(trim(p_url), v_nombre, 'Clave para escribir en el CRM de una cuenta de Sumied'); end if;
+  update public.conta_crm set escribir_ref = v_ref, escribir_por_name = coalesce(nullif(trim(p_quien), ''), 'una persona de la cuenta'), escribir_at = now(), updated_at = now()
+   where account_id = p_account and crm = p_crm;
+  return jsonb_build_object('frase', 'Clave guardada. Bitrix24 sigue sin actualizarse hasta que Julio lo encienda.');
+end $_$;
 
 
 --
@@ -40428,6 +40597,22 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb) IS 'G01c · «Qué es cada campo»: una persona administradora o encargada confirma el mapa de las empresas o de los contactos de su CRM (con quién y cuándo).';
+
+
+--
+-- Name: conta_crm_escribir_de_portal(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_escribir_de_portal(p_portal text) RETURNS TABLE(account_id uuid, actualizar boolean, url text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'vault'
+    AS $$
+begin
+  return query
+  select c.account_id, coalesce(c.actualizar, false), s.decrypted_secret::text
+    from public.conta_crm c left join vault.decrypted_secrets s on s.id = c.escribir_ref
+   where c.crm = 'bitrix24' and lower(c.portal) = lower(p_portal);
+end $$;
 
 
 --
@@ -119244,6 +119429,29 @@ COMMENT ON TABLE public.conta_bitrix_pestana_cambio IS 'GB · Lo hecho desde la 
 
 
 --
+-- Name: conta_bitrix_pestana_persona; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_bitrix_pestana_persona (
+    account_id uuid NOT NULL,
+    portal text NOT NULL,
+    usuario_id text NOT NULL,
+    nombre text,
+    primera_at timestamp with time zone DEFAULT now() NOT NULL,
+    ultima_at timestamp with time zone DEFAULT now() NOT NULL,
+    veces integer DEFAULT 1 NOT NULL,
+    CONSTRAINT conta_bitrix_pestana_persona_usuario_id_check CHECK ((usuario_id ~ '^[0-9]{1,18}$'::text))
+);
+
+
+--
+-- Name: TABLE conta_bitrix_pestana_persona; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_bitrix_pestana_persona IS 'R18d · Quién ha abierto la pestaña de Sumied desde Bitrix24 sin usuario de Sumied: su id y su nombre de Bitrix24 (nunca su correo ni su token).';
+
+
+--
 -- Name: conta_bitrix_red; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -121029,6 +121237,14 @@ CREATE TABLE public.conta_crm (
     aviso_encendido_at timestamp with time zone,
     aviso_encendido_por_name text,
     aviso_ultimo_at timestamp with time zone,
+    pestana_portal_at timestamp with time zone,
+    pestana_portal_por text,
+    actualizar boolean,
+    actualizar_por_name text,
+    actualizar_at timestamp with time zone,
+    escribir_ref uuid,
+    escribir_por_name text,
+    escribir_at timestamp with time zone,
     CONSTRAINT conta_crm_crm_check CHECK ((crm ~ '^[a-z0-9_]+$'::text)),
     CONSTRAINT conta_crm_entorno_check CHECK ((entorno = ANY (ARRAY['real'::text, 'pruebas'::text])))
 );
@@ -121109,6 +121325,27 @@ COMMENT ON COLUMN public.conta_crm.aviso_encendido IS 'G01d · «Al instante» e
 --
 
 COMMENT ON COLUMN public.conta_crm.aviso_ultimo_at IS 'G01d · Cuándo llegó el último aviso auténtico.';
+
+
+--
+-- Name: COLUMN conta_crm.pestana_portal_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.pestana_portal_at IS 'R18d · Cuándo se unió el portal a esta cuenta para la pestaña (al instalar la aplicación de Sumied en Bitrix24). Con fecha, todas las personas del portal ven la pestaña, solo leyendo.';
+
+
+--
+-- Name: COLUMN conta_crm.actualizar; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.actualizar IS 'R18 · «Actualizar Bitrix24»: true, Sumied escribe en el CRM (solo en las fichas que deja el código); null o false, no (de serie). Lo enciende solo un administrador de la plataforma.';
+
+
+--
+-- Name: COLUMN conta_crm.escribir_ref; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.escribir_ref IS 'R18 · La clave para escribir en el CRM, en Vault (aparte de la de leer, url_ref). Nunca sale a la pantalla.';
 
 
 --
@@ -139233,6 +139470,14 @@ ALTER TABLE ONLY public.conta_bitrix_pestana_cambio
 
 
 --
+-- Name: conta_bitrix_pestana_persona conta_bitrix_pestana_persona_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_bitrix_pestana_persona
+    ADD CONSTRAINT conta_bitrix_pestana_persona_pkey PRIMARY KEY (account_id, portal, usuario_id);
+
+
+--
 -- Name: conta_bitrix_red conta_bitrix_red_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -155713,6 +155958,14 @@ ALTER TABLE ONLY public.conta_bitrix_pestana_cambio
 
 
 --
+-- Name: conta_bitrix_pestana_persona conta_bitrix_pestana_persona_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_bitrix_pestana_persona
+    ADD CONSTRAINT conta_bitrix_pestana_persona_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_bitrix_red conta_bitrix_red_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -168488,6 +168741,19 @@ CREATE POLICY conta_bitrix_pestana_cambio_leer ON public.conta_bitrix_pestana_ca
 
 
 --
+-- Name: conta_bitrix_pestana_persona; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_bitrix_pestana_persona ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_bitrix_pestana_persona conta_bitrix_pestana_persona_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_bitrix_pestana_persona_leer ON public.conta_bitrix_pestana_persona FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_bitrix_red; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -178265,6 +178531,14 @@ GRANT ALL ON FUNCTION public._conta_entrega_mercancia(p_supplier uuid) TO servic
 
 
 --
+-- Name: FUNCTION _conta_es_admin_plataforma(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_es_admin_plataforma() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_es_admin_plataforma() TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_factura_apuntar(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -184484,6 +184758,14 @@ GRANT ALL ON FUNCTION public.conta_bitrix_pestana_leer(p_portal text, p_correo t
 
 
 --
+-- Name: FUNCTION conta_bitrix_pestana_leer_portal(p_portal text, p_usuario text, p_nombre text, p_tipo text, p_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_leer_portal(p_portal text, p_usuario text, p_nombre text, p_tipo text, p_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_pestana_leer_portal(p_portal text, p_usuario text, p_nombre text, p_tipo text, p_id text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_bitrix_pestana_mensajes(p_portal text, p_correo text, p_tipo text, p_id text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -184513,6 +184795,14 @@ GRANT ALL ON FUNCTION public.conta_bitrix_pestana_suelto_poner(p_portal text, p_
 
 REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_sueltos(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_bitrix_pestana_sueltos(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_bitrix_portal_unir(p_portal text, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_portal_unir(p_portal text, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_portal_unir(p_portal text, p_quien text) TO service_role;
 
 
 --
@@ -185184,6 +185474,24 @@ GRANT ALL ON FUNCTION public.conta_crear_cuenta_sola(p_nombre text, p_slug text,
 
 
 --
+-- Name: FUNCTION conta_crm_actualizar_estado(p_account uuid, p_crm text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_actualizar_estado(p_account uuid, p_crm text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_actualizar_estado(p_account uuid, p_crm text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_crm_actualizar_estado(p_account uuid, p_crm text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_crm_actualizar_poner(p_account uuid, p_crm text, p_on boolean, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_actualizar_poner(p_account uuid, p_crm text, p_on boolean, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_actualizar_poner(p_account uuid, p_crm text, p_on boolean, p_quien text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_crm_actualizar_poner(p_account uuid, p_crm text, p_on boolean, p_quien text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_crm_aplicar_union(p_account uuid, p_crm text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -185193,12 +185501,29 @@ GRANT ALL ON FUNCTION public.conta_crm_aplicar_union(p_account uuid, p_crm text)
 
 
 --
+-- Name: FUNCTION conta_crm_clave_escribir_guardar(p_account uuid, p_crm text, p_url text, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_clave_escribir_guardar(p_account uuid, p_crm text, p_url text, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_clave_escribir_guardar(p_account uuid, p_crm text, p_url text, p_quien text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_crm_clave_escribir_guardar(p_account uuid, p_crm text, p_url text, p_quien text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_crm_escribir_de_portal(p_portal text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_escribir_de_portal(p_portal text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_escribir_de_portal(p_portal text) TO service_role;
 
 
 --
@@ -198917,6 +199242,14 @@ GRANT SELECT ON TABLE public.conta_bitrix_pestana_aviso TO authenticated;
 
 GRANT ALL ON TABLE public.conta_bitrix_pestana_cambio TO service_role;
 GRANT SELECT ON TABLE public.conta_bitrix_pestana_cambio TO authenticated;
+
+
+--
+-- Name: TABLE conta_bitrix_pestana_persona; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_bitrix_pestana_persona TO service_role;
+GRANT SELECT ON TABLE public.conta_bitrix_pestana_persona TO authenticated;
 
 
 --
