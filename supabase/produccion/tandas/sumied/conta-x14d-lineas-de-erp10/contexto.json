@@ -1,0 +1,19 @@
+{
+ "_que": "X14 · 2 · La clase de una línea de lo leído · contexto medido en la BASE LOCAL con la estructura de staging (main 1b02e43, con el X14 · 1, el 1b y el 2 delante, como en producción), en SOLO LECTURA: no en producción. 1042 solo añade una función que no lee tablas. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-25T09:43Z",
+ "tanda": {
+  "supabase/migrations/20261125T1042_x14d_clase_del_apunte.sql": "97f7e724c31350400ba3a82da6c55ae7"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

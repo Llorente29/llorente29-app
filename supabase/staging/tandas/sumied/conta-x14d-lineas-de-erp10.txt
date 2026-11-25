@@ -1,0 +1,3 @@
+# X14 · 2 · La clase de una línea de lo leído: la 1042 y su prueba en ROLLBACK.
+supabase/migrations/20261125T1042_x14d_clase_del_apunte.sql
+supabase/staging/sql/20261125_x14d_clase_del_apunte_prueba.sql

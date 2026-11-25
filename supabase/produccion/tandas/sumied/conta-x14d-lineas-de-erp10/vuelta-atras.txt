@@ -1,0 +1,3 @@
+# X14 · 2 · la vuelta atrás: quita la función de la clase de una línea.
+cuenta: scripts/conta/produccion/cuentas/x14d-lineas.sql
+supabase/vuelta-atras/20261125T1042_x14d_clase_del_apunte.down.sql

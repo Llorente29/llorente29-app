@@ -1,0 +1,9 @@
+# X14 · 2 · Las líneas de lo leído de ERP10 que journal_line no admite (Julio, 25/11): el 2024 de QBO para en
+# conta_traer_seguir con journal_line_debe_o_haber. Esta tanda, de momento, es para MEDIR en el ensayo cuántas líneas hay de
+# cada clase (cuentas/x14d-lineas.sql); el arreglo irá en la misma rama cuando Julio elija cómo tratarlas.
+#
+#   1042  _conta_traer_clase_apunte: función nueva, no lee tablas; no la llama nadie todavía.
+#
+# Nada en el camino del pedido. No cambia ninguna fila. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x14d-lineas.sql
+supabase/migrations/20261125T1042_x14d_clase_del_apunte.sql
