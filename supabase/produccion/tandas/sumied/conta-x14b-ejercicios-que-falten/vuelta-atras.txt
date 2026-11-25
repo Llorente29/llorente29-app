@@ -1,0 +1,3 @@
+# X14 · 1b · la vuelta atrás: conta_traer_cargar y conta_traer_deshacer de sus respaldos.
+cuenta: scripts/conta/produccion/cuentas/x14b-ejercicios.sql
+supabase/vuelta-atras/20261125T0816_x14b_ejercicios_que_falten.down.sql
