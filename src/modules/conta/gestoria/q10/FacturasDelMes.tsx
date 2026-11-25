@@ -10,7 +10,7 @@
 // Sumied no emite ni numera. Debajo de la línea de arriba va lo de Cegid (la
 // lectura, los códigos de cliente y la tabla de equivalencias: CegidQ10.tsx).
 
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { eurQ10, type MesQ10 } from './facturasDelMes'
 
@@ -20,8 +20,6 @@ export interface PropsQ10 {
   modelo: MesQ10
   /** Lo de la facturación de Cegid (la lectura, los códigos de cliente y la tabla de equivalencias). */
   cegid: ReactNode
-  /** Abre el PDF del borrador i; devuelve la frase si no se puede. */
-  alVerPdf: (i: number) => Promise<string | null>
   rutaVolver: string
   rutaSinCliente: string
 }
@@ -30,12 +28,6 @@ const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice
 
 export function FacturasDelMes(p: PropsQ10) {
   const m = p.modelo
-  const [aviso, setAviso] = useState<string | null>(null)
-  const [abriendo, setAbriendo] = useState<number | null>(null)
-  const verPdf = async (i: number) => {
-    setAbriendo(i); setAviso(null)
-    try { setAviso(await p.alVerPdf(i)) } catch (e) { setAviso(e instanceof Error ? e.message : String(e)) } finally { setAbriendo(null) }
-  }
   return (
     <div className="g4 q10" data-pantalla="facturas-q10">
       <header className="g4-cabecera">
@@ -51,24 +43,22 @@ export function FacturasDelMes(p: PropsQ10) {
       {p.cegid}
 
       <section className="g4-bloque" aria-labelledby="q10-facturas">
-        <h2 id="q10-facturas" className="g4-bloque-titulo">Cobrado y con todo para facturar ({m.facturas.length}) · {eurQ10(m.facturasCent)}</h2>
-        {aviso && <p className="q10-linea" data-tono="mal" role="alert">{aviso}</p>}
-        {m.facturas.length === 0 ? <p className="q10-linea">Ninguna, de momento: mira lo pendiente de revisar.</p> : (
+        <h2 id="q10-facturas" className="g4-bloque-titulo">Con todo para facturar: {m.porCliente.length} {m.porCliente.length === 1 ? 'factura' : 'facturas'} ({m.facturas.length} {m.facturas.length === 1 ? 'cobro' : 'cobros'}) · {eurQ10(m.facturasCent)}</h2>
+        <p className="q10-linea">Una factura por cliente, mes y serie, con todos sus cobros: Contasimple en la serie 3; lo demás, en la 1. La numera Cegid.</p>
+        {m.porCliente.length === 0 ? <p className="q10-linea">Ninguna, de momento: mira lo pendiente de revisar.</p> : (
           <div className="q10-tabla-caja">
             <table className="q10-tabla" aria-label="Facturas">
-              <thead><tr><th>Número</th><th>Cliente</th><th>Qué es</th><th>Cobrada el</th><th className="q10-num">Base</th><th className="q10-num">IVA</th><th className="q10-num">Retención</th><th className="q10-num">Total</th><th /></tr></thead>
+              <thead><tr><th>Cliente</th><th>Serie</th><th>Cobros</th><th className="q10-num">Base</th><th className="q10-num">IVA</th><th className="q10-num">Retención</th><th className="q10-num">Total</th></tr></thead>
               <tbody>
-                {m.facturas.map((f, i) => (
-                  <tr key={f.cobro.gcId} data-cobro={f.cobro.gcId}>
-                    <td className="q10-numero">La numera Cegid</td>
+                {m.porCliente.map((f) => (
+                  <tr key={`${f.ficha.partyId}|${f.serie}`} data-serie={f.serie}>
                     <td><div className="q10-cliente">{f.ficha.nombre}</div><div className="g4-pequeno">NIF {f.ficha.nif}</div></td>
-                    <td>{f.concepto}</td>
-                    <td>{dmy(f.cobro.fecha)}</td>
+                    <td>{f.serie}</td>
+                    <td><ul className="q10-cobros">{f.cobros.map((c) => <li key={c.cobro.gcId} data-cobro={c.cobro.gcId}>{c.concepto} · {dmy(c.cobro.fecha)} · {eurQ10(c.totalCent)}</li>)}</ul></td>
                     <td className="q10-num">{eurQ10(f.baseCent)}</td>
                     <td className="q10-num">{eurQ10(f.ivaCent)}</td>
-                    <td className="q10-num">{f.retencion ? `−${eurQ10(f.retencion.cent)} (${f.retencion.pct} %)` : '—'}</td>
+                    <td className="q10-num">{f.retencionCent ? `−${eurQ10(f.retencionCent)}` : '—'}</td>
                     <td className="q10-num q10-total">{eurQ10(f.totalCent)}</td>
-                    <td><button type="button" className="g4-boton g4-boton-pequeno" disabled={abriendo !== null} onClick={() => void verPdf(i)}>{abriendo === i ? 'Abriendo…' : 'PDF'}</button></td>
                   </tr>
                 ))}
               </tbody>

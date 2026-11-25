@@ -38,6 +38,8 @@ export interface DatosQ10 {
   fichas: FichaQ10[]
   /** La 430 de cada ficha en Sumied (company_account_link «customer», principal): el código de su cliente en Cegid. */
   cuentas: Map<string, string>
+  /** Q10 (26/11) · El atado de «Clientes y cuotas»: cada ficha con su cliente de GoCardless (conta_cobro_cliente). */
+  cobroCliente: { gcClienteId: string; partyId: string }[]
 }
 
 const finDeMes = (mes: string) => {
@@ -46,7 +48,7 @@ const finDeMes = (mes: string) => {
 }
 
 export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: string): Promise<DatosQ10> {
-  const [emp, cobros, suscripciones, mandatos, enlaces] = await Promise.all([
+  const [emp, cobros, suscripciones, mandatos, enlaces, cobroCliente] = await Promise.all([
     tabla('company').select('id, legal_name, trade_name, tax_id, fiscal_street_type, fiscal_street, fiscal_number, fiscal_extra, fiscal_postal_code, fiscal_city, email, phone')
       .eq('account_id', cuenta).eq('id', empresa).maybeSingle(),
     todas('los cobros de GoCardless', (a, b) => tabla('conta_gc_cobro').select('gc_id, estado, fecha, importe, suscripcion_gc_id, mandato_gc_id, motivo_es')
@@ -54,10 +56,12 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
     todas('las suscripciones de GoCardless', (a, b) => tabla('conta_gc_suscripcion').select('gc_id, nombre, gc_cliente_id').eq('company_id', empresa).order('gc_id').range(a, b)),
     todas('los mandatos de GoCardless', (a, b) => tabla('conta_gc_mandato').select('gc_id, gc_cliente_id, cuenta_final').eq('company_id', empresa).order('gc_id').range(a, b)),
     todas('los enlaces de GoCardless', (a, b) => tabla('conta_gc_enlace').select('gc_cliente_id, party_id, estado').eq('company_id', empresa).order('gc_cliente_id').range(a, b)),
+    // El atado que usa «Clientes y cuotas» (columnas comprobadas el 26/11, regla 40).
+    todas('los clientes de GoCardless de cada ficha', (a, b) => tabla('conta_cobro_cliente').select('party_id, gc_cliente_id').eq('company_id', empresa).not('gc_cliente_id', 'is', null).order('party_id').range(a, b)),
   ])
   if (emp.error) throw new Error(mensaje('No se ha podido leer la empresa', emp.error as never))
   if (!emp.data) throw new Error('Esa empresa no es de esta cuenta.')
-  const partes = [...new Set(enlaces.map((e) => s(e.party_id)).filter((x): x is string => !!x))]
+  const partes = [...new Set([...enlaces, ...cobroCliente].map((e) => s(e.party_id)).filter((x): x is string => !!x))]
   const fichas: FichaQ10[] = []
   for (let i = 0; i < partes.length; i += 200) {
     const ids = partes.slice(i, i + 200)
@@ -86,6 +90,7 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
   }
   return {
     cuentas,
+    cobroCliente: cobroCliente.filter((x) => s(x.party_id) && s(x.gc_cliente_id)).map((x) => ({ gcClienteId: String(x.gc_cliente_id), partyId: String(x.party_id) })),
     empresa: emp.data as Fila,
     cobros: cobros.map((c) => ({ gcId: String(c.gc_id), estado: String(c.estado), fecha: String(c.fecha), importe: Number(c.importe), suscripcionId: s(c.suscripcion_gc_id), mandatoId: s(c.mandato_gc_id), motivo: s(c.motivo_es) })),
     suscripciones: suscripciones.map((x) => ({ gcId: String(x.gc_id), nombre: s(x.nombre), gcClienteId: s(x.gc_cliente_id) })),

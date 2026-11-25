@@ -11,8 +11,8 @@
 //      serie y su retención;
 //   3. en la empresa que retiene, la retención de cada cliente sale de su
 //      última factura de Cegid;
-//   4. lo pendiente con su motivo; lo que GoCardless no cobró, aparte; el PDF
-//      de muestra de un cobro se abre.
+//   4. una factura por cliente, mes y serie (Contasimple en la 3), con el atado
+//      de «Clientes y cuotas»; lo pendiente con su motivo; lo no cobrado, aparte.
 //
 // La sesión, el marco y la cuenta de prueba son staging y el código de verdad.
 // Lo que la pantalla LEE se simula (como en ../q08/decisiones-qbo.spec.ts):
@@ -65,10 +65,13 @@ async function simular(page: Page, Q: string, A: string, conectada = true) {
     cobro('5', 121, `${MES}-04`), cobro('6', 36.3, `${MES}-05`), cobro('7', 99, `${MES}-09`, 'paid_out', { suscripcion_gc_id: null }),
     // Lo que GoCardless no cobró: sin factura.
     cobro('8', 121, `${MES}-04`, 'failed', { motivo_es: 'Fondos insuficientes' }), cobro('9', 53, `${MES}-04`, 'charged_back'),
+    // El Contasimple del cliente 1: su factura va aparte, en la serie 3.
+    cobro('10', 36.3, `${MES}-05`, 'paid_out', { mandato_gc_id: 'MD1' }),
   ]
   const sus = (gc: string, nombre: string) => ({ gc_id: `SB${gc}`, nombre, gc_cliente_id: `CU${gc}` })
   const suscripciones = [sus('1', 'GESTORIA MENSUAL'), sus('2', 'SERVICIOS GESTORIA'), sus('3', 'GESTION LABORAL PERSONA INVENTADA'), sus('4', 'GESTORIA MENSUAL'),
-    sus('5', 'GESTORIA MENSUAL'), sus('6', 'CONTASIMPLE SOFTWARE'), sus('8', 'GESTORIA MENSUAL'), sus('9', 'GESTORIA MENSUAL')]
+    sus('5', 'GESTORIA MENSUAL'), sus('6', 'CONTASIMPLE SOFTWARE'), sus('8', 'GESTORIA MENSUAL'), sus('9', 'GESTORIA MENSUAL'),
+    { gc_id: 'SB10', nombre: 'CONTASIMPLE SOFTWARE', gc_cliente_id: 'CU1' }]
   const mandatos = Array.from({ length: 9 }, (_, i) => ({ gc_id: `MD${i + 1}`, gc_cliente_id: `CU${i + 1}`, cuenta_final: String(10 + i) }))
   const enlaces = Array.from({ length: 9 }, (_, i) => ({ gc_cliente_id: `CU${i + 1}`, party_id: `p${i + 1}`, estado: i + 1 === 5 ? 'propuesto' : 'atado' }))
   const fichas = [
@@ -90,7 +93,9 @@ async function simular(page: Page, Q: string, A: string, conectada = true) {
   const facturasCegid = [factura(2700, 101, [linea('0001', 100)], 0), factura(2701, 102, [linea('0002', 50, true)], 15),
     factura(2702, 103, [linea('0008', 20)], 0), factura(2703, 104, [linea('0001', 50, true)], 15)]
   const TABLAS: Record<string, unknown[]> = { conta_gc_cobro: cobros, conta_gc_suscripcion: suscripciones, conta_gc_mandato: mandatos, conta_gc_enlace: enlaces, party: fichas, customer_fiscal: [],
-    company_account_link: enlaces430 }
+    company_account_link: enlaces430,
+    // El atado de «Clientes y cuotas»: el cliente 5 tiene su enlace solo «propuesto», pero su fila aquí lo ata.
+    conta_cobro_cliente: [{ party_id: 'p5', gc_cliente_id: 'CU5' }] }
   const CEGID: Record<string, unknown[]> = { conta_cegid_cliente: clientesCegid, conta_cegid_concepto: conceptosCegid, conta_cegid_factura: facturasCegid }
   await page.route(/\/rest\/v1\/(conta_cegid_cliente|conta_cegid_concepto|conta_cegid_factura)\?/, (r) => {
     const t = /\/rest\/v1\/([a-z_]+)\?/.exec(r.request().url())![1]
@@ -109,7 +114,7 @@ async function simular(page: Page, Q: string, A: string, conectada = true) {
     if (b.accion === 'leer') { leido = true; return objeto(r, { ok: true, que: b.que, pagina: b.pagina, leidas: b.que === 'clientes' ? 4 : b.que === 'conceptos' ? 3 : 4, total: 4, ultima: true }) }
     return objeto(r, { ok: true, que: b.que, desde: b.desde, hechos: 4, ultima: true })
   })
-  await page.route(/\/rest\/v1\/(conta_gc_cobro|conta_gc_suscripcion|conta_gc_mandato|conta_gc_enlace|party|customer_fiscal|company_account_link)\?/, (r) => {
+  await page.route(/\/rest\/v1\/(conta_gc_cobro|conta_gc_suscripcion|conta_gc_mandato|conta_gc_enlace|party|customer_fiscal|company_account_link|conta_cobro_cliente)\?/, (r) => {
     if (r.request().method() !== 'GET') return r.fallback()
     const t = /\/rest\/v1\/([a-z_]+)\?/.exec(r.request().url())![1]
     // La segunda página (range desde 1000) va vacía.
@@ -136,13 +141,17 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     // La pestaña «Facturas del mes», en las páginas de Clientes y cuotas, y marcada (Julio, 25/11: no la encontraba).
     await expect(page.getByRole('list', { name: 'Páginas de Clientes y cuotas' }).getByRole('link', { name: 'Facturas del mes' })).toHaveAttribute('aria-current', 'page')
     const cabecera = page.locator('[data-prueba="cabecera"]')
-    // 4 cobros con todo (121 + 53 + 24,20 + 60,50 = 258,70); cobrado 258,70 + 121 + 36,30 + 99 = 515,00; faltan 3 (256,30).
-    await expect(cabecera).toHaveText('Noviembre: 4 facturas, 258,70 €. GoCardless cobró 515,00 €. Faltan 3 (256,30 €): mira abajo.')
+    // 6 cobros con todo (121 + 53 + 24,20 + 60,50 + 121 del 5, atado por Clientes y cuotas, + 36,30 de Contasimple = 416,00), en
+    // 6 facturas (el cliente 1, dos: la serie 1 y la 3); cobrado 416,00 + 36,30 + 99 = 551,30; faltan 2 (135,30).
+    await expect(cabecera).toHaveText('Noviembre: 6 facturas (6 cobros), 416,00 €. GoCardless cobró 551,30 €. Faltan 2 (135,30 €): mira abajo.')
     // 1. Ni «Emitir» ni números: los pone Cegid.
     await expect(page.getByRole('button', { name: /Emitir/ })).toHaveCount(0)
     const filas = page.getByRole('table', { name: 'Facturas' }).locator('tbody tr')
-    await expect(filas).toHaveCount(4)
-    await expect(filas.first().locator('td').first()).toHaveText('La numera Cegid')
+    await expect(filas).toHaveCount(6)
+    // Una factura por cliente, mes y serie: Contasimple, en la 3.
+    await expect(filas.filter({ hasText: 'Construcciones Ficticias, S.A.' })).toHaveCount(2)
+    await expect(filas.filter({ hasText: 'Construcciones Ficticias, S.A.' }).and(page.locator('[data-serie="3"]'))).toContainText('CONTASIMPLE SOFTWARE')
+    await expect(filas.filter({ hasText: 'Sin Atar de Prueba, S.L.' })).toContainText('121,00 €')
 
     // 2. «Leer de Cegid»: solo lee; los códigos de cliente y la tabla de equivalencias.
     const cegid = page.locator('[data-prueba="cegid"]')
@@ -150,7 +159,11 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await cegid.getByRole('button', { name: 'Leer de Cegid' }).click()
     await expect(cegid.locator('[data-prueba="lectura"]')).toHaveText('Leído de Cegid: 4 clientes con sus conceptos fijos, 3 conceptos y 4 facturas de 2026. No se ha escrito nada en Cegid.', { timeout: 30_000 })
     expect(pedidas.every((p) => p.accion === 'leer' || p.accion === 'detalle')).toBe(true)
-    await expect(cegid.locator('[data-prueba="codigos"]')).toHaveText('De 9 fichas atadas: 3 con su 430 igual al código de Cegid (y el mismo NIF), 0 con el código pero otro NIF en Cegid, 1 por su NIF y 5 sin código de Cegid.')
+    await expect(cegid.locator('[data-prueba="codigos"]')).toHaveText('De 7 fichas atadas: 3 con su 430 igual al código de Cegid (y el mismo NIF), 0 con el código pero otro NIF en Cegid, 1 por su NIF y 3 sin código de Cegid.')
+    // Las fichas sin código de Cegid, con su NIF, para mirarlas.
+    await cegid.locator('[data-prueba="sin-codigo"] summary').click()
+    await expect(cegid.getByRole('table', { name: 'Fichas sin código de Cegid' }).locator('tbody tr')).toHaveCount(3)
+    await expect(cegid.getByRole('table', { name: 'Fichas sin código de Cegid' })).toContainText('B00000002')
     const tabla = cegid.getByRole('table', { name: 'Tabla de equivalencias' })
     await expect(tabla.locator('tr[data-familia="GESTORIA MENSUAL"]')).toContainText('0001 HONORARIOS MENSUALES')
     // La 104 se factura con retención (50 € → 53 €) y su cobro es de 60,50 €: no vota.
@@ -160,17 +173,11 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await expect(tabla.locator('tr[data-familia="GESTION LABORAL"]')).toContainText('0008 GESTIÓN LABORAL')
     await expect(tabla.locator('tr[data-familia="(sin suscripción)"]')).toContainText('Sin propuesta')
 
-    // 4. Lo pendiente, con su motivo; lo no cobrado, aparte; el PDF de muestra se abre.
-    await expect(page.locator('[data-prueba="pendientes"] li')).toHaveCount(3)
-    await expect(page.locator('[data-prueba="pendientes"] li[data-motivo="sin_cliente"]')).toContainText('átalo en «Cobros de GoCardless sin cliente»')
+    // 4. Lo pendiente, con su motivo (ya no «sin cliente»: el 5 lo ata Clientes y cuotas); lo no cobrado, aparte.
+    await expect(page.locator('[data-prueba="pendientes"] li')).toHaveCount(2)
+    await expect(page.locator('[data-prueba="pendientes"] li[data-motivo="sin_cliente"]')).toHaveCount(0)
+    await expect(page.locator('[data-prueba="pendientes"] li[data-motivo="sin_nif"]')).toContainText('no tiene NIF')
     await expect(page.locator('[data-prueba="sin-factura"] li[data-estado="failed"]')).toContainText('Fallido: GoCardless no lo pudo cobrar (Fondos insuficientes)')
-    await page.evaluate(() => {
-      const w = window as unknown as { __abiertas: string[] }
-      w.__abiertas = []
-      window.open = ((u?: string | URL) => { w.__abiertas.push(String(u)); return {} as Window }) as typeof window.open
-    })
-    await filas.nth(0).getByRole('button', { name: 'PDF' }).click()
-    await expect.poll(() => page.evaluate(() => (window as unknown as { __abiertas: string[] }).__abiertas)).toEqual([expect.stringMatching(/^blob:/)])
 
     mkdirSync(DIR, { recursive: true })
     await page.evaluate(() => document.fonts.ready)
@@ -182,7 +189,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     // Lo leído ya está guardado (la simulación lo da): 53 € a Talleres de Prueba (15 %): base 50, retención 7,50; 24,20 a la persona (sin retención): base 20.
     const talleres = filas.filter({ hasText: 'Talleres de Prueba, S.L.' })
     await expect(talleres).toContainText('50,00 €', { timeout: 30_000 })
-    await expect(talleres).toContainText('−7,50 € (15 %)')
+    await expect(talleres).toContainText('−7,50 €')
     await expect(filas.filter({ hasText: 'Persona Inventada Uno' })).toContainText('20,00 €')
     // 60,50 € con el 15 % no da el total al céntimo: a revisar, no a ojo.
     await expect(page.locator('[data-prueba="pendientes"] li[data-motivo="no_cuadra"]')).toContainText('Comercial Ejemplo, S.L.')

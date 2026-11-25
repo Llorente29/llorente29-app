@@ -101,7 +101,8 @@ export function tablaEquivalencias(cobros: readonly CobroQ[], codigos: ReadonlyM
   for (const c of cobros) { const k = familia(c.concepto); grupos.set(k, [...(grupos.get(k) ?? []), c]) }
   const filas: FilaEquivalencia[] = []
   for (const [fam, xs] of grupos) {
-    const votos = new Map<string, number>()
+    // Un voto por CLIENTE y concepto: un cliente con varios trabajadores (varios cobros) no vota varias veces.
+    const votantes = new Map<string, Set<number>>()
     const clientesFam = new Set<number>(), conPrueba = new Set<number>()
     for (const c of xs) {
       const cod = c.partyId ? codigos.get(c.partyId)?.codigo ?? null : null
@@ -131,9 +132,9 @@ export function tablaEquivalencias(cobros: readonly CobroQ[], codigos: ReadonlyM
         if ([total, porUnidad].some((v) => Math.abs(Math.round(cent(v) * 1.21) - objetivo) <= 1)) vistos.add(codigo)
       }
       if (vistos.size) conPrueba.add(cod)
-      for (const k of vistos) votos.set(k, (votos.get(k) ?? 0) + 1)
+      for (const k of vistos) votantes.set(k, (votantes.get(k) ?? new Set<number>()).add(cod))
     }
-    const cands = [...votos.entries()].map(([codigo, n]) => ({ codigo, descripcion: conc.get(codigo)?.descripcion ?? null, votos: n }))
+    const cands = [...votantes.entries()].map(([codigo, quienes]) => ({ codigo, descripcion: conc.get(codigo)?.descripcion ?? null, votos: quienes.size }))
       .sort((a, b) => b.votos - a.votos || a.codigo.localeCompare(b.codigo))
     const propuesta = cands[0] ?? null
     let serie: FilaEquivalencia['serie'] = null, retencion: FilaEquivalencia['retencion'] = null
