@@ -44,4 +44,39 @@ select clave, valor from (
             where c.company_id = r.company_id and c.series_code = x->>'serie' and c.fiscal_year = (x->>'ejercicio')::int
               and c.number = (x->>'numero')::int and c.import_run_id is null))::text
     from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 9, 'carga del 2024 de QBO · emitidas repetidas: grupos',
+         (select count(*) from (select 1 from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' group by x->>'serie', x->>'ejercicio', x->>'numero'
+                                 having count(*) > 1 and true) d)::text   -- quieta: el detalle de una carga en prueba no cambia
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 10, 'carga del 2024 de QBO · emitidas repetidas: grupos idénticos (fecha, cliente e importes)',
+         (select count(*) from (select 1 from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' group by x->>'serie', x->>'ejercicio', x->>'numero'
+                                 having count(*) > 1 and count(distinct (x->>'fecha', x->'cliente', x->>'base', x->>'cuota', x->>'retencion', x->>'total')) = 1) d)::text   -- quieta: el detalle de una carga en prueba no cambia
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 11, 'carga del 2024 de QBO · emitidas repetidas: grupos con la misma fecha y cliente e importes distintos',
+         (select count(*) from (select 1 from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' group by x->>'serie', x->>'ejercicio', x->>'numero'
+                                 having count(*) > 1 and count(distinct (x->>'fecha', x->'cliente')) = 1 and count(distinct (x->>'base', x->>'cuota', x->>'total')) > 1) d)::text   -- quieta: el detalle de una carga en prueba no cambia
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 12, 'carga del 2024 de QBO · emitidas repetidas: grupos con distinta fecha',
+         (select count(*) from (select 1 from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' group by x->>'serie', x->>'ejercicio', x->>'numero'
+                                 having count(*) > 1 and count(distinct x->>'fecha') > 1) d)::text   -- quieta: el detalle de una carga en prueba no cambia
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 13, 'carga del 2024 de QBO · emitidas repetidas: grupos con distinto cliente',
+         (select count(*) from (select 1 from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' group by x->>'serie', x->>'ejercicio', x->>'numero'
+                                 having count(*) > 1 and count(distinct x->'cliente') > 1) d)::text   -- quieta: el detalle de una carga en prueba no cambia
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 14, 'carga del 2024 de QBO · emitidas repetidas: grupos con el mismo asiento',
+         (select count(*) from (select 1 from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' group by x->>'serie', x->>'ejercicio', x->>'numero'
+                                 having count(*) > 1 and count(distinct x->>'asiento') = 1 and bool_and(nullif(x->>'asiento', '') is not null)) d)::text   -- quieta: el detalle de una carga en prueba no cambia
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 15, 'carga del 2024 de QBO · emitidas repetidas: grupos con un importe en negativo',
+         (select count(*) from (select 1 from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' group by x->>'serie', x->>'ejercicio', x->>'numero'
+                                 having count(*) > 1 and bool_or((x->>'total')::numeric < 0)) d)::text   -- quieta: el detalle de una carga en prueba no cambia
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
 ) t order by o, clave;

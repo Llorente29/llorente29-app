@@ -17,3 +17,10 @@ esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas dent
 esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas sin número = como antes
 esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas que ya están en Sumied, traídas de otra carga = como antes
 esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas que ya están en Sumied, hechas en Sumied = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas: grupos = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas: grupos idénticos (fecha, cliente e importes) = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas: grupos con la misma fecha y cliente e importes distintos = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas: grupos con distinta fecha = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas: grupos con distinto cliente = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas: grupos con el mismo asiento = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas: grupos con un importe en negativo = como antes
