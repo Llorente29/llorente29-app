@@ -75,7 +75,7 @@ export function ApartadoFacturacionCegid({ quien, movil, nombre }: { quien: Quie
             <button type="submit" className="cx-boton-sec" disabled={ocupado}>{con.conClaves ? 'Cambiar las claves' : 'Guardar las claves'}</button>
           </form>
           <form onSubmit={guardarCodigo} autoComplete="off">
-            <CampoTexto etiqueta="Código de esta empresa en Cegid" valor={codigo} cambiar={setCodigo} deshabilitado={ocupado} modo="numeric" />
+            <CampoTexto etiqueta="Código de esta empresa en Cegid" ayuda="El número de la empresa en Cegid (en ERP10 sale entre corchetes, como «[1000]»). «Probar la conexión» dice a qué empresa ha entrado, para confirmarlo." valor={codigo} cambiar={setCodigo} deshabilitado={ocupado} modo="numeric" />
             <button type="submit" className="cx-boton-sec" disabled={ocupado || !codigo.trim()}>Guardar el código</button>
           </form>
           <button type="button" className="cx-boton" disabled={ocupado || !con.conClaves || !con.codigo.trim()}

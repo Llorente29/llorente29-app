@@ -2,8 +2,9 @@
 //
 // Q10 · respuesta 1 · puntos 1 y 2 · LEER LA FACTURACIÓN DE CEGID (API DiezREC), SOLO LEYENDO. Las llamadas a la API
 // salen solo de aquí (el servidor): las claves nunca llegan al navegador.
-//   · { company_id, accion: 'probar' }: entra (login, con «empresa» o «codigoEmpresa») y lee las series. No escribe
-//     nada ni en Cegid ni en Sumied. Dice con qué campo ha entrado y qué series hay.
+//   · { company_id, accion: 'probar' }: entra (login, con «empresa» o «codigoEmpresa») y dice a qué empresa ha entrado
+//     por lo que lee de ella (DiezREC no da su nombre ni su NIF): sus series con su última factura del año y cuántos
+//     clientes tiene, y el id del login. No escribe nada ni en Cegid ni en Sumied.
 //   · { company_id, accion: 'leer', que, pagina, ejercicio? }: UNA página de lo que se lee y se guarda en Sumied
 //     (conta_cegid_*, la 1840): 'clientes', 'conceptos' o 'facturas' (de un ejercicio). La pantalla las pide una a
 //     una; ninguna llamada pasa de un minuto. La primera página de cada cosa borra la foto de antes de esa empresa.
@@ -18,7 +19,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
-import { ClienteDiezRec, clienteCegid, conceptoCegid, conceptosFijos, facturaCegid, FalloDiezRec, rutaCliente, rutaConcepto, type QueLeer } from "../_shared/diezRec.ts";
+import { ClienteDiezRec, clienteCegid, conceptoCegid, conceptosFijos, facturaCegid, FalloDiezRec, fraseProbado, rutaCliente, rutaConcepto, rutaUltimaFactura, type Probado, type QueLeer } from "../_shared/diezRec.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -33,7 +34,7 @@ type Srv = any;
 type Fila = Record<string, unknown>;
 
 /** Las claves de la cuenta y el código de empresa de la sociedad, del conector «diezrec». */
-async function conexion(srv: Srv, accountId: string, companyId: string): Promise<{ cliente: ClienteDiezRec } | { error: string; status: number }> {
+async function conexion(srv: Srv, accountId: string, companyId: string): Promise<{ cliente: ClienteDiezRec; empresa: string } | { error: string; status: number }> {
   const { data: filas, error } = await srv.from("account_connector").select("id, scope, company_id, external_account_id, connector!inner(code)")
     .eq("account_id", accountId).eq("connector.code", "diezrec").in("scope", ["account", "company"]);
   if (error) return { error: `no se ha podido leer la conexión con Cegid: ${error.message}`, status: 500 };
@@ -50,7 +51,7 @@ async function conexion(srv: Srv, accountId: string, companyId: string): Promise
   }
   const cliente = new ClienteDiezRec({ claves: { client_id: sec.client_id, client_secret: sec.client_secret, username: sec.username, password: sec.password }, empresa,
     fetch: (url, init) => fetch(url, init) });
-  return { cliente };
+  return { cliente, empresa };
 }
 
 Deno.serve(async (req) => {
@@ -86,10 +87,21 @@ Deno.serve(async (req) => {
 
   try {
     if (accion === "probar") {
+      // A qué empresa ha entrado, por lo que se lee de ella: sus series con su última factura del año y cuántos clientes.
+      const ejercicioHoy = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(new Date()).slice(0, 4));
       const s = await api.pagina("series", 0);
-      const series = s.filas.map((x) => String(x.codigo ?? "").trim()).filter(Boolean);
-      return json({ ok: true, campo: api.campoEmpresa, series,
-        frase: `Conectada con la facturación de Cegid (ha entrado con «${api.campoEmpresa}»). Series: ${series.length ? series.join(", ") : "ninguna"}. No se ha escrito nada.` });
+      const series: Probado["series"] = [];
+      for (const x of s.filas.slice(0, 20)) {
+        const codigo = String(x.codigo ?? "").trim();
+        if (!codigo) continue;
+        const r = await api.get(rutaUltimaFactura(ejercicioHoy, codigo));
+        const f = r.status === 200 ? ((r.json as Fila | null)?.datos as Fila[] | undefined)?.[0] : undefined;
+        series.push({ codigo, descripcion: String(x.descripcion ?? "").trim() || null, ultima: f ? { ejercicio: Number(f.ejercicio), codigo: Number(f.codigo) } : null });
+      }
+      const cl = await api.get("/api/Customers?$orderby=codigo&$top=1&$skip=0");
+      const clientes = cl.status === 200 ? Number((cl.json as Fila | null)?.resultadosTotales ?? NaN) : NaN;
+      const p: Probado = { campo: api.campoEmpresa, empresa: c.empresa, idCliente: api.idCliente, clientes: Number.isFinite(clientes) ? clientes : null, series, ejercicio: ejercicioHoy };
+      return json({ ok: true, ...p, frase: fraseProbado(p) });
     }
 
     if (accion === "leer") {

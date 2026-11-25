@@ -98,6 +98,8 @@ export class ClienteDiezRec {
   private token: string | null = null
   /** El campo con el que el login aceptó el código de empresa («empresa» o «codigoEmpresa»), cuando ya ha entrado. */
   campoEmpresa: 'empresa' | 'codigoEmpresa' | null = null
+  /** El «id» que devuelve el login: el cliente de Diez Software al que pertenece el usuario. */
+  idCliente: string | null = null
   constructor(private readonly o: { claves: ClavesDiezRec; empresa: string; base?: string; fetch: Fetch }) {}
 
   private async llamar(metodo: 'GET' | 'POST', ruta: string, cuerpo?: Fila): Promise<Respuesta> {
@@ -120,7 +122,7 @@ export class ClienteDiezRec {
     for (const campo of ['empresa', 'codigoEmpresa'] as const) {
       const r = await this.llamar('POST', '/api/Auth/login', { ...base, [campo]: this.o.empresa })
       const tok = (r.json as Fila | null)?.auth_token
-      if (r.status === 200 && typeof tok === 'string' && tok) { this.token = tok; this.campoEmpresa = campo; return }
+      if (r.status === 200 && typeof tok === 'string' && tok) { this.token = tok; this.campoEmpresa = campo; this.idCliente = txt((r.json as Fila).id); return }
       ultimo = r
       if (r.status !== 400) break
     }
@@ -154,4 +156,31 @@ export function motivoDeError(j: unknown): string {
   if (Array.isArray(acceso)) return [...acceso, ...(Array.isArray(x.Error) ? x.Error : x.Error ? [x.Error] : [])].map(String).join(' ').slice(0, 200)
   if (x.errors && typeof x.errors === 'object') return Object.values(x.errors as Record<string, unknown>).flat().map(String).join(' ').slice(0, 200)
   return String(x.title ?? x.message ?? 'sin detalle').slice(0, 200)
+}
+
+// ── «Probar la conexión»: a qué empresa ha entrado, por lo que lee de ella ───────────────
+
+/** La última factura de un ejercicio y una serie (la de número más alto). */
+export const rutaUltimaFactura = (ejercicio: number, serie: string) =>
+  `/api/Invoices?${q({ $filter: `ejercicio eq ${Math.trunc(ejercicio)} and serie eq '${serie.replace(/'/g, "''")}'`, $orderby: 'codigo desc', $top: 1, $skip: 0 })}`
+
+export interface Probado {
+  campo: 'empresa' | 'codigoEmpresa' | null
+  empresa: string
+  idCliente: string | null
+  clientes: number | null
+  series: { codigo: string; descripcion: string | null; ultima: { ejercicio: number; codigo: number } | null }[]
+  ejercicio: number
+}
+
+/**
+ * La frase de «Probar la conexión». DiezREC no da el nombre ni el NIF de la empresa en la que se entra: se dice lo que
+ * se lee de ella (sus series con su última factura del año y cuántos clientes tiene) para reconocerla sin adivinar.
+ */
+export function fraseProbado(p: Probado): string {
+  const series = p.series.length
+    ? p.series.map((x) => `${x.codigo}${x.descripcion ? ` («${x.descripcion}»)` : ''}: ${x.ultima ? `la última de ${p.ejercicio} es la ${x.ultima.ejercicio}/${x.codigo}/${x.ultima.codigo}` : `ninguna factura de ${p.ejercicio}`}`).join('; ')
+    : 'ninguna'
+  return `Conectada con la facturación de Cegid: ha entrado en la empresa ${p.empresa} (con «${p.campo ?? '?'}»${p.idCliente ? `; cliente de Diez Software ${p.idCliente}` : ''}). `
+    + `Tiene ${p.clientes ?? '?'} clientes. Series: ${series}. Mira que es la empresa que toca. No se ha escrito nada.`
 }

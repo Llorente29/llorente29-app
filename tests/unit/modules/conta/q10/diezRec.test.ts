@@ -84,3 +84,23 @@ describe('Q10 · DiezREC · rutas y formas cortas', () => {
     expect(motivoDeError({ title: 'One or more validation errors occurred.', errors: { UserName: ['The UserName field is required.'] } })).toBe('The UserName field is required.')
   })
 })
+
+describe('Q10 · DiezREC · «Probar la conexión» dice a qué empresa ha entrado', async () => {
+  const { fraseProbado, rutaUltimaFactura } = await import('../../../../../supabase/functions/_shared/diezRec')
+  it('la última factura del año de una serie', () => {
+    expect(rutaUltimaFactura(2026, '1')).toBe("/api/Invoices?$filter=ejercicio%20eq%202026%20and%20serie%20eq%20'1'&$orderby=codigo%20desc&$top=1&$skip=0")
+  })
+  it('por lo que lee: sus series con su última factura y cuántos clientes', () => {
+    expect(fraseProbado({ campo: 'empresa', empresa: '1000', idCliente: '1234', clientes: 412, ejercicio: 2026,
+      series: [{ codigo: '1', descripcion: 'GENERAL', ultima: { ejercicio: 2026, codigo: 2749 } }, { codigo: '3', descripcion: null, ultima: null }] }))
+      .toBe('Conectada con la facturación de Cegid: ha entrado en la empresa 1000 (con «empresa»; cliente de Diez Software 1234). Tiene 412 clientes. '
+        + 'Series: 1 («GENERAL»): la última de 2026 es la 2026/1/2749; 3: ninguna factura de 2026. Mira que es la empresa que toca. No se ha escrito nada.')
+  })
+  it('el login guarda el id del cliente de Diez Software', async () => {
+    let i = 0
+    const fetch = async () => ({ status: 200, text: async () => JSON.stringify(i++ === 0 ? { id: '1234', auth_token: 'tok' } : {}) })
+    const c = new ClienteDiezRec({ claves, empresa: '1000', fetch })
+    await c.entrar()
+    expect(c.idCliente).toBe('1234')
+  })
+})
