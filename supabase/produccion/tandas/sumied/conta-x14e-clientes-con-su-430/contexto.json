@@ -1,0 +1,22 @@
+{
+ "_que": "X14 · 2 · El código de cada cliente al traer · contexto medido en la BASE LOCAL con la estructura de staging (main 0e9d779, como en producción), en SOLO LECTURA: no en producción. Reemplaza conta_traer_cargar y conta_traer_deshacer (la misma firma), con respaldo y con su prueba de staging. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-25T13:16Z",
+ "tanda": {
+  "supabase/migrations/20261125T1415_x14e_clientes_con_su_430.sql": "89e22fb2ae79fcbbe8d775111061effb"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_traer_cargar(uuid,text,jsonb,text)",
+   "public.conta_traer_deshacer(uuid,text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

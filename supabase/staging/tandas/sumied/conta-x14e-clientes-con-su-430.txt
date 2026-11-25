@@ -1,0 +1,3 @@
+# X14 · 2 · El código de cada cliente al traer: la 1415 y su prueba en ROLLBACK.
+supabase/migrations/20261125T1415_x14e_clientes_con_su_430.sql
+supabase/staging/sql/20261125_x14e_clientes_con_su_430_prueba.sql
