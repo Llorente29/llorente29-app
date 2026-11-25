@@ -1,10 +1,14 @@
-# X14 · 2 · Traer pone el código de cada cliente (su 430) en conta_cobro_cliente.codigo_cliente, el sitio que leen el cobro
-# (G05) y la salida a ERP10 (Julio, 25/11): QBO contabiliza noviembre desde Sumied. Rama conta/x14e-clientes-con-su-430. Se ensaya y se aplica
-# desde main nombrando esta rama, antes de fusionar.
+# X14 · 2 · Traer como en ERP10 (Julio, 25/11): la carga de ERP10 es una foto fiel y exacta; si una cuenta, un nombre o la 430
+# de un cliente ya existían distintos en Sumied, gana ERP10 y Sumied se ajusta, nunca al revés. Y el código de cada cliente
+# (su 430) en conta_cobro_cliente.codigo_cliente, el sitio que leen el cobro (G05) y la salida a ERP10. Rama
+# conta/x14e-clientes-con-su-430. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
 #
-#   1415  conta_traer_cargar y conta_traer_deshacer (enteras, con respaldo): el código al traer, sin pisar lo que hay
-#         (lo que choca va a lo que hay que mirar), y su vuelta al deshacer. Declarado, con su prueba.
+#   1415  conta_traer_cargar y conta_traer_deshacer (enteras, con respaldo), y las nuevas _conta_traer_como_erp10, su
+#         deshacer y _conta_traer_ajustar_a_erp10. Declarado, con su prueba.
+#   1649  El 2024 de QBO (ya dado por bueno con la regla de antes: 776 avisos de «se queda la de Sumied»), ajustado a ERP10:
+#         TOCA DATOS (dentro de la función: el analizador lo da por «sigue»). Lo que cambia lo cuentan las medidas 2 a 4.
 #
-# Nada en el camino del pedido. No cambia ninguna fila al aplicarse. El real lo lanza Julio.
+# Nada en el camino del pedido. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/x14e-codigos.sql
 supabase/migrations/20261125T1415_x14e_clientes_con_su_430.sql
+supabase/migrations/20261125T1649_x14e_ajustar_a_erp10.sql

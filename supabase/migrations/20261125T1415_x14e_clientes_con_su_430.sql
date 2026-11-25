@@ -11,11 +11,149 @@
 --      cuentan en la carga (n_codigos_cliente).
 --   2. conta_traer_deshacer (misma firma; guardada): deshacer la carga quita las filas que creó y deja sin código las que
 --      rellenó.
+--   3. (Julio, 25/11, después del 2024 de QBO) «La carga de ERP10 es una foto fiel y exacta: si una cuenta, un nombre o la 430
+--      de un cliente ya existían distintos en Sumied, gana ERP10 y Sumied se ajusta; nunca al revés.» El 2024 dejó 776 avisos
+--      de «se queda la de Sumied». Ahora, al traer: la cuenta principal de cada proveedor y cliente pasa a la de ERP10 (y la
+--      cuenta deja de ser de otro tercero); la cuenta que ya existía se llama como en ERP10; y el código de cliente es el de
+--      su 430, aunque ya tuviera otro o lo tuviera otro cliente. Todo, en lo que hay que mirar y deshecho al deshacer. Las
+--      piezas: _conta_traer_como_erp10 y su deshacer (nuevas), y _conta_traer_ajustar_a_erp10 (nueva) para lo ya traído
+--      (la aplica la 1715 al 2024 de QBO).
 -- Las dos, enteras: las de producción (X14 · 1b y X14 · 2) con los trozos nuevos («X14 · 2 · El código del cliente»).
 -- sin hueco: el fichero no retira nada al aplicarse. El «delete from public.journal_entry» es el de siempre de
 -- conta_traer_deshacer (los asientos traídos en borrador de una carga en prueba), dentro de la función, sin cambios.
--- Nada en el camino del pedido. No cambia ninguna fila al aplicarse. El real lo lanza Julio. Vuelta atrás: las dos
+-- Nada en el camino del pedido. Este fichero no cambia ninguna fila al aplicarse (el ajuste del 2024 va en la 1715). El real lo lanza Julio. Vuelta atrás: las dos
 -- funciones de sus respaldos.
+
+-- 0 · Las piezas nuevas: la cuenta como en ERP10 (y su deshacer), y el ajuste de lo ya traído ---------------------------
+-- X14 · 2 · La cuenta principal de un tercero, como en ERP10 (Julio, 25/11: «una foto fiel y exacta: gana ERP10 y Sumied se
+-- ajusta a ERP10, nunca al revés»). Si la cuenta era la principal de otro tercero en Sumied, ese enlace se quita; si el
+-- tercero tenía otra cuenta principal, pasa a la de ERP10; si no tenía, se crea. Devuelve lo que hace falta para deshacerlo
+-- y las frases de lo que ha cambiado. No toca las cuentas comunes (is_common) ni lo que no es un proveedor o un cliente.
+create or replace function public._conta_traer_como_erp10(p_cuenta uuid, p_company uuid, p_cta uuid, p_entity text, p_id uuid, p_nombre text, p_prog text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_d jsonb := '[]'; v_f jsonb := '[]'; r record; v_code text; v_mio public.company_account_link; v_antes text; v_nuevo uuid;
+begin
+  select code into v_code from public.company_account where id = p_cta;
+  if exists (select 1 from public.company_account where id = p_cta and is_common) then
+    return jsonb_build_object('deshacer', v_d, 'frases', v_f);
+  end if;
+  -- La cuenta era la principal de otro tercero: deja de serlo.
+  for r in select l.*, coalesce(s.name, p.name, 'otro tercero') quien from public.company_account_link l
+             left join public.supplier s on l.entity = 'supplier' and s.id::text = l.entity_id
+             left join public.party p on l.entity = 'customer' and p.id::text = l.entity_id
+            where l.company_id = p_company and l.company_account_id = p_cta and l.role = 'principal' and l.entity in ('supplier', 'customer')
+              and (l.entity, l.entity_id) is distinct from (p_entity, p_id::text) loop
+    delete from public.company_account_link where id = r.id;
+    v_d := v_d || jsonb_build_object('borrado', to_jsonb(r) - 'quien');
+    v_f := v_f || to_jsonb(format('La cuenta %s era de %s en Sumied; en %s es de %s, y pasa a %s.', v_code, r.quien, p_prog, p_nombre, p_nombre));
+  end loop;
+  -- El tercero: su principal, la de ERP10.
+  select * into v_mio from public.company_account_link where company_id = p_company and entity = p_entity and entity_id = p_id::text and role = 'principal';
+  if v_mio.id is null then
+    insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+    values (p_cuenta, p_company, p_cta, p_entity, p_id::text, 'principal', 'migrated') returning id into v_nuevo;
+    v_d := v_d || jsonb_build_object('nuevo', v_nuevo);
+  elsif v_mio.company_account_id <> p_cta then
+    select code into v_antes from public.company_account where id = v_mio.company_account_id;
+    update public.company_account_link set company_account_id = p_cta, source = 'migrated' where id = v_mio.id;
+    v_d := v_d || jsonb_build_object('movido', v_mio.id, 'antes', v_mio.company_account_id, 'source', v_mio.source);
+    v_f := v_f || to_jsonb(format('%s tenía la cuenta %s en Sumied; en %s es la %s, y pasa a la %s.', p_nombre, v_antes, p_prog, v_code, v_code));
+  end if;
+  return jsonb_build_object('deshacer', v_d, 'frases', v_f);
+end $$;
+comment on function public._conta_traer_como_erp10(uuid, uuid, uuid, text, uuid, text, text) is
+  'X14 · 2: la cuenta principal de un proveedor o cliente, como en el programa de antes (gana el programa de antes). Devuelve {deshacer, frases}. Solo la llaman las funciones de Traer.';
+revoke all on function public._conta_traer_como_erp10(uuid, uuid, uuid, text, uuid, text, text) from public, anon, authenticated;
+
+-- X14 · 2 · Deshacer lo de _conta_traer_como_erp10, en orden inverso.
+create or replace function public._conta_traer_como_erp10_deshacer(p_d jsonb)
+returns void language plpgsql security definer set search_path = public as $$
+declare x jsonb;
+begin
+  for x in select value from jsonb_array_elements(coalesce(p_d, '[]')) with ordinality e(value, o) order by o desc loop
+    if x ? 'nuevo' then
+      delete from public.company_account_link where id = (x->>'nuevo')::uuid;
+    elsif x ? 'movido' then
+      update public.company_account_link set company_account_id = (x->>'antes')::uuid, source = coalesce(x->>'source', source) where id = (x->>'movido')::uuid;
+    elsif x ? 'borrado' then
+      insert into public.company_account_link select * from jsonb_populate_record(null::public.company_account_link, x->'borrado') on conflict do nothing;
+    end if;
+  end loop;
+end $$;
+revoke all on function public._conta_traer_como_erp10_deshacer(jsonb) from public, anon, authenticated;
+
+-- X14 · 2 · Lo traído ANTES de esta regla (cargas ya dadas por buenas), ajustado a ERP10: la cuenta principal de cada
+-- proveedor y cliente (sacada de las líneas traídas: la cuenta y su tercero), el código de cada cliente (su 430) y el
+-- nombre de cada cuenta (el del sumas y saldos de ERP10, si se soltó su fichero). Lo deja todo en la carga
+-- (detail.ajuste_erp10) para poder volver atrás. Interna: la llama la migración, no el navegador.
+create or replace function public._conta_traer_ajustar_a_erp10(p_carga uuid, p_quien text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_r public.import_run; v_prog text; v_quien text; r record; v_e jsonb; v_sup uuid; v_d jsonb := '[]'; v_f jsonb := '[]';
+  v_nombres jsonb := '[]'; v_cods jsonb := '[]'; v_cod int; v_tiene int; v_otro uuid; v_fila boolean;
+  n_mov int := 0; n_quit int := 0; n_nue int := 0; n_nom int := 0; n_cod int := 0;
+begin
+  select * into v_r from public.import_run where id = p_carga;
+  if v_r.id is null or v_r.kind <> 'carga' or v_r.status <> 'dada_por_buena' then return null; end if;
+  if v_r.detail ? 'ajuste_erp10' then return v_r.detail->'ajuste_erp10'->'cuentas'; end if;   -- una sola vez
+  v_prog := case v_r.program when 'erp10' then 'ERP10' when 'diez' then 'Diez' else 'el programa de antes' end;
+  v_quien := coalesce(nullif(trim(p_quien), ''), 'X14 · 2');
+  -- 1 · La cuenta de cada tercero, de lo traído: cada cuenta de proveedor (40, 41) o de cliente (43, 44) con su tercero.
+  for r in select distinct l.company_account_id cta, a.code, l.party_id, p.name
+             from public.journal_entry e join public.journal_line l on l.entry_id = e.id
+             join public.company_account a on a.id = l.company_account_id join public.party p on p.id = l.party_id
+            where e.import_run_id = p_carga and e.source_type = 'migrated' and a.code ~ '^4[0134]' and not a.is_common
+            order by a.code loop
+    if r.code ~ '^4[01]' then
+      select pr.supplier_id into v_sup from public.party_role pr where pr.party_id = r.party_id and pr.role = 'supplier' and pr.supplier_id is not null limit 1;
+      continue when v_sup is null;
+      v_e := public._conta_traer_como_erp10(v_r.account_id, v_r.company_id, r.cta, 'supplier', v_sup, r.name, v_prog);
+    else
+      v_e := public._conta_traer_como_erp10(v_r.account_id, v_r.company_id, r.cta, 'customer', r.party_id, r.name, v_prog);
+      -- El código del cliente (su 430), el de ERP10.
+      if r.code ~ '^430[0-9]+$' and length(r.code) <= 12 and substr(r.code, 4)::bigint between 1 and 99999 then
+        v_cod := substr(r.code, 4)::int; v_tiene := null; v_otro := null; v_fila := null;
+        select true, c.codigo_cliente into v_fila, v_tiene from public.conta_cobro_cliente c where c.company_id = v_r.company_id and c.party_id = r.party_id;
+        select c.party_id into v_otro from public.conta_cobro_cliente c where c.company_id = v_r.company_id and c.codigo_cliente = v_cod and c.party_id <> r.party_id;
+        if v_otro is not null then
+          update public.conta_cobro_cliente set codigo_cliente = null, updated_at = now(), updated_by_name = v_quien where company_id = v_r.company_id and party_id = v_otro;
+          v_cods := v_cods || jsonb_build_object('party', v_otro, 'antes', v_cod, 'fila', true);
+        end if;
+        if v_tiene is distinct from v_cod then
+          if v_fila then
+            update public.conta_cobro_cliente set codigo_cliente = v_cod, updated_at = now(), updated_by_name = v_quien where company_id = v_r.company_id and party_id = r.party_id;
+          else
+            insert into public.conta_cobro_cliente (company_id, party_id, account_id, codigo_cliente, updated_by_name) values (v_r.company_id, r.party_id, v_r.account_id, v_cod, v_quien);
+          end if;
+          v_cods := v_cods || jsonb_build_object('party', r.party_id, 'antes', v_tiene, 'fila', coalesce(v_fila, false));
+          n_cod := n_cod + 1;
+        end if;
+      end if;
+    end if;
+    v_d := v_d || (v_e->'deshacer'); v_f := v_f || (v_e->'frases');
+    n_mov := n_mov + (select count(*) from jsonb_array_elements(v_e->'deshacer') x where x ? 'movido');
+    n_quit := n_quit + (select count(*) from jsonb_array_elements(v_e->'deshacer') x where x ? 'borrado');
+    n_nue := n_nue + (select count(*) from jsonb_array_elements(v_e->'deshacer') x where x ? 'nuevo');
+  end loop;
+  -- 2 · El nombre de cada cuenta, el del sumas y saldos de ERP10 (si se soltó su fichero).
+  if v_r.detail->>'sumas_de' = 'fichero' then
+    for r in select a.id, a.name antes, trim(s->>'nombre') nombre from jsonb_array_elements(v_r.detail->'sumas') s
+               join public.company_account a on a.company_id = v_r.company_id and a.code = s->>'cuenta'
+              where nullif(trim(s->>'nombre'), '') is not null and trim(s->>'nombre') <> a.name loop
+      update public.company_account set name = r.nombre where id = r.id;
+      v_nombres := v_nombres || jsonb_build_object('id', r.id, 'name', r.antes);
+      n_nom := n_nom + 1;
+    end loop;
+  end if;
+  update public.import_run set detail = detail || jsonb_build_object('ajuste_erp10', jsonb_build_object('el', now(), 'por', v_quien,
+           'cuentas', jsonb_build_object('enlaces_movidos', n_mov, 'enlaces_quitados', n_quit, 'enlaces_nuevos', n_nue, 'nombres', n_nom, 'codigos', n_cod),
+           'deshacer', jsonb_build_object('enlaces', v_d, 'nombres', v_nombres, 'codigos', v_cods), 'frases', v_f))
+   where id = p_carga;
+  return jsonb_build_object('enlaces_movidos', n_mov, 'enlaces_quitados', n_quit, 'enlaces_nuevos', n_nue, 'nombres', n_nom, 'codigos', n_cod);
+end $$;
+comment on function public._conta_traer_ajustar_a_erp10(uuid, text) is
+  'X14 · 2: lo traído antes de «gana ERP10» (carga dada por buena), ajustado a ERP10: cuentas principales, códigos de cliente y nombres de cuenta. Una vez por carga; lo que deshace, en detail.ajuste_erp10.';
+revoke all on function public._conta_traer_ajustar_a_erp10(uuid, text) from public, anon, authenticated;
 
 -- 1 · conta_traer_cargar: el código de cada cliente -----------------------------------------------------------------------
 select public._respaldar_funcion('public.conta_traer_cargar(uuid,text,jsonb,text)', '20261125T1415_x14e_clientes_con_su_430');
@@ -36,6 +174,7 @@ declare
   n_cuentas int := 0; n_cuentas_estaban int := 0;
   v_sup uuid; v_party uuid; v_nif text; v_link uuid;
   n_x14_codigos int := 0;   -- X14 · 2 · los códigos de cliente puestos
+  v_x14_e jsonb;            -- X14 · 2 · lo que ha hecho «como en ERP10»
   n_prov int := 0; n_cli int := 0; n_enlazados int := 0;
   v_tercero jsonb := '{}';   -- código de la subcuenta → {party, supplier}
   v_emitidas jsonb := '[]'; v_provs jsonb := '[]'; v_fichas jsonb := '[]';   -- N06b
@@ -180,9 +319,12 @@ begin
     select * into v_ex from public.company_account where company_id = p_company and code = v_code;
     if v_ex.id is not null then
       n_cuentas_estaban := n_cuentas_estaban + 1;
-      if v_nombre is not null and lower(v_nombre) <> lower(v_ex.name) then
+      if v_nombre is not null and v_nombre <> v_ex.name then
+        -- X14 · 2 · Gana el programa de antes: la cuenta se llama como allí (Julio, 25/11). Lo de antes, para deshacer.
+        update public.company_account set name = v_nombre where id = v_ex.id;
+        v_deshacer := jsonb_set(v_deshacer, '{nombres}', coalesce(v_deshacer->'nombres', '[]') || jsonb_build_object('id', v_ex.id, 'name', v_ex.name));
         v_mirar := v_mirar || jsonb_build_object('que', 'cuenta', 'cuenta', v_code,
-          'frase', format('La cuenta %s ya estaba en Sumied como «%s»; en %s se llama «%s». Se queda la de Sumied.', v_code, v_ex.name, v_nombre_prog, v_nombre));
+          'frase', format('La cuenta %s se llamaba «%s» en Sumied; en %s se llama «%s», y se queda así.', v_code, v_ex.name, v_nombre_prog, v_nombre));
       end if;
       continue;
     end if;
@@ -247,14 +389,10 @@ begin
       end if;
       v_provs := v_provs || to_jsonb(v_sup);
       select party_id into v_party from public.party_role where account_id = v_cuenta and role = 'supplier' and supplier_id = v_sup;
-      if public._conta_traer_ocupada(v_cta, 'supplier', v_sup) is not null then
-        v_mirar := v_mirar || jsonb_build_object('que', 'tercero', 'cuenta', v_code, 'frase',
-          format('La cuenta %s ya es de %s en Sumied: %s se ha traído sin enlazarla.', v_code, public._conta_traer_ocupada(v_cta, 'supplier', v_sup), v_nombre));
-      else
-        insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
-        values (v_cuenta, p_company, v_cta, 'supplier', v_sup::text, 'principal', 'migrated')
-        on conflict do nothing returning id into v_link;
-      end if;
+      -- X14 · 2 · Su cuenta principal, la de ERP10: gana el programa de antes (Julio, 25/11).
+      v_x14_e := public._conta_traer_como_erp10(v_cuenta, p_company, v_cta, 'supplier', v_sup, v_nombre, v_nombre_prog);
+      v_deshacer := jsonb_set(v_deshacer, '{enlaces_erp10}', coalesce(v_deshacer->'enlaces_erp10', '[]') || (v_x14_e->'deshacer'));
+      v_mirar := v_mirar || (select coalesce(jsonb_agg(jsonb_build_object('que', 'tercero', 'cuenta', v_code, 'frase', fr)), '[]') from jsonb_array_elements_text(v_x14_e->'frases') fr);
     else
       if v_nif is not null then
         select p.id into v_party from public.party p where p.account_id = v_cuenta and p.tax_id = v_nif;
@@ -276,14 +414,10 @@ begin
         insert into public.customer_fiscal (party_id, account_id) values (v_party, v_cuenta);
         v_deshacer := jsonb_set(v_deshacer, '{fiscales}', (v_deshacer->'fiscales') || to_jsonb(v_party));
       end if;
-      if public._conta_traer_ocupada(v_cta, 'customer', v_party) is not null then
-        v_mirar := v_mirar || jsonb_build_object('que', 'tercero', 'cuenta', v_code, 'frase',
-          format('La cuenta %s ya es de %s en Sumied: %s se ha traído sin enlazarla.', v_code, public._conta_traer_ocupada(v_cta, 'customer', v_party), v_nombre));
-      else
-        insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
-        values (v_cuenta, p_company, v_cta, 'customer', v_party::text, 'principal', 'migrated')
-        on conflict do nothing returning id into v_link;
-      end if;
+      -- X14 · 2 · Su cuenta principal, la de ERP10: gana el programa de antes (Julio, 25/11).
+      v_x14_e := public._conta_traer_como_erp10(v_cuenta, p_company, v_cta, 'customer', v_party, v_nombre, v_nombre_prog);
+      v_deshacer := jsonb_set(v_deshacer, '{enlaces_erp10}', coalesce(v_deshacer->'enlaces_erp10', '[]') || (v_x14_e->'deshacer'));
+      v_mirar := v_mirar || (select coalesce(jsonb_agg(jsonb_build_object('que', 'tercero', 'cuenta', v_code, 'frase', fr)), '[]') from jsonb_array_elements_text(v_x14_e->'frases') fr);
       -- X14 · 2 (Julio, 25/11) · El código del cliente, en UN solo sitio: conta_cobro_cliente.codigo_cliente, que leen el
       -- cobro (G05) y la salida a ERP10. Su 430 de allí es 430 + código (43000827 → 827). Lo que ya hay no se pisa: un
       -- código distinto en su ficha, o el mismo código de otro cliente, va a lo que hay que mirar con su porqué.
@@ -294,14 +428,22 @@ begin
           select true, c.codigo_cliente into v_x14_fila, v_x14_tiene from public.conta_cobro_cliente c where c.company_id = p_company and c.party_id = v_party;
           select c.party_id into v_x14_otro from public.conta_cobro_cliente c
            where c.company_id = p_company and c.codigo_cliente = v_x14_cod and c.party_id <> v_party;
+          -- Gana el programa de antes (Julio, 25/11): si ese código lo tenía otro cliente, se le quita.
+          if v_x14_otro is not null then
+            update public.conta_cobro_cliente set codigo_cliente = null, updated_at = now(), updated_by_name = v_quien
+             where company_id = p_company and party_id = v_x14_otro;
+            v_deshacer := jsonb_set(v_deshacer, '{codigos_quitados}', coalesce(v_deshacer->'codigos_quitados', '[]') || jsonb_build_object('party', v_x14_otro, 'codigo', v_x14_cod));
+            v_mirar := v_mirar || jsonb_build_object('que', 'codigo_cliente', 'cuenta', v_code, 'frase',
+              format('El código de cliente %s era de otro cliente en Sumied; en %s es de %s (la %s), y pasa a él.', v_x14_cod, v_nombre_prog, v_nombre, v_code));
+          end if;
           if v_x14_tiene = v_x14_cod then
             null;   -- ya lo tenía
           elsif v_x14_tiene is not null then
+            update public.conta_cobro_cliente set codigo_cliente = v_x14_cod, updated_at = now(), updated_by_name = v_quien
+             where company_id = p_company and party_id = v_party;
+            v_deshacer := jsonb_set(v_deshacer, '{codigos_cambiados}', coalesce(v_deshacer->'codigos_cambiados', '[]') || jsonb_build_object('party', v_party, 'antes', v_x14_tiene));
             v_mirar := v_mirar || jsonb_build_object('que', 'codigo_cliente', 'cuenta', v_code, 'frase',
-              format('%s ya tiene el código de cliente %s en Sumied y en %s es la %s: se queda el de Sumied.', v_nombre, v_x14_tiene, v_nombre_prog, v_code));
-          elsif v_x14_otro is not null then
-            v_mirar := v_mirar || jsonb_build_object('que', 'codigo_cliente', 'cuenta', v_code, 'frase',
-              format('El código de cliente %s (la %s de %s) ya es de otro cliente en Sumied: %s se queda sin código.', v_x14_cod, v_code, v_nombre_prog, v_nombre));
+              format('%s tenía el código de cliente %s en Sumied; en %s es la %s, y pasa al %s.', v_nombre, v_x14_tiene, v_nombre_prog, v_code, v_x14_cod));
           elsif v_x14_fila then
             update public.conta_cobro_cliente set codigo_cliente = v_x14_cod, updated_at = now(), updated_by_name = v_quien
              where company_id = p_company and party_id = v_party;
@@ -311,16 +453,9 @@ begin
             values (p_company, v_party, v_cuenta, v_x14_cod, v_quien);
             v_deshacer := jsonb_set(v_deshacer, '{codigos_nuevos}', coalesce(v_deshacer->'codigos_nuevos', '[]') || to_jsonb(v_party));
           end if;
-          n_x14_codigos := n_x14_codigos + case when v_x14_tiene is null and v_x14_otro is null then 1 else 0 end;
+          n_x14_codigos := n_x14_codigos + case when v_x14_tiene is distinct from v_x14_cod then 1 else 0 end;
         end if;
       end;
-    end if;
-    if v_link is not null then
-      v_deshacer := jsonb_set(v_deshacer, '{enlaces}', (v_deshacer->'enlaces') || to_jsonb(v_link));
-    elsif public._conta_traer_ocupada(v_cta, case when v_sup is not null then 'supplier' else 'customer' end, coalesce(v_sup, v_party)) is null and not exists (select 1 from public.company_account_link k where k.company_id = p_company and k.company_account_id = v_cta
-                        and k.entity_id = coalesce(v_sup, v_party)::text and k.role = 'principal') then
-      v_mirar := v_mirar || jsonb_build_object('que', 'tercero', 'cuenta', v_code,
-        'frase', format('%s ya tenía otra cuenta principal en Sumied; la de %s es la %s. Se queda la de Sumied.', v_nombre, v_nombre_prog, v_code));
     end if;
     v_link := null;
     v_tercero := v_tercero || jsonb_build_object(v_code, jsonb_build_object('party', v_party, 'supplier', v_sup, 'nif', v_nif));
@@ -429,11 +564,18 @@ begin
   update public.supplier set legal_name = null where id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_d->'fichas', '[]')));   -- N06b
   delete from public.company_account_link where id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_d->'enlaces', '[]')));
   get diagnostics n_enlaces = row_count;
+  -- X14 · 2 · Lo que la carga ajustó a ERP10, como estaba: los enlaces, los nombres de las cuentas y los códigos.
+  perform public._conta_traer_como_erp10_deshacer(v_d->'enlaces_erp10');
+  update public.company_account a set name = y->>'name' from jsonb_array_elements(coalesce(v_d->'nombres', '[]')) y where a.id = (y->>'id')::uuid;
   -- X14 · 2 · Los códigos de cliente que puso la carga: los que creó, fuera; los que rellenó, otra vez sin código.
   delete from public.conta_cobro_cliente where company_id = v_r.company_id
      and party_id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_d->'codigos_nuevos', '[]')));
   update public.conta_cobro_cliente set codigo_cliente = null, updated_at = now(), updated_by_name = v_quien where company_id = v_r.company_id
      and party_id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_d->'codigos_puestos', '[]')));
+  update public.conta_cobro_cliente c set codigo_cliente = (y->>'antes')::int, updated_at = now(), updated_by_name = v_quien
+    from jsonb_array_elements(coalesce(v_d->'codigos_cambiados', '[]')) y where c.company_id = v_r.company_id and c.party_id = (y->>'party')::uuid;
+  update public.conta_cobro_cliente c set codigo_cliente = (y->>'codigo')::int, updated_at = now(), updated_by_name = v_quien
+    from jsonb_array_elements(coalesce(v_d->'codigos_quitados', '[]')) y where c.company_id = v_r.company_id and c.party_id = (y->>'party')::uuid;
   delete from public.party_role where id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_d->'roles', '[]')));
   delete from public.customer_fiscal where party_id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_d->'fiscales', '[]')));
   -- Lo creado por la carga, si nadie lo usa ya (lo que se usa después de traer, se queda).

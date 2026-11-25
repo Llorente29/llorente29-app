@@ -1,3 +1,4 @@
-# X14 · 2 · El código de cada cliente al traer: la 1415 y su prueba en ROLLBACK.
+# X14 · 2 · Traer como en ERP10 y el código de cada cliente: la 1415, la 1649 y su prueba en ROLLBACK.
 supabase/migrations/20261125T1415_x14e_clientes_con_su_430.sql
+supabase/migrations/20261125T1649_x14e_ajustar_a_erp10.sql
 supabase/staging/sql/20261125_x14e_clientes_con_su_430_prueba.sql
