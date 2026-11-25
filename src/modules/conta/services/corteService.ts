@@ -3,8 +3,9 @@
 // C04 R4 · La fecha de corte con el programa anterior, como dato de la
 // empresa: hasta ese día manda lo traído; desde el siguiente asienta Folvy.
 // Se fija con conta_fijar_corte (solo administrador; cierra como «traídos» los
-// meses enteros de antes). Cambiable mientras no haya asientos traídos: lo
-// guarda el disparador fiscal_year_corte_cambiable, y aquí se dice antes.
+// meses enteros de antes). X14 · 2: lo fija una persona, a mano, nunca lo traído;
+// con asientos traídos también, si todos quedan antes del día de inicio (lo
+// guardan la base y el disparador fiscal_year_corte_cambiable; aquí se dice antes).
 //
 // Todo por cuenta y empresa (regla 9).
 
@@ -15,8 +16,10 @@ export interface CorteEmpresa {
   ejercicio: string | null
   hasta: string | null
   programa: string | null
-  /** Asientos traídos del programa anterior: con alguno, el corte ya no cambia. */
+  /** Asientos traídos del programa anterior. */
   traidos: number
+  /** X14 · 2 · El día del último asiento traído: el día de inicio, como pronto, el siguiente. Nulo sin traídos. */
+  ultimoTraido: string | null
   /** N05c · Lo anterior al corte ya está traído (history_imported_at). Sin corte, true. */
   historicoTraido: boolean
   /** N05c · «Empezar a trabajar ya» sin lo anterior: cuándo y quién. Nulo si no se ha decidido. */
@@ -41,15 +44,18 @@ export function nombrePrograma(programa: string | null | undefined): string | nu
 }
 
 export async function leerCorte(accountId: string, companyId: string): Promise<CorteEmpresa> {
-  const [ej, tr, di] = await Promise.all([
+  const [ej, tr, ult, di] = await Promise.all([
     tabla('fiscal_year').select('code, starts_on, ends_on, origin, origin_program, imported_until, history_imported_at, works_without_history_at, works_without_history_by_name')
       .eq('account_id', accountId).eq('company_id', companyId).order('starts_on', { ascending: false }),
     tabla('journal_entry').select('id', { count: 'exact', head: true })
       .eq('account_id', accountId).eq('company_id', companyId).eq('source_type', 'migrated'),
+    tabla('journal_entry').select('entry_date')
+      .eq('account_id', accountId).eq('company_id', companyId).eq('source_type', 'migrated').order('entry_date', { ascending: false }).limit(1),
     rpc<string | null>('conta_empresa_dia_de_inicio', { p_company: companyId }),
   ])
   if (ej.error) throw new Error(mensaje('No se ha podido leer el ejercicio', ej.error))
   if (tr.error) throw new Error(mensaje('No se han podido contar los asientos traídos', tr.error))
+  if (ult.error) throw new Error(mensaje('No se ha podido leer el último asiento traído', ult.error))
   const filas = (ej.data ?? []) as Record<string, unknown>[]
   // El mixto lleva la fecha; si todo un ejercicio es traído, el corte es su último día.
   const mixto = filas.find((f) => f.origin === 'mixed' && f.imported_until)
@@ -60,6 +66,7 @@ export async function leerCorte(accountId: string, companyId: string): Promise<C
     hasta: mixto ? String(mixto.imported_until) : traido ? String(traido.ends_on) : null,
     programa: f?.origin_program ? String(f.origin_program) : null,
     traidos: tr.count ?? 0,
+    ultimoTraido: ((ult.data ?? []) as { entry_date?: string }[])[0]?.entry_date ?? null,
     historicoTraido: !f || !f.origin_program || f.history_imported_at != null,
     sinHistorico: f?.works_without_history_at
       ? { el: String(f.works_without_history_at), por: f.works_without_history_by_name ? String(f.works_without_history_by_name) : null }

@@ -400,12 +400,13 @@ test('A · Ajustes › Ejercicio: desde cuándo asienta Folvy (el corte con el p
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/ajustes/ejercicio')
-  // Respuesta 4 · 1: el corte se ve siempre; se cambia mientras no haya asientos traídos.
+  // Respuesta 4 · 1: el corte se ve siempre. X14 · 2: se cambia a mano también con asientos traídos (lo traído no lo fija);
+  // con alguno, se dice hasta dónde llega y desde qué día, como pronto.
   const corte = page.getByTestId('corte-actual')
   await expect(corte).toBeVisible()
   await expect(corte).toHaveText(/^(Hasta el .+ lo trae .+; desde el .+ asienta Folvy\.|Sin fecha de corte: Folvy asienta el ejercicio entero\.)$/)
-  const fijo = await page.getByTestId('corte-fijo').count()
-  if (fijo) await expect(page.getByTestId('corte-fijo')).toContainText('Para moverla, primero se deshace lo traído')
-  else await expect(page.getByRole('button', { name: 'Cambiar' }).last()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Cambiar' }).last()).toBeVisible()
+  const traido = await page.getByTestId('corte-traido').count()
+  if (traido) await expect(page.getByTestId('corte-traido')).toHaveText(/, el último del \d\d\/\d\d\/\d{4}\. Traerlos no fija el día de inicio: lo fijas tú, y como pronto el \d\d\/\d\d\/\d{4}\.$/)
   await capturar(page, 'ajustes-corte')
 })
