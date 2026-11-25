@@ -5828,6 +5828,27 @@ COMMENT ON FUNCTION public._conta_entrega_mercancia(p_supplier uuid) IS 'S01o·2
 
 
 --
+-- Name: _conta_erp10_factura_frenada(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_erp10_factura_frenada(p_company uuid, p_entry uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select exists (select 1 from public.conta_erp10_facturas_fuera f where f.company_id = p_company and f.encendido)
+     and (exists (select 1 from public.supplier_invoice si where si.journal_entry_id = p_entry and si.company_id = p_company)
+       or exists (select 1 from public.customer_invoice ci where ci.entry_id = p_entry and ci.company_id = p_company))
+$$;
+
+
+--
+-- Name: FUNCTION _conta_erp10_factura_frenada(p_company uuid, p_entry uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_erp10_factura_frenada(p_company uuid, p_entry uuid) IS 'X33 · true si el asiento es de una factura (emitida o recibida) y la empresa tiene encendido «Las facturas las emite Cegid».';
+
+
+--
 -- Name: _conta_es_admin_plataforma(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -6412,6 +6433,101 @@ COMMENT ON FUNCTION public._conta_gasto_propuesto(p_company uuid, p_supplier uui
 
 
 --
+-- Name: _conta_gc_asientos_plan(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_gc_asientos_plan(p_company uuid, p_mes date) RETURNS TABLE(clase text, gc_id text, fecha date, importe numeric, party_id uuid, nombre text, cuenta text, concepto text, lineas jsonb, pendiente text[])
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_ini date := date_trunc('month', p_mes)::date;
+  v_fin date := (date_trunc('month', p_mes) + interval '1 month')::date;
+  v_aj public.conta_gestoria_ajustes;
+  v_pre text; v_pla text; v_ban text; v_d int;
+  v_x record; v_cta text; v_num text; v_con text; v_pen text[];
+begin
+  select * into v_aj from public.conta_gestoria_ajustes a where a.company_id = p_company;
+  v_pre := coalesce(nullif(v_aj.prefijo_cliente, ''), '430');
+  v_pla := coalesce(nullif(v_aj.cuenta_plataforma, ''), '57200002');
+  v_ban := coalesce(nullif(v_aj.cuenta_banco, ''), '57200000');
+  select length(a.code) into v_d from public.company_account a where a.company_id = p_company limit 1;
+  v_d := coalesce(v_d, 8);
+
+  -- Los cobros del mes (confirmados, liquidados o retrocedidos después): el cobro, y si se retrocedió, su devolución.
+  for v_x in
+    select c.gc_id, c.estado, c.fecha, c.importe, k.party_id, coalesce(p.name, k.nombre) as nombre, cc.codigo_cliente
+      from public.conta_gc_cobro c
+      left join public.conta_gc_mandato m on m.company_id = c.company_id and m.gc_id = c.mandato_gc_id
+      left join public.conta_gc_cliente k on k.company_id = c.company_id and k.gc_id = m.gc_cliente_id
+      left join public.party p on p.id = k.party_id
+      left join public.conta_cobro_cliente cc on cc.company_id = c.company_id and cc.party_id = k.party_id
+     where c.company_id = p_company and c.fecha >= v_ini and c.fecha < v_fin
+       and c.estado in ('confirmed', 'paid_out', 'charged_back')
+     order by c.fecha, c.gc_id
+  loop
+    v_pen := '{}';
+    v_cta := null;
+    if v_x.party_id is null then v_pen := v_pen || 'El cobro no está atado a ningún cliente de Sumied'::text;
+    elsif v_x.codigo_cliente is null then v_pen := v_pen || 'El cliente no tiene su 430'::text;
+    elsif v_x.codigo_cliente <= 0 or length(v_x.codigo_cliente::text) > v_d - length(v_pre) then
+      v_pen := v_pen || format('El código de cliente %s no cabe en una subcuenta %s de %s cifras', v_x.codigo_cliente, v_pre, v_d);
+    else
+      v_cta := v_pre || lpad(v_x.codigo_cliente::text, v_d - length(v_pre), '0');
+    end if;
+    v_num := case when v_x.party_id is null then null else public._conta_gc_factura_del_cobro(p_company, v_x.party_id, v_x.importe, v_x.fecha) end;
+    if v_num is null then v_pen := v_pen || 'Falta el número de factura'::text; end if;
+    v_con := coalesce(v_num, '—') || '-' || coalesce(v_x.nombre, 'sin nombre');
+    if v_x.importe is null or v_x.importe <= 0 then v_pen := v_pen || 'El cobro tiene que ser mayor que cero'::text; end if;
+    clase := 'cobro'; gc_id := v_x.gc_id; fecha := v_x.fecha; importe := v_x.importe; party_id := v_x.party_id; nombre := v_x.nombre;
+    cuenta := v_cta; concepto := v_con; pendiente := v_pen;
+    lineas := case when cardinality(v_pen) = 0 then jsonb_build_array(
+      jsonb_build_object('cuenta', v_pla, 'debe', v_x.importe, 'haber', 0, 'concepto', v_con, 'tercero_id', v_x.party_id),
+      jsonb_build_object('cuenta', v_cta, 'debe', 0, 'haber', v_x.importe, 'concepto', v_con, 'tercero_id', v_x.party_id)) end;
+    return next;
+    if v_x.estado = 'charged_back' then
+      clase := 'devolucion'; concepto := 'Retrocedido ' || v_con; lineas := null;
+      pendiente := v_pen || 'Falta el día de la devolución'::text;
+      return next;
+    end if;
+  end loop;
+
+  -- Lo que llega al banco: el ingreso de cada liquidación del mes. Una ya casada en Bancos (match_id) ya tiene su
+  -- asiento (G05: el ingreso lo casa Bancos): no se prepara otro.
+  for v_x in
+    select y.gc_id, y.llegada, y.importe, y.referencia
+      from public.conta_gc_payout y
+     where y.company_id = p_company and y.llegada >= v_ini and y.llegada < v_fin and y.estado = 'paid' and y.match_id is null
+     order by y.llegada, y.gc_id
+  loop
+    clase := 'ingreso'; gc_id := v_x.gc_id; fecha := v_x.llegada; importe := v_x.importe; party_id := null; nombre := null;
+    cuenta := v_ban; concepto := 'Ingreso de GoCardless ' || coalesce(v_x.referencia, v_x.gc_id);
+    pendiente := case when v_x.importe is null or v_x.importe = 0 then array['La liquidación no trae importe'] else '{}' end;
+    lineas := case when cardinality(pendiente) > 0 then null
+      when v_x.importe > 0 then jsonb_build_array(
+        jsonb_build_object('cuenta', v_ban, 'debe', v_x.importe, 'haber', 0, 'concepto', concepto),
+        jsonb_build_object('cuenta', v_pla, 'debe', 0, 'haber', v_x.importe, 'concepto', concepto))
+      else jsonb_build_array(
+        jsonb_build_object('cuenta', v_pla, 'debe', -v_x.importe, 'haber', 0, 'concepto', concepto),
+        jsonb_build_object('cuenta', v_ban, 'debe', 0, 'haber', -v_x.importe, 'concepto', concepto)) end;
+    return next;
+  end loop;
+end $$;
+
+
+--
+-- Name: _conta_gc_copia_no_se_cambia(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_gc_copia_no_se_cambia() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+begin
+  raise exception 'La copia de GoCardless no se cambia ni se borra: se guarda tal cual se leyó.' using errcode = '42501';
+end $$;
+
+
+--
 -- Name: _conta_gc_enlace_guardar(jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -6443,6 +6559,23 @@ end $$;
 --
 
 COMMENT ON FUNCTION public._conta_gc_enlace_guardar(p_filas jsonb) IS 'G06 · Lo que escribe conta-gocardless-leer en conta_gc_enlace. Lo automático no pisa lo de una persona ni un conflicto; lo de una persona solo pisa una decisión más antigua. Devuelve las filas escritas.';
+
+
+--
+-- Name: _conta_gc_factura_del_cobro(uuid, uuid, numeric, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_gc_factura_del_cobro(p_company uuid, p_party uuid, p_importe numeric, p_fecha date) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(nullif(btrim(ci.number_text), ''), nullif(concat_ws('/', ci.series_code, ci.number::text), ''))
+    from public.customer_invoice ci
+   where ci.company_id = p_company and ci.party_id = p_party and ci.total = p_importe and ci.status = 'emitida'
+     and ci.issue_date <= p_fecha and ci.issue_date > p_fecha - 62
+   order by ci.issue_date desc, ci.created_at desc
+   limit 1
+$$;
 
 
 --
@@ -11073,6 +11206,30 @@ $$;
 --
 
 COMMENT ON FUNCTION public._conta_tpv_propuesta(p_dia uuid) IS 'R05: el asiento de un día del TPV (cobros por forma de pago, ventas e IVA por tipo), o por qué no se puede proponer. Solo lee.';
+
+
+--
+-- Name: _conta_traer_clase_apunte(numeric, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_traer_clase_apunte(p_debe numeric, p_haber numeric) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select case when coalesce(p_debe, 0) = 0 and coalesce(p_haber, 0) = 0 then 'ceros'
+              when coalesce(p_debe, 0) > 0 and coalesce(p_haber, 0) > 0 then 'dos_lados'
+              when coalesce(p_debe, 0) <> 0 and coalesce(p_haber, 0) <> 0 then 'dos_lados_con_negativo'
+              when coalesce(p_debe, 0) < 0 then 'negativo_debe'
+              when coalesce(p_haber, 0) < 0 then 'negativo_haber'
+              else 'normal' end
+$$;
+
+
+--
+-- Name: FUNCTION _conta_traer_clase_apunte(p_debe numeric, p_haber numeric); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_traer_clase_apunte(p_debe numeric, p_haber numeric) IS 'X14 · 2: la clase de una línea de lo leído de otro programa (normal, ceros, dos_lados, dos_lados_con_negativo, negativo_debe, negativo_haber). No lee tablas.';
 
 
 --
@@ -44555,6 +44712,91 @@ end $$;
 
 
 --
+-- Name: conta_erp10_facturas_fuera_del_mes(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_facturas_fuera_del_mes(p_company uuid, p_mes date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_f public.conta_erp10_facturas_fuera;
+  v_fin date := (date_trunc('month', p_mes) + interval '1 month')::date;
+  v_emitidas int := 0;
+  v_recibidas int := 0;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null or (auth.uid() is not null and not public.belongs_to_account(v_c.account_id)) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  if p_mes is null then raise exception 'Falta el mes.' using errcode = '22023'; end if;
+  select * into v_f from public.conta_erp10_facturas_fuera where company_id = v_c.id;
+  if coalesce(v_f.encendido, false) then
+    select count(*) filter (where exists (select 1 from public.customer_invoice ci where ci.entry_id = e.id and ci.company_id = e.company_id)),
+           count(*) filter (where exists (select 1 from public.supplier_invoice si where si.journal_entry_id = e.id and si.company_id = e.company_id))
+      into v_emitidas, v_recibidas
+      from public.journal_entry e
+     where e.company_id = v_c.id and e.account_id = v_c.account_id and e.status = 'validado'
+       and e.entry_date >= date_trunc('month', p_mes)::date and e.entry_date < v_fin;
+  end if;
+  return jsonb_build_object('encendido', coalesce(v_f.encendido, false), 'cambiado_en', v_f.cambiado_en,
+    'cambiado_por_nombre', v_f.cambiado_por_nombre, 'emitidas', v_emitidas, 'recibidas', v_recibidas);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_facturas_fuera_del_mes(p_company uuid, p_mes date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_facturas_fuera_del_mes(p_company uuid, p_mes date) IS 'X33 · El ajuste «Las facturas las emite Cegid» de la empresa y cuántas facturas validadas del mes no salen por él.';
+
+
+--
+-- Name: conta_erp10_facturas_fuera_poner(uuid, boolean, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_facturas_fuera_poner(p_company uuid, p_encendido boolean, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_f public.conta_erp10_facturas_fuera;
+  v_quien text;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null or not public.belongs_to_account(v_c.account_id) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  if not public.current_user_is_admin_of(v_c.account_id) then
+    raise exception 'Solo un administrador de la cuenta cambia lo que sale a ERP10.' using errcode = '42501';
+  end if;
+  if p_encendido is null then raise exception 'Falta si se enciende o se apaga.' using errcode = '22023'; end if;
+  select * into v_f from public.conta_erp10_facturas_fuera where company_id = v_c.id for update;
+  if v_f.company_id is null or v_f.encendido is distinct from p_encendido then
+    v_quien := nullif(btrim(coalesce(p_quien_nombre, public.conta_nombre_actor(), '')), '');
+    insert into public.conta_erp10_facturas_fuera (company_id, account_id, encendido, cambiado_en, cambiado_por, cambiado_por_nombre)
+    values (v_c.id, v_c.account_id, p_encendido, now(), auth.uid(), v_quien)
+    on conflict (company_id) do update set encendido = excluded.encendido, cambiado_en = excluded.cambiado_en,
+      cambiado_por = excluded.cambiado_por, cambiado_por_nombre = excluded.cambiado_por_nombre
+    returning * into v_f;
+  end if;
+  return jsonb_build_object('encendido', v_f.encendido, 'cambiado_en', v_f.cambiado_en, 'cambiado_por_nombre', v_f.cambiado_por_nombre,
+    'texto', case when v_f.encendido
+      then 'Encendido: las facturas de Sumied de esta empresa no salen a ERP10 (las emite Cegid). Los demás asientos, sí.'
+      else 'Apagado: las facturas de esta empresa salen a ERP10 como los demás asientos.' end);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_facturas_fuera_poner(p_company uuid, p_encendido boolean, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_facturas_fuera_poner(p_company uuid, p_encendido boolean, p_quien_nombre text) IS 'X33 · Enciende o apaga «Las facturas las emite Cegid: no se suben las de Sumied» (un administrador de la cuenta), con cuándo y quién.';
+
+
+--
 -- Name: conta_erp10_igualado_poner(uuid, date, text, date, integer, integer, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -46092,6 +46334,119 @@ COMMENT ON FUNCTION public.conta_gasto_propuesto(p_company uuid, p_supplier uuid
 
 
 --
+-- Name: conta_gc_asientos_del_mes(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gc_asientos_del_mes(p_company uuid, p_mes date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_ini date := date_trunc('month', p_mes)::date;
+  v_fin date := (date_trunc('month', p_mes) + interval '1 month')::date;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null or (auth.uid() is not null and not public.belongs_to_account(v_c.account_id)) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  if p_mes is null then raise exception 'Falta el mes.' using errcode = '22023'; end if;
+  return jsonb_build_object(
+    'por_preparar', (select count(*) from public._conta_gc_asientos_plan(v_c.id, p_mes) x
+                      where not exists (select 1 from public.conta_gc_asiento a where a.company_id = v_c.id and a.clase = x.clase and a.gc_id = x.gc_id)),
+    'filas', coalesce((select jsonb_agg(jsonb_build_object('clase', a.clase, 'gc_id', a.gc_id, 'fecha', a.fecha, 'importe', a.importe,
+        'nombre', a.nombre, 'cuenta', a.cuenta, 'concepto', a.concepto, 'pendiente', to_jsonb(a.pendiente), 'entry_id', a.entry_id,
+        'numero', case when e.id is null then null else e.series || '/' || coalesce(e.number::text, '—') end, 'estado', e.status)
+        order by cardinality(a.pendiente) > 0 desc, a.fecha, a.clase, a.gc_id)
+      from public.conta_gc_asiento a left join public.journal_entry e on e.id = a.entry_id
+     where a.company_id = v_c.id and a.account_id = v_c.account_id and a.fecha >= v_ini and a.fecha < v_fin), '[]'::jsonb));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_gc_asientos_del_mes(p_company uuid, p_mes date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_gc_asientos_del_mes(p_company uuid, p_mes date) IS 'X33 · Los asientos de GoCardless preparados del mes (con su asiento o en «Pendiente de revisar» con su motivo), y cuántos quedan por preparar.';
+
+
+--
+-- Name: conta_gc_asientos_preparar(uuid, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gc_asientos_preparar(p_company uuid, p_mes date, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_quien text;
+  v_x record;
+  v_ya public.conta_gc_asiento;
+  v_r jsonb;
+  v_entry uuid;
+  v_aj public.conta_gestoria_ajustes;
+  v_pla text;
+  v_preparados int := 0; v_seguian int := 0; v_pendientes int := 0;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null or not public.belongs_to_account(v_c.account_id) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  if not public.current_user_is_admin_of(v_c.account_id) then
+    raise exception 'Solo un administrador de la cuenta prepara los asientos de GoCardless.' using errcode = '42501';
+  end if;
+  if p_mes is null then raise exception 'Falta el mes.' using errcode = '22023'; end if;
+  v_quien := nullif(btrim(coalesce(p_quien_nombre, public.conta_nombre_actor(), '')), '');
+  select * into v_aj from public.conta_gestoria_ajustes a where a.company_id = v_c.id;
+  v_pla := coalesce(nullif(v_aj.cuenta_plataforma, ''), '57200002');
+  -- Dos a la vez sobre la misma empresa y el mismo mes no se cruzan.
+  perform pg_advisory_xact_lock(hashtextextended('conta_gc_asientos:' || v_c.id::text || ':' || to_char(p_mes, 'YYYY-MM'), 0));
+
+  for v_x in select * from public._conta_gc_asientos_plan(v_c.id, p_mes) loop
+    select * into v_ya from public.conta_gc_asiento a where a.company_id = v_c.id and a.clase = v_x.clase and a.gc_id = v_x.gc_id for update;
+    -- Ya tiene un asiento vivo: no se escribe otro (nada dos veces).
+    if v_ya.entry_id is not null and exists (select 1 from public.journal_entry e where e.id = v_ya.entry_id and e.status in ('propuesto', 'borrador', 'validado')) then
+      v_seguian := v_seguian + 1; continue;
+    end if;
+    v_entry := null;
+    if cardinality(v_x.pendiente) = 0 then
+      perform public._conta_cobro_cuenta(v_c.id, v_pla, 'Plataforma GoCardless', v_quien);
+      if v_x.clase = 'cobro' then perform public._conta_cobro_cuenta(v_c.id, v_x.cuenta, coalesce(v_x.nombre, 'Cliente'), v_quien); end if;
+      if v_x.clase = 'ingreso' then perform public._conta_cobro_cuenta(v_c.id, v_x.cuenta, 'Banco', v_quien); end if;
+      v_r := public._journal_entry_proponer(v_c.id,
+        jsonb_build_object('series', 4, 'fecha', v_x.fecha, 'source_type', 'customer_payment',
+          'source_id', md5(v_c.id::text || ':' || v_x.clase || ':' || v_x.gc_id)::uuid, 'concepto', v_x.concepto,
+          'party_id', v_x.party_id, 'confianza', 'seguro',
+          'porque', case v_x.clase when 'cobro' then 'Cobro de GoCardless (X33).' else 'Ingreso de GoCardless en el banco (X33).' end),
+        v_x.lineas, null, v_quien, auth.uid());
+      v_entry := (v_r->>'id')::uuid;
+      v_preparados := v_preparados + 1;
+    else
+      v_pendientes := v_pendientes + 1;
+    end if;
+    insert into public.conta_gc_asiento (company_id, account_id, clase, gc_id, fecha, importe, nombre, cuenta, concepto, entry_id, pendiente,
+                                         preparado_en, preparado_por_nombre)
+    values (v_c.id, v_c.account_id, v_x.clase, v_x.gc_id, v_x.fecha, v_x.importe, v_x.nombre, v_x.cuenta, v_x.concepto, v_entry, v_x.pendiente,
+            now(), v_quien)
+    on conflict (company_id, clase, gc_id) do update set fecha = excluded.fecha, importe = excluded.importe, nombre = excluded.nombre,
+      cuenta = excluded.cuenta, concepto = excluded.concepto, entry_id = excluded.entry_id, pendiente = excluded.pendiente,
+      preparado_en = excluded.preparado_en, preparado_por_nombre = excluded.preparado_por_nombre;
+  end loop;
+
+  return jsonb_build_object('preparados', v_preparados, 'ya_estaban', v_seguian, 'pendientes', v_pendientes,
+    'texto', format('%s preparados · %s ya estaban · %s en «Pendiente de revisar».', v_preparados, v_seguian, v_pendientes));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_gc_asientos_preparar(p_company uuid, p_mes date, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_gc_asientos_preparar(p_company uuid, p_mes date, p_quien_nombre text) IS 'X33 · Prepara (propuestos, sin subir) los asientos de GoCardless del mes: cobro, devolución e ingreso. Sin cliente, sin 430 o sin número de factura: «Pendiente de revisar». Nada dos veces.';
+
+
+--
 -- Name: conta_gc_cobro_otra_via(uuid, text, text, date, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -46128,6 +46483,109 @@ begin
   if not found then raise exception 'Ese cargo no estaba marcado como cobrado por otra vía.' using errcode = 'P0002'; end if;
   return jsonb_build_object('frase', 'Quitado: ese cargo vuelve a salir en «Te deben».');
 end $$;
+
+
+--
+-- Name: conta_gc_contar_copia(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gc_contar_copia(p_copia uuid, p_mes date DEFAULT NULL::date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_dia date; v_mes date; v_r jsonb;
+begin
+  select (c.tomada_at at time zone 'Europe/Madrid')::date into v_dia from public.conta_gc_copia c
+   where c.id = p_copia and (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(c.account_id));
+  if v_dia is null then return null; end if;
+  v_mes := date_trunc('month', coalesce(p_mes, (
+    select min((f.datos->>'proximo_cobro_fecha')::date) from public.conta_gc_copia_fila f
+     where f.copia_id = p_copia and f.tipo = 'suscripcion' and f.datos->>'estado' = 'active'
+       and (f.datos->>'proximo_cobro_fecha')::date >= v_dia)))::date;
+  if v_mes is null then
+    return jsonb_build_object('regla', 'suscripciones active con su próximo cobro en el mes', 'mes', null, 'suscripciones', 0, 'clientes', 0, 'euros', 0);
+  end if;
+  select jsonb_build_object(
+    'regla', 'suscripciones active con su próximo cobro en el mes; euros = su próximo importe; clientes = los distintos clientes de GoCardless',
+    'mes', to_char(v_mes, 'YYYY-MM'),
+    'suscripciones', count(*),
+    'clientes', count(distinct f.datos->>'gc_cliente_id'),
+    'euros', coalesce(round(sum((f.datos->>'proximo_cobro_importe')::numeric), 2), 0),
+    'dias', coalesce((select jsonb_object_agg(d, n) from (
+        select g.datos->>'proximo_cobro_fecha' d, count(*) n from public.conta_gc_copia_fila g
+         where g.copia_id = p_copia and g.tipo = 'suscripcion' and g.datos->>'estado' = 'active'
+           and date_trunc('month', (g.datos->>'proximo_cobro_fecha')::date) = v_mes group by 1) x), '{}'::jsonb))
+    into v_r
+    from public.conta_gc_copia_fila f
+   where f.copia_id = p_copia and f.tipo = 'suscripcion' and f.datos->>'estado' = 'active'
+     and date_trunc('month', (f.datos->>'proximo_cobro_fecha')::date) = v_mes;
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_gc_contar_copia(p_copia uuid, p_mes date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_gc_contar_copia(p_copia uuid, p_mes date) IS 'R19 · LA forma de contar lo que GoCardless cobrará en un mes (la única: la usan la copia, el paso 1 y Q). Suscripciones en estado active con su próximo cobro dentro del mes; euros = la suma de su próximo importe; clientes = los distintos gc_cliente_id. Sin mes: el del próximo cobro más cercano desde el día de la copia.';
+
+
+--
+-- Name: conta_gc_copia_tomar(uuid, uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gc_copia_tomar(p_company uuid, p_lectura uuid, p_por text, p_quien text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; v_id uuid := gen_random_uuid(); v_n record;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'Esa empresa no existe.' using errcode = 'P0002'; end if;
+  create temp table if not exists _conta_gc_copia_foto (tipo text, gc_id text, datos jsonb) on commit drop;
+  truncate _conta_gc_copia_foto;
+  insert into _conta_gc_copia_foto (tipo, gc_id, datos)
+  select 'cliente', x.gc_id, to_jsonb(x) - 'account_id' - 'company_id' from public.conta_gc_cliente x where x.company_id = p_company
+  union all
+  select 'mandato', x.gc_id, to_jsonb(x) - 'account_id' - 'company_id' from public.conta_gc_mandato x where x.company_id = p_company
+  union all
+  select 'suscripcion', x.gc_id, to_jsonb(x) - 'account_id' - 'company_id' from public.conta_gc_suscripcion x where x.company_id = p_company
+  union all
+  select 'cobro', x.gc_id, to_jsonb(x) - 'account_id' - 'company_id' from public.conta_gc_cobro x where x.company_id = p_company;
+  select count(*) filter (where tipo = 'cliente') cl, count(*) filter (where tipo = 'mandato') ma,
+         count(*) filter (where tipo = 'suscripcion') su, count(*) filter (where tipo = 'cobro') co,
+         md5(coalesce(string_agg(tipo || '|' || gc_id || '|' || datos::text, E'\n' order by tipo, gc_id), '')) h
+    into v_n from _conta_gc_copia_foto;
+  insert into public.conta_gc_copia (id, account_id, company_id, lectura_id, por, quien_name, clientes, mandatos, suscripciones, cobros, huella)
+  values (v_id, v_cuenta, p_company, p_lectura, p_por, nullif(trim(coalesce(p_quien, '')), ''), v_n.cl, v_n.ma, v_n.su, v_n.co, v_n.h);
+  insert into public.conta_gc_copia_fila (copia_id, account_id, tipo, gc_id, datos)
+  select v_id, v_cuenta, tipo, gc_id, datos from _conta_gc_copia_foto;
+  truncate _conta_gc_copia_foto;
+  return jsonb_build_object('copia', v_id, 'clientes', v_n.cl, 'mandatos', v_n.ma, 'suscripciones', v_n.su, 'cobros', v_n.co, 'huella', v_n.h);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_gc_copia_tomar(p_company uuid, p_lectura uuid, p_por text, p_quien text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_gc_copia_tomar(p_company uuid, p_lectura uuid, p_por text, p_quien text) IS 'R19 · Toma la copia de lo que hay de GoCardless de una empresa (la llama la lectura, antes de tocar Sumied). Solo el servidor.';
+
+
+--
+-- Name: conta_gc_copias(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gc_copias(p_company uuid) RETURNS TABLE(id uuid, tomada_at timestamp with time zone, por text, quien_name text, clientes integer, mandatos integer, suscripciones integer, cobros integer, huella text, cuenta jsonb)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select c.id, c.tomada_at, c.por, c.quien_name, c.clientes, c.mandatos, c.suscripciones, c.cobros, c.huella, public.conta_gc_contar_copia(c.id)
+    from public.conta_gc_copia c
+   where c.company_id = p_company and public.belongs_to_account(c.account_id)
+   order by c.tomada_at desc
+   limit 400
+$$;
 
 
 --
@@ -122123,6 +122581,27 @@ COMMENT ON COLUMN public.conta_erp10_envio.alta_pedida_en IS 'X31 · Cuándo pid
 
 
 --
+-- Name: conta_erp10_facturas_fuera; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_erp10_facturas_fuera (
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    encendido boolean DEFAULT false NOT NULL,
+    cambiado_en timestamp with time zone DEFAULT now() NOT NULL,
+    cambiado_por uuid,
+    cambiado_por_nombre text
+);
+
+
+--
+-- Name: TABLE conta_erp10_facturas_fuera; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_erp10_facturas_fuera IS 'X33 · «Las facturas las emite Cegid: no se suben las de Sumied», por empresa. Encendido: ninguna factura (emitida o recibida) de Sumied sale a ERP10; los demás asientos, sí.';
+
+
+--
 -- Name: conta_erp10_igualado; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -122524,6 +123003,84 @@ CREATE TABLE public.conta_gasto_por_venta (
 --
 
 COMMENT ON TABLE public.conta_gasto_por_venta IS 'R14. Por lo que vende un proveedor (las líneas de su factura), la hoja del 6 de su gasto. Cada línea va a la primera fila (por orden) que tenga una de sus palabras; gana la hoja con más líneas. Las palabras, con tilde; se comparan sin tildes ni mayúsculas, enteras o en plural. Probada contra los nombres reales (regla 31) en el parte del R14.';
+
+
+--
+-- Name: conta_gc_asiento; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_asiento (
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    clase text NOT NULL,
+    gc_id text NOT NULL,
+    fecha date NOT NULL,
+    importe numeric(14,2) NOT NULL,
+    nombre text,
+    cuenta text,
+    concepto text,
+    entry_id uuid,
+    pendiente text[] DEFAULT '{}'::text[] NOT NULL,
+    preparado_en timestamp with time zone DEFAULT now() NOT NULL,
+    preparado_por_nombre text,
+    CONSTRAINT conta_gc_asiento_clase_check CHECK ((clase = ANY (ARRAY['cobro'::text, 'devolucion'::text, 'ingreso'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gc_asiento; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_asiento IS 'X33 · Los asientos de GoCardless preparados desde conta_gc_cobro y conta_gc_payout: uno por cobro, devolución o ingreso. Con asiento (entry_id) o en «Pendiente de revisar» con su motivo.';
+
+
+--
+-- Name: conta_gc_copia; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_copia (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    tomada_at timestamp with time zone DEFAULT now() NOT NULL,
+    lectura_id uuid,
+    por text NOT NULL,
+    quien_name text,
+    clientes integer NOT NULL,
+    mandatos integer NOT NULL,
+    suscripciones integer NOT NULL,
+    cobros integer NOT NULL,
+    huella text NOT NULL,
+    CONSTRAINT conta_gc_copia_por_check CHECK ((por = ANY (ARRAY['persona'::text, 'cada_noche'::text, 'conexion'::text, 'aviso'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gc_copia; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_copia IS 'R19 · Una copia de lo que hay en GoCardless de una empresa, por lectura, fechada y sin poder cambiarse. Lo que cuenta: conta_gc_contar_copia.';
+
+
+--
+-- Name: conta_gc_copia_fila; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_copia_fila (
+    copia_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    tipo text NOT NULL,
+    gc_id text NOT NULL,
+    datos jsonb NOT NULL,
+    CONSTRAINT conta_gc_copia_fila_tipo_check CHECK ((tipo = ANY (ARRAY['cliente'::text, 'mandato'::text, 'suscripcion'::text, 'cobro'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gc_copia_fila; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_copia_fila IS 'R19 · Lo copiado de GoCardless, fila a fila (clientes, mandatos, suscripciones y cobros), tal como se leyó. Sin poder cambiarse.';
 
 
 --
@@ -140063,6 +140620,14 @@ ALTER TABLE ONLY public.conta_erp10_envio
 
 
 --
+-- Name: conta_erp10_facturas_fuera conta_erp10_facturas_fuera_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_facturas_fuera
+    ADD CONSTRAINT conta_erp10_facturas_fuera_pkey PRIMARY KEY (company_id);
+
+
+--
 -- Name: conta_erp10_igualado conta_erp10_igualado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -140127,6 +140692,14 @@ ALTER TABLE ONLY public.conta_gasto_por_venta
 
 
 --
+-- Name: conta_gc_asiento conta_gc_asiento_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_asiento
+    ADD CONSTRAINT conta_gc_asiento_pkey PRIMARY KEY (company_id, clase, gc_id);
+
+
+--
 -- Name: conta_gc_cliente conta_gc_cliente_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -140148,6 +140721,22 @@ ALTER TABLE ONLY public.conta_gc_cobro_otra_via
 
 ALTER TABLE ONLY public.conta_gc_cobro
     ADD CONSTRAINT conta_gc_cobro_pkey PRIMARY KEY (company_id, gc_id);
+
+
+--
+-- Name: conta_gc_copia_fila conta_gc_copia_fila_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_copia_fila
+    ADD CONSTRAINT conta_gc_copia_fila_pkey PRIMARY KEY (copia_id, tipo, gc_id);
+
+
+--
+-- Name: conta_gc_copia conta_gc_copia_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_copia
+    ADD CONSTRAINT conta_gc_copia_pkey PRIMARY KEY (id);
 
 
 --
@@ -146401,6 +146990,13 @@ CREATE UNIQUE INDEX conta_erp10_salida_partida_viva_uq ON public.conta_erp10_sal
 
 
 --
+-- Name: conta_gc_asiento_mes; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_asiento_mes ON public.conta_gc_asiento USING btree (company_id, fecha);
+
+
+--
 -- Name: conta_gc_cobro_mandato_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -146412,6 +147008,13 @@ CREATE INDEX conta_gc_cobro_mandato_idx ON public.conta_gc_cobro USING btree (co
 --
 
 CREATE INDEX conta_gc_cobro_suscripcion_idx ON public.conta_gc_cobro USING btree (company_id, suscripcion_gc_id, fecha);
+
+
+--
+-- Name: conta_gc_copia_empresa_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_copia_empresa_idx ON public.conta_gc_copia USING btree (company_id, tomada_at DESC);
 
 
 --
@@ -151515,6 +152118,34 @@ CREATE TRIGGER conta_diez_base_apuntar AFTER INSERT OR DELETE OR UPDATE OF nombr
 --
 
 CREATE TRIGGER conta_diez_base_guarda BEFORE INSERT OR UPDATE ON public.conta_diez_base FOR EACH ROW EXECUTE FUNCTION public.conta_diez_base_guarda();
+
+
+--
+-- Name: conta_gc_copia_fila conta_gc_copia_fila_no_se_cambia; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_gc_copia_fila_no_se_cambia BEFORE DELETE OR UPDATE ON public.conta_gc_copia_fila FOR EACH ROW EXECUTE FUNCTION public._conta_gc_copia_no_se_cambia();
+
+
+--
+-- Name: conta_gc_copia_fila conta_gc_copia_fila_no_se_vacia; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_gc_copia_fila_no_se_vacia BEFORE TRUNCATE ON public.conta_gc_copia_fila FOR EACH STATEMENT EXECUTE FUNCTION public._conta_gc_copia_no_se_cambia();
+
+
+--
+-- Name: conta_gc_copia conta_gc_copia_no_se_cambia; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_gc_copia_no_se_cambia BEFORE DELETE OR UPDATE ON public.conta_gc_copia FOR EACH ROW EXECUTE FUNCTION public._conta_gc_copia_no_se_cambia();
+
+
+--
+-- Name: conta_gc_copia conta_gc_copia_no_se_vacia; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_gc_copia_no_se_vacia BEFORE TRUNCATE ON public.conta_gc_copia FOR EACH STATEMENT EXECUTE FUNCTION public._conta_gc_copia_no_se_cambia();
 
 
 --
@@ -156798,6 +157429,22 @@ ALTER TABLE ONLY public.conta_erp10_envio
 
 
 --
+-- Name: conta_erp10_facturas_fuera conta_erp10_facturas_fuera_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_facturas_fuera
+    ADD CONSTRAINT conta_erp10_facturas_fuera_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_erp10_facturas_fuera conta_erp10_facturas_fuera_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_facturas_fuera
+    ADD CONSTRAINT conta_erp10_facturas_fuera_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_erp10_igualado conta_erp10_igualado_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -156918,6 +157565,30 @@ ALTER TABLE ONLY public.conta_erp10_subcuenta_salida
 
 
 --
+-- Name: conta_gc_asiento conta_gc_asiento_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_asiento
+    ADD CONSTRAINT conta_gc_asiento_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_asiento conta_gc_asiento_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_asiento
+    ADD CONSTRAINT conta_gc_asiento_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_asiento conta_gc_asiento_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_asiento
+    ADD CONSTRAINT conta_gc_asiento_entry_id_fkey FOREIGN KEY (entry_id) REFERENCES public.journal_entry(id) ON DELETE SET NULL;
+
+
+--
 -- Name: conta_gc_cliente conta_gc_cliente_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -156971,6 +157642,14 @@ ALTER TABLE ONLY public.conta_gc_cobro_otra_via
 
 ALTER TABLE ONLY public.conta_gc_cobro_otra_via
     ADD CONSTRAINT conta_gc_cobro_otra_via_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_copia_fila conta_gc_copia_fila_copia_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_copia_fila
+    ADD CONSTRAINT conta_gc_copia_fila_copia_id_fkey FOREIGN KEY (copia_id) REFERENCES public.conta_gc_copia(id);
 
 
 --
@@ -169408,6 +170087,19 @@ CREATE POLICY conta_erp10_envio_leer ON public.conta_erp10_envio FOR SELECT TO a
 
 
 --
+-- Name: conta_erp10_facturas_fuera; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_erp10_facturas_fuera ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_erp10_facturas_fuera conta_erp10_facturas_fuera_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_erp10_facturas_fuera_leer ON public.conta_erp10_facturas_fuera FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_erp10_igualado; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -169486,6 +170178,19 @@ CREATE POLICY conta_gasto_por_venta_leer ON public.conta_gasto_por_venta FOR SEL
 
 
 --
+-- Name: conta_gc_asiento; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_asiento ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_asiento conta_gc_asiento_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_asiento_leer ON public.conta_gc_asiento FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_gc_cliente; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -169522,6 +170227,32 @@ ALTER TABLE public.conta_gc_cobro_otra_via ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_gc_cobro_otra_via_leer ON public.conta_gc_cobro_otra_via FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gc_copia; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_copia ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_copia_fila; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_copia_fila ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_copia_fila conta_gc_copia_fila_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_copia_fila_leer ON public.conta_gc_copia_fila FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gc_copia conta_gc_copia_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_copia_leer ON public.conta_gc_copia FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -178761,6 +179492,15 @@ GRANT ALL ON FUNCTION public._conta_entrega_mercancia(p_supplier uuid) TO servic
 
 
 --
+-- Name: FUNCTION _conta_erp10_factura_frenada(p_company uuid, p_entry uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_erp10_factura_frenada(p_company uuid, p_entry uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_erp10_factura_frenada(p_company uuid, p_entry uuid) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_erp10_factura_frenada(p_company uuid, p_entry uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_es_admin_plataforma(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -178860,11 +179600,36 @@ GRANT ALL ON FUNCTION public._conta_gasto_propuesto(p_company uuid, p_supplier u
 
 
 --
+-- Name: FUNCTION _conta_gc_asientos_plan(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_gc_asientos_plan(p_company uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_gc_asientos_plan(p_company uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_gc_copia_no_se_cambia(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._conta_gc_copia_no_se_cambia() TO anon;
+GRANT ALL ON FUNCTION public._conta_gc_copia_no_se_cambia() TO authenticated;
+GRANT ALL ON FUNCTION public._conta_gc_copia_no_se_cambia() TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_gc_enlace_guardar(p_filas jsonb); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public._conta_gc_enlace_guardar(p_filas jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_gc_enlace_guardar(p_filas jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_gc_factura_del_cobro(p_company uuid, p_party uuid, p_importe numeric, p_fecha date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_gc_factura_del_cobro(p_company uuid, p_party uuid, p_importe numeric, p_fecha date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_gc_factura_del_cobro(p_company uuid, p_party uuid, p_importe numeric, p_fecha date) TO service_role;
 
 
 --
@@ -179905,6 +180670,14 @@ GRANT ALL ON FUNCTION public._conta_tpv_lista(p text[]) TO service_role;
 
 REVOKE ALL ON FUNCTION public._conta_tpv_propuesta(p_dia uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_tpv_propuesta(p_dia uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_traer_clase_apunte(p_debe numeric, p_haber numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_traer_clase_apunte(p_debe numeric, p_haber numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_traer_clase_apunte(p_debe numeric, p_haber numeric) TO service_role;
 
 
 --
@@ -186474,6 +187247,24 @@ GRANT ALL ON FUNCTION public.conta_erp10_envio_tomar(p_company uuid, p_entry uui
 
 
 --
+-- Name: FUNCTION conta_erp10_facturas_fuera_del_mes(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_facturas_fuera_del_mes(p_company uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_facturas_fuera_del_mes(p_company uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_facturas_fuera_del_mes(p_company uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_erp10_facturas_fuera_poner(p_company uuid, p_encendido boolean, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_facturas_fuera_poner(p_company uuid, p_encendido boolean, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_facturas_fuera_poner(p_company uuid, p_encendido boolean, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_facturas_fuera_poner(p_company uuid, p_encendido boolean, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_erp10_igualado_poner(p_company uuid, p_mes date, p_fichero text, p_fecha date, p_cuentas integer, p_con_diferencia integer, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -186716,6 +187507,24 @@ GRANT ALL ON FUNCTION public.conta_gasto_propuesto(p_company uuid, p_supplier uu
 
 
 --
+-- Name: FUNCTION conta_gc_asientos_del_mes(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gc_asientos_del_mes(p_company uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gc_asientos_del_mes(p_company uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gc_asientos_del_mes(p_company uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gc_asientos_preparar(p_company uuid, p_mes date, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gc_asientos_preparar(p_company uuid, p_mes date, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gc_asientos_preparar(p_company uuid, p_mes date, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gc_asientos_preparar(p_company uuid, p_mes date, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_gc_cobro_otra_via(p_company uuid, p_gc_cobro text, p_via text, p_fecha date, p_nota text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -186731,6 +187540,32 @@ GRANT ALL ON FUNCTION public.conta_gc_cobro_otra_via(p_company uuid, p_gc_cobro 
 REVOKE ALL ON FUNCTION public.conta_gc_cobro_otra_via_quitar(p_company uuid, p_gc_cobro text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_gc_cobro_otra_via_quitar(p_company uuid, p_gc_cobro text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_gc_cobro_otra_via_quitar(p_company uuid, p_gc_cobro text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gc_contar_copia(p_copia uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gc_contar_copia(p_copia uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gc_contar_copia(p_copia uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gc_contar_copia(p_copia uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gc_copia_tomar(p_company uuid, p_lectura uuid, p_por text, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gc_copia_tomar(p_company uuid, p_lectura uuid, p_por text, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gc_copia_tomar(p_company uuid, p_lectura uuid, p_por text, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gc_copias(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gc_copias(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gc_copias(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gc_copias(p_company uuid) TO service_role;
 
 
 --
@@ -200004,6 +200839,14 @@ GRANT ALL ON TABLE public.conta_erp10_envio TO service_role;
 
 
 --
+-- Name: TABLE conta_erp10_facturas_fuera; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_erp10_facturas_fuera TO authenticated;
+GRANT ALL ON TABLE public.conta_erp10_facturas_fuera TO service_role;
+
+
+--
 -- Name: TABLE conta_erp10_igualado; Type: ACL; Schema: public; Owner: -
 --
 
@@ -200074,6 +200917,30 @@ GRANT ALL ON TABLE public.conta_factura_cobro TO service_role;
 
 GRANT ALL ON TABLE public.conta_gasto_por_venta TO service_role;
 GRANT SELECT ON TABLE public.conta_gasto_por_venta TO authenticated;
+
+
+--
+-- Name: TABLE conta_gc_asiento; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_asiento TO authenticated;
+GRANT ALL ON TABLE public.conta_gc_asiento TO service_role;
+
+
+--
+-- Name: TABLE conta_gc_copia; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_copia TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_copia TO authenticated;
+
+
+--
+-- Name: TABLE conta_gc_copia_fila; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_copia_fila TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_copia_fila TO authenticated;
 
 
 --
