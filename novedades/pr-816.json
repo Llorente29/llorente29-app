@@ -1,0 +1,11 @@
+[
+ {
+  "id": "816-1",
+  "pr": 816,
+  "fecha": "2026-11-25T17:03:04Z",
+  "producto": "sumied",
+  "apartado": "Salida a ERP10",
+  "frase": "el cobro de GoCardless de una factura ya cobrada en Sumied no se vuelve a asentar, y un cobro sin su factura atada queda en «Pendiente de revisar».",
+  "ruta": null
+ }
+]

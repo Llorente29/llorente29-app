@@ -1,0 +1,6 @@
+# X33 · la vuelta atrás, al revés: lo que prepara los asientos de GoCardless, las tres funciones de la salida desde su
+# respaldo y el ajuste «Las facturas las emite Cegid».
+cuenta: scripts/conta/produccion/cuentas/x33-qbo-a-erp10.sql
+supabase/vuelta-atras/20261125T1207_x33_asientos_de_gocardless.down.sql
+supabase/vuelta-atras/20261125T1206_x33_freno_en_la_salida.down.sql
+supabase/vuelta-atras/20261125T1205_x33_facturas_las_emite_cegid.down.sql

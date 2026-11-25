@@ -1,0 +1,15 @@
+# X14 · 2 · Sumied admite asientos en negativo, como ERP10 (Julio, 25/11). El 2024 de QBO paraba en conta_traer_seguir con
+# journal_line_debe_o_haber: trae 87 líneas negativas (en 37 asientos) y 2 a cero (medido en el ensayo de la 1042). Rama
+# conta/x14d-lineas-de-erp10. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1042  _conta_traer_clase_apunte: función nueva, no lee tablas (la clase de una línea de lo leído).
+#   1132  journal_line: un lado distinto de 0, con cualquier signo (quita journal_line_debit_check y
+#         journal_line_credit_check: AUTORIZO de Julio con el nombre del fichero; vuelve a poner journal_line_debe_o_haber).
+#         Y seis funciones enteras, con respaldo: Traer deja fuera las líneas a cero («lo que no ha entrado»), el asiento a
+#         mano admite negativos, los motivos para validar comparan en valor absoluto, el cierre y la retención de la nómina
+#         miran el signo, y el pago de un modelo dice «el pago» o «la devolución» por el signo.
+#
+# Nada en el camino del pedido. No cambia ninguna fila. El real lo lanza Julio, con autorizo: 20261125T1132_x14d_negativos.sql
+cuenta: scripts/conta/produccion/cuentas/x14d-lineas.sql
+supabase/migrations/20261125T1042_x14d_clase_del_apunte.sql
+supabase/migrations/20261125T1132_x14d_negativos.sql

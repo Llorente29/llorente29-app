@@ -233,3 +233,28 @@ export async function leerDiasTpvPorSalir(companyId: string, mes: string, quien:
   ])
   return { ...aDias(dias, libro), altas: (altas ?? []).filter((x) => x.nuevo).map((x) => ({ nif: x.nif, nombre: x.nombre, codigo: x.codigo })) }
 }
+
+// ── X33 · QBO a ERP10: «Las facturas las emite Cegid» y los asientos de GoCardless ─────────────────────────────────
+// Funciones (regla 40, de las migraciones 20261125T1205 y 1207): conta_erp10_facturas_fuera_del_mes,
+// conta_erp10_facturas_fuera_poner, conta_gc_asientos_del_mes y conta_gc_asientos_preparar.
+
+/** El ajuste de la empresa y cuántas facturas del mes no salen por él. */
+export async function leerFacturasFuera(companyId: string, mes: string): Promise<Record<string, unknown>> {
+  return rpc<Record<string, unknown>>('conta_erp10_facturas_fuera_del_mes', { p_company: companyId, p_mes: mes })
+}
+
+/** Encender o apagar «Las facturas las emite Cegid» (un administrador). Devuelve la frase de la base. */
+export async function ponerFacturasFuera(companyId: string, encendido: boolean, quien: string | null): Promise<string> {
+  const r = await rpc<{ texto: string }>('conta_erp10_facturas_fuera_poner', { p_company: companyId, p_encendido: encendido, p_quien_nombre: quien })
+  return String(r.texto)
+}
+
+/** Los asientos de GoCardless preparados del mes, y cuántos quedan por preparar. */
+export async function leerAsientosGc(companyId: string, mes: string): Promise<Record<string, unknown>> {
+  return rpc<Record<string, unknown>>('conta_gc_asientos_del_mes', { p_company: companyId, p_mes: mes })
+}
+
+/** Preparar (por revisar, sin subir) los asientos de GoCardless del mes. Devuelve lo que ha hecho, en números. */
+export async function prepararAsientosGc(companyId: string, mes: string, quien: string | null): Promise<Record<string, unknown>> {
+  return rpc<Record<string, unknown>>('conta_gc_asientos_preparar', { p_company: companyId, p_mes: mes, p_quien_nombre: quien })
+}

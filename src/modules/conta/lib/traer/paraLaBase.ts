@@ -88,12 +88,17 @@ function apuntesDe(a: Asiento, f: Factura | null, libro: 'recibidas' | 'expedida
     const esIva = /^47[27]/.test(x.subcuenta)
     const esRet = x.subcuenta.startsWith('4751')
     const importe = x.debe - x.haber
+    // X14 · 2 · El apunte puede venir en negativo (como en ERP10): cada tramo lleva su signo, para que las sumas del debe y
+    // del haber sigan siendo las de allí al céntimo. Solo se parte si todos los tramos van con el mismo signo que la cuota.
+    const signo = (x.debe || x.haber) < 0 ? -1 : 1
     if (esIva && f && prefijo && x.subcuenta.startsWith(prefijo) && deIva.filter((y) => y.subcuenta.startsWith(prefijo)).length === 1
-        && Math.abs(importe) === f.cuota && f.tramos.every((t) => t.tipo !== null)) {
-      // Uno por tipo de IVA, en el mismo lado que el apunte.
+        && Math.abs(importe) === Math.abs(f.cuota) && f.tramos.every((t) => t.tipo !== null)
+        && f.tramos.every((t) => t.cuota === 0 || Math.sign(t.cuota) === Math.sign(f.cuota))) {
+      // Uno por tipo de IVA, en el mismo lado que el apunte y con su signo.
       for (const t of f.tramos) {
-        out.push({ ...base, debe: x.debe ? t.cuota : 0, haber: x.haber ? t.cuota : 0,
-          iva: { tipo: t.tipo as number, base: t.base, libro: libro === 'recibidas' ? 'received' : 'issued' } })
+        const cuota = signo * Math.abs(t.cuota)
+        out.push({ ...base, debe: x.debe ? cuota : 0, haber: x.haber ? cuota : 0,
+          iva: { tipo: t.tipo as number, base: signo * Math.abs(t.base), libro: libro === 'recibidas' ? 'received' : 'issued' } })
       }
       continue
     }
@@ -158,7 +163,10 @@ export function paraLaBase(carga: Carga, programa = 'erp10'): DatosDeLaCarga {
     pendientesNoExactos: carga.aprendido.pendientes.filter((p) => !p.cuadraExacto).map((p) => ({ codigo: p.codigo, nombre: p.nombre, saldo: p.saldo, frase: p.frase,
       facturasSinCasar: p.facturasSinCasar ?? [], cuadraConSaldo: p.cuadraConSaldo ?? p.cuadraExacto })),
     raros: carga.comprobado.tercerosRaros.map((r) => ({ que: r.que, cuentas: r.cuentas, nif: r.nif, frase: r.frase })),
-    sumas: (carga.sumas?.filas ?? []).map((x) => ({ cuenta: x.subcuenta, nombre: x.nombre, debe: x.debe, haber: x.haber })),
+    // X14 · 2 · Solo el sumas y saldos que viene de ERP10 (su fichero). El calculado de los mismos asientos (la conexión) no
+    // es un testigo: con él la base comparaba lo traído consigo mismo y decía «Cuadra» siempre.
+    sumas: carga.ficheros.find((f) => f.tipo === 'sumas_saldos')?.origen === 'fichero'
+      ? (carga.sumas?.filas ?? []).map((x) => ({ cuenta: x.subcuenta, nombre: x.nombre, debe: x.debe, haber: x.haber })) : [],
     inmovilizado: carga.inmovilizado,
     frases: carga.comprobado.frases,
   }

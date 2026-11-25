@@ -1,0 +1,12 @@
+# Q08 · El reparto por la cuenta del mandato (25/11). Rama conta/q08-reparto-por-mandato. Se ensaya y se aplica desde
+# main nombrando la rama, antes de fusionar (lo lanza Julio, T10).
+#
+#   1207  Update e insert sobre lo que existe (autorizo): tres clientes de GoCardless con el mismo correo, atados los
+#         tres por correo a la ficha 1487, pasan a la ficha que dijo Julio por la cuenta del mandato (··53 → 1486,
+#         ··56 → 1485, ··49 → 1487). Su decisión (la que lee la lectura de cada noche, para que no lo vuelva a atar
+#         por correo), el enlace por una persona, los dos enlaces de antes y sus mandatos de Sumied. Con su guarda: si
+#         la ficha o el mandato no son lo dicho, PARA. Lo de antes, en conta_gc_enlace.antes.
+#
+# No toca recibos, cobros ni facturas. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/q08-reparto-por-mandato.sql
+supabase/migrations/20261125T1207_q08_reparto_por_mandato.sql

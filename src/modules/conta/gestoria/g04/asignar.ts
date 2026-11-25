@@ -24,12 +24,22 @@ export interface PorAsignar {
   propuesta: Propuesta
   /** Q08 · Lo que escribió QBO en su Excel para este cliente (un nombre en vez del nº de ficha), con las fichas que encajan. */
   deQbo: DeQbo | null
+  /** Q08 · En cuántos clientes de GoCardless está su email (más de 1: no se propone por email; saldrían todos a la misma ficha). */
+  correoEnVarios: number
+  /** Q08 · Sus mandatos, para distinguirlo de otro con el mismo email: banco, final de la cuenta (lo que guarde GoCardless) y referencia. */
+  mandatos: MandatoGc[]
   /** R19 · Lo que propuso la lectura de GoCardless (por correo o por nombre) y nadie ha confirmado aún. */
   propuestoPorSumied: boolean
-  /** R19 · Sus mandatos (banco y últimos dígitos), para distinguirlo cuando el correo se repite. */
-  mandatos: { banco: string | null; cuentaFinal: string | null; estado: string | null }[]
-  /** R19 · El correo lo tienen también otros clientes de GoCardless, o varias fichas: se enseñan el banco y los dígitos. */
-  correoRepetido: boolean
+}
+
+export interface MandatoGc { banco: string | null; cuentaFinal: string | null; referencia: string | null; estado: string | null }
+
+/** «Banco Ejemplo ··53 · ref. PRUEBA-0001 (activo)». */
+export function textoDeMandato(m: MandatoGc): string {
+  const cuenta = [m.banco, m.cuentaFinal ? `··${m.cuentaFinal}` : null].filter(Boolean).join(' ') || 'Cuenta sin datos'
+  const estado = m.estado === 'active' ? 'activo' : m.estado === 'cancelled' ? 'cancelado' : m.estado === 'expired' ? 'caducado' : m.estado === 'failed' ? 'fallido'
+    : m.estado === 'pending_submission' || m.estado === 'submitted' ? 'pendiente' : m.estado
+  return `${cuenta}${m.referencia ? ` · ref. ${m.referencia}` : ''}${estado ? ` (${estado})` : ''}`
 }
 
 /** R19 · Los apuntados como «No tiene ficha: apuntar para QBO» (conta_gc_enlace en «sin_ficha»), para la lista que se da a QBO. */
@@ -101,13 +111,19 @@ export function clientesParaCasar(d: DatosClientes): ClienteParaCasar[] {
  * del mes del próximo cobro, y su próximo importe). Las apuntadas «sin ficha» van aparte (apuntadosParaQbo).
  */
 export function porAsignar(d: DatosClientes, suscripciones: readonly Fila[], gcClientes: readonly Fila[], empresas: readonly { id: string; nombre: string }[], elegidas: readonly string[],
-  pendientesQbo: readonly Fila[] = []): PorAsignar[] {
+  pendientesQbo: readonly Fila[] = [], mandatos: readonly Fila[] = []): PorAsignar[] {
+  // Q08: un email que está en varios clientes de GoCardless (p. ej. una persona con una sociedad en cada uno) no sirve para proponer.
+  const correoN = new Map<string, number>()
+  for (const g of gcClientes) { const c = texto(g.correo)?.toLowerCase(); if (c) correoN.set(c, (correoN.get(c) ?? 0) + 1) }
+  const mandatosDe = new Map<string, MandatoGc[]>()
+  for (const m of mandatos) {
+    const k = `${String(m.company_id)}|${String(m.gc_cliente_id)}`
+    mandatosDe.set(k, [...(mandatosDe.get(k) ?? []), { banco: texto(m.banco), cuentaFinal: texto(m.cuenta_final), referencia: texto(m.referencia), estado: texto(m.estado) }])
+  }
   const deQbo = new Map<string, string>()
   for (const e of pendientesQbo) { const t = textoDelPendiente(texto(e.porque)); if (t) deQbo.set(`${String(e.company_id)}|${String(e.gc_cliente_id)}`, t) }
   const delGc = new Map(gcClientes.map((g) => [`${String(g.company_id)}|${String(g.gc_id)}`, g]))
   const enlace = (k: string) => (delGc.get(k)?.enlace ?? null) as Fila | null
-  const correos = new Map<string, number>()
-  for (const g of gcClientes) { const c = texto(g.correo)?.toLowerCase(); if (c) correos.set(c, (correos.get(c) ?? 0) + 1) }
   const grupos = new Map<string, PorAsignar>()
   const casar = clientesParaCasar(d)
   const existe = new Set(casar.map((c) => c.id))
@@ -123,17 +139,18 @@ export function porAsignar(d: DatosClientes, suscripciones: readonly Fila[], gcC
       const nombre = texto(gc?.nombre) ?? String(s.gc_cliente_id)
       const correo = texto(gc?.correo)
       const nif = texto(gc?.nif)
-      // La propuesta de la lectura (propuesto por correo o por nombre, sin confirmar) manda sobre la de la pantalla.
+      // R19 · La propuesta de la lectura (propuesto por correo o por nombre, sin confirmar) manda sobre la de la pantalla;
+      // Q08 · salvo si es por un email que está en varios clientes de GoCardless: ese no sirve para proponer.
+      const correoEnVarios = correo ? correoN.get(correo.toLowerCase()) ?? 1 : 0
       const candidatas = (Array.isArray(e?.candidatas) ? (e!.candidatas as unknown[]).map(String) : []).filter((id) => existe.has(id))
       const por: 'NIF' | 'email' | 'nombre' = e?.por === 'correo' ? 'email' : e?.por === 'nif' ? 'NIF' : 'nombre'
-      const deLaLectura = e?.estado === 'propuesto' && candidatas.length > 0
+      const deLaLectura = e?.estado === 'propuesto' && candidatas.length > 0 && !(por === 'email' && correoEnVarios > 1)
       const propuesta: Propuesta = deLaLectura
         ? (candidatas.length === 1 ? { tipo: 'una', clienteId: candidatas[0], por } : { tipo: 'varias', clienteIds: candidatas, por })
-        : proponerCliente({ nombre: texto(gc?.nombre), correo, nif }, casar)
-      const mandatos = (Array.isArray(gc?.mandatos) ? (gc!.mandatos as Fila[]) : []).map((m) => ({ banco: texto(m.banco), cuentaFinal: texto(m.cuenta_final), estado: texto(m.estado) }))
+        : proponerCliente({ nombre: texto(gc?.nombre), correo: correo && correoEnVarios > 1 ? null : correo, nif }, casar)
       g = { empresaId, empresa: empresas.find((x) => x.id === empresaId)?.nombre ?? '', gcClienteId: String(s.gc_cliente_id), nombre, correo, nif, suscripciones: [], alMesCent: 0,
-        propuesta, deQbo: deQbo.has(k) ? fichasDeQbo(deQbo.get(k)!, casar) : null, propuestoPorSumied: deLaLectura, mandatos,
-        correoRepetido: (!!correo && (correos.get(correo.toLowerCase()) ?? 0) > 1) || (propuesta.tipo === 'varias' && propuesta.por === 'email') }
+        correoEnVarios, mandatos: (mandatosDe.get(k) ?? []).sort((a, b) => Number(b.estado === 'active') - Number(a.estado === 'active')),
+        propuesta, deQbo: deQbo.has(k) ? fichasDeQbo(deQbo.get(k)!, casar) : null, propuestoPorSumied: deLaLectura }
       grupos.set(k, g)
     }
     const al = cobraEnElMes(s)
@@ -168,11 +185,6 @@ export function apuntadosParaQbo(suscripciones: readonly Fila[], gcClientes: rea
   return [...out.values()].sort((a, b) => b.alMesCent - a.alMesCent || a.nombre.localeCompare(b.nombre, 'es'))
 }
 
-/** R19 · «Banco Ejemplo · ···1234», de los mandatos de un cliente de GoCardless. */
-export function textoDeMandatos(ms: PorAsignar['mandatos']): string | null {
-  const t = ms.filter((m) => m.banco || m.cuentaFinal).map((m) => [m.banco, m.cuentaFinal ? `···${m.cuentaFinal}` : null].filter(Boolean).join(' · '))
-  return t.length ? `Mandato: ${[...new Set(t)].join(' / ')}` : null
-}
 
 /** «Propuesto por NIF», «2 posibles por nombre», «Sin propuesta». */
 export function textoDePropuesta(p: Propuesta, nombreDe: (id: string) => string): string {

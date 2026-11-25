@@ -120,7 +120,7 @@ function AsignarG04({ accountId, datos, empresas, elegidas, lasDos, recargar, ru
   const mesQueCuenta = gc.datos.meses.map((m) => String(m.mes ?? '')).filter((m) => m && elegidas.includes(String(gc.datos!.meses.find((x) => String(x.mes) === m)?.company_id))).sort()[0]
   const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
   return (
-    <Asignar lista={porAsignar(datos, gc.datos.suscripciones, gc.datos.gcClientes, empresas, elegidas, gc.datos.pendientesQbo)} clientes={clientesParaCasar(datos)} lasDos={lasDos} rutaVolver={rutaVolver}
+    <Asignar lista={porAsignar(datos, gc.datos.suscripciones, gc.datos.gcClientes, empresas, elegidas, gc.datos.pendientesQbo, gc.datos.mandatos)} clientes={clientesParaCasar(datos)} lasDos={lasDos} rutaVolver={rutaVolver}
       mes={mesQueCuenta ? MESES[Number(mesQueCuenta.slice(5, 7)) - 1] : undefined}
       alUnir={async (empresa, gcCliente, cliente) => { const r = await acciones.enlazar(empresa, gcCliente, cliente); recargar(); return r.frase }}
       alConfirmar={async (empresa, gcCliente, cliente) => { const r = await acciones.confirmarEnlace(empresa, gcCliente, cliente); recargar(); gc.recargar(); return r.frase }}

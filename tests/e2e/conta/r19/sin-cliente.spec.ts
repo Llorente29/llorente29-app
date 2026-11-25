@@ -4,8 +4,8 @@
 // R19 · paso 1 · «Cobros de GoCardless sin cliente» (Julio, 25/11), a 1366 y a 1920:
 //   1. arriba, lo que GoCardless cobrará este mes SIN ATAR a su ficha: suscripciones, clientes y euros, con la forma de
 //      contar de la copia (lo atado no sale; lo que no cobra este mes no cuenta);
-//   2. lo propuesto por correo sin confirmar también sale, con la propuesta de Sumied y, como el correo se repite, el
-//      banco y los dígitos del mandato;
+//   2. lo propuesto por correo sin confirmar también sale, con la propuesta de Sumied; con sus mandatos (banco y
+//      dígitos, Q08) y, si el email está en varios clientes de GoCardless, sin proponer por email;
 //   3. «No tiene ficha: apuntar para QBO» lo apunta (conta_gc_enlace_sin_ficha) y lo dice;
 //   4. lo ya apuntado sale en su lista, con su Excel para dárselo a QBO.
 //
@@ -36,11 +36,10 @@ function asignar(Q: string) {
     suscripciones: [s('CU-PROP', 'SB-1', 60.5), s('CU-PROP', 'SB-2', 10, false), s('CU-OTRO', 'SB-3', 24.2), s('CU-SIN', 'SB-4', 100), s('CU-APUNT', 'SB-5', 50), s('CU-ATADO', 'SB-6', 30)],
     meses: [{ company_id: Q, mes: '2026-12' }],
     gc_clientes: [
-      { company_id: Q, gc_id: 'CU-PROP', nombre: 'GRUPO DE PRUEBA SL', correo: 'repetido@ejemplo.test', nif: null,
-        enlace: { estado: 'propuesto', por: 'correo', party_id: null, candidatas: ['c8', 'c6'], porque: 'Su correo está en 2 fichas.' },
-        mandatos: [{ estado: 'active', banco: 'Banco de Prueba', cuenta_final: '00' }] },
-      { company_id: Q, gc_id: 'CU-OTRO', nombre: 'OTRO DE PRUEBA SL', correo: 'repetido@ejemplo.test', nif: null, enlace: null, mandatos: [{ estado: 'active', banco: 'Otro Banco de Prueba', cuenta_final: '99' }] },
-      { company_id: Q, gc_id: 'CU-SIN', nombre: 'NADIE DE PRUEBA SL', correo: 'nadie@ejemplo.test', nif: null, enlace: null, mandatos: [] },
+      { company_id: Q, gc_id: 'CU-PROP', nombre: 'GRUPO DE PRUEBA SL', correo: 'grupo@ejemplo.test', nif: null,
+        enlace: { estado: 'propuesto', por: 'correo', party_id: null, candidatas: ['c8', 'c6'], porque: 'Su correo está en 2 fichas.' } },
+      { company_id: Q, gc_id: 'CU-OTRO', nombre: 'OTRO DE PRUEBA SL', correo: 'repetido@ejemplo.test', nif: null, enlace: null },
+      { company_id: Q, gc_id: 'CU-SIN', nombre: 'NADIE DE PRUEBA SL', correo: 'repetido@ejemplo.test', nif: null, enlace: null },
       { company_id: Q, gc_id: 'CU-APUNT', nombre: 'APUNTADO DE PRUEBA SL', correo: 'apuntado@ejemplo.test', nif: null,
         enlace: { estado: 'sin_ficha', por: 'persona', party_id: null, candidatas: [], porque: 'Persona de prueba dijo que no tiene ficha en Bitrix24.' }, mandatos: [] },
       { company_id: Q, gc_id: 'CU-ATADO', nombre: 'ATADO DE PRUEBA SL', correo: null, nif: null, enlace: { estado: 'atado', por: 'persona', party_id: 'c8', candidatas: [] }, mandatos: [] },
@@ -72,8 +71,12 @@ async function simular(page: Page, Q: string, A: string) {
     if (r.request().method() !== 'GET' || !(nombre in datos)) return r.fallback()
     return json(r, datos[nombre])
   })
-  // Lo que QBO dejó pendiente en su Excel: aquí, nada.
+  // Lo que QBO dejó pendiente en su Excel: aquí, nada. Y los mandatos (Q08), de su tabla.
   await page.route(/\/rest\/v1\/conta_gc_enlace\?/, (r) => json(r, []))
+  await page.route(/\/rest\/v1\/conta_gc_mandato\?/, (r) => json(r, [
+    { company_id: Q, gc_cliente_id: 'CU-PROP', estado: 'active', referencia: 'REF-PRUEBA-1', cuenta_final: '00', banco: 'Banco de Prueba' },
+    { company_id: Q, gc_cliente_id: 'CU-OTRO', estado: 'active', referencia: 'REF-PRUEBA-2', cuenta_final: '99', banco: 'Otro Banco de Prueba' },
+  ]))
   const LECTURAS: Record<string, (c: Record<string, unknown>) => unknown> = { ...pantallas(datos), conta_pantalla_asignar: () => asignar(Q) }
   const APUNTAR: Record<string, (c: Record<string, unknown>) => unknown> = {
     conta_gc_enlace_sin_ficha: () => ({ frase: 'NADIE DE PRUEBA SL no tiene ficha en Bitrix24: hay que crearla allí. Hasta entonces, sus cobros no salen en ninguna ficha.', deshacer_hasta: null }),
@@ -107,14 +110,17 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await expect(page.locator('.g4-as-uno')).toHaveCount(3)
     await expect(page.getByRole('region', { name: 'ATADO DE PRUEBA SL' })).toHaveCount(0)
 
-    // 2. Lo propuesto por correo sin confirmar, con la propuesta de Sumied y, como el correo se repite, el banco.
+    // 2. Lo propuesto por correo sin confirmar, con la propuesta de Sumied y sus mandatos.
     const prop = page.getByRole('region', { name: 'GRUPO DE PRUEBA SL' })
     await expect(prop.locator('.g4-as-propuesta')).toHaveText('Propuesta de Sumied · 2 posibles por email: elige cuál')
-    await expect(prop.locator('[data-prueba="mandato"]')).toHaveText('Mandato: Banco de Prueba · ···00 · el correo lo tienen otros: mira el banco antes de unir.')
+    await expect(prop.locator('[data-prueba="mandatos"]')).toHaveText('Mandato: Banco de Prueba ··00 · ref. REF-PRUEBA-1 (activo)')
     await expect(prop.getByRole('radiogroup', { name: 'Posibles' }).getByRole('radio')).toHaveText(['Transportes de Ejemplo, S.L.', 'Construcciones Ficticias, S.A.'])
     await expect(prop.getByLabel('Buscar otro cliente para GRUPO DE PRUEBA SL')).toBeVisible()
-    await expect(page.getByRole('region', { name: 'OTRO DE PRUEBA SL' }).locator('[data-prueba="mandato"]')).toContainText('Otro Banco de Prueba · ···99')
-    await expect(page.getByRole('region', { name: 'NADIE DE PRUEBA SL' }).locator('[data-prueba="mandato"]')).toHaveCount(0)
+    // Con el email en dos clientes de GoCardless, no se propone por email (Q08) y se ve el banco para elegir.
+    const otro = page.getByRole('region', { name: 'OTRO DE PRUEBA SL' })
+    await expect(otro.locator('[data-prueba="mandatos"]')).toHaveText('Mandato: Otro Banco de Prueba ··99 · ref. REF-PRUEBA-2 (activo)')
+    await expect(otro.locator('[data-prueba="correo-en-varios"]')).toHaveText('Su email está en 2 clientes de GoCardless: no se propone por email. Mira la cuenta y la referencia para elegir.')
+    await expect(page.getByRole('region', { name: 'NADIE DE PRUEBA SL' }).locator('[data-prueba="mandatos"]')).toHaveCount(0)
     mkdirSync(DIR, { recursive: true })
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/sin-cliente-${ancho}.png`, fullPage: true })

@@ -1,0 +1,22 @@
+{
+ "_que": "X33 · La contabilidad de QBO a ERP10 · contexto medido en la BASE LOCAL con la estructura de staging (y, en producción, en solo lectura: el filtro que cambia la 1206 está una vez en cada una de las tres funciones). 1205 y 1207 añaden tablas y funciones; 1206 cambia tres funciones con la misma firma y no escribe en ninguna fila. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-25T10:52Z",
+ "tanda": {
+  "supabase/migrations/20261125T1205_x33_facturas_las_emite_cegid.sql": "9d92fc184811fc830f2681bfa938cad4",
+  "supabase/migrations/20261125T1206_x33_freno_en_la_salida.sql": "e088f3c3fb1e79b27a1fcf4d9aefd56f",
+  "supabase/migrations/20261125T1207_x33_asientos_de_gocardless.sql": "944fb6c16fe17675fae8c84684d6865b"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_erp10_por_salir(uuid,date)",
+   "public.conta_erp10_cola(integer)",
+   "public.conta_erp10_atascados(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": { "tablas": [], "funciones": [] },
+  "usos": {},
+  "registro": []
+ }
+}

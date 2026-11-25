@@ -2,7 +2,7 @@
 // qué clientes de GoCardless faltan por unir y a quién se proponen. Nombres,
 // NIF y correos inventados (T11).
 import { describe, expect, it } from 'vitest'
-import { apuntadosParaQbo, porAsignar, textoDeMandatos, textoDePropuesta } from '@/modules/conta/gestoria/g04/asignar'
+import { apuntadosParaQbo, porAsignar, textoDeMandato, textoDePropuesta } from '@/modules/conta/gestoria/g04/asignar'
 import type { DatosClientes } from '@/modules/conta/gestoria/g04/datos'
 
 const Q = 'emp-qbo'
@@ -61,17 +61,27 @@ describe('G04 · Asignar a un cliente', () => {
 
   it('R19 · lo propuesto por correo sin confirmar también sale, con la propuesta de Sumied; lo atado y lo apuntado para QBO, no', () => {
     const g2 = [...gc.filter((x) => x.gc_id !== 'CU3'),
-      { company_id: Q, gc_id: 'CU3', nombre: 'Otro nombre', correo: 'Admin@estudio-de-prueba.es', nif: null, enlace: { estado: 'propuesto', por: 'correo', party_id: null, candidatas: ['3', '4'] },
-        mandatos: [{ estado: 'active', banco: 'Banco de Prueba', cuenta_final: '00' }] },
+      { company_id: Q, gc_id: 'CU3', nombre: 'Otro nombre', correo: 'Admin@estudio-de-prueba.es', nif: null, enlace: { estado: 'propuesto', por: 'correo', party_id: null, candidatas: ['3', '4'] } },
       { company_id: Q, gc_id: 'CU9', nombre: 'Nadie Conocido', correo: 'nadie@ejemplo.es', nif: null, enlace: { estado: 'sin_ficha', por: 'persona', party_id: null, candidatas: [], porque: 'Persona de prueba dijo que no tiene ficha en Bitrix24.' } }]
-    const xs = porAsignar(datos(), subs, g2, EMPRESAS, [Q])
+    const mds = [{ company_id: Q, gc_cliente_id: 'CU3', estado: 'active', banco: 'Banco de Prueba', cuenta_final: '00', referencia: 'REF-PRUEBA-1' }]
+    const xs = porAsignar(datos(), subs, g2, EMPRESAS, [Q], [], mds)
     expect(xs.map((x) => x.gcClienteId)).toEqual(['CU3', 'CU2', 'CU4'])
-    expect(xs[0]).toMatchObject({ propuestoPorSumied: true, propuesta: { tipo: 'varias', clienteIds: ['3', '4'], por: 'email' }, correoRepetido: true })
-    expect(textoDeMandatos(xs[0].mandatos)).toBe('Mandato: Banco de Prueba · ···00')
+    expect(xs[0]).toMatchObject({ propuestoPorSumied: true, propuesta: { tipo: 'varias', clienteIds: ['3', '4'], por: 'email' }, correoEnVarios: 1 })
+    expect(textoDeMandato(xs[0].mandatos[0])).toBe('Banco de Prueba ··00 · ref. REF-PRUEBA-1 (activo)')
     expect(apuntadosParaQbo(subs, g2, EMPRESAS, [Q])).toEqual([{ empresaId: Q, empresa: 'QBO Prueba', gcClienteId: 'CU9', nombre: 'Nadie Conocido', correo: 'nadie@ejemplo.es', nif: null, alMesCent: 1000, quien: 'Persona de prueba' }])
   })
   it('R19 · cuenta lo que GoCardless cobrará en el mes (su próximo importe); lo que no cobra en el mes, no', () => {
     const s2 = [{ ...sub(Q, 'CU2', 60.5), proximo_cobro_importe: 61, cobra_en_el_mes: true }, { ...sub(Q, 'CU2', 24.2, 'LABORAL'), cobra_en_el_mes: false }]
     expect(porAsignar(datos(), s2, gc, EMPRESAS, [Q]).map((x) => [x.gcClienteId, x.alMesCent])).toEqual([['CU2', 6100]])
+  })
+
+  it('R19 + Q08 · la propuesta de la lectura por email no vale si ese email está en varios clientes de GoCardless', () => {
+    const g3 = [
+      { company_id: Q, gc_id: 'CU3', nombre: 'Otro nombre', correo: 'comun@ejemplo.es', nif: null, enlace: { estado: 'propuesto', por: 'correo', party_id: null, candidatas: ['3'] } },
+      { company_id: Q, gc_id: 'CU4', nombre: 'Otro más', correo: 'comun@ejemplo.es', nif: null },
+    ]
+    const x = porAsignar(datos(), subs, g3, EMPRESAS, [Q]).find((y) => y.gcClienteId === 'CU3')!
+    expect(x).toMatchObject({ propuestoPorSumied: false, correoEnVarios: 2 })
+    expect(x.propuesta.tipo === 'una' && x.propuesta.por === 'email').toBe(false)
   })
 })

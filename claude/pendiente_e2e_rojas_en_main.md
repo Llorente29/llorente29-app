@@ -14,7 +14,12 @@ que hay que hacer cuando se arregle.
 Rojas en `main` desde la e2e de la noche del 24/11 (run 45390645186). Salieron también en la e2e del #808 (run
 45574888302), que las corrió porque cambiaba el fichero.
 
-**Cuando se arreglen** (X14 · 2, Julio, 25/11): recuperar en la 399 («A · Ajustes › Ejercicio: desde cuándo asienta
+- **N07 · 1** (`tests/e2e/conta/n07/traer-erp10.spec.ts:132`) · «solo cuentas y proveedores: soltar, ver, traer, darlo por
+  bueno; la recibida sin proveedor lo encuentra». Esperaba en «Dado por bueno…» la frase «1 factura que había entrado sin
+  proveedor ya lo tiene.»; sale «La primera factura de cada proveedor te pedirá a…» sin ella. Roja en `main` desde la noche
+  del 24/11 (run 45390645186); salió igual en la e2e a mano del #817 (run 45667470541).
+
+**Cuando se arreglen las de c04** (X14 · 2, Julio, 25/11): recuperar en la 399 («A · Ajustes › Ejercicio: desde cuándo asienta
 Folvy») el ajuste del #808, que se devolvió a como estaba en `main` para no arrastrar estas dos rojas:
 
 - «Cambiar» se ve siempre (ya no hay «corte-fijo»);

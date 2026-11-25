@@ -13,6 +13,7 @@
 //     nombre del emisor y sus datos; arriba a la derecha, Verifactu: el QR con
 //     «VERI*FACTU» y «Factura verificable en la sede electrónica de la AEAT»,
 //     o sin QR el recuadro de trazos «Verifactu de pruebas: pendiente»;
+//     (Q10: una empresa que no usa Verifactu, ni lo uno ni lo otro);
 //   · «Factura» grande con «Servicios de …» y, a la derecha, Número · Fecha ·
 //     Pagada, sobre su línea azul;
 //   · el cliente y la forma de pago en dos tarjetas grises, lado a lado;
@@ -67,8 +68,11 @@ export interface DatosFacturaSumied {
   ivaCent: number
   retencion: { pct: number; cent: number } | null
   totalCent: number
-  /** El QR de su registro de Verifactu (la matriz ya calculada) o, sin registro aún, nada: «pendiente». */
-  verifactu: { modulos: boolean[][]; prueba: boolean } | null
+  /**
+   * El QR de su registro de Verifactu (la matriz ya calculada) o, sin registro aún, nada: «pendiente».
+   * Q10 · «no»: la empresa no usa Verifactu (las dos de la gestoría): ni QR ni recuadro.
+   */
+  verifactu: { modulos: boolean[][]; prueba: boolean } | 'no' | null
   /** Cuenta de demostración: la marca de agua y «Datos inventados para la demostración» al pie. */
   demo: boolean
 }
@@ -208,7 +212,9 @@ export function facturaSumiedPdf(JsPDF: JsPdfCtor, d: DatosFacturaSumied): Uint8
 
   const vfX = 161.9, vfW = 104 * PX, vfC = vfX + vfW / 2
   let finVf: number
-  if (d.verifactu && d.verifactu.modulos.length) {
+  if (d.verifactu === 'no') {
+    finVf = 0
+  } else if (d.verifactu && d.verifactu.modulos.length) {
     texto(SUMIED_PDF.verifactu, vfC, 13.6, 'InterBold', 9.5, TINTA, { align: 'center' })
     const n = d.verifactu.modulos.length, lado = vfW / n
     relleno(TINTA)
