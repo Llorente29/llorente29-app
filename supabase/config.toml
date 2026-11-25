@@ -189,6 +189,11 @@ verify_jwt = true
 [functions.conta-erp10-leer]
 verify_jwt = true
 
+# (25/11) conta-cegid-leer · Q10. Leer la facturación de Cegid (DiezREC): clientes con sus conceptos fijos,
+# conceptos y facturas emitidas, a las tablas conta_cegid_*. Solo lee; con la sesión de quien pulsa.
+[functions.conta-cegid-leer]
+verify_jwt = true
+
 # (19/11) conta-erp10-escribir · X10b. Sacar las recibidas a ERP10 (alta de factura y su PDF),
 # sin que nada salga dos veces. Con la sesión de un administrador.
 [functions.conta-erp10-escribir]

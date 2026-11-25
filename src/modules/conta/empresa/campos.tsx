@@ -25,7 +25,7 @@ function Envoltura({ id, etiqueta, ayuda, fallo, children }: Base & { id: string
 
 const describe = (id: string, b: Base) => [b.ayuda ? `${id}-ayuda` : '', b.fallo ? `${id}-fallo` : ''].filter(Boolean).join(' ') || undefined
 
-export function CampoTexto(p: Base & { valor: string; cambiar: (v: string) => void; tipo?: 'text' | 'date'; modo?: 'numeric' | 'decimal' }) {
+export function CampoTexto(p: Base & { valor: string; cambiar: (v: string) => void; tipo?: 'text' | 'date' | 'password'; modo?: 'numeric' | 'decimal' }) {
   const id = useId()
   return (
     <Envoltura id={id} {...p}>

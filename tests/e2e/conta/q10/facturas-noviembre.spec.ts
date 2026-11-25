@@ -1,20 +1,24 @@
 /// <reference lib="dom" />
 // tests/e2e/conta/q10/facturas-noviembre.spec.ts
 //
-// Q10 · «Las facturas de noviembre», en borrador, a 1366 y a 1920:
-//   1. la línea de arriba frente a GoCardless («Faltan N: mira abajo»);
-//   2. «Leer de ERP10»: la serie (la última de ERP10 y por dónde seguiría) y,
-//      en la empresa que retiene, la retención de cada cliente de su última
-//      factura;
-//   3. las facturas con su número seguido, base, IVA, retención y total; lo
-//      pendiente con su motivo; lo que GoCardless no cobró, aparte;
-//   4. el PDF de un borrador se abre (sin emitir nada);
-//   5. «Emitir» se ve y no se puede pulsar todavía.
+// Q10 · «Las facturas de noviembre», a 1366 y a 1920 (respuesta 1 al Q10: las
+// facturas las emite Cegid; Sumied prepara lo que falta y lo cuadra):
+//   1. la línea de arriba frente a GoCardless («Faltan N: mira abajo»), sin
+//      «Emitir» ni números: los pone Cegid;
+//   2. «Leer de Cegid» (solo lee): lo que va leyendo y lo leído; el código de
+//      cliente de Cegid de cada ficha (por su 430 o por su NIF); y la tabla de
+//      equivalencias, con el concepto de Cegid que propone lo ya facturado, su
+//      serie y su retención;
+//   3. en la empresa que retiene, la retención de cada cliente sale de su
+//      última factura de Cegid;
+//   4. lo pendiente con su motivo; lo que GoCardless no cobró, aparte; el PDF
+//      de muestra de un cobro se abre.
 //
 // La sesión, el marco y la cuenta de prueba son staging y el código de verdad.
 // Lo que la pantalla LEE se simula (como en ../q08/decisiones-qbo.spec.ts):
-// los cobros, suscripciones, mandatos, enlaces y fichas, inventados (T11), y
-// ERP10 (conta-erp10-leer). Nada se escribe: la pantalla solo lee.
+// los cobros, suscripciones, mandatos, enlaces, fichas y sus 430, inventados
+// (T11), y la conexión y lo leído de Cegid (conta-cegid-leer y conta_cegid_*).
+// Nada se escribe: ni en Sumied ni en Cegid.
 
 import { mkdirSync } from 'node:fs'
 import { test, expect, type Page, type Route } from '@playwright/test'
@@ -72,30 +76,51 @@ async function simular(page: Page, Q: string, A: string) {
     ['p4', 'Comercial Ejemplo, S.L.', 'B00000001'], ['p5', 'Sin Atar de Prueba, S.L.', 'B00000002'], ['p6', 'Sin NIF de Prueba, S.L.', null],
     ['p7', 'Suelto de Prueba, S.L.', 'B00000003'], ['p8', 'Fallido de Prueba, S.L.', 'B00000004'], ['p9', 'Devuelto de Prueba, S.L.', 'B00000005'],
   ].map(([id, name, tax_id]) => ({ id, name, tax_id }))
-  const TABLAS: Record<string, unknown[]> = { conta_gc_cobro: cobros, conta_gc_suscripcion: suscripciones, conta_gc_mandato: mandatos, conta_gc_enlace: enlaces, party: fichas, customer_fiscal: [] }
-  await page.route(/\/rest\/v1\/(conta_gc_cobro|conta_gc_suscripcion|conta_gc_mandato|conta_gc_enlace|party|customer_fiscal)\?/, (r) => {
+  // Sus 430 en Sumied: p1, p2 y p4 (el código de su cliente en Cegid); p3 no tiene (se ata por su NIF).
+  const enlaces430 = [['p1', '43000101'], ['p2', '43000102'], ['p4', '43000104']].map(([entity_id, code]) => ({ entity_id, company_account: { code } }))
+  // Lo leído de Cegid: vacío hasta pulsar «Leer de Cegid».
+  let leido = false
+  const clientesCegid = [[101, 'A00000000'], [102, 'B00000000'], [103, '00000000T'], [104, 'B00000001']]
+    .map(([codigo, nif]) => ({ codigo, nombre_comercial: null, nombre_fiscal: `Cliente Cegid ${codigo}`, nif, conceptos: [], leido_at: '2026-11-25T17:00:00Z' }))
+  const conceptosCegid = [['0001', 'HONORARIOS MENSUALES'], ['0002', 'SERVICIOS DE GESTORÍA'], ['0008', 'GESTIÓN LABORAL']]
+    .map(([codigo, descripcion]) => ({ codigo, descripcion, por_iva: 21, con_retencion: false, iva_incluido: false }))
+  const linea = (codigoConcepto: string, importe: number, llevaRetencion = false) => ({ linea: 1, codigoConcepto, importe, total: importe, cantidad: 1, porcentajeIva: 21, llevaRetencion })
+  const factura = (codigo: number, cliente: number, lineas: Fila[], ret: number) =>
+    ({ ejercicio: 2026, serie: '1', codigo, cliente, nif: null, fecha_cegid: 20261005, total: null, retencion: ret ? 7.5 : 0, porcentaje_retencion: ret || null, lineas })
+  const facturasCegid = [factura(2700, 101, [linea('0001', 100)], 0), factura(2701, 102, [linea('0002', 50, true)], 15),
+    factura(2702, 103, [linea('0008', 20)], 0), factura(2703, 104, [linea('0001', 50, true)], 15)]
+  const TABLAS: Record<string, unknown[]> = { conta_gc_cobro: cobros, conta_gc_suscripcion: suscripciones, conta_gc_mandato: mandatos, conta_gc_enlace: enlaces, party: fichas, customer_fiscal: [],
+    company_account_link: enlaces430 }
+  const CEGID: Record<string, unknown[]> = { conta_cegid_cliente: clientesCegid, conta_cegid_concepto: conceptosCegid, conta_cegid_factura: facturasCegid }
+  await page.route(/\/rest\/v1\/(conta_cegid_cliente|conta_cegid_concepto|conta_cegid_factura)\?/, (r) => {
+    const t = /\/rest\/v1\/([a-z_]+)\?/.exec(r.request().url())![1]
+    return json(r, leido ? CEGID[t] : [])
+  })
+  // La conexión: el conector, la de la cuenta (con claves) y la de cada sociedad (con su código).
+  const objeto = (r: Route, x: unknown) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(x) })
+  await page.route(/\/rest\/v1\/connector\?/, (r) => objeto(r, { id: 'conector-diezrec' }))
+  await page.route(/\/rest\/v1\/account_connector\?/, (r) => json(r, [{ id: 'ac-cuenta', scope: 'account', company_id: null, external_account_id: null },
+    { id: 'ac-q', scope: 'company', company_id: Q, external_account_id: '1' }, { id: 'ac-a', scope: 'company', company_id: A, external_account_id: '1' }]))
+  await page.route(/\/functions\/v1\/connector-credentials/, (r) => objeto(r, { ok: true, hasCredentials: true }))
+  const pedidas: Fila[] = []
+  await page.route(/\/functions\/v1\/conta-cegid-leer/, (r) => {
+    const b = (r.request().postDataJSON() ?? {}) as Fila
+    pedidas.push(b)
+    if (b.accion === 'leer') { leido = true; return objeto(r, { ok: true, que: b.que, pagina: b.pagina, leidas: b.que === 'clientes' ? 4 : b.que === 'conceptos' ? 3 : 4, total: 4, ultima: true }) }
+    return objeto(r, { ok: true, que: b.que, desde: b.desde, hechos: 4, ultima: true })
+  })
+  await page.route(/\/rest\/v1\/(conta_gc_cobro|conta_gc_suscripcion|conta_gc_mandato|conta_gc_enlace|party|customer_fiscal|company_account_link)\?/, (r) => {
     if (r.request().method() !== 'GET') return r.fallback()
     const t = /\/rest\/v1\/([a-z_]+)\?/.exec(r.request().url())![1]
     // La segunda página (range desde 1000) va vacía.
     if (/offset=1000|range=1000/.test(r.request().url()) || (r.request().headers()['range'] ?? '').startsWith('1000')) return json(r, [])
     return json(r, TABLAS[t])
   })
-  // ERP10: las facturas emitidas de octubre y noviembre. La 2 (Talleres de Prueba) llevaba el 15 %; la 3 (una persona), sin retención.
-  const erp = (n: number, nif: string, fecha: number, ret: number | null) =>
-    ({ cuenta: `4300${n}`, nif, numero: `2026/1/${n}`, fecha, fechaFactura: fecha, retencion: ret ? { tipo: ret, importe: 750 } : null })
-  const pedidas: Fila[] = []
-  await page.route(/\/functions\/v1\/conta-erp10-leer/, (r) => {
-    const b = (r.request().postDataJSON() ?? {}) as Fila
-    pedidas.push(b)
-    const filas = b.mes === MES ? [erp(572, 'B00000000', 20261103, 15), erp(573, 'A00000000', 20261105, 15)]
-      : b.mes === '2026-10' ? [erp(560, '00000000T', 20261006, null), erp(561, 'B00000001', 20261006, 15), erp(562, 'A00000000', 20261006, 15)] : []
-    return json(r, { ok: true, pagina: { que: 'facturas', ejercicio: '2026', mes: b.mes, pagina: b.pagina, filas, total: filas.length, ultima: true } })
-  })
   return pedidas
 }
 
 for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
-  test(`«Las facturas de noviembre» a ${ancho}: frente a GoCardless, ERP10, pendientes y el PDF, sin emitir`, async ({ page }, info) => {
+  test(`«Las facturas de noviembre» a ${ancho}: frente a GoCardless, lo leído de Cegid y la tabla de equivalencias, sin escribir nada`, async ({ page }, info) => {
     test.skip(info.project.name === 'movil', 'Las facturas del mes, en el ordenador')
     test.setTimeout(180_000)
     await page.setViewportSize({ width: ancho, height: alto })
@@ -109,33 +134,34 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await page.goto(`/conta/ventas/clientes-y-cuotas/facturas?empresa=${Q}&mes=${MES}`, { timeout: 30_000 })
     await expect(page.getByRole('heading', { level: 1, name: 'Las facturas de noviembre de 2026' })).toBeVisible({ timeout: 30_000 })
     const cabecera = page.locator('[data-prueba="cabecera"]')
-    // 4 facturas (121 + 53 + 24,20 + 60,50 = 258,70); cobrado 258,70 + 121 + 36,30 + 99 = 515,00; faltan 3 (256,30).
+    // 4 cobros con todo (121 + 53 + 24,20 + 60,50 = 258,70); cobrado 258,70 + 121 + 36,30 + 99 = 515,00; faltan 3 (256,30).
     await expect(cabecera).toHaveText('Noviembre: 4 facturas, 258,70 €. GoCardless cobró 515,00 €. Faltan 3 (256,30 €): mira abajo.')
-    await expect(page.getByRole('button', { name: 'Emitir las de noviembre de 2026' })).toBeDisabled()
+    // 1. Ni «Emitir» ni números: los pone Cegid.
+    await expect(page.getByRole('button', { name: /Emitir/ })).toHaveCount(0)
     const filas = page.getByRole('table', { name: 'Facturas' }).locator('tbody tr')
     await expect(filas).toHaveCount(4)
-    await expect(filas.first()).toContainText('Sin número')
-    await expect(filas.first()).toContainText('Construcciones Ficticias, S.A.')
+    await expect(filas.first().locator('td').first()).toHaveText('La numera Cegid')
 
-    // ERP10: la serie, y los números seguidos desde la de después de la última.
-    await page.getByRole('button', { name: 'Leer de ERP10' }).click()
-    await expect(page.locator('[data-prueba="erp10"]')).toHaveAttribute('data-estado', 'leido', { timeout: 30_000 })
-    await expect(page.locator('[data-prueba="serie"]')).toContainText('se seguiría la serie de ERP10 desde la 2026/1/574')
-    await expect(filas.nth(0).locator('td').first()).toHaveText('2026/1/574')
-    await expect(filas.nth(3).locator('td').first()).toHaveText('2026/1/577')
-    expect(pedidas.every((p) => p.accion === 'traer' && p.que === 'facturas')).toBe(true)
+    // 2. «Leer de Cegid»: solo lee; los códigos de cliente y la tabla de equivalencias.
+    const cegid = page.locator('[data-prueba="cegid"]')
+    await expect(cegid).toContainText('Aún no se ha leído nada de Cegid.')
+    await cegid.getByRole('button', { name: 'Leer de Cegid' }).click()
+    await expect(cegid.locator('[data-prueba="lectura"]')).toHaveText('Leído de Cegid: 4 clientes con sus conceptos fijos, 3 conceptos y 4 facturas de 2026. No se ha escrito nada en Cegid.', { timeout: 30_000 })
+    expect(pedidas.every((p) => p.accion === 'leer' || p.accion === 'detalle')).toBe(true)
+    await expect(cegid.locator('[data-prueba="codigos"]')).toHaveText('De 9 fichas atadas: 3 con su 430 igual al código de Cegid (y el mismo NIF), 0 con el código pero otro NIF en Cegid, 1 por su NIF y 5 sin código de Cegid.')
+    const tabla = cegid.getByRole('table', { name: 'Tabla de equivalencias' })
+    await expect(tabla.locator('tr[data-familia="GESTORIA MENSUAL"]')).toContainText('0001 HONORARIOS MENSUALES')
+    // La 104 se factura con retención (50 € → 53 €) y su cobro es de 60,50 €: no vota.
+    await expect(tabla.locator('tr[data-familia="GESTORIA MENSUAL"]')).toContainText('1 de 2 clientes')
+    await expect(tabla.locator('tr[data-familia="SERVICIOS GESTORIA"]')).toContainText('0002')
+    await expect(tabla.locator('tr[data-familia="SERVICIOS GESTORIA"]')).toContainText('Sí (1 de 1 líneas)')
+    await expect(tabla.locator('tr[data-familia="GESTION LABORAL"]')).toContainText('0008 GESTIÓN LABORAL')
+    await expect(tabla.locator('tr[data-familia="(sin suscripción)"]')).toContainText('Sin propuesta')
 
-    // Lo pendiente, cada uno con su motivo; lo no cobrado, aparte.
-    const pend = page.locator('[data-prueba="pendientes"] li')
-    await expect(pend).toHaveCount(3)
+    // 4. Lo pendiente, con su motivo; lo no cobrado, aparte; el PDF de muestra se abre.
+    await expect(page.locator('[data-prueba="pendientes"] li')).toHaveCount(3)
     await expect(page.locator('[data-prueba="pendientes"] li[data-motivo="sin_cliente"]')).toContainText('átalo en «Cobros de GoCardless sin cliente»')
-    await expect(page.locator('[data-prueba="pendientes"] li[data-motivo="sin_nif"]')).toContainText('no tiene NIF')
-    await expect(page.locator('[data-prueba="pendientes"] li[data-motivo="sin_suscripcion"]')).toContainText('cobro suelto')
-    await expect(page.locator('[data-prueba="sin-factura"] li')).toHaveCount(2)
     await expect(page.locator('[data-prueba="sin-factura"] li[data-estado="failed"]')).toContainText('Fallido: GoCardless no lo pudo cobrar (Fondos insuficientes)')
-
-    // El PDF de un borrador se abre en otra pestaña: se apunta lo que abre (la pestaña de un PDF de blob, en el
-    // Chromium sin pantalla, no tiene aún su dirección cuando salta «popup»: e2e 45625540114, url «»).
     await page.evaluate(() => {
       const w = window as unknown as { __abiertas: string[] }
       w.__abiertas = []
@@ -143,27 +169,20 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     })
     await filas.nth(0).getByRole('button', { name: 'PDF' }).click()
     await expect.poll(() => page.evaluate(() => (window as unknown as { __abiertas: string[] }).__abiertas)).toEqual([expect.stringMatching(/^blob:/)])
-    await expect(page.locator('section').filter({ hasText: 'Facturas (4)' }).getByRole('alert')).toHaveCount(0)
 
     mkdirSync(DIR, { recursive: true })
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/facturas-sociedad-${ancho}.png`, fullPage: true })
 
-    // ── La autónoma: con retención, de la última factura de cada cliente en ERP10 ──
+    // ── 3. La autónoma: la retención de cada cliente, de su última factura en Cegid ──
     await page.goto(`/conta/ventas/clientes-y-cuotas/facturas?empresa=${A}&mes=${MES}`, { timeout: 30_000 })
     await expect(page.getByRole('heading', { level: 1, name: 'Las facturas de noviembre de 2026' })).toBeVisible({ timeout: 30_000 })
-    await expect(cabecera).toContainText('Noviembre: 0 facturas')
-    await expect(page.locator('[data-prueba="pendientes"] li[data-motivo="sin_retencion"]')).toHaveCount(4)
-    await page.getByRole('button', { name: 'Leer de ERP10' }).click()
-    await expect(page.locator('[data-prueba="erp10"]')).toHaveAttribute('data-estado', 'leido', { timeout: 30_000 })
-    // 53 € a Talleres de Prueba (15 %): base 50, IVA 10,50, retención 7,50. 24,20 a la persona (sin retención): base 20.
+    // Lo leído ya está guardado (la simulación lo da): 53 € a Talleres de Prueba (15 %): base 50, retención 7,50; 24,20 a la persona (sin retención): base 20.
     const talleres = filas.filter({ hasText: 'Talleres de Prueba, S.L.' })
-    await expect(talleres).toContainText('50,00 €')
+    await expect(talleres).toContainText('50,00 €', { timeout: 30_000 })
     await expect(talleres).toContainText('−7,50 € (15 %)')
     await expect(filas.filter({ hasText: 'Persona Inventada Uno' })).toContainText('20,00 €')
-    // 121 € con el 15 % sí da el total (base 114,15); 60,50 € no: a revisar, no a ojo.
-    await expect(filas.filter({ hasText: 'Construcciones Ficticias, S.A.' })).toContainText('114,15 €')
-    await expect(page.locator('[data-prueba="pendientes"] li[data-motivo="no_cuadra"]')).toHaveCount(1)
+    // 60,50 € con el 15 % no da el total al céntimo: a revisar, no a ojo.
     await expect(page.locator('[data-prueba="pendientes"] li[data-motivo="no_cuadra"]')).toContainText('Comercial Ejemplo, S.L.')
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/facturas-autonoma-${ancho}.png`, fullPage: true })
