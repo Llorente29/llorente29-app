@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ClienteParaCasar } from '../../../../../supabase/functions/_shared/tarifa/lista'
 import { euros } from '../../../../../supabase/functions/_shared/tarifa/precio'
-import { textoDePropuesta, type PorAsignar } from './asignar'
+import { textoDePropuesta, textoDeQbo, type PorAsignar } from './asignar'
 
 export interface PropsAsignar {
   lista: PorAsignar[]
@@ -21,6 +21,8 @@ export interface PropsAsignar {
   lasDos: boolean
   rutaVolver: string
   alUnir: (empresaId: string, gcClienteId: string, clienteId: string) => Promise<string>
+  /** Q08 · Para los que QBO dejó pendientes: «Es esta», que guarda quién lo confirmó (conta_gc_enlace_confirmar). Sin él, se une con alUnir. */
+  alConfirmar?: (empresaId: string, gcClienteId: string, clienteId: string) => Promise<string>
 }
 
 type Aviso = { ok: boolean; texto: string } | null
@@ -50,12 +52,15 @@ export function Asignar(p: PropsAsignar) {
   )
 }
 
-function Uno({ x, clientes, lasDos, alUnir, nombreDe, setAviso }: PropsAsignar & { x: PorAsignar; nombreDe: (id: string) => string; setAviso: (a: Aviso) => void }) {
-  const inicial = x.propuesta.tipo === 'una' ? x.propuesta.clienteId : null
+function Uno({ x, clientes, lasDos, alUnir, alConfirmar, nombreDe, setAviso }: PropsAsignar & { x: PorAsignar; nombreDe: (id: string) => string; setAviso: (a: Aviso) => void }) {
+  // Q08: si QBO escribió un nombre, manda su propuesta (si es una sola ficha, ya elegida; nunca se une sola).
+  const deQbo = x.deQbo
+  const inicial = deQbo ? (deQbo.clienteIds.length === 1 ? deQbo.clienteIds[0] : null) : x.propuesta.tipo === 'una' ? x.propuesta.clienteId : null
   const [elegido, setElegido] = useState<string | null>(inicial)
   const [busca, setBusca] = useState('')
   const [enCurso, setEnCurso] = useState(false)
-  const posibles = x.propuesta.tipo === 'varias' ? x.propuesta.clienteIds : []
+  const posibles = deQbo ? (deQbo.clienteIds.length > 1 ? deQbo.clienteIds : []) : x.propuesta.tipo === 'varias' ? x.propuesta.clienteIds : []
+  const unir = deQbo && alConfirmar ? alConfirmar : alUnir
   const q = busca.trim().toLowerCase()
   const sugeridos = q.length >= 2 ? clientes.filter((c) => `${c.nombre} ${c.nif ?? ''} ${c.correos.join(' ')}`.toLowerCase().includes(q)).slice(0, 8) : []
   return (
@@ -68,7 +73,9 @@ function Uno({ x, clientes, lasDos, alUnir, nombreDe, setAviso }: PropsAsignar &
         <div className="g4-as-importe"><b>{euros(x.alMesCent)}</b> <span className="g4-pequeno">al mes</span></div>
       </div>
       <div className="g4-pequeno">{x.suscripciones.map((s) => `${s.nombre} · ${euros(s.alMesCent)}`).join(' · ')}</div>
-      <div className="g4-as-propuesta" data-hay={x.propuesta.tipo !== 'ninguna' ? '' : undefined}>{textoDePropuesta(x.propuesta, nombreDe)}</div>
+      {deQbo
+        ? <div className="g4-as-propuesta" data-hay={deQbo.clienteIds.length ? '' : undefined} data-qbo={deQbo.como}>{textoDeQbo(deQbo, nombreDe)}</div>
+        : <div className="g4-as-propuesta" data-hay={x.propuesta.tipo !== 'ninguna' ? '' : undefined}>{textoDePropuesta(x.propuesta, nombreDe)}</div>}
       {posibles.length > 0 && (
         <div role="radiogroup" aria-label="Posibles" className="g4-tf-chips">
           {posibles.map((id) => <button key={id} type="button" role="radio" aria-checked={elegido === id} className="g4-tf-chip" onClick={() => setElegido(id)}>{nombreDe(id)}</button>)}
@@ -86,9 +93,9 @@ function Uno({ x, clientes, lasDos, alUnir, nombreDe, setAviso }: PropsAsignar &
       <div className="g4-tf-botones">
         <button type="button" className="g4-boton" data-tipo="primario" disabled={!elegido || enCurso} onClick={async () => {
           setEnCurso(true)
-          try { setAviso({ ok: true, texto: await alUnir(x.empresaId, x.gcClienteId, elegido!) }) } catch (e) { setAviso({ ok: false, texto: e instanceof Error ? e.message : String(e) }) }
+          try { setAviso({ ok: true, texto: await unir(x.empresaId, x.gcClienteId, elegido!) }) } catch (e) { setAviso({ ok: false, texto: e instanceof Error ? e.message : String(e) }) }
           setEnCurso(false)
-        }}>{elegido ? `Unir a ${nombreDe(elegido)}` : 'Elige un cliente'}</button>
+        }}>{elegido ? (deQbo ? `Es esta: unir a ${nombreDe(elegido)}` : `Unir a ${nombreDe(elegido)}`) : 'Elige un cliente'}</button>
       </div>
     </section>
   )

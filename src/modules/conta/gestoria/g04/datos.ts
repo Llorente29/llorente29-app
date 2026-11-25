@@ -13,7 +13,8 @@
 //   · conta_pantalla_asignar: «Asignar a un cliente».
 // Hacer, por las funciones de la 0930, que ensayan por defecto.
 
-import { rpc } from '@/modules/conta/services/bd'
+import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
+import { ORIGEN_QBO } from '../decisionesQbo'
 
 export type Fila = Record<string, unknown>
 
@@ -82,9 +83,14 @@ export async function leerFicha(accountId: string, cliente: string): Promise<Dat
 }
 
 /** «Asignar a un cliente»: las suscripciones activas de GoCardless y los clientes de GoCardless que las pagan. */
-export async function leerAsignar(accountId: string): Promise<{ suscripciones: Fila[]; gcClientes: Fila[] }> {
-  const d = (await rpc<Fila | null>('conta_pantalla_asignar', { p_cuenta: accountId })) ?? {}
-  return { suscripciones: filas(d.suscripciones), gcClientes: filas(d.gc_clientes) }
+export async function leerAsignar(accountId: string): Promise<{ suscripciones: Fila[]; gcClientes: Fila[]; pendientesQbo: Fila[] }> {
+  // Q08 · Lo que QBO dejó pendiente en su Excel (conta_gc_enlace: company_id, gc_cliente_id, estado, por, porque, quien_name; regla 40, comprobado el 25/11).
+  const [d, pend] = await Promise.all([
+    rpc<Fila | null>('conta_pantalla_asignar', { p_cuenta: accountId }),
+    tabla('conta_gc_enlace').select('company_id, gc_cliente_id, porque').eq('account_id', accountId).eq('estado', 'propuesto').eq('por', 'persona').like('quien_name', `${ORIGEN_QBO}%`),
+  ])
+  if (pend.error) throw new Error(mensaje('No se ha podido leer lo que QBO dejó pendiente', pend.error))
+  return { suscripciones: filas((d ?? {}).suscripciones), gcClientes: filas((d ?? {}).gc_clientes), pendientesQbo: (pend.data ?? []) as Fila[] }
 }
 
 type Respuesta = { frase: string; id?: string; ensayo?: boolean }
@@ -117,4 +123,6 @@ export const acciones = {
   aplicarCambio: (id: string) => hacer('conta_tarifa_cambio_aplicar', { p_cambio: id }),
   deshacerCambio: (id: string) => hacer('conta_tarifa_cambio_deshacer', { p_cambio: id }),
   enlazar: (empresa: string, gcCliente: string, cliente: string) => hacer('conta_gestoria_enlazar', { p_company: empresa, p_gc_cliente: gcCliente, p_party: cliente }),
+  /** G06 · «Es esta»: lo confirma una persona y manda sobre lo automático (y sobre lo que dejó pendiente QBO). */
+  confirmarEnlace: (empresa: string, gcCliente: string, cliente: string) => hacer('conta_gc_enlace_confirmar', { p_company: empresa, p_gc_cliente: gcCliente, p_party: cliente }),
 }
