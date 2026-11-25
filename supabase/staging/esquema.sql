@@ -46746,6 +46746,9 @@ declare
   v_r jsonb;
   v_entry uuid;
   v_nota text;
+  v_pend text[];
+  v_ya_pago uuid;
+  v_ya_hay boolean;
   v_aj public.conta_gestoria_ajustes;
   v_pla text;
   v_preparados int := 0; v_seguian int := 0; v_pendientes int := 0;
@@ -46773,14 +46776,26 @@ begin
     if v_x.clase = 'cobro' and v_x.party_id is not null then
       select * into v_f from public._conta_gc_factura_de_cobro(v_c.id, v_x.gc_id);
     end if;
-    if cardinality(v_x.pendiente) = 0 and v_f.id is not null and v_f.cobrado + v_x.importe > v_f.total then
-      -- Una factura con cobro nunca lleva dos asientos de cobro: la fila señala el que ya tiene.
-      select p.entry_id into v_entry from public.customer_invoice_payment p
-       where p.invoice_id = v_f.id and p.entry_id is not null order by p.paid_on desc, p.created_at desc limit 1;
-      v_nota := format('La factura %s ya está cobrada en Sumied: su cobro %s y no se escribe otro.', v_f.numero,
-        case when v_entry is null then 'no lleva asiento aquí' else 'ya tiene su asiento' end);
+    v_pend := v_x.pendiente; v_ya_hay := false; v_ya_pago := null;
+    if cardinality(v_pend) = 0 and v_f.id is not null then
+      -- Este cobro, ¿ya está apuntado en su factura? (por «Preparar», o por el G05: «Domiciliación SEPA <cobro>»)
+      select p.entry_id, true into v_ya_pago, v_ya_hay from public.customer_invoice_payment p
+       where p.invoice_id = v_f.id and p.note in ('GoCardless ' || v_x.gc_id, 'Domiciliación SEPA ' || v_x.gc_id)
+       order by p.created_at limit 1;
+      v_ya_hay := coalesce(v_ya_hay, false);
+      if not v_ya_hay and v_f.cobrado + v_x.importe > v_f.total then
+        -- Una factura queda cobrada cuando la suma de sus cobros llega a su total: este no cabe. No se adivina: se dice.
+        v_pend := v_pend || format('La factura %s ya está cobrada entera (%s de %s €): este cobro pasa de su total',
+          v_f.numero, translate(to_char(v_f.cobrado, 'FM999G999G990D00'), ',.', '.,'), translate(to_char(v_f.total, 'FM999G999G990D00'), ',.', '.,'));
+      end if;
+    end if;
+    if v_ya_hay then
+      -- Un cobro, un asiento: la fila señala el que ya tiene.
+      v_entry := v_ya_pago;
+      v_nota := format('El cobro ya está apuntado en la factura %s: %s y no se escribe otro.', v_f.numero,
+        case when v_entry is null then 'no lleva asiento aquí' else 'tiene su asiento' end);
       v_seguian := v_seguian + 1;
-    elsif cardinality(v_x.pendiente) = 0 then
+    elsif cardinality(v_pend) = 0 then
       perform public._conta_cobro_cuenta(v_c.id, v_pla, 'Plataforma GoCardless', v_quien);
       if v_x.clase = 'cobro' then perform public._conta_cobro_cuenta(v_c.id, v_x.cuenta, coalesce(v_x.nombre, 'Cliente'), v_quien); end if;
       if v_x.clase = 'ingreso' then perform public._conta_cobro_cuenta(v_c.id, v_x.cuenta, 'Banco', v_quien); end if;
@@ -46803,7 +46818,7 @@ begin
     end if;
     insert into public.conta_gc_asiento (company_id, account_id, clase, gc_id, fecha, importe, nombre, cuenta, concepto, entry_id, pendiente,
                                          preparado_en, preparado_por_nombre, factura_id, nota)
-    values (v_c.id, v_c.account_id, v_x.clase, v_x.gc_id, v_x.fecha, v_x.importe, v_x.nombre, v_x.cuenta, v_x.concepto, v_entry, v_x.pendiente,
+    values (v_c.id, v_c.account_id, v_x.clase, v_x.gc_id, v_x.fecha, v_x.importe, v_x.nombre, v_x.cuenta, v_x.concepto, v_entry, v_pend,
             now(), v_quien, v_f.id, v_nota)
     on conflict (company_id, clase, gc_id) do update set fecha = excluded.fecha, importe = excluded.importe, nombre = excluded.nombre,
       cuenta = excluded.cuenta, concepto = excluded.concepto, entry_id = excluded.entry_id, pendiente = excluded.pendiente,
@@ -123544,7 +123559,7 @@ CREATE TABLE public.conta_gc_cobro_factura (
 -- Name: TABLE conta_gc_cobro_factura; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.conta_gc_cobro_factura IS 'X33b · La factura emitida de cada cobro de GoCardless (Q10: una por cobro). La escribe la emisión; la lee «Preparar» los asientos de GoCardless para no cobrar dos veces una factura.';
+COMMENT ON TABLE public.conta_gc_cobro_factura IS 'X33b/X33c · La factura de cada cobro de GoCardless: un cobro, una factura; una factura (por cliente y mes), varios cobros. La escriben las facturas de las cuotas (Q); la lee «Preparar» los asientos de GoCardless.';
 
 
 --
@@ -141226,14 +141241,6 @@ ALTER TABLE ONLY public.conta_gc_cliente
 
 
 --
--- Name: conta_gc_cobro_factura conta_gc_cobro_factura_invoice_id_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.conta_gc_cobro_factura
-    ADD CONSTRAINT conta_gc_cobro_factura_invoice_id_key UNIQUE (invoice_id);
-
-
---
 -- Name: conta_gc_cobro_factura conta_gc_cobro_factura_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -147528,6 +147535,13 @@ CREATE UNIQUE INDEX conta_erp10_salida_partida_viva_uq ON public.conta_erp10_sal
 --
 
 CREATE INDEX conta_gc_asiento_mes ON public.conta_gc_asiento USING btree (company_id, fecha);
+
+
+--
+-- Name: conta_gc_cobro_factura_factura; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_cobro_factura_factura ON public.conta_gc_cobro_factura USING btree (invoice_id);
 
 
 --
