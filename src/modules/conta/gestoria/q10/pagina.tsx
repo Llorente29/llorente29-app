@@ -9,7 +9,6 @@
 
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { jsPDF } from 'jspdf'
 import { rutaApartadoEmpresa, rutaClientesCuotas } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
@@ -17,10 +16,8 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { leerConexionCegid, leerGuardadoCegid, leerTodoCegid } from '@/modules/conta/services/cegidService'
-import { facturaSumiedPdf } from '../../../../../supabase/functions/_shared/facturaSumiedPdf'
 import { COBRADO, facturasDelMes, nombreDelMesQ10 } from './facturasDelMes'
 import { leerFacturasDelMes } from './datos'
-import { datosPdfQ10, emisorQ10 } from './pdf'
 import { FacturasDelMes } from './FacturasDelMes'
 import { CegidQ10 } from './CegidQ10'
 import { codigosCegid, resumenCodigos, retencionesDeCegid, tablaEquivalencias } from './equivalencias'
@@ -44,35 +41,41 @@ export function FacturasQ10Page() {
   const cg = useLeer(listo ? () => leerGuardadoCegid(empresa.id, anio) : null, `${empresa?.id}:${anio}:q10-cegid:${vuelta}`)
   const retiene = retieneQ10(d.datos?.empresa.tax_id)
 
+  // La ficha de cada cobro (el atado de «Clientes y cuotas» y, si no, el enlace atado): la misma para todo lo de abajo.
+  const base = useMemo(() => {
+    if (!d.datos || !empresa) return null
+    return facturasDelMes({ mes, empresa: { id: empresa.id, nombre: empresa.nombre, retiene: false }, cobros: d.datos.cobros, suscripciones: d.datos.suscripciones,
+      mandatos: d.datos.mandatos, enlaces: d.datos.enlaces, fichas: d.datos.fichas, retenciones: new Map(), cobroCliente: d.datos.cobroCliente })
+  }, [d.datos, empresa, mes])
+
   const cegid = useMemo(() => {
-    if (!d.datos || !cg.datos || !cg.datos.clientes.length) return null
-    const fichas = d.datos.fichas.map((f) => ({ partyId: f.partyId, nif: f.nif, cuenta430: d.datos!.cuentas.get(f.partyId) ?? null }))
+    if (!d.datos || !base || !cg.datos || !cg.datos.clientes.length) return null
+    // El código de Cegid de las fichas con algún cobro cobrado este mes (las que se facturan).
+    const conCobro = new Map([...base.facturas.map((f) => f.ficha), ...base.pendientes.map((p) => p.ficha).filter((f): f is NonNullable<typeof f> => !!f)].map((f) => [f.partyId, f]))
+    const fichas = [...conCobro.values()].map((f) => ({ partyId: f.partyId, nif: f.nif, cuenta430: d.datos!.cuentas.get(f.partyId) ?? null }))
     const codigos = codigosCegid(fichas, cg.datos.clientes)
-    return { codigos, resumen: resumenCodigos(codigos).frase, retenciones: retencionesDeCegid(codigos, cg.datos.facturas) }
-  }, [d.datos, cg.datos])
+    const sinCodigo = [...codigos].filter(([, c]) => c.codigo === null).map(([partyId, c]) => ({ nombre: conCobro.get(partyId)?.nombre ?? '', nif: conCobro.get(partyId)?.nif ?? null,
+      cuenta430: d.datos!.cuentas.get(partyId) ?? null, porque: c.porque })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    return { codigos, resumen: resumenCodigos(codigos).frase, sinCodigo, retenciones: retencionesDeCegid(codigos, cg.datos.facturas) }
+  }, [d.datos, base, cg.datos])
 
   const modelo = useMemo(() => {
     if (!d.datos || !empresa) return null
     return facturasDelMes({ mes, empresa: { id: empresa.id, nombre: empresa.nombre, retiene }, cobros: d.datos.cobros, suscripciones: d.datos.suscripciones,
-      mandatos: d.datos.mandatos, enlaces: d.datos.enlaces, fichas: d.datos.fichas, retenciones: cegid?.retenciones ?? new Map<string, number>() })
+      mandatos: d.datos.mandatos, enlaces: d.datos.enlaces, fichas: d.datos.fichas, retenciones: cegid?.retenciones ?? new Map<string, number>(), cobroCliente: d.datos.cobroCliente })
   }, [d.datos, empresa, mes, retiene, cegid])
 
   const tabla = useMemo(() => {
-    if (!d.datos || !cg.datos || !cegid) return null
+    if (!d.datos || !base || !cg.datos || !cegid) return null
     const sus = new Map(d.datos.suscripciones.map((s) => [s.gcId, s]))
-    const enl = new Map(d.datos.enlaces.map((e) => [e.gcClienteId, e]))
-    const cobros = d.datos.cobros.filter((c) => c.fecha.slice(0, 7) === mes && (COBRADO as readonly string[]).includes(c.estado)).map((c) => {
-      const s = c.suscripcionId ? sus.get(c.suscripcionId) : undefined
-      const e = s?.gcClienteId ? enl.get(s.gcClienteId) : undefined
-      return { partyId: e?.estado === 'atado' ? e.partyId : null, importe: c.importe, concepto: s?.nombre ?? null }
-    })
+    const fichaDe = new Map([...base.facturas.map((f) => [f.cobro.gcId, f.ficha.partyId] as const), ...base.pendientes.filter((p) => p.ficha).map((p) => [p.cobro.gcId, p.ficha!.partyId] as const)])
+    const cobros = d.datos.cobros.filter((c) => c.fecha.slice(0, 7) === mes && (COBRADO as readonly string[]).includes(c.estado)).map((c) => ({
+      partyId: fichaDe.get(c.gcId) ?? null, importe: c.importe, concepto: (c.suscripcionId ? sus.get(c.suscripcionId)?.nombre : null) ?? null }))
     return tablaEquivalencias(cobros, cegid.codigos, cg.datos.clientes, cg.datos.conceptos, cg.datos.facturas)
-  }, [d.datos, cg.datos, cegid, mes])
+  }, [d.datos, base, cg.datos, cegid, mes])
 
   if (d.error) return <ErrorConReintento mensaje={`No se han podido leer los cobros del mes: ${d.error}`} reintentar={d.recargar} />
   if (!d.datos || !empresa || !modelo) return <TarjetaCargando />
-  const datos = d.datos
-  const mandatos = new Map(datos.mandatos.map((m) => [m.gcId, m]))
 
   const leer = async () => {
     setLectura({ clave, estado: 'leyendo', frase: 'Entrando en la facturación de Cegid…' })
@@ -86,25 +89,15 @@ export function FacturasQ10Page() {
     }
   }
 
-  const verPdf = async (i: number) => {
-    const f = modelo.facturas[i]
-    const m = f.cobro.mandatoId ? mandatos.get(f.cobro.mandatoId) : undefined
-    const bytes = facturaSumiedPdf(jsPDF, datosPdfQ10(f, mes, { emisor: emisorQ10(datos.empresa), numero: null, fecha: hoy, cuenta: m?.final ? { pais: null, final: m.final } : null }))
-    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }))
-    const w = window.open(url, '_blank')
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    return w ? null : 'El navegador no ha dejado abrir el PDF en otra pestaña: permite las ventanas de esta página.'
-  }
-
   const conectada = !!(con.datos?.conClaves && con.datos.codigo.trim())
   const bloqueCegid = (
     <CegidQ10 conectada={conectada} rutaConectar={rutaApartadoEmpresa('ejercicio')}
       lectura={lectura?.clave === clave ? { estado: lectura.estado, frase: lectura.frase } : con.error ? { estado: 'fallo', frase: `No se ha podido leer la conexión con Cegid: ${con.error}` } : cg.error ? { estado: 'fallo', frase: `No se ha podido leer lo leído de Cegid: ${cg.error}` } : null}
-      leidoAt={cg.datos?.leidoAt ?? null} alLeer={() => void leer()} codigos={cegid?.resumen ?? null} tabla={tabla} />
+      leidoAt={cg.datos?.leidoAt ?? null} alLeer={() => void leer()} codigos={cegid?.resumen ?? null} sinCodigo={cegid?.sinCodigo ?? null} tabla={tabla} />
   )
 
   return (
-    <FacturasDelMes empresa={empresa.nombre} mes={nombreDelMesQ10(mes)} modelo={modelo} cegid={bloqueCegid} alVerPdf={verPdf}
+    <FacturasDelMes empresa={empresa.nombre} mes={nombreDelMesQ10(mes)} modelo={modelo} cegid={bloqueCegid}
       rutaVolver={rutaClientesCuotas()} rutaSinCliente={`${rutaClientesCuotas()}?ver=sin-cliente`} />
   )
 }

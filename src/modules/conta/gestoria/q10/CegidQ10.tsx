@@ -21,6 +21,8 @@ export interface PropsCegidQ10 {
   leidoAt: string | null
   alLeer: () => void
   codigos: string | null
+  /** Las fichas con cobros este mes que no tienen código de Cegid, con su NIF, para que Julio las mire. */
+  sinCodigo: { nombre: string; nif: string | null; cuenta430: string | null; porque: string }[] | null
   tabla: FilaEquivalencia[] | null
 }
 
@@ -48,6 +50,21 @@ export function CegidQ10(p: PropsCegidQ10) {
       {p.lectura && <p className="q10-linea" data-prueba="lectura" data-tono={p.lectura.estado === 'fallo' ? 'mal' : p.lectura.estado === 'leido' ? 'bien' : undefined}
         role={p.lectura.estado === 'fallo' ? 'alert' : 'status'}>{p.lectura.frase}</p>}
       {p.codigos && <p className="q10-linea" data-prueba="codigos">{p.codigos}</p>}
+      {p.sinCodigo && p.sinCodigo.length > 0 && (
+        <details className="q10-sin-codigo" data-prueba="sin-codigo">
+          <summary>Las {p.sinCodigo.length} fichas sin código de Cegid, con su NIF</summary>
+          <div className="q10-tabla-caja">
+            <table className="q10-tabla" aria-label="Fichas sin código de Cegid">
+              <thead><tr><th>Ficha</th><th>NIF</th><th>Su 430 en Sumied</th><th>Por qué</th></tr></thead>
+              <tbody>
+                {p.sinCodigo.map((x) => (
+                  <tr key={`${x.nombre}|${x.nif}`}><td className="q10-cliente">{x.nombre}</td><td>{x.nif ?? 'Sin NIF'}</td><td>{x.cuenta430 ?? '—'}</td><td>{x.porque}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
       {p.tabla && p.tabla.length > 0 && (
         <>
           <h3 className="q10-subtitulo">Qué concepto de Cegid lleva cada cobro de GoCardless</h3>

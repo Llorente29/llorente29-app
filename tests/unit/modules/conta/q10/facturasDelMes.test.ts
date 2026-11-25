@@ -63,7 +63,7 @@ describe('Q10 · una factura por cada cobro cobrado', () => {
     expect(m.pendientes).toEqual([])
     expect(m.cobradoCent).toBe(18150)
     expect(m.facturasCent).toBe(18150)
-    expect(m.frase).toBe('Noviembre: 2 facturas, 181,50 €. GoCardless cobró 181,50 €. Cuadra.')
+    expect(m.frase).toBe('Noviembre: 2 facturas (2 cobros), 181,50 €. GoCardless cobró 181,50 €. Cuadra.')
     expect(m.cuadra).toBe(true)
   })
   it('cada una dice la cuota y el día real del cobro, y la línea es la suscripción', () => {
@@ -106,7 +106,7 @@ describe('Q10 · lo que no se puede facturar va a «Pendiente de revisar», con 
     expect(m.facturas.map((f) => f.cobro.gcId)).toEqual(['C'])
     expect(m.pendientes.map((p) => [p.cobro.gcId, p.motivo])).toEqual([['A', 'sin_cliente'], ['B', 'sin_nif'], ['D', 'sin_suscripcion']])
     expect(m.pendientes[0].porque).toMatch(/«Cobros de GoCardless sin cliente»/)
-    expect(m.frase).toBe('Noviembre: 1 factura, 121,00 €. GoCardless cobró 484,00 €. Faltan 3 (363,00 €): mira abajo.')
+    expect(m.frase).toBe('Noviembre: 1 factura (1 cobro), 121,00 €. GoCardless cobró 484,00 €. Faltan 3 (363,00 €): mira abajo.')
     expect(m.cuadra).toBe(false)
   })
   it('un cobro suelto sin suscripción encuentra su cliente por el mandato, y aun así no se adivina el servicio', () => {
@@ -192,5 +192,53 @@ describe('Q10 · quién factura con retención y por dónde sigue la serie', asy
   })
   it('las dos series siguen la de Cegid: 2745 y 574', () => {
     expect(Object.values(SERIE_Q10).map((x) => `${x.anio}/${x.serie}/${x.desde}`).sort()).toEqual(['2026/1/2745', '2026/1/574'])
+  })
+})
+
+describe('Q10 · el atado de «Clientes y cuotas» (conta_cobro_cliente)', () => {
+  it('manda sobre el enlace: un cobro con el enlace «propuesto» y su fila en Clientes y cuotas, atado', () => {
+    const e = entrada([cobro('A', 121)])
+    const m = facturasDelMes({ ...e, enlaces: [{ gcClienteId: 'CU-A', partyId: null, estado: 'propuesto' }], cobroCliente: [{ gcClienteId: 'CU-A', partyId: 'p-A' }] })
+    expect(m.facturas.map((f) => f.ficha.partyId)).toEqual(['p-A'])
+  })
+  it('en varias fichas: la del enlace atado si es una de ellas; si no, a revisar', () => {
+    const e = entrada([cobro('A', 121), cobro('B', 121)], { fichas: [ficha('p-A'), ficha('p-A2'), ficha('p-B'), ficha('p-B2')] })
+    const m = facturasDelMes({ ...e,
+      enlaces: [{ gcClienteId: 'CU-A', partyId: 'p-A2', estado: 'atado' }, { gcClienteId: 'CU-B', partyId: null, estado: 'conflicto' }],
+      cobroCliente: [{ gcClienteId: 'CU-A', partyId: 'p-A' }, { gcClienteId: 'CU-A', partyId: 'p-A2' }, { gcClienteId: 'CU-B', partyId: 'p-B' }, { gcClienteId: 'CU-B', partyId: 'p-B2' }] })
+    expect(m.facturas.map((f) => f.ficha.partyId)).toEqual(['p-A2'])
+    expect(m.pendientes.map((p) => [p.cobro.gcId, p.motivo])).toEqual([['B', 'varias_fichas']])
+  })
+  it('sin fila en Clientes y cuotas, el enlace atado', () => {
+    const m = facturasDelMes(entrada([cobro('A', 121)], { cobroCliente: [] }))
+    expect(m.facturas).toHaveLength(1)
+  })
+})
+
+describe('Q10 · una factura por cliente, mes y serie (Contasimple en la 3)', async () => {
+  const { serieDeConcepto } = await import('@/modules/conta/gestoria/q10/facturasDelMes')
+  it('Contasimple en la serie 3; lo demás, en la 1', () => {
+    expect(serieDeConcepto('CONTASIMPLE SOFTWARE')).toBe('3')
+    expect(serieDeConcepto('EMPRESA DE PRUEBA SL CONTA SIMPLE')).toBe('3')
+    expect(serieDeConcepto('GESTORIA MENSUAL')).toBe('1')
+    expect(serieDeConcepto(null)).toBe('1')
+  })
+  it('los cobros del mismo cliente, juntos por serie, con sus sumas', () => {
+    const cs = [cobro('A1', 121, { fecha: '2026-11-04' }), cobro('A2', 24.2, { fecha: '2026-11-03' }), cobro('A3', 36.3), cobro('B', 60.5)]
+    const e = entrada(cs, {
+      suscripciones: [{ gcId: 'SB-A1', nombre: 'GESTORIA MENSUAL', gcClienteId: 'CU-A' }, { gcId: 'SB-A2', nombre: 'GESTION LABORAL TRABAJADOR UNO', gcClienteId: 'CU-A' },
+        { gcId: 'SB-A3', nombre: 'CONTASIMPLE SOFTWARE', gcClienteId: 'CU-A' }, { gcId: 'SB-B', nombre: 'GESTORIA MENSUAL', gcClienteId: 'CU-B' }],
+      enlaces: [{ gcClienteId: 'CU-A', partyId: 'p-A', estado: 'atado' }, { gcClienteId: 'CU-B', partyId: 'p-B', estado: 'atado' }],
+      fichas: [ficha('p-A'), ficha('p-B')],
+    })
+    const m = facturasDelMes(e)
+    expect(m.porCliente.map((f) => [f.ficha.partyId, f.serie, f.cobros.map((c) => c.cobro.gcId), f.totalCent])).toEqual([
+      ['p-A', '1', ['A2', 'A1'], 14520], ['p-A', '3', ['A3'], 3630], ['p-B', '1', ['B'], 6050]])
+    expect(m.frase).toBe('Noviembre: 3 facturas (4 cobros), 241,99 €. GoCardless cobró 242,00 €. Faltan 0 (0,00 €): mira abajo.'.replace('241,99', '242,00').replace('Faltan 0 (0,00 €): mira abajo.', 'Cuadra.'))
+  })
+  it('Contasimple, sin retención aunque el cliente la lleve', () => {
+    const e = entrada([cobro('A', 36.3)], { empresa: { id: 'e2', nombre: 'Autónoma de Prueba', retiene: true }, retenciones: new Map([['p-A', 15]]),
+      suscripciones: [{ gcId: 'SB-A', nombre: 'CONTASIMPLE SOFTWARE', gcClienteId: 'CU-A' }] })
+    expect(facturasDelMes(e).facturas[0]).toMatchObject({ baseCent: 3000, retencion: null })
   })
 })

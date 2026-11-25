@@ -59,7 +59,7 @@ export interface BorradorQ10 {
   totalCent: number
 }
 
-export type MotivoPendiente = 'sin_cliente' | 'sin_nif' | 'sin_retencion' | 'sin_suscripcion' | 'no_cuadra'
+export type MotivoPendiente = 'sin_cliente' | 'varias_fichas' | 'sin_nif' | 'sin_retencion' | 'sin_suscripcion' | 'no_cuadra'
 export interface PendienteQ10 {
   cobro: CobroQ10
   motivo: MotivoPendiente
@@ -72,9 +72,40 @@ export interface PendienteQ10 {
 }
 export interface SinFacturaQ10 { cobro: CobroQ10; porque: string; gcClienteId: string | null; ficha: FichaQ10 | null; concepto: string | null }
 
+/**
+ * Q10 (26/11, confirmado con los datos de Cegid) · Una factura por cliente, mes y serie: Contasimple en la serie 3 y lo
+ * demás en la 1. Cada una, con todos sus cobros del mes.
+ */
+export const serieDeConcepto = (concepto: string | null | undefined) => (/CONTA ?SIMPLE/i.test(concepto ?? '') ? '3' : '1')
+export interface FacturaClienteQ10 {
+  ficha: FichaQ10
+  serie: string
+  /** Sus cobros del mes, por el día del cobro. */
+  cobros: BorradorQ10[]
+  baseCent: number
+  ivaCent: number
+  retencionCent: number
+  totalCent: number
+}
+/** Los cobros con todo, juntos por cliente y serie: lo que será cada factura de Cegid. */
+export function facturasPorClienteYSerie(bs: readonly BorradorQ10[]): FacturaClienteQ10[] {
+  const g = new Map<string, FacturaClienteQ10>()
+  for (const b of bs) {
+    const serie = serieDeConcepto(b.concepto)
+    const k = `${b.ficha.partyId}|${serie}`
+    const f = g.get(k) ?? { ficha: b.ficha, serie, cobros: [], baseCent: 0, ivaCent: 0, retencionCent: 0, totalCent: 0 }
+    f.cobros.push(b); f.baseCent += b.baseCent; f.ivaCent += b.ivaCent; f.retencionCent += b.retencion?.cent ?? 0; f.totalCent += b.totalCent
+    g.set(k, f)
+  }
+  return [...g.values()].map((f) => ({ ...f, cobros: [...f.cobros].sort((a, b) => a.cobro.fecha.localeCompare(b.cobro.fecha) || a.cobro.gcId.localeCompare(b.cobro.gcId)) }))
+    .sort((a, b) => a.ficha.nombre.localeCompare(b.ficha.nombre, 'es') || a.serie.localeCompare(b.serie))
+}
+
 export interface MesQ10 {
   mes: string
   facturas: BorradorQ10[]
+  /** Q10 (26/11) · Las facturas de verdad: una por cliente y serie, con sus cobros. */
+  porCliente: FacturaClienteQ10[]
   pendientes: PendienteQ10[]
   /** Lo que GoCardless no dio por cobrado: no lleva factura. */
   sinFactura: SinFacturaQ10[]
@@ -126,6 +157,7 @@ export const porqueSinFactura = (c: CobroQ10) =>
 
 const PORQUE: Record<MotivoPendiente, string> = {
   sin_cliente: 'El cobro no tiene su cliente atado a una ficha: átalo en «Cobros de GoCardless sin cliente».',
+  varias_fichas: 'Su cliente de GoCardless está en varias fichas y no se sabe a cuál se factura: deja una sola en «Clientes y cuotas».',
   sin_nif: 'La ficha no tiene NIF: una factura lo lleva. Ponlo en su ficha.',
   sin_retencion: 'No se sabe si lleva retención: su última factura en ERP10 no lo dice (o no tiene ninguna).',
   sin_suscripcion: 'Es un cobro suelto, sin suscripción: GoCardless no dice qué servicio es, y no se adivina.',
@@ -145,6 +177,12 @@ export interface EntradaQ10 {
    * 15, 0… Solo cuenta si la empresa retiene. Sin la ficha en el mapa: no se sabe.
    */
   retenciones: ReadonlyMap<string, number>
+  /**
+   * Q10 (26/11) · El atado de «Clientes y cuotas» (conta_cobro_cliente): cada ficha con su cliente de GoCardless. Manda
+   * sobre el enlace: si el cliente de GoCardless está en una sola ficha, esa; si está en varias, la del enlace atado si
+   * es una de ellas (si no, «Pendiente de revisar»); si no está, la del enlace atado.
+   */
+  cobroCliente?: readonly { gcClienteId: string; partyId: string }[]
 }
 
 /** Las facturas del mes, en el orden en que se numeran: por el día del cobro, el cliente y el cobro. */
@@ -153,6 +191,8 @@ export function facturasDelMes(e: EntradaQ10): MesQ10 {
   const sus = new Map(e.suscripciones.map((s) => [s.gcId, s]))
   const man = new Map(e.mandatos.map((m) => [m.gcId, m]))
   const enl = new Map(e.enlaces.map((x) => [x.gcClienteId, x]))
+  const cc = new Map<string, string[]>()
+  for (const x of e.cobroCliente ?? []) cc.set(x.gcClienteId, [...(cc.get(x.gcClienteId) ?? []), x.partyId])
   const fic = new Map(e.fichas.map((f) => [f.partyId, f]))
   const facturas: BorradorQ10[] = []
   const pendientes: PendienteQ10[] = []
@@ -161,17 +201,22 @@ export function facturasDelMes(e: EntradaQ10): MesQ10 {
     const s = c.suscripcionId ? sus.get(c.suscripcionId) ?? null : null
     const gcClienteId = s?.gcClienteId ?? (c.mandatoId ? man.get(c.mandatoId)?.gcClienteId ?? null : null)
     const enlace = gcClienteId ? enl.get(gcClienteId) : undefined
-    const ficha = enlace?.estado === 'atado' && enlace.partyId ? fic.get(enlace.partyId) ?? null : null
+    const atadoEnlace = enlace?.estado === 'atado' && enlace.partyId ? enlace.partyId : null
+    const enCobro = gcClienteId ? [...new Set(cc.get(gcClienteId) ?? [])] : []
+    const partyId = enCobro.length === 1 ? enCobro[0] : enCobro.length > 1 ? (atadoEnlace && enCobro.includes(atadoEnlace) ? atadoEnlace : null) : atadoEnlace
+    const varias = enCobro.length > 1 && partyId === null
+    const ficha = partyId ? fic.get(partyId) ?? null : null
     const concepto = s?.nombre?.replace(/\s+/g, ' ').trim() || null
     if (!(COBRADO as readonly string[]).includes(c.estado)) {
       sinFactura.push({ cobro: c, porque: porqueSinFactura(c), gcClienteId, ficha, concepto })
       continue
     }
     const pendiente = (motivo: MotivoPendiente) => pendientes.push({ cobro: c, motivo, porque: PORQUE[motivo], gcClienteId, ficha, concepto })
-    if (!ficha) { pendiente('sin_cliente'); continue }
+    if (!ficha) { pendiente(varias ? 'varias_fichas' : 'sin_cliente'); continue }
     if (!ficha.nif?.trim()) { pendiente('sin_nif'); continue }
     if (!concepto) { pendiente('sin_suscripcion'); continue }
-    const retPct = e.empresa.retiene ? e.retenciones.get(ficha.partyId) : 0
+    // Contasimple (la serie 3) va sin retención: así la factura Cegid (la 2026/3/16, a una S.L.).
+    const retPct = e.empresa.retiene && serieDeConcepto(concepto) !== '3' ? e.retenciones.get(ficha.partyId) : 0
     if (retPct === undefined) { pendiente('sin_retencion'); continue }
     const totalCent = cent(c.importe)
     const d = desglose(totalCent, retPct)
@@ -189,9 +234,10 @@ export function facturasDelMes(e: EntradaQ10): MesQ10 {
   const cuadra = pendientes.length === 0 && facturasCent === cobradoCent
   const mes = MESES[Number(e.mes.slice(5, 7)) - 1]
   const Mes = mes[0].toUpperCase() + mes.slice(1)
-  const frase = `${Mes}: ${n(facturas.length, 'factura', 'facturas')}, ${eurQ10(facturasCent)}. GoCardless cobró ${eurQ10(cobradoCent)}. `
+  const porCliente = facturasPorClienteYSerie(facturas)
+  const frase = `${Mes}: ${n(porCliente.length, 'factura', 'facturas')} (${n(facturas.length, 'cobro', 'cobros')}), ${eurQ10(facturasCent)}. GoCardless cobró ${eurQ10(cobradoCent)}. `
     + (cuadra ? 'Cuadra.' : `Faltan ${pendientes.length} (${eurQ10(pendientesCent)}): mira abajo.`)
-  return { mes: e.mes, facturas, pendientes, sinFactura, cobradoCent, facturasCent, pendientesCent, frase, cuadra }
+  return { mes: e.mes, facturas, porCliente, pendientes, sinFactura, cobradoCent, facturasCent, pendientesCent, frase, cuadra }
 }
 
 // ── La numeración y la fecha de emisión ─────────────────────────────────────────

@@ -67,8 +67,8 @@ describe('Q10 · la tabla de equivalencias, por lo que ya pasó', () => {
     expect(g.serie).toEqual({ serie: '1', veces: 2, de: 3 })
     expect(g.retencion).toEqual({ si: 1, de: 3 })
   })
-  it('GESTION LABORAL → 0008, por sus líneas de 20 € y por el concepto fijo de la ficha', () => {
-    expect(t.find((x) => x.familia === 'GESTION LABORAL')).toMatchObject({ cobros: 2, propuesta: { codigo: '0008', votos: 2 }, retencion: { si: 0, de: 1 } })
+  it('GESTION LABORAL → 0008: dos trabajadores del mismo cliente son un voto (un cliente, no dos cobros)', () => {
+    expect(t.find((x) => x.familia === 'GESTION LABORAL')).toMatchObject({ cobros: 2, clientes: 1, propuesta: { codigo: '0008', votos: 1 }, retencion: { si: 0, de: 1 } })
   })
   it('CONTASIMPLE → 0040, en la serie 3', () => {
     expect(t.find((x) => x.familia === 'CONTASIMPLE SOFTWARE')).toMatchObject({ propuesta: { codigo: '0040' }, serie: { serie: '3', veces: 1, de: 1 } })
