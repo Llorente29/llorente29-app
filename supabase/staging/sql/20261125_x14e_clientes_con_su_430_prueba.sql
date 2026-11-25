@@ -10,11 +10,12 @@
 -- azar con su letra). Una primera carga (solo cuentas y terceros, dada por buena) deja en Sumied: el cliente «829» con la
 -- 43000999 («VIEJO») y el código 999, y el cliente «830» con la 43000830 y el código 830. Lo de ERP10 (la segunda carga, de
 -- 2024): el «829» es la 43000829; la 43000830 es de un cliente nuevo; y la 43000999 se llama «NUEVO». Los caminos:
---   1. Traer: el «829» pasa a la 43000829 y al código 829; la 43000830 y el código 830 pasan al nuevo (el «830» se queda sin
---      ellos); la 43000999 se llama «NUEVO» y la 43000830, como el nuevo; y lo dice, los 6 cambios, en lo que hay que mirar.
+--   1. Traer: el «829» pasa a la 43000829 y al código 829; la 43000830 pasa al nuevo (el «830» se queda sin ella), pero el
+--      código 830 no: el nuevo no tiene fila en el cobro, y no se crean filas (Julio, 25/11); la 43000999 se llama «NUEVO» y
+--      la 43000830, como el nuevo; y lo dice, los 5 cambios, en lo que hay que mirar.
 --   2. Deshacer: todo como estaba (enlaces, códigos y nombre).
 --   3. Lo ya traído (_conta_traer_ajustar_a_erp10): la misma carga en prueba con lo de Sumied puesto a mano se ajusta a
---      ERP10 igual (1 enlace movido, 1 quitado, 1 nuevo, 2 códigos, 1 nombre), una sola vez; deshacer la carga devuelve
+--      ERP10 igual (1 enlace movido, 1 quitado, 1 nuevo, 1 código, 1 nombre), una sola vez; deshacer la carga devuelve
 --      también el ajuste; y la vuelta atrás de la
 --      20261125T1649 la devuelve.
 --   4. La vuelta atrás de la 20261125T1415: las dos funciones de antes y las nuevas, fuera.
@@ -91,6 +92,11 @@ begin
 end $$;
 reset role;
 update public.import_run set status = 'dada_por_buena', finished_at = now() where id = pg_temp.p('cargaA')::uuid;   -- como si se hubiera dado por buena
+-- Sus fichas del cobro, con su código de Sumied (el cobro las crea; Traer, ya no).
+insert into public.conta_cobro_cliente (company_id, party_id, account_id, codigo_cliente)
+select pg_temp.p('empresa')::uuid, p.id, p.account_id, case p.tax_id when pg_temp.p('cli')::jsonb->>'n29' then 999 else 830 end
+  from public.party p where p.account_id = 'c01a0000-0000-4000-8000-00000000000a' and p.tax_id in (pg_temp.p('cli')::jsonb->>'n29', pg_temp.p('cli')::jsonb->>'n30')
+on conflict (company_id, party_id) do update set codigo_cliente = excluded.codigo_cliente;
 insert into _x14e select 'antes', pg_temp.estado();
 do $$ begin
   if pg_temp.p('antes') is distinct from 'CLIENTE X14E 829→43000999·999 CLIENTE X14E 830→43000830·830 | 43000999=VIEJO' then
@@ -107,12 +113,12 @@ begin
   while coalesce((r->>'acabado')::boolean, true) is false loop r := public.conta_traer_seguir((r->>'carga')::uuid); end loop;
   select * into v_r from public.import_run where id = (r->>'carga')::uuid;
   if v_r.status <> 'en_prueba' then raise exception 'PRUEBA X14e · 1: no ha entrado en prueba: %', r; end if;
-  if pg_temp.estado() is distinct from 'CLIENTE X14E 829→43000829·829 CLIENTE X14E 830→—·— CLIENTE X14E 831→43000830·830 | 43000999=NUEVO' then
+  if pg_temp.estado() is distinct from 'CLIENTE X14E 829→43000829·829 CLIENTE X14E 830→—·830 CLIENTE X14E 831→43000830·— | 43000999=NUEVO' then
     raise exception 'PRUEBA X14e · 1: no queda como en ERP10: %', pg_temp.estado();
   end if;
   select string_agg(m->>'frase', ' | ' order by m->>'frase') into v_frases from jsonb_array_elements(v_r.detail->'mirar') m
    where m->>'que' in ('tercero', 'codigo_cliente', 'cuenta') and m->>'frase' ~ '(pasa|se queda así)';
-  if (select count(*) from regexp_matches(v_frases, '\|', 'g')) <> 5 then raise exception 'PRUEBA X14e · 1: lo que hay que mirar no dice los 6 cambios: %', v_frases; end if;
+  if (select count(*) from regexp_matches(v_frases, '\|', 'g')) <> 4 then raise exception 'PRUEBA X14e · 1: lo que hay que mirar no dice los 5 cambios: %', v_frases; end if;
   insert into _x14e values ('cargaB', v_r.id);
   raise notice 'PRUEBA X14e · 1: como en ERP10 (%), y lo dice: «%».', pg_temp.estado(), v_frases;
 end $$;
@@ -154,8 +160,8 @@ do $$
 declare r jsonb; r2 jsonb;
 begin
   r := public._conta_traer_ajustar_a_erp10(pg_temp.p('cargaC')::uuid, 'Prueba X14e');
-  if r is distinct from '{"codigos": 2, "nombres": 1, "enlaces_nuevos": 1, "enlaces_movidos": 1, "enlaces_quitados": 1}'::jsonb then raise exception 'PRUEBA X14e · 3: el ajuste dice %', r; end if;
-  if pg_temp.estado() is distinct from 'CLIENTE X14E 829→43000829·829 CLIENTE X14E 830→—·— CLIENTE X14E 831→43000830·830 | 43000999=NUEVO' then
+  if r is distinct from '{"codigos": 1, "nombres": 1, "enlaces_nuevos": 1, "enlaces_movidos": 1, "enlaces_quitados": 1}'::jsonb then raise exception 'PRUEBA X14e · 3: el ajuste dice %', r; end if;
+  if pg_temp.estado() is distinct from 'CLIENTE X14E 829→43000829·829 CLIENTE X14E 830→—·830 CLIENTE X14E 831→43000830·— | 43000999=NUEVO' then
     raise exception 'PRUEBA X14e · 3: lo ya traído no queda como en ERP10: %', pg_temp.estado();
   end if;
   r2 := public._conta_traer_ajustar_a_erp10(pg_temp.p('cargaC')::uuid, 'Prueba X14e');

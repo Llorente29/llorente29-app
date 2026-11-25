@@ -2,7 +2,7 @@
  "_que": "X14 · 2 · Traer como en ERP10 y el código de cada cliente · contexto medido en la BASE LOCAL con la estructura de staging (como en producción), en SOLO LECTURA: no en producción. 1415 reemplaza conta_traer_cargar y conta_traer_deshacer (misma firma, con respaldo) y añade tres funciones; 1649 ajusta a ERP10 el 2024 de QBO (toca datos dentro de una función). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
  "medido": "2026-11-25T16:15Z",
  "tanda": {
-  "supabase/migrations/20261125T1415_x14e_clientes_con_su_430.sql": "8c2bf9463ee33ad816534edb0832f8b9",
+  "supabase/migrations/20261125T1415_x14e_clientes_con_su_430.sql": "08d1e996336cbb3bb8542833a8ac87f9",
   "supabase/migrations/20261125T1649_x14e_ajustar_a_erp10.sql": "5679951f9c584106b07e7f35eee04c3d"
  },
  "contexto": {

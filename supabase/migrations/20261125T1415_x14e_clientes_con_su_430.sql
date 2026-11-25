@@ -6,7 +6,8 @@
 -- que es lo que leen el G05 y el X33 de K. Un solo sitio.» QBO contabiliza noviembre desde Sumied, y su cobro (G05) usa el
 -- código de cada cliente: su subcuenta es 430 + código (43000827 → 827).
 --   1. conta_traer_cargar (misma firma; la de antes, guardada): al enlazar cada cliente con su 430, le pone su código en
---      conta_cobro_cliente (crea la fila o rellena la que no tenía código). Lo que ya hay no se pisa: si el cliente ya
+--      conta_cobro_cliente, solo donde el cliente ya tiene fila en el cobro (Julio, 25/11: no se crean filas; el que no la
+--      tiene recibe su código cuando la tenga). Lo que ya hay no se pisa: si el cliente ya
 --      tiene otro código, o ese código es de otro cliente de la empresa, va a lo que hay que mirar con su porqué. Se
 --      cuentan en la carga (n_codigos_cliente).
 --   2. conta_traer_deshacer (misma firma; guardada): deshacer la carga quita las filas que creó y deja sin código las que
@@ -115,17 +116,14 @@ begin
         v_cod := substr(r.code, 4)::int; v_tiene := null; v_otro := null; v_fila := null;
         select true, c.codigo_cliente into v_fila, v_tiene from public.conta_cobro_cliente c where c.company_id = v_r.company_id and c.party_id = r.party_id;
         select c.party_id into v_otro from public.conta_cobro_cliente c where c.company_id = v_r.company_id and c.codigo_cliente = v_cod and c.party_id <> r.party_id;
-        if v_otro is not null then
+        -- Solo donde ya hay fila en el cobro (Julio, 25/11): no se crean filas.
+        if coalesce(v_fila, false) and v_otro is not null then
           update public.conta_cobro_cliente set codigo_cliente = null, updated_at = now(), updated_by_name = v_quien where company_id = v_r.company_id and party_id = v_otro;
           v_cods := v_cods || jsonb_build_object('party', v_otro, 'antes', v_cod, 'fila', true);
         end if;
-        if v_tiene is distinct from v_cod then
-          if v_fila then
-            update public.conta_cobro_cliente set codigo_cliente = v_cod, updated_at = now(), updated_by_name = v_quien where company_id = v_r.company_id and party_id = r.party_id;
-          else
-            insert into public.conta_cobro_cliente (company_id, party_id, account_id, codigo_cliente, updated_by_name) values (v_r.company_id, r.party_id, v_r.account_id, v_cod, v_quien);
-          end if;
-          v_cods := v_cods || jsonb_build_object('party', r.party_id, 'antes', v_tiene, 'fila', coalesce(v_fila, false));
+        if coalesce(v_fila, false) and v_tiene is distinct from v_cod then
+          update public.conta_cobro_cliente set codigo_cliente = v_cod, updated_at = now(), updated_by_name = v_quien where company_id = v_r.company_id and party_id = r.party_id;
+          v_cods := v_cods || jsonb_build_object('party', r.party_id, 'antes', v_tiene, 'fila', true);
           n_cod := n_cod + 1;
         end if;
       end if;
@@ -452,6 +450,8 @@ begin
           select true, c.codigo_cliente into v_x14_fila, v_x14_tiene from public.conta_cobro_cliente c where c.company_id = p_company and c.party_id = v_party;
           select c.party_id into v_x14_otro from public.conta_cobro_cliente c
            where c.company_id = p_company and c.codigo_cliente = v_x14_cod and c.party_id <> v_party;
+          -- Solo donde ya hay fila en el cobro (Julio, 25/11): no se crean filas; el que no la tiene recibe su código cuando la tenga.
+          if coalesce(v_x14_fila, false) then
           -- Gana el programa de antes (Julio, 25/11): si ese código lo tenía otro cliente, se le quita.
           if v_x14_otro is not null then
             update public.conta_cobro_cliente set codigo_cliente = null, updated_at = now(), updated_by_name = v_quien
@@ -468,16 +468,13 @@ begin
             v_deshacer := jsonb_set(v_deshacer, '{codigos_cambiados}', coalesce(v_deshacer->'codigos_cambiados', '[]') || jsonb_build_object('party', v_party, 'antes', v_x14_tiene));
             v_mirar := v_mirar || jsonb_build_object('que', 'codigo_cliente', 'cuenta', v_code, 'frase',
               format('%s tenía el código de cliente %s en Sumied; en %s es la %s, y pasa al %s.', v_nombre, v_x14_tiene, v_nombre_prog, v_code, v_x14_cod));
-          elsif v_x14_fila then
+          else
             update public.conta_cobro_cliente set codigo_cliente = v_x14_cod, updated_at = now(), updated_by_name = v_quien
              where company_id = p_company and party_id = v_party;
             v_deshacer := jsonb_set(v_deshacer, '{codigos_puestos}', coalesce(v_deshacer->'codigos_puestos', '[]') || to_jsonb(v_party));
-          else
-            insert into public.conta_cobro_cliente (company_id, party_id, account_id, codigo_cliente, updated_by_name)
-            values (p_company, v_party, v_cuenta, v_x14_cod, v_quien);
-            v_deshacer := jsonb_set(v_deshacer, '{codigos_nuevos}', coalesce(v_deshacer->'codigos_nuevos', '[]') || to_jsonb(v_party));
           end if;
           n_x14_codigos := n_x14_codigos + case when v_x14_tiene is distinct from v_x14_cod then 1 else 0 end;
+          end if;
         end if;
       end;
     end if;
