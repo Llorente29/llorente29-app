@@ -1,0 +1,20 @@
+[
+ {
+  "id": "805-1",
+  "pr": 805,
+  "fecha": "2026-11-25T08:08:44Z",
+  "producto": "sumied",
+  "apartado": "Bitrix24",
+  "frase": "todas las personas del Bitrix24 conectado ven la pestaña de Sumied con los datos de la cuenta, sin usuario de Sumied, sin invitaciones y sin correos. Solo mirar: para cambiar algo, entrar en Sumied.",
+  "ruta": null
+ },
+ {
+  "id": "805-2",
+  "pr": 805,
+  "fecha": "2026-11-25T08:08:44Z",
+  "producto": "sumied",
+  "apartado": "Bitrix24",
+  "frase": "cuando la pestaña no puede enseñar nada, dice qué pasa y a quién avisar (nunca «Sin acceso a Sumied» a secas).",
+  "ruta": null
+ }
+]
