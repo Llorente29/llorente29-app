@@ -36,6 +36,8 @@ export interface DatosQ10 {
   mandatos: (MandatoQ10 & { final: string | null })[]
   enlaces: EnlaceQ10[]
   fichas: FichaQ10[]
+  /** La 430 de cada ficha en Sumied (company_account_link «customer», principal): el código de su cliente en Cegid. */
+  cuentas: Map<string, string>
 }
 
 const finDeMes = (mes: string) => {
@@ -74,7 +76,16 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
       fichas.push({ partyId: String(x.id), nombre: s(d?.legal_name) ?? s(x.name) ?? 'Sin nombre', nif: s(x.tax_id), direccion })
     }
   }
+  // La 430 de cada ficha atada (company_account_link + company_account; columnas y clave ajena comprobadas el 25/11, regla 40).
+  const cuentas = new Map<string, string>()
+  for (let i = 0; i < partes.length; i += 200) {
+    const l = await tabla('company_account_link').select('entity_id, company_account(code)').eq('company_id', empresa).eq('entity', 'customer').eq('role', 'principal')
+      .in('entity_id', partes.slice(i, i + 200))
+    if (l.error) throw new Error(mensaje('No se han podido leer las subcuentas de los clientes', l.error as never))
+    for (const x of (l.data ?? []) as Fila[]) { const c = s((x.company_account as Fila | null)?.code); if (c) cuentas.set(String(x.entity_id), c) }
+  }
   return {
+    cuentas,
     empresa: emp.data as Fila,
     cobros: cobros.map((c) => ({ gcId: String(c.gc_id), estado: String(c.estado), fecha: String(c.fecha), importe: Number(c.importe), suscripcionId: s(c.suscripcion_gc_id), mandatoId: s(c.mandato_gc_id), motivo: s(c.motivo_es) })),
     suscripciones: suscripciones.map((x) => ({ gcId: String(x.gc_id), nombre: s(x.nombre), gcClienteId: s(x.gc_cliente_id) })),

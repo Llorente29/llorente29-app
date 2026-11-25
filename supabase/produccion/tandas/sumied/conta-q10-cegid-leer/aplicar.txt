@@ -1,0 +1,10 @@
+# Q10 · respuesta 1 · Leer la facturación de Cegid (DiezREC), 25/11. Rama conta/q10-cegid-leer. Se ensaya y se aplica
+# desde main nombrando la rama, antes de fusionar (lo lanza Julio, T10).
+#
+#   1840  Añade el conector «diezrec» (una fila del catálogo connector) y tres tablas nuevas para lo leído de Cegid
+#         (conta_cegid_cliente, conta_cegid_concepto y conta_cegid_factura), con RLS de solo lectura. No toca ninguna
+#         fila que exista.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/q10-cegid-leer.sql
+supabase/migrations/20261125T1840_q10_cegid_leer.sql

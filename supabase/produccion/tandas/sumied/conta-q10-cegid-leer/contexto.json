@@ -1,0 +1,16 @@
+{
+ "_que": "Q10 · leer la facturación de Cegid · contexto de producción de la tanda (1840), medido en SOLO LECTURA el 25/11 a las 18:55Z con la consulta de analizar.mjs sql-contexto: existe connector (sin «diezrec»), las tres tablas no; nada en el camino del pedido y nada en el historial.",
+ "medido": "2026-11-25T18:55Z",
+ "tanda": {
+  "supabase/migrations/20261125T1840_q10_cegid_leer.sql": "09e722f8fa860e4b99ea76325dc8bcf3"
+ },
+ "contexto": {
+  "tablas": ["public.connector"],
+  "funciones": [],
+  "filas": { "public.connector": 0 },
+  "otras": {},
+  "camino": { "tablas": [], "funciones": [] },
+  "usos": {},
+  "registro": []
+ }
+}

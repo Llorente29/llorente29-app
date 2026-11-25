@@ -1,0 +1,4 @@
+# Q10 · Leer la facturación de Cegid (1840). Su prueba (ROLLBACK), con datos inventados: el conector y las tablas, dos
+# veces; lo leído lo ve la cuenta A y no la B, y no se escribe desde la pantalla; y la vuelta atrás.
+supabase/migrations/20261125T1840_q10_cegid_leer.sql
+supabase/staging/sql/20261125_q10_cegid_leer_prueba.sql

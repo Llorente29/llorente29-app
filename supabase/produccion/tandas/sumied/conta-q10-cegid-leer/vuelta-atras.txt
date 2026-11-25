@@ -1,0 +1,3 @@
+# Q10 · Leer la facturación de Cegid · vuelta atrás: quita las tres tablas y, si nadie lo ha conectado, el conector.
+cuenta: scripts/conta/produccion/cuentas/q10-cegid-leer.sql
+supabase/vuelta-atras/20261125T1840_q10_cegid_leer.down.sql
