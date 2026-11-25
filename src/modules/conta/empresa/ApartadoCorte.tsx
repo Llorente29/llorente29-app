@@ -1,9 +1,10 @@
 // src/modules/conta/empresa/ApartadoCorte.tsx
 //
 // C04 R4 · «Desde cuándo asienta Folvy» en Ajustes › Ejercicio. La fecha de
-// corte con el programa anterior se ve siempre; se cambia mientras no haya
-// asientos traídos. Con alguno, solo lectura y el porqué: cambiarla dejaría
-// lo traído a medias (se deshace lo traído y se vuelve a traer).
+// corte con el programa anterior se ve siempre y se cambia a mano. X14 · 2: lo
+// traído nunca lo fija; con asientos traídos también se cambia, si todos quedan
+// antes del día elegido: se dice hasta dónde llega lo traído, y si no, la base
+// para con su frase.
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
@@ -43,7 +44,8 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
   if (error) return <ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} />
   if (!c) return <TarjetaCargando />
 
-  const fijo = c.traidos > 0
+  // X14 · 2 · Lo traído no deja fijo el día de inicio: lo acota. Como pronto, el siguiente al último traído.
+  const comoPronto = c.ultimoTraido ? diaSiguiente(c.ultimoTraido) : null
   // N05c · El programa como en el N03 («ERP10», «Diez» o «el programa de antes»), nunca «erp10».
   const nombreProg = nombrePrograma(c.programa)
   const elPrograma = nombreProg ?? 'el programa de antes'
@@ -60,7 +62,7 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
       setConfirmar(false)
     }, () => texto)
   }
-  const empezar = () => { setDesde(c.hasta ? diaSiguiente(c.hasta) : ''); setPrograma(c.programa ?? ''); setEditando(true); h.limpiar() }
+  const empezar = () => { setDesde(c.hasta ? diaSiguiente(c.hasta) : comoPronto ?? ''); setPrograma(c.programa ?? nombreProg ?? ''); setEditando(true); h.limpiar() }
   const guardar = (ev: FormEvent) => {
     ev.preventDefault()
     const hasta = desde ? diaAnterior(desde) : null
@@ -76,7 +78,7 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
 
   return (
     <TarjetaApartado titulo={`Desde cuándo asienta ${MARCA.nombre}`} movil={movil}
-      accion={!fijo && !editando ? <button type="button" className="cx-enlace" onClick={empezar}>Cambiar</button> : undefined}>
+      accion={!editando ? <button type="button" className="cx-enlace" onClick={empezar}>Cambiar</button> : undefined}>
       {!editando && (
         <p style={{ margin: 0 }} data-testid="corte-actual">
           {c.hasta
@@ -84,10 +86,10 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
             : <>Sin fecha de corte: {MARCA.nombre} asienta el ejercicio entero.</>}
         </p>
       )}
-      {fijo && (
-        <p className="cx-ayuda" data-testid="corte-fijo">
-          No se puede cambiar: ya hay {c.traidos.toLocaleString('es-ES')} {c.traidos === 1 ? 'asiento traído' : 'asientos traídos'} {dePrograma}.
-          Para moverla, primero se deshace lo traído y se vuelve a traer.
+      {c.traidos > 0 && c.ultimoTraido && comoPronto && (
+        <p className="cx-ayuda" data-testid="corte-traido">
+          Hay {c.traidos.toLocaleString('es-ES')} {c.traidos === 1 ? 'asiento traído' : 'asientos traídos'} {dePrograma}, el último del {dma(c.ultimoTraido)}.
+          {' '}Traerlos no fija el día de inicio: lo fijas tú, y como pronto el {dma(comoPronto)}.
         </p>
       )}
       {!editando && faltaLoAnterior && inicio && (c.sinHistorico
@@ -122,7 +124,7 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
         <form onSubmit={guardar} className="cx-columna" aria-label="Fecha de corte">
           <label className="cx-campo">
             <span className="cx-etiqueta">¿Desde qué día asienta {MARCA.nombre}?</span>
-            <input className="cx-input" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+            <input className="cx-input" type="date" value={desde} min={comoPronto ?? undefined} onChange={(e) => setDesde(e.target.value)} />
             <span className="cx-ayuda">Lo de antes lo trae el programa anterior. Vacío: {MARCA.nombre} asienta el ejercicio entero.</span>
           </label>
           <label className="cx-campo">

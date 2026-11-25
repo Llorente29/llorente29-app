@@ -1,0 +1,3 @@
+# X14 · 2 · la vuelta atrás: las cuatro funciones de sus respaldos.
+cuenta: scripts/conta/produccion/cuentas/x14c-dia-de-inicio.sql
+supabase/vuelta-atras/20261125T0903_x14c_dia_de_inicio_a_mano.down.sql

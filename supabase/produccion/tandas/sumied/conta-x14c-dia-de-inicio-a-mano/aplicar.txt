@@ -1,0 +1,12 @@
+# X14 · 2 · Lo traído de ERP10 nunca fija el día de inicio (Julio, 25/11): QBO sigue llevando su contabilidad en ERP10, y
+# Sumied tiene que poder traer 2024, 2025 y lo que va de 2026 en cualquier orden, sin que uno deje fuera al otro. El día de
+# inicio lo fija Julio, a mano. Rama conta/x14c-dia-de-inicio-a-mano. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   0903  conta_traer_cargar y _conta_traer_seguir (enteras, con respaldo): traer no llama a conta_fijar_corte ni anuncia
+#         un día de inicio. conta_fijar_corte y fiscal_year_corte_cambiable (enteras, con respaldo): a mano, también con
+#         asientos traídos, si todos quedan antes del día elegido. Declarado, con su prueba.
+#
+# Nada en el camino del pedido. No cambia ninguna fila. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x14c-dia-de-inicio.sql
+supabase/migrations/20261125T0903_x14c_dia_de_inicio_a_mano.sql

@@ -1,0 +1,24 @@
+{
+ "_que": "X14 · 2 · Lo traído no fija el día de inicio · contexto medido en la BASE LOCAL con la estructura de staging (main d6cdc0e, con la 1552 del X14 · 1 y la 0816 del X14 · 1b delante, como en producción tras el real del #807), en SOLO LECTURA: no en producción. 0903 reemplaza conta_traer_cargar, _conta_traer_seguir, conta_fijar_corte y fiscal_year_corte_cambiable (la misma firma), con respaldo y con su prueba de staging. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-25T08:09Z",
+ "tanda": {
+  "supabase/migrations/20261125T0903_x14c_dia_de_inicio_a_mano.sql": "b4eb6deea6e00fcc738c3669ad18a6c2"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public._conta_traer_seguir(uuid,timestamp with time zone)",
+   "public.conta_fijar_corte(uuid,date,text)",
+   "public.conta_traer_cargar(uuid,text,jsonb,text)",
+   "public.fiscal_year_corte_cambiable()"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
