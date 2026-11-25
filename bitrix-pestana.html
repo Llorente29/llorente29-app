@@ -73,6 +73,8 @@
       .campos input, .campos select { height: 40px; border: 1px solid #CBD4E1; border-radius: 10px; padding: 0 12px; font: 500 14px Inter, sans-serif; background: #fff; color: var(--tinta); }
       .previsto { background: #fff; border-radius: 10px; padding: 12px 14px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
       .botones { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+      /* R18d · Solo mirar: sin botones de cambiar ni enlaces que hacen algo (el servidor tampoco lo dejaría). */
+      body.solo-lectura .botones, body.solo-lectura button.enlace, body.solo-lectura button.boton { display: none !important; }
       .chips { display: flex; gap: 8px; flex-wrap: wrap; }
       .chip-opcion { border: 1px solid #CBD4E1; background: #fff; color: var(--texto); border-radius: 999px; padding: 0 14px; height: 38px; font: 500 13px Inter, sans-serif; cursor: pointer; }
       .chip-opcion[aria-checked=true] { border-color: var(--azul); background: var(--azul-fondo); color: #1747AE; font-weight: 600; }

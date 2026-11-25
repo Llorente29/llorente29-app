@@ -16,7 +16,7 @@
 //      línea con su porqué, los cobros con el devuelto, los servicios, los
 //      trabajadores, lo pendiente de revisar y «Abrir en Sumied ↗». Pintada en
 //      menos de 1 s. El token sale de la dirección. Ningún código interno.
-//   2. Sin acceso: «Pide acceso a Sumied a tu administrador» y nada más.
+//   2. Sin acceso: qué pasa y a quién avisar (R18d), y nada más.
 //   3. Una ficha sin enlazar, y abierta fuera de Bitrix24: lo dicen.
 //   4. La instalación: lo dice y termina la instalación en Bitrix24.
 
@@ -134,9 +134,9 @@ test('sin acceso, sin enlazar o fuera de Bitrix24: lo dice y no enseña nada', a
   const errores = vigilar(page)
   const pestana = page.locator('#pestana')
 
-  await simular(page, { estado: 'sin_acceso', frase: 'Pide acceso a Sumied a tu administrador.' })
+  await simular(page, { estado: 'sin_acceso', frase: 'Tu usuario de Bitrix24 aún no puede ver Sumied. Avisa a quien administra Bitrix24 en tu empresa.' })
   await page.goto(`/bitrix-pestana.html${ALMOHADILLA}`)
-  await expect(pestana.getByRole('status')).toHaveText(/Sin acceso a Sumied\s*Pide acceso a Sumied a tu administrador\./, { timeout: 30_000 })
+  await expect(pestana.getByRole('status')).toHaveText(/No puedes ver Sumied desde aquí\s*Tu usuario de Bitrix24 aún no puede ver Sumied\. Avisa a quien administra Bitrix24 en tu empresa\./, { timeout: 30_000 })
   await expect(pestana.locator('.recibo, .bloque')).toHaveCount(0)
   await page.screenshot({ path: `${DIR}/sin-acceso-${lado(page)}.png`, fullPage: true })
 

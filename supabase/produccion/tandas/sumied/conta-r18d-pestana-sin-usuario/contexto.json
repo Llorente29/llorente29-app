@@ -1,0 +1,6 @@
+{
+ "_que": "R18d · La pestaña sin usuario de Sumied · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: esta sesión no lee producción. 2311 solo añade (dos columnas que admiten nulos, una tabla y dos funciones nuevas). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-24T22:57Z",
+ "tanda": { "supabase/migrations/20261124T2311_r18d_pestana_sin_usuario.sql": "1ae4c8c8509cdd913480caacc1624585" },
+ "contexto": { "tablas": ["public.conta_crm"], "funciones": [], "filas": {}, "otras": {}, "camino": { "tablas": [], "funciones": [] }, "usos": {}, "registro": [] }
+}

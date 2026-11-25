@@ -144,15 +144,36 @@ export function usuarioDeBitrix(respuesta: unknown): { id: string; correo: strin
   return { id: String(r.ID ?? ''), correo, nombre }
 }
 
-/** Lo que dice la pestaña en cada caso que no enseña nada. Palabras de oficina, ningún código. */
+/**
+ * R18d · La persona que mira, según Bitrix24 (user.current): su número y su nombre, y su correo si lo trae.
+ * Sin usuario de Sumied ya no hace falta el correo: basta con que Bitrix24 diga quién es y que está activa.
+ */
+export function personaDeBitrix(respuesta: unknown): { id: string; nombre: string; correo: string | null } | null {
+  const r = (respuesta as { result?: Record<string, unknown> } | null)?.result
+  if (!r || typeof r !== 'object') return null
+  const activo = r.ACTIVE === true || r.ACTIVE === 'Y' || r.ACTIVE === '1' || r.ACTIVE === undefined
+  const id = String(r.ID ?? '')
+  if (!activo || !/^[0-9]{1,18}$/.test(id)) return null
+  const correo = typeof r.EMAIL === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.EMAIL.trim()) ? r.EMAIL.trim().toLowerCase() : null
+  const nombre = [r.NAME, r.LAST_NAME].filter((x) => typeof x === 'string' && x.trim()).map((x) => String(x).trim()).join(' ')
+  return { id, nombre: nombre || `Persona ${id} de Bitrix24`, correo }
+}
+
+/**
+ * Lo que dice la pestaña en cada caso que no enseña nada. Palabras de oficina, ningún código. R18d: cada una dice
+ * qué pasa y A QUIÉN AVISAR (Julio: nada de «Sin acceso a Sumied» a secas).
+ */
 export const FRASES: Record<string, string> = {
-  sin_acceso: 'Pide acceso a Sumied a tu administrador.',
-  portal_desconocido: 'Este Bitrix24 no está conectado con ninguna cuenta de Sumied.',
-  portal_no_permitido: 'La pestaña de Sumied no está activada en este Bitrix24.',
-  no_es_sumied: 'No se ha podido comprobar que eres tú. Cierra la ficha y vuelve a abrirla.',
+  sin_acceso: 'Tu usuario de Bitrix24 aún no puede ver Sumied. Avisa a quien administra Bitrix24 en tu empresa.',
+  portal_desconocido: 'Este Bitrix24 no está conectado con ninguna cuenta de Sumied. Avisa a quien administra Sumied en tu empresa.',
+  portal_no_permitido: 'La pestaña de Sumied no está activada en este Bitrix24. Avisa a quien administra Bitrix24 en tu empresa.',
+  portal_sin_unir: 'La pestaña de Sumied aún no está activada para todo este Bitrix24. Quien administra Bitrix24 tiene que reinstalar la aplicación «Sumied».',
+  cuenta_sin_administradora: 'La cuenta de Sumied unida a este Bitrix24 no tiene ninguna administradora activa. Avisa a quien administra Sumied en tu empresa.',
+  no_es_sumied: 'No se ha podido comprobar que eres tú. Cierra la ficha y vuelve a abrirla; si sigue, avisa a quien administra Bitrix24 en tu empresa.',
   ficha_rara: 'Esta pestaña solo funciona en la ficha de una empresa o de un contacto.',
-  varias_cuentas: 'Tu correo está en más de una cuenta de Sumied con este Bitrix24. Pide a tu administrador que lo revise.',
+  varias_cuentas: 'Este Bitrix24 está unido a más de una cuenta de Sumied. Avisa a quien administra Sumied en tu empresa para que lo revise.',
   sin_enlazar: 'Esta ficha no está enlazada con ningún cliente de Sumied.',
+  solo_lectura: 'Desde aquí solo se puede mirar. Para cambiar algo, entra en Sumied.',
 }
 
 /**

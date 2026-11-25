@@ -34,6 +34,10 @@
 .g4-boton[data-tipo='primario'] { border: 0; background: var(--g4-azul); color: #FFFFFF; }
 .g4-boton[data-tipo='primario']:hover { color: #FFFFFF; background: var(--g4-azul-oscuro); }
 .g4-boton:disabled { opacity: .55; cursor: default; }
+/* Q08 · Lo que ha pasado al cargar las decisiones de QBO, debajo de la cabecera */
+.g4-decisiones { display: flex; flex-direction: column; gap: 4px; }
+.g4-decisiones-frase { margin: 0; padding: 10px 14px; border-radius: 10px; font-size: 14px; font-weight: 600; background: #E8F5EE; color: #135C36; }
+.g4-decisiones-frase[data-tono='mal'] { background: #FDECEC; color: #8A1C1C; }
 .g4-enlace { border: 0; background: transparent; padding: 6px 0; min-height: 44px; color: var(--g4-azul); font-size: 13px; font-weight: 600; cursor: pointer; align-self: flex-start; text-decoration: none; display: inline-flex; align-items: center; }
 
 /* La banda oscura del próximo cobro */

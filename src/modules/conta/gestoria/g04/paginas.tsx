@@ -23,6 +23,8 @@ import { Clientes } from './Clientes'
 import { descargarPrecios, enlaceAlCrm, exportar, imprimirPrecios, imprimirTarifa, mesEnPalabras } from './enlaces'
 import { Tarifa } from './Tarifa'
 import { Asignar } from './Asignar'
+import { BotonDecisionesQbo, ResultadoDecisionesQbo, type EstadoDecisiones } from './DecisionesQbo'
+import { cargarDecisionesQbo } from '@/modules/conta/services/decisionesQboService'
 import { useAlDiaConLasLecturas } from '../useAlDia'
 import { clientesParaCasar, porAsignar } from './asignar'
 import { formaParaGuardar, formaEnPalabras, modeloTarifa } from './modeloTarifa'
@@ -49,6 +51,18 @@ export function ClientesG04Page() {
   const d = useLeer(!cargando && accountId ? () => leerClientes(accountId, hoyEnMadrid().slice(0, 7)) : null, `${accountId}:g04-clientes:${hoyEnMadrid().slice(0, 7)}`)
   // GD (nº71): al acabar una lectura del CRM o de GoCardless de la cuenta, se pone al día sola (con el panel abierto).
   useAlDiaConLasLecturas(accountId, d.recargar)
+  // Q08 · «Cargar decisiones de QBO»: el Excel se lee en el navegador (no pasa por el repositorio, T11).
+  const [qbo, setQbo] = useState<EstadoDecisiones>({ cargando: false, aviso: null, lineas: null })
+  const cargarQbo = async (f: File) => {
+    if (!accountId) return
+    setQbo({ cargando: true, aviso: null, lineas: null })
+    try {
+      const r = await cargarDecisionesQbo(accountId, empresas.map((e) => ({ id: e.id, nombre: e.nombre })), f)
+      setQbo({ cargando: false, aviso: { ok: true, texto: r.frase }, lineas: r.lineas }); d.recargar()
+    } catch (e) {
+      setQbo({ cargando: false, aviso: { ok: false, texto: `No se han podido cargar las decisiones de QBO: ${e instanceof Error ? e.message : String(e)}` }, lineas: null })
+    }
+  }
   if (d.error) return <ErrorConReintento mensaje={`No se han podido leer los clientes: ${d.error}`} reintentar={d.recargar} />
   if (!d.datos || !activa) return <TarjetaCargando />
   const lasDos = params.get('empresa') === 'las-dos' && empresas.length > 1
@@ -78,6 +92,8 @@ export function ClientesG04Page() {
       }}
       alExportar={exportar} alAsignar={() => setParams(lasDos ? { empresa: 'las-dos', ver: 'sin-cliente' } : { ver: 'sin-cliente' })}
       portal={(otras) => <PortalPendiente cuenta={accountId!} otras={otras} rutaFicha={(c) => `${rutaClienteGestoria(c, lasDos ? null : activa.id)}${lasDos ? '?' : '&'}pestana=portal`} />}
+      decisiones={d.datos.cuotasGc.length > 0 || d.datos.gcDelMes.length > 0
+        ? { boton: <BotonDecisionesQbo cargando={qbo.cargando} alElegir={(f) => void cargarQbo(f)} />, resultado: <ResultadoDecisionesQbo {...qbo} /> } : undefined}
       hoy={hoy} rutaPonerCuota={(cliente, empresa) => `${rutaClienteGestoria(cliente, empresa)}${empresa ? '&' : '?'}anadir=1`}
       rutaCobro={lasDos ? null : rutaCobroGestoria(activa.id)}
       alCobradoPorOtraVia={async (empresa, cargos, via, fecha) => {

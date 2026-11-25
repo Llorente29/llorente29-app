@@ -1,0 +1,3 @@
+# R18d · la vuelta atrás: quita las dos funciones, la tabla de quién ha mirado y las dos columnas del portal unido.
+cuenta: scripts/conta/produccion/cuentas/r18d-pestana-sin-usuario.sql
+supabase/vuelta-atras/20261124T2311_r18d_pestana_sin_usuario.down.sql
