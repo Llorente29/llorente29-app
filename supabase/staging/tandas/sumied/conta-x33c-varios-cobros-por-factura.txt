@@ -1,0 +1,5 @@
+# X33c · Una factura por cliente y mes, con todos sus cobros. La 1810 quita el UNIQUE de la factura y cambia
+# conta_gc_asientos_preparar (desde la rama, en ROLLBACK; de verdad desde main al fusionar). Su prueba, con una factura
+# de tres cobros (y un cuarto que pasa de su total), con la vuelta atrás dentro.
+supabase/migrations/20261125T1810_x33c_varios_cobros_por_factura.sql
+supabase/staging/sql/20261125_x33c_varios_cobros_por_factura_prueba.sql

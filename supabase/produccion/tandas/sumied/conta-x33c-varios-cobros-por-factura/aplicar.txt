@@ -1,0 +1,12 @@
+# X33c · Una factura por cliente y mes, con todos sus cobros del mes (25/11). Rama conta/x33c-varios-cobros-por-factura.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1810  Quita el UNIQUE (invoice_id) de conta_gc_cobro_factura (un cobro, una factura; una factura, varios cobros) y
+#         cambia conta_gc_asientos_preparar (misma firma, con su respaldo): un asiento por cobro; un cobro ya apuntado en
+#         su factura (por «Preparar» o por el G05) no lleva otro; la factura queda cobrada cuando sus cobros llegan a su
+#         total, y el que pasa de él va a «Pendiente de revisar». No escribe en ninguna fila. Lleva AUTORIZO (quita una
+#         restricción; la tabla tiene 0 filas en producción el 25/11).
+#
+# Nada en el camino del pedido. Lo cuenta x33c-varios-cobros-por-factura.sql (regla 31). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x33c-varios-cobros-por-factura.sql
+supabase/migrations/20261125T1810_x33c_varios_cobros_por_factura.sql
