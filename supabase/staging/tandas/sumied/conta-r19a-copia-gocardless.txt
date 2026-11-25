@@ -1,0 +1,4 @@
+# R19 · paso 0 · La copia de GoCardless.
+# 1115 (solo añade: desde la rama, de verdad, W05), con su prueba.
+supabase/migrations/20261125T1115_r19a_copia_gocardless.sql
+supabase/staging/sql/20261125_r19a_copia_gocardless_prueba.sql

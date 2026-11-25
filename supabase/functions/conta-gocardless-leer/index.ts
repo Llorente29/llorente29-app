@@ -133,6 +133,11 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
       if (error) throw new Error(`No se han podido quitar las liquidaciones que no son de ningún cliente: ${error.message}`)
     }
     if (fuera.length) console.log(`[conta-gocardless-leer] ${fuera.length} liquidaciones de GoCardless que no son de ningún cliente de ahora: fuera.`)
+    // R19 · paso 0 · La copia de lo que hay de GoCardless, fechada y sin poder cambiarse, ANTES de tocar nada de Sumied
+    // (Julio, 25/11). Si no se puede guardar, la lectura para aquí: no se cambia nada de Sumied sin su copia.
+    const { data: copia, error: eCopia } = await db.rpc('conta_gc_copia_tomar', { p_company: empresa, p_lectura: lectura, p_por: por, p_quien: quien })
+    if (eCopia) throw new Error(`No se ha podido guardar la copia de GoCardless, y sin ella no se cambia nada de Sumied: ${eCopia.message}`)
+    console.log(JSON.stringify({ r19: 'copia', empresa, ...(copia as Record<string, unknown>) }))
     await upsert(db, 'conta_cobro_cliente', plan.cobroCliente, 'company_id,party_id')
     // G06 · Y el sitio único del enlace (conta_gc_enlace). Los dos de arriba se siguen escribiendo hasta que todos los
     // que los leen hayan cambiado (cautela del nº 140).

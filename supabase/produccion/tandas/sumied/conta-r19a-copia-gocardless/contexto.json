@@ -1,0 +1,6 @@
+{
+ "_que": "R19 · paso 0 · La copia de GoCardless · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA: esta sesión no lee producción para esto. 1115 solo añade (dos tablas y tres funciones nuevas). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-25T10:24Z",
+ "tanda": { "supabase/migrations/20261125T1115_r19a_copia_gocardless.sql": "8572c6b12e9824026845740af00a9522" },
+ "contexto": { "tablas": ["public.conta_gc_cliente", "public.conta_gc_mandato", "public.conta_gc_suscripcion", "public.conta_gc_cobro", "public.company"], "funciones": [], "filas": {}, "otras": {}, "camino": { "tablas": [], "funciones": [] }, "usos": {}, "registro": [] }
+}

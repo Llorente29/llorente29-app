@@ -1,0 +1,4 @@
+# R19 · paso 0 · la vuelta atrás: quita las funciones y las dos tablas de la copia (con las copias que haya). Lo leído
+# de GoCardless no se toca.
+cuenta: scripts/conta/produccion/cuentas/r19a-copia-gocardless.sql
+supabase/vuelta-atras/20261125T1115_r19a_copia_gocardless.down.sql
