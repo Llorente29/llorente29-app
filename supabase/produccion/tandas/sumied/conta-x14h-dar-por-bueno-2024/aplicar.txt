@@ -1,0 +1,11 @@
+# X14 · 2 · «Darlo por bueno» del 2024 de QBO Integrity desde «Aplicar SQL en producción» (Julio, 25/11, urgente): desde la
+# pantalla da 500 «canceling statement due to statement timeout» (4.425 asientos y 2.123 facturas). Rama conta/x14h-dar-por-bueno-2024. Se ensaya y
+# se aplica desde main nombrando esta rama.
+#
+#   2119  conta_traer_dar_por_bueno de la carga e694df2e… (si sigue en prueba), como quien la trajo. No crea ni cambia
+#         objetos; TOCA DATOS (valida sus asientos y crea sus emitidas). Sin vuelta atrás: lo dado por bueno no se deshace.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x14h-dar-por-bueno.sql
+supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql
+sin-vuelta-atras: supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql · motivo: lo dado por bueno no se deshace; un error en lo traído se corrige con un asiento a mano.
