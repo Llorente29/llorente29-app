@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  CODIGOS_NIF, CODIGOS_TIPO_VENTA, avisoOtrosProgramas, cifrasHacienda, etiquetaHacienda, lineaDeTiempo, obligaDesde, porQueEnviando, porQueRechazo,
+  CODIGOS_NIF, CODIGOS_TIPO_VENTA, OBLIGA_VERIFACTU, avisoOtrosProgramas, cifrasHacienda, textoConexion, etiquetaHacienda, lineaDeTiempo, obligaDesde, porQueEnviando, porQueRechazo,
   type EstadoFactura,
 } from '@/modules/conta/lib/verifactu/estado'
 
@@ -82,13 +82,28 @@ describe('«Cómo va con Hacienda» (tablero 27)', () => {
 })
 
 describe('el alta (tablero 25)', () => {
-  it('una sociedad, desde el 1 de enero de 2027; un autónomo, desde el 1 de julio', () => {
-    expect(obligaDesde('B28000016')).toMatchObject({ quien: 'sociedad', texto: '1 de enero de 2027' })
-    expect(obligaDesde('12345678Z')).toMatchObject({ quien: 'persona', texto: '1 de julio de 2027' })
+  it('V05 · desde el 6 de octubre de 2028 para todos (Real Decreto-ley 43/2026)', () => {
+    // V05: el Real Decreto-ley 43/2026 lo aplaza; un solo dato para todas las pantallas.
+    expect(obligaDesde('B28000016')).toMatchObject({ quien: 'sociedad', desde: '2028-10-06', texto: '6 de octubre de 2028' })
+    expect(obligaDesde('12345678Z')).toMatchObject({ quien: 'persona', desde: '2028-10-06', texto: '6 de octubre de 2028' })
+    expect(OBLIGA_VERIFACTU).toMatchObject({ desde: '2028-10-06', norma: 'Real Decreto-ley 43/2026' })
   })
   it('Excel no cumple; otro programa, que lo compruebe; solo Sumied, nada que avisar', () => {
     expect(avisoOtrosProgramas(['tpv', 'excel'])).toMatchObject({ tono: 'falta' })
     expect(avisoOtrosProgramas(['tienda'])).toMatchObject({ tono: 'duda' })
     expect(avisoOtrosProgramas([])).toBeNull()
+  })
+})
+
+describe('V05 · la prueba de conexión dice de quién es la culpa', () => {
+  const c = (o: Partial<{ ok: boolean; codigo: number | null; mensaje: string | null }>) => ({ ok: false, codigo: null, mensaje: null, probada_at: '2026-11-26T09:00:00Z', ...o })
+  it('bien, del certificado, de Hacienda o de Sumied', () => {
+    expect(textoConexion(c({ ok: true, mensaje: 'respuesta_de_consulta · HTTP 200' }))).toMatchObject({ tono: 'ok', culpa: 'nadie' })
+    expect(textoConexion(c({ mensaje: 'http_403 · HTTP 403' }))).toMatchObject({ tono: 'falta', culpa: 'certificado' })
+    expect(textoConexion(c({ mensaje: 'fault · HTTP 500 · Codigo[4102] El XML no cumple el esquema', codigo: 4102 })).texto).toContain('4102: «Codigo[4102] El XML no cumple el esquema»')
+    expect(textoConexion(c({ mensaje: 'llamada_tiempo' }))).toMatchObject({ culpa: 'sumied' })
+    expect(textoConexion(c({ mensaje: 'llamada_destino' })).texto).toMatch(/^Tu certificado está bien; la conexión de Sumied con Hacienda/)
+    expect(textoConexion(null)).toMatchObject({ culpa: 'sumied' })
+    expect(textoConexion(null).texto).toContain('tu certificado no se ha usado')
   })
 })

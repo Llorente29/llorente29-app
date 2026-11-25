@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { type Lote, type Piezas, unaVuelta } from '../../../../../supabase/functions/_shared/verifactu/enviar'
 import type { Registro } from '../../../../../supabase/functions/_shared/verifactu/xml'
-import { puerta } from '../../../../../supabase/functions/_shared/verifactu/puerta'
+import { puerta, REAL_CERRADO } from '../../../../../supabase/functions/_shared/verifactu/puerta'
 import { casosPruebas } from '../../../../../supabase/functions/_shared/verifactu/pruebasAeat'
 import { cuerpoEnvio } from '../../../../../supabase/functions/_shared/verifactu/xml'
 import { spawnSync } from 'node:child_process'
@@ -105,16 +105,26 @@ describe('V03 · la puerta de conta-verifactu', () => {
   it('pruebas solo desde staging; real solo desde producción', () => {
     expect(puerta('pruebas', STAGING)).toEqual({ entorno: 'pruebas' })
     expect(puerta('pruebas', PROD)).toHaveProperty('cerrada')
-    expect(puerta('real', PROD)).toEqual({ entorno: 'real' })
-    expect(puerta('real', STAGING)).toHaveProperty('cerrada')
+    // V05: real, cerrado en el programa, desde las dos bases.
+    expect(puerta('real', PROD)).toEqual({ cerrada: REAL_CERRADO })
+    expect(puerta('real', STAGING)).toEqual({ cerrada: REAL_CERRADO })
   })
   it('G05 · desde producción, pruebas solo para las demos, con la llamada que lo pide y CONTA_VERIFACTU_DEMOS puesto', () => {
     expect(puerta('real', PROD, 'pruebas', 'pruebas')).toEqual({ entorno: 'pruebas', soloDemos: true })
     expect(puerta(undefined, PROD, 'pruebas', 'pruebas')).toEqual({ entorno: 'pruebas', soloDemos: true })
     expect(puerta('real', PROD, 'pruebas', undefined)).toHaveProperty('cerrada')
-    expect(puerta('real', PROD, undefined, 'pruebas')).toEqual({ entorno: 'real' })
+    expect(puerta('real', PROD, undefined, 'pruebas')).toEqual({ cerrada: REAL_CERRADO })
     // En staging no cambia nada: pruebas como siempre, sin «solo demos».
     expect(puerta('pruebas', STAGING, 'pruebas', 'pruebas')).toEqual({ entorno: 'pruebas' })
+  })
+  it('V05 · las empresas con su certificado, desde producción: solo con la autorización de ESE día de Madrid', () => {
+    const ahora = new Date('2026-11-26T09:00:00Z') // 10:00 en Madrid
+    expect(puerta(undefined, PROD, 'pruebas_empresas', undefined, { autoriza: 'pruebas:2026-11-26', ahora })).toEqual({ entorno: 'pruebas', conCertEmpresa: true })
+    expect(puerta(undefined, PROD, 'pruebas_empresas', undefined, { autoriza: 'pruebas:2026-11-25', ahora })).toHaveProperty('cerrada')
+    expect(puerta(undefined, PROD, 'pruebas_empresas', undefined, { autoriza: undefined, ahora })).toHaveProperty('cerrada')
+    expect(puerta('pruebas', STAGING, 'pruebas_empresas', undefined, { autoriza: 'pruebas:2026-11-26', ahora })).toHaveProperty('cerrada')
+    // 23:30 UTC del 25 ya es el 26 en Madrid.
+    expect(puerta(undefined, PROD, 'pruebas_empresas', undefined, { autoriza: 'pruebas:2026-11-26', ahora: new Date('2026-11-25T23:30:00Z') })).toEqual({ entorno: 'pruebas', conCertEmpresa: true })
   })
 })
 

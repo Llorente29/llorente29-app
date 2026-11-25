@@ -22,6 +22,14 @@
 //                      si lo ha autorizado para Verifactu (verifactu_cert_abrir,
 //                      2341); por la vía de colaborador social (la de partida,
 //                      preparada y apagada), vuelve a la cola diciendo por qué.
+//   · V05 · «pruebas_empresas» (lo pide la llamada, desde producción, y Julio
+//                      pone CONTA_VERIFACTU_EMPRESAS = «pruebas:AAAA-MM-DD»):
+//                      las empresas en pruebas, al entorno de pruebas, con el
+//                      certificado que cada una autorizó para Verifactu
+//                      (verifactu_cert_abrir_pruebas*, 0V05). La despierta
+//                      verifactu_despertar_empresa, que pulsa un administrador.
+//   · Real, cerrado en el programa (V05): la dirección de producción no está en
+//     la lista de destinos de certificados/mtls.ts.
 //
 // Sin sesión: verify_jwt = false (config.toml) y x-cron-secret = CRON_SECRET.
 // En el registro, solo recuentos y motivos: nunca el XML, el certificado, el
@@ -108,16 +116,61 @@ async function prepararPruebas(srv: any): Promise<Record<string, unknown>> {
   return { preparadas: altas.length + 1, altas: altas.length, anulaciones: 1, prefijo };
 }
 
+/** V05 · El certificado que la empresa autorizó, para el entorno de pruebas (la base dice si se puede). */
+// deno-lint-ignore no-explicit-any
+async function certEmpresa(srv: any, fn: "verifactu_cert_abrir_pruebas" | "verifactu_cert_abrir_pruebas_envio", args: Record<string, unknown>) {
+  const { data, error } = await srv.rpc(fn, args);
+  if (error) throw new Error(`${fn}: ${error.message}`);
+  const x = data as { ok: boolean; mensaje?: string; material?: string; nif?: string; nombre?: string };
+  if (!x.ok || !x.material) throw new SinCertificado(x.mensaje ?? "No se puede usar el certificado de la empresa.");
+  const m = JSON.parse(x.material) as MaterialCertificado;
+  return { material: { cert: m.cert, key: m.key }, nif: (x.nif ?? "").replace(/^ES/i, "").toUpperCase(), nombre: x.nombre ?? "" };
+}
+
+/**
+ * V05 · Las 25 facturas de pruebasAeat.ts para UNA empresa de verdad en
+ * pruebas (desde producción, con su certificado). Solo si está en pruebas y su
+ * conexión de pruebas salió bien. Van al entorno «pruebas»: no cuentan.
+ */
+// deno-lint-ignore no-explicit-any
+async function prepararPruebasEmpresa(srv: any, companyId: string): Promise<Record<string, unknown>> {
+  const uno = async <T>(q: PromiseLike<{ data: T | null; error: { message: string } | null }>, que: string): Promise<T | null> => {
+    const { data, error } = await q;
+    if (error) throw new Error(`${que}: ${error.message}`);
+    return data;
+  };
+  const co = await uno(srv.from("company").select("id, account_id, tax_id, legal_name").eq("id", companyId).maybeSingle(), "la empresa") as { id: string; account_id: string; tax_id: string; legal_name: string } | null;
+  if (!co) throw new Error("Esa empresa no está.");
+  const ve = await uno(srv.from("verifactu_empresa").select("modo").eq("company_id", companyId).maybeSingle(), "su Verifactu") as { modo: string } | null;
+  if (ve?.modo !== "pruebas") throw new Error("La empresa no está en pruebas: ponla en pruebas antes de lanzar las facturas de prueba.");
+  const nif = (co.tax_id ?? "").replace(/^ES/i, "").toUpperCase();
+  const { data: probada, error: e0 } = await srv.rpc("verifactu_conexion_probada", { p_entorno: "pruebas", p_nif: nif });
+  if (e0) throw new Error(`verifactu_conexion_probada: ${e0.message}`);
+  if (!probada) throw new Error("Todavía no se ha probado la conexión con el entorno de pruebas de Hacienda con el certificado de esta empresa.");
+  const madrid = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+  const prefijo = "PR" + madrid.replace(/\D/g, "").slice(2, 12);
+  const { altas, anular } = casosPruebas({ account_id: co.account_id, company_id: co.id, nif_emisor: nif, nombre_emisor: co.legal_name, prefijo, fecha: madrid.slice(0, 10) });
+  const ids: string[] = [];
+  for (const a of altas) {
+    const r = await uno(srv.rpc("_verifactu_registrar", { p: a.p }), `registrar ${a.que}`) as { id: string };
+    ids.push(r.id);
+  }
+  await uno(srv.rpc("_verifactu_anular", { p_alta: ids[anular], p_quien: "Pruebas V05" }), "registrar la anulación");
+  return { preparadas: altas.length + 1, altas: altas.length, anulaciones: 1, prefijo };
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "usa POST" }, 405);
-  const cuerpo = (await req.json().catch(() => ({}))) as { accion?: string; entorno?: string };
+  const cuerpo = (await req.json().catch(() => ({}))) as { accion?: string; entorno?: string; company_id?: string };
   // G05 · T3: {"entorno":"pruebas"} desde producción (verifactu_despertar_demos) abre las pruebas solo para las demos.
-  const p = puerta(Deno.env.get("CONTA_VERIFACTU"), SUPABASE_URL, cuerpo.entorno, Deno.env.get("CONTA_VERIFACTU_DEMOS"));
+  // V05: {"entorno":"pruebas_empresas"} (verifactu_despertar_empresa), las empresas con su certificado.
+  const p = puerta(Deno.env.get("CONTA_VERIFACTU"), SUPABASE_URL, cuerpo.entorno, Deno.env.get("CONTA_VERIFACTU_DEMOS"),
+    { autoriza: Deno.env.get("CONTA_VERIFACTU_EMPRESAS"), ahora: new Date() });
   // Quién puede despertarla: el cron (CRON_SECRET) o, solo en pruebas, el
   // workflow de las pruebas con su llave de un solo run (VERIFACTU_PRUEBAS_TOKEN).
   const cron = Deno.env.get("CRON_SECRET") ?? "", llave = Deno.env.get("VERIFACTU_PRUEBAS_TOKEN") ?? "";
   const porCron = !!cron && (req.headers.get("x-cron-secret") ?? "") === cron;
-  const porPruebas = "entorno" in p && p.entorno === "pruebas" && !("soloDemos" in p) && !!llave && (req.headers.get("x-verifactu-pruebas") ?? "") === llave;
+  const porPruebas = "entorno" in p && p.entorno === "pruebas" && !("soloDemos" in p) && !("conCertEmpresa" in p) && !!llave && (req.headers.get("x-verifactu-pruebas") ?? "") === llave;
   if (!porCron && !porPruebas) return json({ error: "no autorizado" }, 401);
   if ("cerrada" in p) {
     console.log(`conta-verifactu · cerrada · ${p.cerrada}`);
@@ -132,6 +185,9 @@ Deno.serve(async (req) => {
   };
   const accion = cuerpo.accion ?? "enviar";
   const soloDemos = "soloDemos" in p && p.soloDemos === true;
+  const conCertEmpresa = "conCertEmpresa" in p && p.conCertEmpresa === true;
+  const companyId = typeof cuerpo.company_id === "string" && /^[0-9a-f-]{36}$/i.test(cuerpo.company_id) ? cuerpo.company_id : null;
+  if (conCertEmpresa && (accion === "probar_conexion" || accion === "preparar_pruebas") && !companyId) return json({ error: "falta company_id" }, 400);
   // Desde producción, en pruebas solo se envía y se comprueba: preparar y probar se hacen en staging.
   // probar_conexion sí: el candado de verifactu_modo pide la conexión de pruebas apuntada en ESTA base.
   if (soloDemos && accion === "preparar_pruebas") return json({ error: "preparar_pruebas no se hace desde producción" }, 400);
@@ -145,24 +201,36 @@ Deno.serve(async (req) => {
     // pruebas de la AEAT, y su resultado apuntado (abre o no el candado, 2351).
     if (entorno !== "pruebas") return json({ error: "probar_conexion solo en pruebas" }, 400);
     try {
-      const c = leerCertPruebas();
+      // V05: desde producción, con el certificado que la empresa autorizó; en staging, el de los secretos.
+      const c = conCertEmpresa ? await (async () => {
+        const e = await certEmpresa(srv, "verifactu_cert_abrir_pruebas", { p_company: companyId });
+        return { material: e.material, nif: e.nif, titular: e.nombre };
+      })() : leerCertPruebas();
       const r = await llamarConCertificado(c.material, URL.pruebas, {
         method: "POST", headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: '""' }, body: sobreConsulta({ nombre: c.titular, nif: c.nif }, new Date()),
       }, { crearCliente: (m) => Deno.createHttpClient({ cert: m.cert, key: m.key }), pedir: (u, init) => fetch(u, init), limiteMs: 60_000 });
       const l = leerConexion(r.status, r.cuerpo);
-      await rpc("verifactu_conexion_apuntar", { p_entorno: "pruebas", p_nif: c.nif, p_ok: l.ok, p_codigo: l.codigo, p_mensaje: `${l.motivo} · HTTP ${r.status}`, p_origen: "conta-verifactu probar_conexion" });
+      // V05: si Hacienda rechaza, su texto (el faultstring) va con el código: se pega tal cual en el parte.
+      const textoAeat = l.ok ? "" : (/<(?:[\w.-]+:)?faultstring>([^<]{1,300})/.exec(r.cuerpo)?.[1] ?? "").trim();
+      await rpc("verifactu_conexion_apuntar", { p_entorno: "pruebas", p_nif: c.nif, p_ok: l.ok, p_codigo: l.codigo, p_mensaje: `${l.motivo} · HTTP ${r.status}${textoAeat ? ` · ${textoAeat}` : ""}`, p_origen: conCertEmpresa ? "conta-verifactu probar_conexion (certificado de la empresa)" : "conta-verifactu probar_conexion" });
       console.log(`conta-verifactu · pruebas · conexión ${l.ok ? "bien" : "mal"} · ${l.motivo}${l.codigo ? ` · ${l.codigo}` : ""}`);
       return json({ ok: l.ok, status: r.status, codigo: l.codigo, motivo: l.motivo, ms: r.ms });
     } catch (e) {
       const motivo = e instanceof SinCertificado ? "sin_certificado" : e instanceof Error && e.name === "LlamadaFallida" ? `llamada_${(e as { motivo?: string }).motivo ?? "fallo"}` : e instanceof Error && e.name === "CertificadoNoVale" ? "certificado_no_vale" : "fallo";
       console.error(`conta-verifactu · pruebas · conexión no probada · ${motivo}`);
+      // V05: que la pantalla sepa por qué, también si no se llegó a Hacienda (el certificado nunca se apunta).
+      if (conCertEmpresa && companyId) {
+        const { data: co } = await srv.from("company").select("tax_id").eq("id", companyId).maybeSingle();
+        const nif = String((co as { tax_id?: string } | null)?.tax_id ?? "").replace(/^ES/i, "").toUpperCase();
+        if (nif) await srv.rpc("verifactu_conexion_apuntar", { p_entorno: "pruebas", p_nif: nif, p_ok: false, p_codigo: null, p_mensaje: motivo, p_origen: "conta-verifactu probar_conexion (certificado de la empresa)" });
+      }
       return json({ ok: false, motivo }, 200);
     }
   }
   if (accion === "preparar_pruebas") {
     if (entorno !== "pruebas") return json({ error: "preparar_pruebas solo en pruebas" }, 400);
     try {
-      const r = await prepararPruebas(srv);
+      const r = conCertEmpresa ? await prepararPruebasEmpresa(srv, companyId!) : await prepararPruebas(srv);
       console.log(`conta-verifactu · pruebas · preparadas ${r.preparadas}`);
       return json(r);
     } catch (e) {
@@ -210,7 +278,7 @@ Deno.serve(async (req) => {
 
   // En pruebas, el certificado de pruebas se lee antes: da el productor si no
   // está puesto. Si faltan sus secretos, cada envío lo dirá al pedir el material.
-  if (entorno === "pruebas") { try { leerCertPruebas(); } catch { /* lo dice material() */ } }
+  if (entorno === "pruebas" && !conCertEmpresa) { try { leerCertPruebas(); } catch { /* lo dice material() */ } }
   // V04 · PR 2: quién fabrica Sumied lo dice la base (verifactu_sistema), el
   // mismo dato que mira el candado para pasar a real. Si la base aún no lo
   // tiene (o no tiene la función), los secretos de antes.
@@ -220,11 +288,23 @@ Deno.serve(async (req) => {
   const sifNif = sb?.nif || Deno.env.get("VERIFACTU_SIF_NIF") || (entorno === "pruebas" ? certPruebas?.nif ?? "" : "");
 
   const piezas: Piezas = {
-    tomar: async (e, max) => (await rpc("verifactu_cola_tomar", { p_entorno: e, p_max: max })) as Lote | null,
+    tomar: async (e, max) => {
+      const lote = (await rpc("verifactu_cola_tomar", { p_entorno: e, p_max: max })) as Lote | null;
+      // V05: en pruebas con el certificado de la empresa, si la base aún no dice quién fabrica Sumied,
+      // figura la propia empresa (como en staging figura el titular del certificado de pruebas).
+      if (conCertEmpresa && lote?.registros?.length && (!sifNombre || !sifNif)) {
+        piezas.sistema.nombreRazon = lote.registros[0].nombre_emisor;
+        piezas.sistema.nif = lote.nif_emisor;
+      }
+      return lote;
+    },
     responder: (id, x) => rpc("verifactu_cola_respuesta", { p_envio: id, p: x }),
     fallar: (id, err) => rpc("verifactu_cola_fallo", { p_envio: id, p_error: err }),
     material: async (lote) => {
       const sinProductor = () => new SinCertificado("Falta quién produce el sistema (nombre y NIF de la declaración responsable: verifactu_sistema en la base, o VERIFACTU_SIF_NOMBRE y VERIFACTU_SIF_NIF). Se rellena antes de pasar a real.");
+      if (entorno === "pruebas" && conCertEmpresa) {
+        return (await certEmpresa(srv, "verifactu_cert_abrir_pruebas_envio", { p_envio: lote.envio_id })).material;
+      }
       if (entorno === "pruebas") {
         const m = materialPruebas(lote);
         if (!sifNombre || !sifNif) throw sinProductor();
@@ -256,10 +336,12 @@ Deno.serve(async (req) => {
       nif: sifNif,
       nombre: "Sumied", id: "SU",
       version: Deno.env.get("VERIFACTU_SIF_VERSION") ?? "1.0.0",
-      numeroInstalacion: entorno === "pruebas" ? (soloDemos ? "demo" : "staging") : "produccion",
+      numeroInstalacion: entorno === "pruebas" ? (soloDemos ? "demo" : conCertEmpresa ? "produccion-pruebas" : "staging") : "produccion",
     },
     url: URL[entorno],
-    enLaDemo: (lote) => empresaEnLaDemo(lote.company_id),
+    // V05: con el certificado de la empresa, un lote de demo no se da por bueno aquí: la base no abre
+    // certificado para una demo (verifactu_cert_abrir_pruebas_envio), vuelve a la cola y lo mandan las demos.
+    enLaDemo: conCertEmpresa ? async () => false : (lote) => empresaEnLaDemo(lote.company_id),
     soloDemos,
   };
 

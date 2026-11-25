@@ -47,7 +47,7 @@ test('el alta (tablero 25): tres pasos, el candado dicho antes, otros programas 
   const alta = page.locator('[data-prueba="verifactu-alta"]')
   await expect(alta.getByRole('heading', { level: 1, name: 'Verifactu: tus facturas, directas a Hacienda' })).toBeVisible({ timeout: 30_000 })
   // Paso 1: la empresa de D, sociedad, y desde cuándo le obliga.
-  await expect(alta.getByRole('region', { name: 'Paso 1: Tus datos' })).toContainText('B12345682 · sociedad: te obliga desde el 1 de enero de 2027')
+  await expect(alta.getByRole('region', { name: 'Paso 1: Tus datos' })).toContainText('B12345682 · sociedad: te obliga desde el 6 de octubre de 2028')
   // Paso 2: la vía de colaborador, recomendada y dicha como cerrada; la del certificado, sin certificado en D.
   await expect(alta.getByText('Recomendado')).toBeVisible()
   await expect(alta.locator('[data-prueba="colaborador-cerrado"]')).toBeVisible()
@@ -55,6 +55,10 @@ test('el alta (tablero 25): tres pasos, el candado dicho antes, otros programas 
   // Paso 3: el candado, antes de pulsar.
   await expect(alta.locator('[data-prueba="candado-pruebas"]')).toContainText('Todavía no se ha probado la conexión con el entorno de pruebas de Hacienda')
   await expect(alta.getByRole('button', { name: 'Empezar las pruebas' })).toBeDisabled()
+  // V05: «Probar la conexión», a la vista; sin certificado autorizado, desactivado y dicho por qué.
+  const probar = alta.locator('[data-prueba="probar-conexion"]')
+  await expect(probar.getByRole('button', { name: 'Probar la conexión' })).toBeDisabled()
+  await expect(probar).toContainText('Para probar, autoriza antes tu certificado para Verifactu (paso 2).')
   await page.evaluate(() => document.fonts.ready)
   await foto(page, 'tablero-25')
   await alta.getByRole('radio', { name: /Con tu certificado de empresa/ }).check()
@@ -172,7 +176,7 @@ test('la rechazada (tableros 26 y 27), con la respuesta de Hacienda simulada', a
   await expect(page.locator('.s-lista-cargando')).toHaveCount(0, { timeout: 30_000 })
   if (lado(page) === 'ordenador') await expect(page.getByRole('table').first().getByRole('columnheader').filter({ hasText: /^Hacienda/ })).toBeVisible()
   await expect(page.getByText(/^Rechazada/).first()).toBeVisible()
-  await expect(page.locator('[data-prueba="pie-hacienda"]')).toContainText('Verifactu empieza el 1 de enero de 2027')
+  await expect(page.locator('[data-prueba="pie-hacienda"]')).toContainText('Verifactu empieza con las de 2027 en adelante')
   await page.evaluate(() => document.fonts.ready)
   await foto(page, 'tablero-26')
 

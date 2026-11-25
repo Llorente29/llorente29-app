@@ -135,15 +135,49 @@ export function lineaDeTiempo(emitida: string | null, registros: readonly Regist
 }
 
 /**
- * Desde cuándo obliga Verifactu (RD 254/2025): las sociedades (Impuesto sobre
- * Sociedades), el 1 de enero de 2027; el resto (autónomos), el 1 de julio.
- * Por el NIF: una letra delante es una entidad.
+ * V05 · DESDE CUÁNDO OBLIGA VERIFACTU: un solo dato para todas las pantallas.
+ * El Real Decreto-ley 43/2026 (BOE del 25/11/2026, en vigor el 26/11) aplaza la
+ * obligación: los programas tienen que estar adaptados antes del 6 de octubre
+ * de 2028. Antes decía el 1 de enero de 2027 (sociedades) y el 1 de julio de
+ * 2027 (el resto, RD 254/2025). Si vuelve a cambiar, se cambia aquí y nada más.
  */
+export const OBLIGA_VERIFACTU = {
+  desde: '2028-10-06',
+  texto: '6 de octubre de 2028',
+  anio: 2028,
+  norma: 'Real Decreto-ley 43/2026',
+} as const
+
+/** Desde cuándo obliga a esta empresa. Por el NIF: una letra delante es una entidad. */
 export function obligaDesde(nif: string | null): { quien: 'sociedad' | 'persona'; desde: string; texto: string } {
   const sociedad = /^[ABCDEFGHJNPQRSUVW]/i.test((nif ?? '').trim())
-  return sociedad
-    ? { quien: 'sociedad', desde: '2027-01-01', texto: '1 de enero de 2027' }
-    : { quien: 'persona', desde: '2027-07-01', texto: '1 de julio de 2027' }
+  return { quien: sociedad ? 'sociedad' : 'persona', desde: OBLIGA_VERIFACTU.desde, texto: OBLIGA_VERIFACTU.texto }
+}
+
+/** V05 · La última prueba de conexión con el entorno de pruebas de Hacienda (verifactu_conexion_ultima). */
+export interface ConexionVista { ok: boolean; codigo: number | null; mensaje: string | null; probada_at: string }
+
+/**
+ * V05 · Qué dice la pantalla de una prueba de conexión, y de quién es la culpa,
+ * en palabras de la calle. Del certificado, solo si Hacienda lo rechaza (401 o
+ * 403) o no se puede abrir; si no llegamos, es de Sumied; si Hacienda contesta
+ * con un error, su código y su texto, tal cual.
+ */
+export function textoConexion(c: ConexionVista | null): { tono: 'ok' | 'falta' | 'duda'; culpa: 'nadie' | 'certificado' | 'sumied' | 'hacienda'; texto: string } {
+  if (!c) {
+    return { tono: 'duda', culpa: 'sumied', texto: 'Hacienda no ha contestado todavía. Lo más probable es que la conexión de Sumied con Hacienda no esté abierta hoy: tu certificado no se ha usado y no se ha enviado nada.' }
+  }
+  if (c.ok) return { tono: 'ok', culpa: 'nadie', texto: 'Conectado: el entorno de pruebas de Hacienda ha contestado con tu certificado. Ya puedes empezar las pruebas.' }
+  const m = c.mensaje ?? ''
+  if (/^sin_certificado/.test(m)) return { tono: 'duda', culpa: 'certificado', texto: 'Falta autorizar tu certificado para Verifactu (paso 2). No se ha enviado nada.' }
+  if (/^(certificado_no_vale|llamada_certificado)|HTTP 40[13]\b/.test(m)) {
+    return { tono: 'falta', culpa: 'certificado', texto: `Hacienda no acepta tu certificado${c.codigo ? ` (código ${c.codigo})` : ''}. Revisa que sea de esta empresa y esté en vigor.` }
+  }
+  if (/^fault/.test(m)) {
+    const texto = m.split(' · ').slice(2).join(' · ')
+    return { tono: 'falta', culpa: 'hacienda', texto: `Hacienda ha contestado con un error${c.codigo ? ` ${c.codigo}` : ''}${texto ? `: «${texto}»` : ''}. Tu certificado ha llegado; el error es de la consulta.` }
+  }
+  return { tono: 'duda', culpa: 'sumied', texto: 'Tu certificado está bien; la conexión de Sumied con Hacienda no ha funcionado (no ha contestado o se ha cortado). No se ha enviado nada: vuelve a probar más tarde.' }
 }
 
 /** Los otros programas con los que se factura (tablero 25), y si cumplen. */
@@ -157,7 +191,7 @@ export const OTROS_PROGRAMAS = [
 /** El aviso de los otros programas, o null si no hay nada que avisar. */
 export function avisoOtrosProgramas(elegidos: readonly string[]): { tono: 'falta' | 'duda'; texto: string } | null {
   if (elegidos.includes('excel')) {
-    return { tono: 'falta', texto: 'Una factura en Excel, en Word o a mano no cumple desde 2027: hazlas en Sumied (o en un programa que cumpla).' }
+    return { tono: 'falta', texto: `Una factura en Excel, en Word o a mano no cumple desde el ${OBLIGA_VERIFACTU.texto}: hazlas en Sumied (o en un programa que cumpla).` }
   }
   if (elegidos.length) {
     return { tono: 'duda', texto: 'Ese programa también tiene que cumplir Verifactu: pide a quien te lo vende su declaración responsable. Si no la tiene, factura con Sumied.' }

@@ -40,7 +40,7 @@ import { LlamadaFallida } from '../certificados/mtls.ts'
 import { comprobar303, FicheroNoVale, generar303, type Datos303 } from '../impuestos/dr303.ts'
 import { comprobar190, FicheroNoVale as FicheroNoVale190, generar190, type Datos190 } from '../impuestos/modelo190.ts'
 import { comprobar180, FicheroNoVale as FicheroNoVale180, generar180, type Datos180, type Inmueble180 } from '../impuestos/modelo180.ts'
-import { type Hacienda, PuertaCerrada, RespuestaRara } from './puerta.ts'
+import { CERRADA_PROBAR, type Hacienda, PuertaCerrada, RespuestaRara } from './puerta.ts'
 
 export interface Dependencias {
   /** Cliente de la base con la clave de servicio. */
@@ -69,7 +69,7 @@ const fechaEs = (iso: string | null | undefined) => (iso ? iso.slice(0, 10).spli
 
 function porQueFalla(e: unknown): { motivo: string; mensaje: string; incierto: boolean } {
   if (e instanceof PuertaCerrada) return { motivo: 'cerrada', mensaje: e.message, incierto: false }
-  if (e instanceof LlamadaFallida) return { motivo: e.motivo, mensaje: e.message, incierto: e.motivo !== 'certificado' }
+  if (e instanceof LlamadaFallida) return { motivo: e.motivo, mensaje: e.message, incierto: e.motivo !== 'certificado' && e.motivo !== 'destino' }
   if (e instanceof RespuestaRara) return { motivo: 'rara', mensaje: e.message, incierto: true }
   if (e instanceof AlmacenNoDeja) return { motivo: 'no_deja', mensaje: e.message, incierto: false }
   if (e instanceof CertificadoNoVale) return { motivo: 'certificado', mensaje: e.message, incierto: false }
@@ -77,7 +77,20 @@ function porQueFalla(e: unknown): { motivo: string; mensaje: string; incierto: b
 }
 
 // ── Probar con Hacienda ─────────────────────────────────────────────────────
+/**
+ * V05 · De quién es la culpa de una prueba fallida, en palabras de la calle.
+ * Del certificado solo cuando Hacienda lo rechaza o no se puede abrir; si no
+ * hemos llegado a Hacienda (puerta cerrada, red, tiempo, una respuesta rara),
+ * es nuestra o de Hacienda, y el certificado no queda marcado como malo.
+ */
+export function culpaDeLaPrueba(motivo: string): 'certificado' | 'sumied' {
+  return motivo === 'certificado' || motivo === 'rechaza' ? 'certificado' : 'sumied'
+}
+
 export async function probar(d: Dependencias, a: { usuario: string; confirmacion: string }): Promise<Salida> {
+  // V05 · Con la puerta cerrada no se abre el certificado ni se apunta un uso:
+  // no ha habido prueba, y el certificado no se queda con «No funcionó».
+  if (d.hacienda.entorno === 'cerrada') return { ok: false, motivo: 'cerrada', culpa: 'sumied', mensaje: CERRADA_PROBAR }
   let abierto: Abierto
   try {
     abierto = await d.almacen.abrir({ confirmacion: a.confirmacion, usuario: a.usuario })
@@ -96,8 +109,14 @@ export async function probar(d: Dependencias, a: { usuario: string; confirmacion
     return { ok: true, mensaje, declaraciones: encontradas.length }
   } catch (e) {
     const f = porQueFalla(e)
-    await d.almacen.terminarUso({ usoId: abierto.usoId, resultado: 'error', mensaje: `No funciona: ${f.mensaje}` })
-    return { ok: false, motivo: f.motivo, mensaje: `No funciona: ${f.mensaje}` }
+    // Hacienda rechaza el certificado (401/403 en la consulta): eso sí es del certificado.
+    const motivo = f.motivo === 'rara' && /no acepta este certificado/i.test(f.mensaje) ? 'rechaza' : f.motivo
+    const culpa = culpaDeLaPrueba(motivo)
+    const mensaje = culpa === 'certificado'
+      ? `No funciona: ${f.mensaje}`
+      : `No se ha podido probar, y no es cosa de tu certificado: ${f.mensaje}`
+    await d.almacen.terminarUso({ usoId: abierto.usoId, resultado: 'error', mensaje })
+    return { ok: false, motivo, culpa, mensaje }
   }
 }
 

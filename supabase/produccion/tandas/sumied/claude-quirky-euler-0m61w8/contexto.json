@@ -1,0 +1,19 @@
+{
+ "_que": "V05 · contexto de producción de la tanda (1830), medido en SOLO LECTURA el 25/11 hacia las 18:30 de Madrid: no existe ninguna de las cuatro funciones que crea la 1830 (ni otra firma con su nombre); existen las columnas y funciones que usa (verifactu_envio.autorizacion_id, tax_certificate.vault_secret_id, accounts.is_demo, _project_url, belongs_to_account, current_user_is_admin_or_manager_of) y cron_secret en el Vault. Nada en el camino del pedido y nada en el historial.",
+ "medido": "2026-11-25T17:30Z",
+ "tanda": {
+  "supabase/migrations/20261125T1830_v05_verifactu_pruebas_empresas.sql": "7e9ede68fb876bdf8f309fb0650c8f8f"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

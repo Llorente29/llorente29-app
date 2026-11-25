@@ -1,0 +1,8 @@
+# V05 · Verifactu en pruebas con el certificado de la empresa. La 1830 solo
+# añade: desde la rama va de verdad después del ensayo (W05), si se puede
+# pasar dos veces. Su prueba (ROLLBACK): sin autorización no se abre el
+# certificado y lo dice; solo el servicio lo abre; pedir (otra persona no, una
+# acción que no existe no, enviar apagado no); la última prueba de conexión; y
+# la vuelta atrás.
+supabase/migrations/20261125T1830_v05_verifactu_pruebas_empresas.sql
+supabase/staging/sql/20261125_v05_verifactu_pruebas_empresas_prueba.sql

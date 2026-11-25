@@ -27,7 +27,7 @@
 // que pone tiempo límite y cierra el cliente. Aquí no se escribe nada en el
 // registro: ni cabeceras, ni cuerpos, ni el certificado, ni el CSV.
 
-import { llamarConCertificado, type MaterialCertificado, type Opciones as OpcionesMtls } from '../certificados/mtls.ts'
+import { destinoPermitido, llamarConCertificado, type MaterialCertificado, type Opciones as OpcionesMtls } from '../certificados/mtls.ts'
 import type { Firmante } from '../certificados/leerP12.ts'
 
 export type Entorno = 'cerrada' | 'doble' | 'pruebas' | 'produccion'
@@ -237,6 +237,10 @@ export class HaciendaAeat implements Hacienda {
     if (!/(^|\.)agenciatributaria\.gob\.es$|(^|\.)aeat\.es$/.test(host)) {
       return { ok: false, motivo: 'no_es_pdf', mensaje: 'La dirección del justificante no es de Hacienda: no se baja.' }
     }
+    // V05: tampoco sin certificado se sale de la lista de destinos (solo pruebas).
+    if (!destinoPermitido(url)) {
+      return { ok: false, motivo: 'no_responde', mensaje: 'Sumied solo habla con el entorno de pruebas de Hacienda: este justificante no se baja desde aquí.' }
+    }
     try {
       const s = await this.pedirSinCertificado(url)
       if (s.status !== 200) return { ok: false, motivo: 'no_responde', mensaje: 'Hacienda no da el justificante desde aquí.' }
@@ -255,6 +259,13 @@ export class HaciendaAeat implements Hacienda {
 // ── El freno ────────────────────────────────────────────────────────────────
 export const CERRADA =
   'Todavía no se presenta desde Sumied: la conexión con Hacienda no está abierta. No se ha enviado nada.'
+
+/** V05 · Probar con la puerta cerrada: la culpa es nuestra, no del certificado. */
+export const CERRADA_PROBAR =
+  'Tu certificado está bien guardado y no se ha usado: la conexión de Sumied con Hacienda todavía no está abierta. No es cosa de tu certificado. No se ha enviado nada.'
+
+export const PRODUCCION_CERRADA =
+  'Sumied todavía no presenta en Hacienda de verdad: solo habla con su entorno de pruebas. No se ha enviado nada.'
 
 /**
  * Las condiciones para abrir la puerta, sin red:
@@ -288,8 +299,9 @@ export function comprobarPuerta(a: { entorno: string | undefined; autorizacion: 
     return 'pruebas'
   }
   if (entorno === 'produccion') {
-    if ((a.autorizacion ?? '').trim() !== 'produccion') throw new PuertaCerrada('Presentar en Hacienda de verdad no está autorizado. No se ha enviado nada.')
-    return 'produccion'
+    // V05 (25/11): la dirección de producción de Hacienda está cerrada en el
+    // programa (mtls.ts, DESTINOS_CON_CERTIFICADO). Ningún secreto la abre.
+    throw new PuertaCerrada(PRODUCCION_CERRADA)
   }
   throw new PuertaCerrada(`«${entorno}» no es un entorno de Hacienda. No se ha enviado nada.`)
 }

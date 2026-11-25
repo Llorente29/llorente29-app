@@ -44,12 +44,29 @@ export function lineaCertificado(c: Certificado): string {
   return `${tipo} ${c.titular} · ${c.estado === 'expired' ? 'caducó' : 'válido hasta'} el ${fecha(c.caduca)}`
 }
 
+/**
+ * V05 · De quién es la culpa de la última prueba fallida, por lo que dejó
+ * escrito conta-hacienda. Del certificado solo si Hacienda lo rechazó o no se
+ * pudo abrir; si no llegamos a Hacienda (la conexión cerrada, la red, el
+ * tiempo), es de Sumied, y el certificado no se marca como malo.
+ */
+export function culpaDeLaPrueba(mensaje: string | null): 'certificado' | 'sumied' {
+  const m = (mensaje ?? '').toLowerCase()
+  if (m.startsWith('no se ha podido probar')) return 'sumied'
+  if (/conexión con hacienda (todavía )?no está abierta|no es cosa de tu certificado|no ha contestado en|se ha cortado la conexión|entorno de pruebas de hacienda|error suyo/.test(m)) return 'sumied'
+  return 'certificado'
+}
+
 /** Los chips de debajo: si funciona (la última prueba), quién puede presentar y quién solo ver. */
 export function chipsCertificado(c: Certificado): { tono: 'seguro' | 'falta' | 'neutro' | 'duda'; texto: string }[] {
   const out: { tono: 'seguro' | 'falta' | 'neutro' | 'duda'; texto: string }[] = []
   if (c.estado === 'active') {
     if (c.prueba === 'ok' && c.probado) out.push({ tono: 'seguro', texto: `Funciona · probado con Hacienda el ${diaMesCorto(c.probado)}` })
-    else if (c.prueba === 'error' && c.probado) out.push({ tono: 'falta', texto: `No funcionó al probarlo el ${diaMesCorto(c.probado)}` })
+    else if (c.prueba === 'error' && c.probado) {
+      out.push(culpaDeLaPrueba(c.prueba_mensaje) === 'certificado'
+        ? { tono: 'falta', texto: `Hacienda no lo aceptó al probarlo el ${diaMesCorto(c.probado)}` }
+        : { tono: 'duda', texto: `No se pudo probar el ${diaMesCorto(c.probado)}: no es cosa del certificado` })
+    }
     else out.push({ tono: 'duda', texto: 'Aún sin probar con Hacienda' })
   }
   const presentan = c.permisos.filter((p) => p.permiso === 'file').map((p) => p.nombre)

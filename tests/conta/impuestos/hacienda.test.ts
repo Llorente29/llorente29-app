@@ -11,8 +11,10 @@ import { firmanteDelPem } from '../../../supabase/functions/_shared/certificados
 import { AlmacenNoDeja, type Almacen, type ClienteBase } from '../../../supabase/functions/_shared/certificados/almacen'
 import { HaciendaDoble } from '../../../supabase/functions/_shared/hacienda/doble'
 import {
-  CERRADA, comprobarPuerta, HaciendaCerrada, leerConsulta, leerPresentacion, PuertaCerrada, RespuestaRara,
+  CERRADA, CERRADA_PROBAR, comprobarPuerta, HaciendaCerrada, PRODUCCION_CERRADA, leerConsulta, leerPresentacion, PuertaCerrada, RespuestaRara,
+  DIRECCIONES,
 } from '../../../supabase/functions/_shared/hacienda/puerta'
+import { DESTINO_CERRADO, destinoPermitido, LlamadaFallida, llamarConCertificado } from '../../../supabase/functions/_shared/certificados/mtls'
 import { contabilizarTrasPresentar, type Dependencias, fichero303, presentar303, probar, yaPresentadoFuera } from '../../../supabase/functions/_shared/hacienda/acciones'
 
 const CUENTA = 'c0000000-0000-4000-8000-00000000000a'
@@ -210,6 +212,36 @@ describe('probar con Hacienda', () => {
     expect(s.mensaje).toMatch(/^No funciona: No se ha podido preparar la conexión con este certificado/)
     expect(e.usos[0].resultado).toBe('error')
   })
+
+  it('V05 · con la conexión cerrada no se abre el certificado, no se apunta un uso y la culpa es de Sumied', async () => {
+    const e = entorno({ hacienda: new HaciendaCerrada() })
+    const s = await probar(e.d, { usuario: 'u-1', confirmacion: CONF })
+    expect(s).toEqual({ ok: false, motivo: 'cerrada', culpa: 'sumied', mensaje: CERRADA_PROBAR })
+    expect(s.mensaje).toContain('No es cosa de tu certificado')
+    expect(e.usos).toEqual([])
+  })
+})
+
+describe('V05 · la lista de destinos: con certificado, solo el entorno de pruebas de Hacienda', () => {
+  it('prewww1 y prewww2 sí; www1, www2 y cualquier otro, no', () => {
+    expect(destinoPermitido('https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP')).toBe(true)
+    expect(destinoPermitido('https://prewww2.aeat.es/wlpl/inwinvoc/x')).toBe(true)
+    expect(destinoPermitido('https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP')).toBe(false)
+    expect(destinoPermitido('https://www2.agenciatributaria.gob.es/x')).toBe(false)
+    expect(destinoPermitido('http://prewww1.aeat.es/x')).toBe(false)
+    expect(destinoPermitido('https://prewww1.aeat.es:8443/x')).toBe(false)
+    expect(destinoPermitido('https://prewww1.aeat.es.otro.com/x')).toBe(false)
+    expect(destinoPermitido('no es una url')).toBe(false)
+  })
+  it('a producción no sale nada: ni se abre el cliente con el certificado', async () => {
+    let abierto = 0
+    const e = await llamarConCertificado({ cert: 'C', key: 'K' }, DIRECCIONES.produccion.consultar, {}, {
+      crearCliente: () => { abierto++; return { close() {} } }, pedir: async () => new Response('x'),
+    }).catch((x) => x)
+    expect(e).toBeInstanceOf(LlamadaFallida)
+    expect(e).toMatchObject({ motivo: 'destino', message: DESTINO_CERRADO })
+    expect(abierto).toBe(0)
+  })
 })
 
 describe('«Ya lo presenté fuera»', () => {
@@ -276,9 +308,9 @@ describe('la puerta: cerrada salvo que Julio la abra', () => {
     expect(p(new Date('2026-10-19T05:30:00Z'), 'pruebas:2026-10-19')).toThrow(PuertaCerrada) // 7:30
     expect(p(new Date('2026-10-17T08:00:00Z'), 'pruebas:2026-10-17')).toThrow(PuertaCerrada) // sábado
   })
-  it('producción: solo con su autorización', () => {
-    expect(() => comprobarPuerta({ entorno: 'produccion', autorizacion: undefined, ahora: lunes10, esProduccion: true })).toThrow('Presentar en Hacienda de verdad no está autorizado. No se ha enviado nada.')
-    expect(comprobarPuerta({ entorno: 'produccion', autorizacion: 'produccion', ahora: lunes10, esProduccion: true })).toBe('produccion')
+  it('V05 · producción: cerrada en el programa, también con su autorización', () => {
+    expect(() => comprobarPuerta({ entorno: 'produccion', autorizacion: undefined, ahora: lunes10, esProduccion: true })).toThrow(PRODUCCION_CERRADA)
+    expect(() => comprobarPuerta({ entorno: 'produccion', autorizacion: 'produccion', ahora: lunes10, esProduccion: true })).toThrow(PRODUCCION_CERRADA)
     expect(() => comprobarPuerta({ entorno: 'www1', autorizacion: 'produccion', ahora: lunes10, esProduccion: true })).toThrow(PuertaCerrada)
   })
 })

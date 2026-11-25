@@ -130,7 +130,7 @@ describe('llamarConCertificado: termina siempre, y no escribe nada en el registr
 
   it('contesta: devuelve estado, cuerpo y tipo, y cierra el cliente', async () => {
     const c = cliente()
-    const r = await llamarConCertificado(MATERIAL, 'https://ejemplo.invalid/', { method: 'POST' }, {
+    const r = await llamarConCertificado(MATERIAL, 'https://prewww1.aeat.es/prueba', { method: 'POST' }, {
       crearCliente: (m) => { expect(m).toBe(MATERIAL); return c },
       pedir: async (_u, init) => { expect(init.client).toBe(c); return new Response('{"ok":1}', { status: 200, headers: { 'content-type': 'application/json' } }) },
     })
@@ -139,14 +139,14 @@ describe('llamarConCertificado: termina siempre, y no escribe nada en el registr
   })
 
   it('sin certificado el otro lado contesta HTTP (un 400): es una respuesta, no un fallo', async () => {
-    const r = await llamarConCertificado(MATERIAL, 'https://ejemplo.invalid/', {}, { crearCliente: cliente, pedir: async () => new Response('No required SSL certificate was sent', { status: 400 }) })
+    const r = await llamarConCertificado(MATERIAL, 'https://prewww1.aeat.es/prueba', {}, { crearCliente: cliente, pedir: async () => new Response('No required SSL certificate was sent', { status: 400 }) })
     expect(r.status).toBe(400)
   })
 
   it('no contesta y NO hace caso de la señal (lo de la prueba mTLS): falla a tiempo, lo dice y cierra', async () => {
     const c = cliente()
     const empieza = Date.now()
-    const e = await llamarConCertificado(MATERIAL, 'https://ejemplo.invalid/', {}, {
+    const e = await llamarConCertificado(MATERIAL, 'https://prewww1.aeat.es/prueba', {}, {
       crearCliente: () => c, pedir: () => new Promise<Response>(() => {}), limiteMs: 60,
     }).catch((x: unknown) => x)
     expect(e).toBeInstanceOf(LlamadaFallida)
@@ -157,7 +157,7 @@ describe('llamarConCertificado: termina siempre, y no escribe nada en el registr
   })
 
   it('no contesta y sí hace caso de la señal: también «tiempo»', async () => {
-    const e = await llamarConCertificado(MATERIAL, 'https://ejemplo.invalid/', {}, {
+    const e = await llamarConCertificado(MATERIAL, 'https://prewww1.aeat.es/prueba', {}, {
       crearCliente: cliente,
       pedir: (_u, init) => new Promise<Response>((_, mal) => init.signal?.addEventListener('abort', () => mal(new DOMException('abortada', 'AbortError')))),
       limiteMs: 1000 * 2,
@@ -167,13 +167,13 @@ describe('llamarConCertificado: termina siempre, y no escribe nada en el registr
   })
 
   it('se corta la conexión: «conexion», sin prometer que no llegó', async () => {
-    const e = await llamarConCertificado(MATERIAL, 'https://ejemplo.invalid/', {}, { crearCliente: cliente, pedir: () => Promise.reject(new TypeError('connection reset')) }).catch((x: unknown) => x)
+    const e = await llamarConCertificado(MATERIAL, 'https://prewww1.aeat.es/prueba', {}, { crearCliente: cliente, pedir: () => Promise.reject(new TypeError('connection reset')) }).catch((x: unknown) => x)
     expect((e as LlamadaFallida).motivo).toBe('conexion')
     expect((e as LlamadaFallida).message).toBe('Se ha cortado la conexión con Hacienda. Compruébalo antes de repetir.')
   })
 
   it('no se puede preparar el cliente con ese material: «certificado», y el mensaje no lleva nada de él', async () => {
-    const e = await llamarConCertificado(MATERIAL, 'https://ejemplo.invalid/', {}, {
+    const e = await llamarConCertificado(MATERIAL, 'https://prewww1.aeat.es/prueba', {}, {
       crearCliente: (): ClienteHttp => { throw new Error(`clave mala ${MATERIAL.key}`) }, pedir: async () => new Response(''),
     }).catch((x: unknown) => x)
     expect((e as LlamadaFallida).motivo).toBe('certificado')
