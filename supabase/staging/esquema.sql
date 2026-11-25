@@ -112780,6 +112780,75 @@ COMMENT ON FUNCTION public.verifactu_cert_abrir_cuadre(p_cuadre uuid) IS 'V03 E3
 
 
 --
+-- Name: verifactu_cert_abrir_pruebas(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.verifactu_cert_abrir_pruebas(p_company uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_co public.company; v_emp public.verifactu_empresa; v_a public.verifactu_autorizacion; c public.tax_certificate; v_material text; v_motivo text; v_demo boolean;
+begin
+  select * into v_co from public.company where id = p_company;
+  if v_co.id is null then return jsonb_build_object('ok', false, 'mensaje', 'Esa empresa no está.'); end if;
+  select coalesce(a.is_demo, false) into v_demo from public.accounts a where a.id = v_co.account_id;
+  select * into v_emp from public.verifactu_empresa where company_id = p_company;
+  select * into v_a from public.verifactu_autorizacion where company_id = p_company and retirada_at is null;
+  select * into c from public.tax_certificate where id = v_a.certificate_id;
+  v_motivo := case
+    when coalesce(v_demo, false) then 'Una empresa de demostración no habla con Hacienda.'
+    when v_emp.via is distinct from 'certificado' then 'La empresa no envía con su certificado: autorízalo para Verifactu primero.'
+    when v_a.id is null then 'La empresa no ha autorizado usar su certificado para Verifactu (o lo ha retirado).'
+    when c.id is null or c.status = 'removed' then 'El certificado autorizado se ha quitado: autoriza uno nuevo.'
+    when c.valid_to <= now() then 'El certificado autorizado ha caducado: sube uno nuevo y autorízalo.'
+    when c.storage <> 'vault' then 'El certificado está en el almacén con clave externa (KMS), que todavía no está preparado.'
+    else null end;
+  if v_motivo is not null then return jsonb_build_object('ok', false, 'mensaje', v_motivo); end if;
+  select decrypted_secret into v_material from vault.decrypted_secrets where id = c.vault_secret_id;
+  if v_material is null then return jsonb_build_object('ok', false, 'mensaje', 'El certificado no está en el almacén: vuelve a subirlo.'); end if;
+  return jsonb_build_object('ok', true, 'material', v_material, 'autorizacion_id', v_a.id,
+    'nif', regexp_replace(upper(btrim(coalesce(v_co.tax_id, ''))), '^ES', ''), 'nombre', coalesce(v_co.legal_name, v_co.trade_name));
+end $$;
+
+
+--
+-- Name: FUNCTION verifactu_cert_abrir_pruebas(p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.verifactu_cert_abrir_pruebas(p_company uuid) IS 'V05. Solo la clave de servicio (conta-verifactu): abre el certificado que la empresa autorizó para Verifactu, para UNA prueba de conexión con el entorno de pruebas de la AEAT. Nunca para una demo. Para nada más.';
+
+
+--
+-- Name: verifactu_cert_abrir_pruebas_envio(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.verifactu_cert_abrir_pruebas_envio(p_envio uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_e public.verifactu_envio; v_emp public.verifactu_empresa; v_r jsonb;
+begin
+  select * into v_e from public.verifactu_envio where id = p_envio for update;
+  if v_e.id is null then return jsonb_build_object('ok', false, 'mensaje', 'Ese envío no está.'); end if;
+  if v_e.entorno <> 'pruebas' then return jsonb_build_object('ok', false, 'mensaje', 'Solo se abre para enviar al entorno de pruebas.'); end if;
+  select * into v_emp from public.verifactu_empresa where company_id = v_e.company_id;
+  if v_emp.modo is distinct from 'pruebas' then return jsonb_build_object('ok', false, 'mensaje', 'La empresa no está en pruebas.'); end if;
+  v_r := public.verifactu_cert_abrir_pruebas(v_e.company_id);
+  if (v_r->>'ok')::boolean then
+    update public.verifactu_envio set autorizacion_id = (v_r->>'autorizacion_id')::uuid where id = p_envio;
+  end if;
+  return v_r - 'nif' - 'nombre';
+end $$;
+
+
+--
+-- Name: FUNCTION verifactu_cert_abrir_pruebas_envio(p_envio uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.verifactu_cert_abrir_pruebas_envio(p_envio uuid) IS 'V05. Solo la clave de servicio (conta-verifactu): abre el certificado autorizado de la empresa para UN envío de pruebas, si la empresa está en pruebas, y apunta la autorización en el envío.';
+
+
+--
 -- Name: verifactu_cola_fallo(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -113061,6 +113130,33 @@ COMMENT ON FUNCTION public.verifactu_conexion_probada(p_entorno text, p_nif text
 
 
 --
+-- Name: verifactu_conexion_ultima(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.verifactu_conexion_ultima(p_company uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_co public.company; v_c public.verifactu_conexion;
+begin
+  select * into v_co from public.company where id = p_company;
+  if v_co.id is null or not public.belongs_to_account(v_co.account_id) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  select * into v_c from public.verifactu_conexion c
+   where c.entorno = 'pruebas' and c.nif = regexp_replace(upper(btrim(coalesce(v_co.tax_id, ''))), '^ES', '')
+   order by c.probada_at desc limit 1;
+  if v_c.id is null then return null; end if;
+  return jsonb_build_object('ok', v_c.ok, 'codigo', v_c.codigo, 'mensaje', v_c.mensaje, 'probada_at', v_c.probada_at);
+end $$;
+
+
+--
+-- Name: FUNCTION verifactu_conexion_ultima(p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.verifactu_conexion_ultima(p_company uuid) IS 'V05. La última prueba de conexión con el entorno de pruebas de la AEAT con el NIF de la empresa: si salió bien, qué contestó y cuándo. Para la pantalla.';
+
+
+--
 -- Name: verifactu_cuadre_fallo(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -113318,6 +113414,47 @@ COMMENT ON FUNCTION public.verifactu_despertar_demos() IS 'G05 · Cada minuto (c
 
 
 --
+-- Name: verifactu_despertar_empresa(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.verifactu_despertar_empresa(p_company uuid, p_accion text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_co public.company; v_emp public.verifactu_empresa; v_secreto text; v_id bigint;
+begin
+  select * into v_co from public.company where id = p_company;
+  if v_co.id is null or not public.belongs_to_account(v_co.account_id) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_co.account_id) then raise exception 'Solo un administrador o un encargado de la cuenta prueba Verifactu.' using errcode = '42501'; end if;
+  if p_accion not in ('probar_conexion', 'preparar_pruebas', 'enviar') then raise exception 'Eso no se puede pedir.' using errcode = '22023'; end if;
+  if exists (select 1 from public.accounts a where a.id = v_co.account_id and a.is_demo) then
+    raise exception 'Una empresa de demostración no habla con Hacienda.' using errcode = '42501';
+  end if;
+  select * into v_emp from public.verifactu_empresa where company_id = p_company;
+  if p_accion <> 'probar_conexion' and v_emp.modo is distinct from 'pruebas' then
+    raise exception 'Primero pon Verifactu en pruebas.' using errcode = '23514';
+  end if;
+  select decrypted_secret into v_secreto from vault.decrypted_secrets where name = 'cron_secret';
+  if v_secreto is null then
+    raise exception 'Falta cron_secret en el Vault: no se puede despertar a conta-verifactu.' using errcode = '55000';
+  end if;
+  select net.http_post(
+    url := public._project_url() || '/functions/v1/conta-verifactu',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
+    body := jsonb_build_object('entorno', 'pruebas_empresas', 'accion', p_accion, 'company_id', p_company),
+    timeout_milliseconds := 150000) into v_id;
+  return jsonb_build_object('pedido', true, 'accion', p_accion, 'pedido_at', now());
+end $$;
+
+
+--
+-- Name: FUNCTION verifactu_despertar_empresa(p_company uuid, p_accion text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.verifactu_despertar_empresa(p_company uuid, p_accion text) IS 'V05. Un administrador o encargado pide a conta-verifactu, para su empresa y solo en el entorno de pruebas: probar la conexión, lanzar las facturas de prueba o enviar. La función solo lo hace si Julio ha abierto ese día (CONTA_VERIFACTU_EMPRESAS); si no, contesta cerrada y no sale nada.';
+
+
+--
 -- Name: verifactu_modo(uuid, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -113547,6 +113684,51 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.verifactu_previsto(p_invoice uuid, p_accion text, p_cambios jsonb) IS 'V03 E3 · «Me he equivocado en…» (tablero 27): qué va a pasar si se rectifica, se anula o se subsana una factura emitida, antes de hacerlo. Solo lee. {accion, puede, frase, aviso, cambios [{campo, que, antes, despues}], numero}. verifactu_anular_factura y verifactu_subsanar paran con esta misma frase.';
+
+
+--
+-- Name: verifactu_pruebas_resumen(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.verifactu_pruebas_resumen(p_company uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_co public.company; v_res jsonb;
+begin
+  select * into v_co from public.company where id = p_company;
+  if v_co.id is null or not public.belongs_to_account(v_co.account_id) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  select jsonb_build_object(
+    'total', count(*),
+    'pendientes', count(*) filter (where r.estado in ('pendiente', 'enviando')),
+    'correctas', count(*) filter (where r.estado = 'correcto'),
+    'con_errores', count(*) filter (where r.estado = 'aceptado_con_errores'),
+    'rechazadas', count(*) filter (where r.estado = 'incorrecto'),
+    'ultimo_rechazo', (select jsonb_build_object('num_serie', x.num_serie, 'codigo', x.codigo_error, 'texto', x.descripcion_error)
+                         from public.verifactu_registro x
+                        where x.company_id = p_company and x.entorno = 'pruebas' and x.estado = 'incorrecto'
+                        order by x.respondido_at desc nulls last limit 1),
+    'ultimo_fallo', (select jsonb_build_object('error', left(e.error, 300), 'cuando', e.terminado_at)
+                       from public.verifactu_envio e
+                      where e.company_id = p_company and e.entorno = 'pruebas' and e.error is not null
+                      order by e.empezado_at desc limit 1),
+    'para_qr', (select jsonb_build_object('nif', x.nif_emisor, 'num_serie', x.num_serie, 'fecha', to_char(x.fecha_expedicion, 'DD-MM-YYYY'),
+                                          'importe', to_char(x.importe_total, 'FM999999999990.00'))
+                  from public.verifactu_registro x
+                 where x.company_id = p_company and x.entorno = 'pruebas' and x.tipo = 'alta' and x.estado in ('correcto', 'aceptado_con_errores')
+                 order by x.respondido_at desc nulls last limit 1))
+    into v_res
+    from public.verifactu_registro r
+   where r.company_id = p_company and r.entorno = 'pruebas';
+  return v_res;
+end $$;
+
+
+--
+-- Name: FUNCTION verifactu_pruebas_resumen(p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.verifactu_pruebas_resumen(p_company uuid) IS 'V05. Cómo van los registros de PRUEBAS de la empresa: cuántos en cada estado, el último rechazo (código y texto de Hacienda), el último fallo de envío y una aceptada para escanear su QR en el cotejo de pruebas.';
 
 
 --
@@ -120671,6 +120853,87 @@ CREATE TABLE public.conta_cambio_precios_linea (
 --
 
 COMMENT ON TABLE public.conta_cambio_precios_linea IS 'G04 · Cada cliente de un «Cambiar precios», con su precio de antes y el nuevo.';
+
+
+--
+-- Name: conta_cegid_cliente; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_cegid_cliente (
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    codigo integer NOT NULL,
+    nombre_comercial text,
+    nombre_fiscal text,
+    nif text,
+    email text,
+    conceptos jsonb,
+    leido_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_cegid_cliente; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_cegid_cliente IS 'Q10 · Los clientes de la facturación de Cegid (DiezREC) de cada empresa, con sus conceptos fijos. Solo lo escribe conta-cegid-leer.';
+
+
+--
+-- Name: conta_cegid_concepto; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_cegid_concepto (
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    codigo text NOT NULL,
+    descripcion text,
+    importe numeric,
+    area integer,
+    extraordinario boolean,
+    por_iva numeric,
+    con_retencion boolean,
+    iva_incluido boolean,
+    leido_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_cegid_concepto; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_cegid_concepto IS 'Q10 · Los conceptos de facturación de Cegid (DiezREC) de cada empresa. Solo lo escribe conta-cegid-leer.';
+
+
+--
+-- Name: conta_cegid_factura; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_cegid_factura (
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    ejercicio integer NOT NULL,
+    serie text NOT NULL,
+    codigo integer NOT NULL,
+    cliente integer,
+    nombre_fiscal text,
+    nif text,
+    fecha_cegid bigint,
+    base numeric,
+    iva numeric,
+    retencion numeric,
+    porcentaje_retencion numeric,
+    total numeric,
+    lineas jsonb DEFAULT '[]'::jsonb NOT NULL,
+    leido_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_cegid_factura; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_cegid_factura IS 'Q10 · Las facturas emitidas en la facturación de Cegid (DiezREC) de cada empresa, con sus líneas. Solo lo escribe conta-cegid-leer.';
 
 
 --
@@ -140793,6 +141056,30 @@ ALTER TABLE ONLY public.conta_cambio_precios
 
 
 --
+-- Name: conta_cegid_cliente conta_cegid_cliente_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_cliente
+    ADD CONSTRAINT conta_cegid_cliente_pkey PRIMARY KEY (company_id, codigo);
+
+
+--
+-- Name: conta_cegid_concepto conta_cegid_concepto_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_concepto
+    ADD CONSTRAINT conta_cegid_concepto_pkey PRIMARY KEY (company_id, codigo);
+
+
+--
+-- Name: conta_cegid_factura conta_cegid_factura_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_factura
+    ADD CONSTRAINT conta_cegid_factura_pkey PRIMARY KEY (company_id, ejercicio, serie, codigo);
+
+
+--
 -- Name: conta_cierre_ajuste conta_cierre_ajuste_company_id_sale_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -147339,6 +147626,13 @@ CREATE INDEX conta_bitrix_pestana_cambio_ficha_idx ON public.conta_bitrix_pestan
 --
 
 CREATE INDEX conta_bitrix_red_ficha ON public.conta_bitrix_red USING btree (account_id, crm, tipo_ficha, id_externo, campo, hecho_at DESC);
+
+
+--
+-- Name: conta_cegid_factura_cliente_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_cegid_factura_cliente_idx ON public.conta_cegid_factura USING btree (company_id, cliente);
 
 
 --
@@ -157406,6 +157700,54 @@ ALTER TABLE ONLY public.conta_cambio_precios_linea
 
 ALTER TABLE ONLY public.conta_cambio_precios_linea
     ADD CONSTRAINT conta_cambio_precios_linea_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_cegid_cliente conta_cegid_cliente_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_cliente
+    ADD CONSTRAINT conta_cegid_cliente_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cegid_cliente conta_cegid_cliente_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_cliente
+    ADD CONSTRAINT conta_cegid_cliente_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cegid_concepto conta_cegid_concepto_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_concepto
+    ADD CONSTRAINT conta_cegid_concepto_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cegid_concepto conta_cegid_concepto_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_concepto
+    ADD CONSTRAINT conta_cegid_concepto_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cegid_factura conta_cegid_factura_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_factura
+    ADD CONSTRAINT conta_cegid_factura_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cegid_factura conta_cegid_factura_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_factura
+    ADD CONSTRAINT conta_cegid_factura_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
 
 
 --
@@ -170266,6 +170608,45 @@ ALTER TABLE public.conta_cambio_precios_linea ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_cambio_precios_linea_leer ON public.conta_cambio_precios_linea FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_cegid_cliente; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_cegid_cliente ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_cegid_cliente conta_cegid_cliente_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_cegid_cliente_leer ON public.conta_cegid_cliente FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_cegid_concepto; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_cegid_concepto ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_cegid_concepto conta_cegid_concepto_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_cegid_concepto_leer ON public.conta_cegid_concepto FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_cegid_factura; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_cegid_factura ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_cegid_factura conta_cegid_factura_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_cegid_factura_leer ON public.conta_cegid_factura FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -198893,6 +199274,22 @@ GRANT ALL ON FUNCTION public.verifactu_cert_abrir_cuadre(p_cuadre uuid) TO servi
 
 
 --
+-- Name: FUNCTION verifactu_cert_abrir_pruebas(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.verifactu_cert_abrir_pruebas(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.verifactu_cert_abrir_pruebas(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION verifactu_cert_abrir_pruebas_envio(p_envio uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.verifactu_cert_abrir_pruebas_envio(p_envio uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.verifactu_cert_abrir_pruebas_envio(p_envio uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION verifactu_cola_fallo(p_envio uuid, p_error text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -198949,6 +199346,15 @@ GRANT ALL ON FUNCTION public.verifactu_conexion_apuntar(p_entorno text, p_nif te
 REVOKE ALL ON FUNCTION public.verifactu_conexion_probada(p_entorno text, p_nif text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.verifactu_conexion_probada(p_entorno text, p_nif text) TO authenticated;
 GRANT ALL ON FUNCTION public.verifactu_conexion_probada(p_entorno text, p_nif text) TO service_role;
+
+
+--
+-- Name: FUNCTION verifactu_conexion_ultima(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.verifactu_conexion_ultima(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.verifactu_conexion_ultima(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.verifactu_conexion_ultima(p_company uuid) TO service_role;
 
 
 --
@@ -199027,6 +199433,15 @@ GRANT ALL ON FUNCTION public.verifactu_despertar_demos() TO service_role;
 
 
 --
+-- Name: FUNCTION verifactu_despertar_empresa(p_company uuid, p_accion text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.verifactu_despertar_empresa(p_company uuid, p_accion text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.verifactu_despertar_empresa(p_company uuid, p_accion text) TO authenticated;
+GRANT ALL ON FUNCTION public.verifactu_despertar_empresa(p_company uuid, p_accion text) TO service_role;
+
+
+--
 -- Name: FUNCTION verifactu_modo(p_company uuid, p_modo text, p_serie text, p_confirmacion text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -199060,6 +199475,15 @@ GRANT ALL ON FUNCTION public.verifactu_otros_programas(p_company uuid, p_program
 REVOKE ALL ON FUNCTION public.verifactu_previsto(p_invoice uuid, p_accion text, p_cambios jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.verifactu_previsto(p_invoice uuid, p_accion text, p_cambios jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.verifactu_previsto(p_invoice uuid, p_accion text, p_cambios jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION verifactu_pruebas_resumen(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.verifactu_pruebas_resumen(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.verifactu_pruebas_resumen(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.verifactu_pruebas_resumen(p_company uuid) TO service_role;
 
 
 --
@@ -201014,6 +201438,30 @@ GRANT SELECT ON TABLE public.conta_cambio_precios TO authenticated;
 
 GRANT ALL ON TABLE public.conta_cambio_precios_linea TO service_role;
 GRANT SELECT ON TABLE public.conta_cambio_precios_linea TO authenticated;
+
+
+--
+-- Name: TABLE conta_cegid_cliente; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_cegid_cliente TO authenticated;
+GRANT ALL ON TABLE public.conta_cegid_cliente TO service_role;
+
+
+--
+-- Name: TABLE conta_cegid_concepto; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_cegid_concepto TO authenticated;
+GRANT ALL ON TABLE public.conta_cegid_concepto TO service_role;
+
+
+--
+-- Name: TABLE conta_cegid_factura; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_cegid_factura TO authenticated;
+GRANT ALL ON TABLE public.conta_cegid_factura TO service_role;
 
 
 --
