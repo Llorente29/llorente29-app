@@ -39,7 +39,7 @@ type Fila = Record<string, unknown>
 const json = (r: Route, cuerpo: unknown) => r.fulfill({ status: 200, contentType: 'application/json', headers: { 'content-range': '*/*' }, body: JSON.stringify(cuerpo) })
 
 /** Q: una sociedad (sin retención); A: una autónoma (con retención). Los mismos cobros, con sus importes de verdad. */
-async function simular(page: Page, Q: string, A: string) {
+async function simular(page: Page, Q: string, A: string, conectada = true) {
   const NIF = { [Q]: 'B00000000', [A]: '00000000T' }
   const NOMBRE = { [Q]: 'Gestoría de Prueba Norte, S.L.', [A]: 'Autónoma de Prueba' }
   await page.route(/\/rest\/v1\/company\?/, async (r) => {
@@ -99,8 +99,8 @@ async function simular(page: Page, Q: string, A: string) {
   // La conexión: el conector, la de la cuenta (con claves) y la de cada sociedad (con su código).
   const objeto = (r: Route, x: unknown) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(x) })
   await page.route(/\/rest\/v1\/connector\?/, (r) => objeto(r, { id: 'conector-diezrec' }))
-  await page.route(/\/rest\/v1\/account_connector\?/, (r) => json(r, [{ id: 'ac-cuenta', scope: 'account', company_id: null, external_account_id: null },
-    { id: 'ac-q', scope: 'company', company_id: Q, external_account_id: '1' }, { id: 'ac-a', scope: 'company', company_id: A, external_account_id: '1' }]))
+  await page.route(/\/rest\/v1\/account_connector\?/, (r) => json(r, conectada ? [{ id: 'ac-cuenta', scope: 'account', company_id: null, external_account_id: null },
+    { id: 'ac-q', scope: 'company', company_id: Q, external_account_id: '1' }, { id: 'ac-a', scope: 'company', company_id: A, external_account_id: '1' }] : []))
   await page.route(/\/functions\/v1\/connector-credentials/, (r) => objeto(r, { ok: true, hasCredentials: true }))
   const pedidas: Fila[] = []
   await page.route(/\/functions\/v1\/conta-cegid-leer/, (r) => {
@@ -133,6 +133,8 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     // ── La sociedad: sin retención ──
     await page.goto(`/conta/ventas/clientes-y-cuotas/facturas?empresa=${Q}&mes=${MES}`, { timeout: 30_000 })
     await expect(page.getByRole('heading', { level: 1, name: 'Las facturas de noviembre de 2026' })).toBeVisible({ timeout: 30_000 })
+    // La pestaña «Facturas del mes», en las páginas de Clientes y cuotas, y marcada (Julio, 25/11: no la encontraba).
+    await expect(page.getByRole('list', { name: 'Páginas de Clientes y cuotas' }).getByRole('link', { name: 'Facturas del mes' })).toHaveAttribute('aria-current', 'page')
     const cabecera = page.locator('[data-prueba="cabecera"]')
     // 4 cobros con todo (121 + 53 + 24,20 + 60,50 = 258,70); cobrado 258,70 + 121 + 36,30 + 99 = 515,00; faltan 3 (256,30).
     await expect(cabecera).toHaveText('Noviembre: 4 facturas, 258,70 €. GoCardless cobró 515,00 €. Faltan 3 (256,30 €): mira abajo.')
@@ -189,3 +191,23 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     expect(errores).toEqual([])
   })
 }
+
+test('«Facturas del mes» sin la conexión con Cegid: «Leer de Cegid» se ve, apagado, y dice dónde se conecta', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Las facturas del mes, en el ordenador')
+  test.setTimeout(120_000)
+  await page.setViewportSize({ width: 1366, height: 768 })
+  const errores: string[] = []
+  page.on('pageerror', (e) => errores.push(e.message))
+  const s = await entrarComo(page, CUENTA_A.email)
+  const [Q, A] = await empresas(s)
+  await simular(page, Q, A, false)
+  await page.goto(`/conta/ventas/clientes-y-cuotas/facturas?empresa=${Q}&mes=${MES}`, { timeout: 30_000 })
+  const cegid = page.locator('[data-prueba="cegid"]')
+  await expect(cegid.getByRole('button', { name: 'Leer de Cegid' })).toBeDisabled({ timeout: 30_000 })
+  await expect(cegid.locator('[data-prueba="sin-conexion"]')).toContainText('faltan las claves o el código de empresa')
+  await expect(cegid.getByRole('link', { name: 'Ponlos en Ajustes › Ejercicio › Facturación de Cegid →' })).toHaveAttribute('href', /\/conta\/ajustes\/empresa\/ejercicio$/)
+  mkdirSync(DIR, { recursive: true })
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${DIR}/facturas-del-mes-sin-conexion-1366.png` })
+  expect(errores).toEqual([])
+})

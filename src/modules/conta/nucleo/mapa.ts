@@ -172,6 +172,8 @@ const REPARTIDORES = b('repartidores', 'Repartidores', 'liquidaciones', R.repart
 const DESPACHO = b('despacho', 'Clientes del despacho', 'despacho', `${R.impuestos}/clientes`, [`${R.impuestos}/clientes`], { solo: 'asesoria', pestana: 'Clientes del despacho' })
 const CUOTAS = b('cuotas', 'Clientes y cuotas', 'clientes', R.clientesCuotas, [R.clientesCuotas], { solo: 'gestoria', pestana: 'Clientes y cuotas' })
 const TARIFAS = b('tarifas', 'Tarifa y paquetes', 'liquidaciones', R.tarifasGestoria, [R.tarifasGestoria], { solo: 'gestoria', pestana: 'Tarifa y paquetes' })
+// Q10 (25/11) · «Facturas del mes»: lo cobrado por GoCardless frente a la facturación de Cegid (antes, sin enlace aquí).
+const FACTURAS_MES = b('facturasMes', 'Facturas del mes', 'facturacion', R.facturasCuotas, [R.facturasCuotas], { solo: 'gestoria', pestana: 'Facturas del mes' })
 
 const atajo = (x: Boton): Boton => ({ ...x, atajo: true })
 
@@ -273,7 +275,7 @@ export const MODULOS: Modulo[] = [
   },
   {
     id: 'despacho', etiqueta: 'Despacho', icono: 'despacho', soloAlguna: ['asesoria', 'gestoria'],
-    pestanas: [{ id: 'clientes', etiqueta: 'Clientes', grupos: [{ titulo: 'Asesoría', botones: [DESPACHO] }, { titulo: 'Gestoría', botones: [CUOTAS, TARIFAS] }] }],
+    pestanas: [{ id: 'clientes', etiqueta: 'Clientes', grupos: [{ titulo: 'Asesoría', botones: [DESPACHO] }, { titulo: 'Gestoría', botones: [CUOTAS, FACTURAS_MES, TARIFAS] }] }],
   },
 ]
 

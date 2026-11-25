@@ -27,17 +27,18 @@ const vistaAntes = (quien: string) => Object.fromEntries(Object.entries(ANTES.em
  * G04 (maqueta del 08/11) · El único cambio que se quiere en el menú: «Clientes
  * y cuotas» deja de ser una pestaña de Ventas y pasa a ser un apartado propio,
  * con Clientes y Tarifa y paquetes (solo donde salía: con el sector Gestoría).
- * Lo demás, igual que en la foto de antes.
+ * Q10 (25/11): y «Facturas del mes» entre las dos (Julio no encontraba «Leer de
+ * Cegid»). Lo demás, igual que en la foto de antes.
  */
 function conG04(v: unknown): unknown {
   const x = v as { menu: string[]; ordenes: string[] }
   if (!x.menu.some((l) => l.startsWith('facturacion:') && l.split(' ').includes('clientesCuotas'))) return v
   const menu = x.menu.flatMap((l) => (l.startsWith('facturacion:')
-    ? ['clientesCuotas: clientesGestoria tarifasGestoria', l.split(' ').filter((t) => t !== 'clientesCuotas').join(' ')] : [l]))
+    ? ['clientesCuotas: clientesGestoria facturasCuotas tarifasGestoria', l.split(' ').filter((t) => t !== 'clientesCuotas').join(' ')] : [l]))
   // En el buscador, sus dos entradas van donde va el apartado: antes de las de Ventas.
   const ordenes = x.ordenes.filter((o) => o !== 'ir.facturacion.clientesCuotas')
   const i = ordenes.findIndex((o) => o.startsWith('ir.facturacion.'))
-  ordenes.splice(i < 0 ? ordenes.length : i, 0, 'ir.clientesCuotas.clientesGestoria', 'ir.clientesCuotas.tarifasGestoria')
+  ordenes.splice(i < 0 ? ordenes.length : i, 0, 'ir.clientesCuotas.clientesGestoria', 'ir.clientesCuotas.facturasCuotas', 'ir.clientesCuotas.tarifasGestoria')
   return { ...x, menu, ordenes }
 }
 

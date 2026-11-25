@@ -8,6 +8,7 @@
 //   · la TABLA DE EQUIVALENCIAS: cada concepto de GoCardless con el concepto de Cegid que propone lo que ya pasó, sus
 //     pruebas, la serie y si lleva retención. Julio la confirma antes de mandar nada (respuesta 1, punto 3).
 
+import { Link } from 'react-router-dom'
 import { eurQ10 } from './facturasDelMes'
 import type { FilaEquivalencia } from './equivalencias'
 
@@ -36,16 +37,16 @@ export function CegidQ10(p: PropsCegidQ10) {
   return (
     <section className="g4-bloque q10-cegid" aria-labelledby="q10-cegid" data-prueba="cegid">
       <h2 id="q10-cegid" className="g4-bloque-titulo">La facturación de Cegid</h2>
+      {/* El botón, siempre a la vista; sin la conexión, apagado y diciendo por qué y dónde se conecta (Julio, 25/11: no lo encontraba). */}
+      <div><button type="button" className="g4-boton" data-tipo="primario" disabled={leyendo || !p.conectada} onClick={p.alLeer}
+        title={p.conectada ? undefined : 'Faltan las claves o el código de empresa de Cegid'}>{leyendo ? 'Leyendo de Cegid…' : p.leidoAt ? 'Volver a leer de Cegid' : 'Leer de Cegid'}</button></div>
       {!p.conectada ? (
-        <p className="q10-linea">Esta empresa aún no está conectada con la facturación de Cegid. <a href={p.rutaConectar}>Conéctala en Ajustes →</a></p>
+        <p className="q10-linea" data-prueba="sin-conexion">Para leer, esta empresa tiene que estar conectada con la facturación de Cegid: faltan las claves o el código de empresa. <Link to={p.rutaConectar}>Ponlos en Ajustes › Ejercicio › Facturación de Cegid →</Link></p>
       ) : (
-        <>
-          <p className="q10-linea">{p.leidoAt ? `Leído de Cegid el ${fechaHora(p.leidoAt)}.` : 'Aún no se ha leído nada de Cegid.'} Solo se lee: no se escribe nada en Cegid.</p>
-          {p.lectura && <p className="q10-linea" data-prueba="lectura" data-tono={p.lectura.estado === 'fallo' ? 'mal' : p.lectura.estado === 'leido' ? 'bien' : undefined}
-            role={p.lectura.estado === 'fallo' ? 'alert' : 'status'}>{p.lectura.frase}</p>}
-          <div><button type="button" className="g4-boton" data-tipo="primario" disabled={leyendo} onClick={p.alLeer}>{leyendo ? 'Leyendo de Cegid…' : p.leidoAt ? 'Volver a leer de Cegid' : 'Leer de Cegid'}</button></div>
-        </>
+        <p className="q10-linea">{p.leidoAt ? `Leído de Cegid el ${fechaHora(p.leidoAt)}.` : 'Aún no se ha leído nada de Cegid.'} Solo se lee: no se escribe nada en Cegid.</p>
       )}
+      {p.lectura && <p className="q10-linea" data-prueba="lectura" data-tono={p.lectura.estado === 'fallo' ? 'mal' : p.lectura.estado === 'leido' ? 'bien' : undefined}
+        role={p.lectura.estado === 'fallo' ? 'alert' : 'status'}>{p.lectura.frase}</p>}
       {p.codigos && <p className="q10-linea" data-prueba="codigos">{p.codigos}</p>}
       {p.tabla && p.tabla.length > 0 && (
         <>
