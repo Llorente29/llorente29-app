@@ -11,6 +11,8 @@
 --   2. conta_traer_deshacer (la misma firma; la de antes, guardada): deshacer la carga quita los ejercicios que creó y deja
 --      el primero de antes sin anterior, como estaba.
 -- Las dos, enteras: la del X14 · 1 (1552, en producción) con el trozo nuevo (los dos marcados «X14 · 1b»).
+-- sin hueco: el fichero no retira nada al aplicarse. El «delete from public.journal_entry» es el de siempre de
+-- conta_traer_deshacer (los asientos traídos en borrador de una carga en prueba), dentro de la función, sin cambios.
 -- Nada en el camino del pedido. El real lo lanza Julio. Vuelta atrás: las dos funciones de sus respaldos.
 
 -- 1 · conta_traer_cargar: crea los ejercicios que falten ---------------------------------------------------------------
