@@ -1,0 +1,11 @@
+[
+ {
+  "id": "801-1",
+  "pr": 801,
+  "fecha": "2026-11-25T10:52:08Z",
+  "producto": "sumied",
+  "apartado": "Revisar el cobro",
+  "frase": "con la cuenta real de GoCardless, compara lo que cobraría Sumied con lo que va a cobrar GoCardless, cliente a cliente, con las diferencias arriba y su Excel. No envía nada.",
+  "ruta": null
+ }
+]
