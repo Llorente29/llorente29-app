@@ -14,6 +14,7 @@
 --   negativo al debe      · solo el debe, y negativo.
 --   negativo al haber     · solo el haber, y negativo.
 -- Por cada clase, cuántas líneas y en cuántos asientos; por carga, ejercicio a ejercicio (el año de la fecha del asiento).
+-- Y, siempre, la tabla entera (cuántas cargas a medias y cuántas líneas en su cola), etiquetada como tal (regla 9).
 with c as (
   select r.id carga, r.account_id cuenta
     from public.import_run r
@@ -33,6 +34,9 @@ with c as (
     from l
 )
 select clave, valor from (
+  select -1 o, 'tabla entera · cargas a medias (cuántas · líneas en su cola)' clave,
+         (select count(*) from c) || ' · ' || (select count(*) from l) valor
+  union all
   select 0 o, 'cuenta ' || cuenta || ' · carga ' || carga || ' · asientos en la cola (cuántos · ya pasados)' clave,
          count(distinct orden) || ' · ' || count(distinct orden) filter (where hecho) valor
     from l group by cuenta, carga
