@@ -10,10 +10,11 @@
 //   · Decidir: «Aprobar» / «Este mes no» (conta_cobro_decidir) y «Aprobar los
 //     N» iguales (conta_cobro_aprobar_iguales). Cada una devuelve su frase.
 
-import { rpc } from '@/modules/conta/services/bd'
+import { rpc, tabla } from '@/modules/conta/services/bd'
 import { supabase } from '@/lib/supabase'
 import type { DatosCobro } from './modeloCobro'
 import type { DatosFichaRecibo } from './modeloFicha'
+import type { ClienteGc, EnlaceGc, ReciboSumied, SuscripcionGc } from './frenteAGocardless'
 
 type Fila = Record<string, unknown>
 
@@ -66,3 +67,43 @@ export async function leerFichaRecibo(cuenta: string, factura: string): Promise<
   const d = await rpc<DatosFichaRecibo | null>('conta_pantalla_factura_recibo', { p_cuenta: cuenta, p_factura: factura })
   return d && d.recibo ? { ...d, eventos: d.eventos ?? [], asientos: d.asientos ?? [] } : null
 }
+
+// ── Q08 · Paso 3 · Frente a GoCardless ──────────────────────────────────────
+//
+// Lo que cobraría Sumied (conta_recibo del mes) al lado de lo que va a cobrar
+// GoCardless (conta_gc_suscripcion activas con su próximo cobro en el mes), con
+// la ficha de cada cliente de GoCardless (conta_gc_cliente y conta_gc_enlace).
+// Cuatro lecturas en paralelo, todas de la empresa y por su cuenta (regla 9);
+// la comparación, en frenteAGocardless.ts. Solo lee.
+// Nombres de la base entre comillas (regla 40), comprobados el 24/11.
+
+const finDeMes = (mes: string) => `${mes}-${String(new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0)).getUTCDate()).padStart(2, '0')}`
+
+async function todasLasFilas(consulta: (desde: number, hasta: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>, que: string): Promise<Fila[]> {
+  const fuera: Fila[] = []
+  for (let a = 0; ; a += 1000) {
+    const { data, error } = await consulta(a, a + 999)
+    if (error) throw new Error(`No se han podido leer ${que}: ${error.message}`)
+    const filas = (data ?? []) as Fila[]
+    fuera.push(...filas)
+    if (filas.length < 1000) return fuera
+  }
+}
+
+export async function leerFrente(cuenta: string, empresa: string, mes: string): Promise<DatosFrente> {
+  const [recibos, susc, clientes, enlaces] = await Promise.all([
+    todasLasFilas((a, b) => tabla('conta_recibo').select('id, party_id, total_cent, decision, party(name)').eq('account_id', cuenta).eq('company_id', empresa).eq('mes', mes).order('id').range(a, b), 'los recibos de Sumied'),
+    todasLasFilas((a, b) => tabla('conta_gc_suscripcion').select('gc_id, gc_cliente_id, nombre, proximo_cobro_importe, proximo_cobro_fecha, estado').eq('account_id', cuenta).eq('company_id', empresa)
+      .gte('proximo_cobro_fecha', `${mes}-01`).lte('proximo_cobro_fecha', finDeMes(mes)).order('gc_id').range(a, b), 'los cobros de GoCardless'),
+    todasLasFilas((a, b) => tabla('conta_gc_cliente').select('gc_id, nombre, party_id').eq('account_id', cuenta).eq('company_id', empresa).order('gc_id').range(a, b), 'los clientes de GoCardless'),
+    todasLasFilas((a, b) => tabla('conta_gc_enlace').select('gc_cliente_id, party_id, estado').eq('account_id', cuenta).eq('company_id', empresa).order('gc_cliente_id').range(a, b), 'los enlaces con las fichas'),
+  ])
+  return {
+    recibos: recibos.map((r) => ({ partyId: String(r.party_id), cliente: String((r.party as { name?: string } | null)?.name ?? ''), totalCent: Number(r.total_cent ?? 0), decision: String(r.decision ?? '') })),
+    suscripciones: susc.map((s) => ({ gcClienteId: String(s.gc_cliente_id), nombre: String(s.nombre ?? ''), importe: Number(s.proximo_cobro_importe ?? 0), fecha: (s.proximo_cobro_fecha as string | null) ?? null, estado: String(s.estado) })),
+    clientes: clientes.map((c) => ({ gcId: String(c.gc_id), nombre: (c.nombre as string | null) ?? null, partyId: (c.party_id as string | null) ?? null })),
+    enlaces: enlaces.map((e) => ({ gcClienteId: String(e.gc_cliente_id), partyId: (e.party_id as string | null) ?? null, estado: String(e.estado) })),
+  }
+}
+
+export interface DatosFrente { recibos: ReciboSumied[]; suscripciones: SuscripcionGc[]; clientes: ClienteGc[]; enlaces: EnlaceGc[] }

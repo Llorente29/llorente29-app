@@ -8,7 +8,7 @@
 // de enviar; y, ya enviado, «Cómo va cada recibo» con sus cuatro cifras.
 // Solo pinta: recibe el modelo (modeloCobro.ts) y lo que hacer al pulsar.
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { nombreDelMes, mesAnterior } from '../../../../../supabase/functions/_shared/cobro/recibo'
 import { botonDeAprobar, type ReciboEnRevision } from '../../../../../supabase/functions/_shared/cobro/revision'
@@ -29,6 +29,8 @@ export interface PropsCobro {
   /** nº 46 · «Volver a cobrar» un recibo que paró su cliente desde el portal. */
   alReanudar?: (reciboId: string) => Promise<string>
   alEnviar: () => Promise<string>
+  /** Q08 · Frente a GoCardless (FrenteAGocardless): lo que cobraría Sumied al lado de lo que cobrará GoCardless, arriba. */
+  frente?: ReactNode
 }
 
 const PASOS: [string, string][] = [['Revisar', 'Lo que cambia'], ['Enviar el cobro', 'Aviso el día 2'], ['Cobrado', 'Cargo el día 4'], ['Facturado', 'Sale solo']]
@@ -77,7 +79,9 @@ export function Cobro(p: PropsCobro) {
       </ol>
 
       {frase && <p role={frase.mal ? 'alert' : 'status'} className="g5-frase" data-tono={frase.mal ? 'mal' : 'bien'}>{frase.texto}</p>}
-      {m.soloPruebas && <p className="g5-frase" data-tono="aviso">Esta empresa tiene conectada su cuenta real de GoCardless: por ahora el cobro solo se envía con una cuenta de pruebas. Con la real no se cobra nada.</p>}
+      {/* Q08 · Con la cuenta real de GoCardless, en paralelo: una sola línea, y no sale «Enviar el cobro». */}
+      {m.soloPruebas && <p className="g5-frase" data-tono="aviso" data-prueba="en-paralelo">En paralelo: Sumied no cobra ni envía nada. Compara con GoCardless.</p>}
+      {p.frente}
 
       {m.vacio ? (
         <section className="g4-bloque" aria-label="Preparar el cobro">
@@ -187,12 +191,12 @@ export function Cobro(p: PropsCobro) {
             </section>
           )}
 
-          <section className="g5-barra" aria-label="Enviar el cobro">
+          {!m.soloPruebas && <section className="g5-barra" aria-label="Enviar el cobro">
             <div className="g5-barra-textos"><b>{r.listos.texto}</b><span>{r.falta}</span></div>
-            <button type="button" className="g5-enviar" disabled={!r.puedeEnviar || !!ocupado || m.soloPruebas} onClick={() => setAvisoAbierto(true)}>Enviar el cobro</button>
-          </section>
+            <button type="button" className="g5-enviar" disabled={!r.puedeEnviar || !!ocupado} onClick={() => setAvisoAbierto(true)}>Enviar el cobro</button>
+          </section>}
 
-          {avisoAbierto && m.aviso && (
+          {avisoAbierto && m.aviso && !m.soloPruebas && (
             <div className="g5-velo" role="presentation" onClick={() => setAvisoAbierto(false)}>
               <div className="g5-aviso" role="dialog" aria-modal="true" aria-labelledby="g5-aviso-t" onClick={(e) => e.stopPropagation()}>
                 <h2 id="g5-aviso-t" className="g4-bloque-titulo">{m.aviso.titulo}</h2>
