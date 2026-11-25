@@ -10,6 +10,7 @@
 
 import { proponerCliente, type ClienteParaCasar, type Propuesta } from '../../../../../supabase/functions/_shared/tarifa/lista'
 import type { DatosClientes, Fila } from './datos'
+import { clave, normal } from '../decisionesQbo'
 
 export interface PorAsignar {
   empresaId: string
@@ -21,6 +22,45 @@ export interface PorAsignar {
   suscripciones: { nombre: string; alMesCent: number }[]
   alMesCent: number
   propuesta: Propuesta
+  /** Q08 · Lo que escribió QBO en su Excel para este cliente (un nombre en vez del nº de ficha), con las fichas que encajan. */
+  deQbo: DeQbo | null
+}
+
+/**
+ * Q08 · Las fichas que dice el texto de QBO. Primero, las que se llaman EXACTAMENTE
+ * así (sin tildes, mayúsculas, espacios ni signos: «S.L.» = «SL»). Si no hay
+ * ninguna, las que llevan todas sus palabras en el nombre, y se dice que no es
+ * igual. Solo propone: nada se ata solo. Con varias o ninguna, se dice.
+ */
+export interface DeQbo { texto: string; como: 'igual' | 'contiene' | 'ninguna'; clienteIds: string[] }
+
+const FORMAS = new Set(['sl', 'sll', 'slu', 'sa', 'cb', 'scp', 'sc', 'de', 'del', 'la', 'las', 'el', 'los', 'y'])
+
+export function fichasDeQbo(texto: string, clientes: readonly ClienteParaCasar[]): DeQbo {
+  const k = clave(texto)
+  const iguales = k ? clientes.filter((c) => clave(c.nombre) === k).map((c) => c.id) : []
+  if (iguales.length) return { texto, como: 'igual', clienteIds: iguales }
+  const palabras = normal(texto).split(' ').filter((x) => x.length > 1 && !FORMAS.has(x))
+  if (!palabras.length || palabras.length > 8) return { texto, como: 'ninguna', clienteIds: [] }
+  const contienen = clientes.filter((c) => { const n = ` ${normal(c.nombre)} `; return palabras.every((x) => n.includes(` ${x} `)) }).map((c) => c.id)
+  return contienen.length ? { texto, como: 'contiene', clienteIds: contienen } : { texto, como: 'ninguna', clienteIds: [] }
+}
+
+/** «QBO escribió «X»: …», en palabras de oficina. */
+export function textoDeQbo(q: DeQbo, nombreDe: (id: string) => string): string {
+  const dijo = `QBO escribió «${q.texto}»`
+  if (q.como === 'ninguna') return `${dijo}: ninguna ficha de Bitrix24 se llama así. Búscala abajo o créala allí.`
+  const n = q.clienteIds.length
+  if (q.como === 'igual') return n === 1 ? `${dijo}: la ficha «${nombreDe(q.clienteIds[0])}» se llama así. Confírmala con un clic.` : `${dijo}: ${n} fichas se llaman así. Elige cuál.`
+  return n === 1 ? `${dijo}: ninguna ficha se llama exactamente así; «${nombreDe(q.clienteIds[0])}» lleva ese nombre. Mira que sea ella antes de unir.`
+    : `${dijo}: ninguna ficha se llama exactamente así; ${n} llevan ese nombre. Elige cuál.`
+}
+
+/** El texto que escribió QBO, sacado del porqué del pendiente («… escribió: «X».»). */
+export function textoDelPendiente(porque: string | null | undefined): string | null {
+  const m = /escribió: «([\s\S]*)»\.$/.exec(porque ?? '')
+  const t = m?.[1]?.replace(/ \(la ficha nº \d+ no está en lo leído de Bitrix24\)$/, '').trim()
+  return t || null
 }
 
 const cent = (v: unknown) => Math.round(Number(v ?? 0) * 100)
@@ -37,7 +77,10 @@ export function clientesParaCasar(d: DatosClientes): ClienteParaCasar[] {
 }
 
 /** Las suscripciones activas y los clientes de GoCardless que las pagan llegan en su propia llamada (conta_pantalla_asignar). */
-export function porAsignar(d: DatosClientes, suscripciones: readonly Fila[], gcClientes: readonly Fila[], empresas: readonly { id: string; nombre: string }[], elegidas: readonly string[]): PorAsignar[] {
+export function porAsignar(d: DatosClientes, suscripciones: readonly Fila[], gcClientes: readonly Fila[], empresas: readonly { id: string; nombre: string }[], elegidas: readonly string[],
+  pendientesQbo: readonly Fila[] = []): PorAsignar[] {
+  const deQbo = new Map<string, string>()
+  for (const e of pendientesQbo) { const t = textoDelPendiente(texto(e.porque)); if (t) deQbo.set(`${String(e.company_id)}|${String(e.gc_cliente_id)}`, t) }
   const unidos = new Set(d.clientes.filter((c) => c.cliente_en_gocardless && c.empresa_id).map((c) => `${String(c.empresa_id)}|${String(c.cliente_en_gocardless)}`))
   const delGc = new Map(gcClientes.map((g) => [`${String(g.company_id)}|${String(g.gc_id)}`, g]))
   const grupos = new Map<string, PorAsignar>()
@@ -54,14 +97,15 @@ export function porAsignar(d: DatosClientes, suscripciones: readonly Fila[], gcC
       const correo = texto(gc?.correo)
       const nif = texto(gc?.nif)
       g = { empresaId, empresa: empresas.find((e) => e.id === empresaId)?.nombre ?? '', gcClienteId: String(s.gc_cliente_id), nombre, correo, nif, suscripciones: [], alMesCent: 0,
-        propuesta: proponerCliente({ nombre: texto(gc?.nombre), correo, nif }, casar) }
+        propuesta: proponerCliente({ nombre: texto(gc?.nombre), correo, nif }, casar), deQbo: deQbo.has(k) ? fichasDeQbo(deQbo.get(k)!, casar) : null }
       grupos.set(k, g)
     }
     const al = cent(s.al_mes)
     g.suscripciones.push({ nombre: String(s.nombre ?? 'Suscripción'), alMesCent: al })
     g.alMesCent += al
   }
-  return [...grupos.values()].sort((a, b) => b.alMesCent - a.alMesCent || a.nombre.localeCompare(b.nombre, 'es'))
+  // Q08: los que QBO contestó en su Excel van primero (son los que hay que confirmar ahora).
+  return [...grupos.values()].sort((a, b) => Number(!!b.deQbo) - Number(!!a.deQbo) || b.alMesCent - a.alMesCent || a.nombre.localeCompare(b.nombre, 'es'))
 }
 
 /** «Propuesto por NIF», «2 posibles por nombre», «Sin propuesta». */
