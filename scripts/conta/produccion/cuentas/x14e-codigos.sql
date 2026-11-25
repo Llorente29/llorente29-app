@@ -24,17 +24,20 @@ with c as (   -- X14 · 2 · las cargas de ERP10 dadas por buenas: de cada cuent
 select clave, valor from (
   select 2 o, 'cuenta ' || t.cuenta || ' · carga ' || t.carga || ' · terceros traídos cuya cuenta principal no es la de ERP10 (de cuántos)' clave,
          count(*) filter (where k.company_account_id is distinct from t.cta) || ' de ' || count(*) valor
+    -- quieta: los enlaces principales de una empresa los cambian solo la ficha del tercero (a mano) y esta tanda
     from t left join public.company_account_link k on k.company_id = t.company_id and k.entity = t.entidad and k.entity_id = t.entidad_id and k.role = 'principal'
    where t.entidad_id is not null group by t.cuenta, t.carga
   union all
   select 3, 'cuenta ' || t.cuenta || ' · carga ' || t.carga || ' · clientes traídos cuyo código no es el de su 430 (de cuántos)',
          count(*) filter (where cc.codigo_cliente is distinct from substr(t.code, 4)::int) || ' de ' || count(*)
+    -- quieta: el código de un cliente lo cambian solo su ficha del cobro (a mano) y esta tanda
     from t left join public.conta_cobro_cliente cc on cc.company_id = t.company_id and cc.party_id = t.party_id
    where t.code ~ '^430[0-9]{1,5}$' and substr(t.code, 4)::int between 1 and 99999 group by t.cuenta, t.carga
   union all
   select 4, 'cuenta ' || c.cuenta || ' · carga ' || c.carga || ' · cuentas que no se llaman como en el sumas y saldos de ERP10 (de cuántas)',
          count(*) filter (where a.name <> trim(s->>'nombre')) || ' de ' || count(*)
     from c cross join lateral jsonb_array_elements(case when c.detail->>'sumas_de' = 'fichero' then c.detail->'sumas' else '[]' end) s
+    -- quieta: el nombre de una cuenta lo cambian solo el plan de cuentas (a mano) y esta tanda
     join public.company_account a on a.company_id = c.company_id and a.code = s->>'cuenta'
    where nullif(trim(s->>'nombre'), '') is not null group by c.cuenta, c.carga
   union all
