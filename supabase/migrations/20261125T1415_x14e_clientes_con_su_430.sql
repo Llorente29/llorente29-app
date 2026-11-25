@@ -12,6 +12,8 @@
 --   2. conta_traer_deshacer (misma firma; guardada): deshacer la carga quita las filas que creó y deja sin código las que
 --      rellenó.
 -- Las dos, enteras: las de producción (X14 · 1b y X14 · 2) con los trozos nuevos («X14 · 2 · El código del cliente»).
+-- sin hueco: el fichero no retira nada al aplicarse. El «delete from public.journal_entry» es el de siempre de
+-- conta_traer_deshacer (los asientos traídos en borrador de una carga en prueba), dentro de la función, sin cambios.
 -- Nada en el camino del pedido. No cambia ninguna fila al aplicarse. El real lo lanza Julio. Vuelta atrás: las dos
 -- funciones de sus respaldos.
 
