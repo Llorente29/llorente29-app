@@ -100,11 +100,23 @@ export class ClienteDiezRec {
   campoEmpresa: 'empresa' | 'codigoEmpresa' | null = null
   /** El «id» que devuelve el login: el cliente de Diez Software al que pertenece el usuario. */
   idCliente: string | null = null
-  constructor(private readonly o: { claves: ClavesDiezRec; empresa: string; base?: string; fetch: Fetch }) {}
+  /**
+   * `escribe: 'incidencias'` (Q10 · respuesta 3): además de leer, puede añadir una incidencia (POST
+   * /api/Incidences/incidence) y borrar una (DELETE /api/Incidences/delete/{cliente}/{incidencia}). Nada más: ni
+   * conceptos, ni clientes. Sin él, solo lee. Lo pide conta-cegid-mandar; conta-cegid-leer no.
+   */
+  constructor(private readonly o: { claves: ClavesDiezRec; empresa: string; base?: string; fetch: Fetch; escribe?: 'incidencias' }) {}
 
-  private async llamar(metodo: 'GET' | 'POST', ruta: string, cuerpo?: Fila): Promise<Respuesta> {
+  private puede(metodo: string, ruta: string): boolean {
+    if (metodo === 'GET') return true
+    if (metodo === 'POST' && ruta === '/api/Auth/login') return true
+    if (this.o.escribe !== 'incidencias') return false
+    return (metodo === 'POST' && ruta === '/api/Incidences/incidence') || (metodo === 'DELETE' && /^\/api\/Incidences\/delete\/\d+\/\d+$/.test(ruta))
+  }
+
+  private async llamar(metodo: 'GET' | 'POST' | 'DELETE', ruta: string, cuerpo?: Fila): Promise<Respuesta> {
     // Solo lee: el único POST que sale es el del login.
-    if (metodo !== 'GET' && !(metodo === 'POST' && ruta === '/api/Auth/login')) throw new FalloDiezRec(`Sumied solo lee de la facturación de Cegid: ${metodo} ${ruta} no sale.`)
+    if (!this.puede(metodo, ruta)) throw new FalloDiezRec(this.o.escribe ? `Sumied solo escribe incidencias en la facturación de Cegid: ${metodo} ${ruta} no sale.` : `Sumied solo lee de la facturación de Cegid: ${metodo} ${ruta} no sale.`)
     const headers: Record<string, string> = { Accept: 'application/json' }
     if (cuerpo) headers['Content-Type'] = 'application/json'
     if (this.token && ruta !== '/api/Auth/login') headers.Authorization = `Bearer ${this.token}`
@@ -135,6 +147,38 @@ export class ClienteDiezRec {
     // El token dura 2 horas: con 401, se vuelve a entrar una vez.
     if (r.status === 401) { this.token = null; await this.entrar(); r = await this.llamar('GET', ruta) }
     return r
+  }
+
+  /** Con un 401 (token caducado), vuelve a entrar una vez y repite. */
+  private async conToken(metodo: 'POST' | 'DELETE', ruta: string, cuerpo?: Fila): Promise<Respuesta> {
+    if (!this.token) await this.entrar()
+    let r = await this.llamar(metodo, ruta, cuerpo)
+    if (r.status === 401) { this.token = null; await this.entrar(); r = await this.llamar(metodo, ruta, cuerpo) }
+    return r
+  }
+
+  /** Añade una incidencia (incidencia 0: la numera Cegid). Devuelve su número; si no, lanza con el porqué. */
+  async crearIncidencia(cuerpo: Fila): Promise<{ incidencia: number; datos: Fila }> {
+    const r = await this.conToken('POST', '/api/Incidences/incidence', cuerpo)
+    const j = (r.json ?? {}) as Fila
+    const n = ent(j.incidencia)
+    if (r.status !== 200 || !n) throw new FalloDiezRec(`Cegid no ha guardado la incidencia (${r.status}): ${motivoDeError(r.json)}`, r.status)
+    return { incidencia: n, datos: j }
+  }
+
+  /** Lee una incidencia: null si no existe (204). */
+  async leerIncidencia(cliente: number, incidencia: number): Promise<Fila | null> {
+    const r = await this.get(`/api/Incidences/GetIncidence/${Math.trunc(cliente)}/${Math.trunc(incidencia)}`)
+    if (r.status === 204) return null
+    if (r.status !== 200) throw new FalloDiezRec(`Cegid contesta ${r.status} al leer la incidencia ${incidencia} del cliente ${cliente}: ${motivoDeError(r.json)}`, r.status)
+    return (r.json ?? {}) as Fila
+  }
+
+  /** Borra una incidencia; true si Cegid dice que la ha borrado. */
+  async borrarIncidencia(cliente: number, incidencia: number): Promise<boolean> {
+    const r = await this.conToken('DELETE', `/api/Incidences/delete/${Math.trunc(cliente)}/${Math.trunc(incidencia)}`)
+    if (r.status !== 200) throw new FalloDiezRec(`Cegid no ha borrado la incidencia ${incidencia} del cliente ${cliente} (${r.status}): ${motivoDeError(r.json)}`, r.status)
+    return r.json === true || r.texto.trim() === 'true'
   }
 
   /** Una página de un listado, con su total. */

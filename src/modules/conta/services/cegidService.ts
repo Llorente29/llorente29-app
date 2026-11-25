@@ -153,3 +153,45 @@ export async function leerGuardadoCegid(companyId: string, ejercicio: number): P
     leidoAt: cl.reduce<string | null>((m, x) => { const t = str(x.leido_at); return t && (!m || t > m) ? t : m }, null),
   }
 }
+
+// ── Q10 · respuesta 3 · Mandar a Cegid (conta-cegid-mandar) ─────────────────────────────
+
+async function mandarInvocar(body: Fila): Promise<Fila> {
+  if (!supabase) throw new Error('Sin conexión con la base.')
+  const { data, error } = await supabase.functions.invoke('conta-cegid-mandar', { body })
+  if (!error) return (data ?? {}) as Fila
+  const ctx = (error as { context?: Response }).context
+  const cuerpo = ctx && typeof ctx.json === 'function' ? await ctx.clone().json().catch(() => null) as Fila | null : null
+  throw new Error(str(cuerpo?.error) ?? (ctx?.status === 404 ? 'Mandar a Cegid aún no está publicado en este entorno.' : `No se ha podido mandar a Cegid: ${error.message}`))
+}
+
+/** Vuelve a leer la ficha de Cegid de esos clientes (de 40 en 40): los que aún tienen conceptos fijos. */
+export async function releerFichasCegid(companyId: string, codigos: number[], avance: (frase: string) => void = () => undefined): Promise<number[]> {
+  const parados: number[] = []
+  for (let i = 0; i < codigos.length; i += 40) {
+    avance(`Leyendo en Cegid las fichas… (${i} de ${codigos.length})`)
+    const r = await mandarInvocar({ company_id: companyId, accion: 'releer', codigos: codigos.slice(i, i + 40) })
+    for (const p of (r.parados as { codigo: number }[] | undefined) ?? []) parados.push(Number(p.codigo))
+  }
+  return parados
+}
+
+/** Manda a Cegid los cobros de UN cliente; devuelve su frase o lanza con el porqué. */
+export async function mandarClienteCegid(companyId: string, mes: string, cliente: number, cobros: string[]): Promise<string> {
+  const r = await mandarInvocar({ company_id: companyId, accion: 'mandar', mes, cliente, cobros })
+  return String(r.frase ?? 'Mandado.')
+}
+
+/** Borra en Cegid lo mandado por Sumied este mes que aún no esté facturado (de un cliente, o de todos). */
+export async function deshacerCegid(companyId: string, mes: string, cliente?: number): Promise<string> {
+  const r = await mandarInvocar({ company_id: companyId, accion: 'deshacer', mes, ...(cliente ? { cliente } : {}) })
+  return String(r.frase ?? 'Deshecho.')
+}
+
+export interface IncidenciaMandada { gcCobroId: string; cliente: number; incidencia: number | null; estado: string; total: number }
+/** Lo mandado a Cegid de un mes (conta_cegid_incidencia, la 2336). Sin la tabla, nada. */
+export async function leerMandadoCegid(companyId: string, mes: string): Promise<IncidenciaMandada[]> {
+  const { data, error } = await tabla('conta_cegid_incidencia').select('gc_cobro_id, cliente, incidencia, estado, total').eq('company_id', companyId).eq('mes', mes)
+  if (error) return []
+  return ((data ?? []) as Fila[]).map((x) => ({ gcCobroId: String(x.gc_cobro_id), cliente: Number(x.cliente), incidencia: x.incidencia == null ? null : Number(x.incidencia), estado: String(x.estado), total: Number(x.total) }))
+}

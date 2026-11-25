@@ -1,0 +1,10 @@
+# Q10 · respuesta 3 · Mandar a Cegid lo cobrado (25/11). Rama conta/q10c-mandar-a-cegid. Se ensaya y se aplica desde
+# main nombrando la rama, antes de fusionar (lo lanza Julio, T10).
+#
+#   2336  Añade una tabla nueva, conta_cegid_incidencia: cada cobro mandado a Cegid como incidencia, con su número en
+#         Cegid (para no mandar nada dos veces y para «Deshacer»). RLS de solo lectura; la escribe solo
+#         conta-cegid-mandar. No toca ninguna fila que exista.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/q10c-mandar-a-cegid.sql
+supabase/migrations/20261125T2336_q10c_cegid_incidencias.sql
