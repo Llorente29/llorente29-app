@@ -13,7 +13,7 @@
 -- Sin vuelta atrás: dar por bueno lo traído no se deshace («si después ves un error, corrígelo con un asiento a mano»).
 -- Nada en el camino del pedido. El real lo lanza Julio.
 do $$
-declare v_r public.import_run; v_claims text; v_activa text; v_res jsonb; v_hint text; v_estado text; e record;
+declare v_r public.import_run; v_claims text; v_activa text; v_res jsonb; v_hint text; v_estado text; e record; v_copias int; v_mirar jsonb; v_fuera bigint[];
 begin
   select * into v_r from public.import_run where id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9';
   if v_r.id is null or v_r.status <> 'en_prueba' then
@@ -22,6 +22,38 @@ begin
   end if;
   if not exists (select 1 from public.user_profiles where user_id = v_r.created_by and account_id = v_r.account_id and role = 'admin' and active) then
     raise exception 'X14h: quien trajo la carga ya no es administrador activo de su cuenta: no se da por buena.';
+  end if;
+  -- Julio, 25/11: el libro de expedidas de ERP10 trae 9 facturas dos veces, iguales (serie, número, ejercicio, fecha, cliente e
+  -- importes). Entra una (la que tiene asiento, si una lo tiene) y la copia queda fuera, en «lo que no ha entrado» con su porqué.
+  -- Los asientos se validan todos tal cual: el sumas y saldos no cambia. Solo las copias exactas; cualquier otra repetida para.
+  with em as (
+    select x, o from jsonb_array_elements(coalesce(v_r.detail->'emitidas', '[]')) with ordinality t(x, o)
+     where x->>'marca' is distinct from 'fuera'
+  ), g as (
+    select x->>'serie' s, x->>'ejercicio' y, x->>'numero' nn,
+           count(distinct (x->>'fecha', x->'cliente', x->>'base', x->>'cuota', x->>'retencion', x->>'total')) variantes
+      from em group by 1, 2, 3
+  ), c as (
+    select em.x, em.o, g.variantes,
+           row_number() over (partition by g.s, g.y, g.nn order by (nullif(em.x->>'asiento', '') is null), em.o) n
+      from em join g on g.s is not distinct from em.x->>'serie' and g.y is not distinct from em.x->>'ejercicio' and g.nn is not distinct from em.x->>'numero'
+  )
+  select count(*) filter (where n > 1 and variantes = 1),
+         coalesce(jsonb_agg(jsonb_build_object('que', 'no_ha_entrado', 'frase',
+           format('No ha entrado una factura emitida %s del %s: ERP10 la trae dos veces, igual; ha entrado una.',
+                  coalesce(nullif(x->>'numero_texto', ''), concat_ws('-', x->>'serie', x->>'numero')), to_char((x->>'fecha')::date, 'DD/MM/YYYY'))))
+           filter (where n > 1 and variantes = 1), '[]'),
+         array_agg(o) filter (where n > 1 and variantes = 1)
+    into v_copias, v_mirar, v_fuera
+    from c;
+  if v_copias > 0 then
+    update public.import_run r
+       set detail = jsonb_set(jsonb_set(r.detail, '{emitidas}',
+             (select jsonb_agg(case when o = any(v_fuera) then x || jsonb_build_object('marca', 'fuera', 'porque', 'ERP10 la trae dos veces, igual') else x end order by o)
+                from jsonb_array_elements(r.detail->'emitidas') with ordinality t(x, o))),
+             '{mirar}', coalesce(r.detail->'mirar', '[]') || v_mirar)
+     where r.id = v_r.id;
+    raise notice 'X14h: % emitidas repetidas, iguales: entra una de cada y la copia queda fuera.', v_copias;
   end if;
   v_claims := current_setting('request.jwt.claims', true); v_activa := current_setting('folvy.cuenta_activa', true);
   perform set_config('request.jwt.claims', json_build_object('sub', v_r.created_by, 'role', 'authenticated')::text, true);

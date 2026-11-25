@@ -79,4 +79,9 @@ select clave, valor from (
          (select count(*) from (select 1 from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' group by x->>'serie', x->>'ejercicio', x->>'numero'
                                  having count(*) > 1 and bool_or((x->>'total')::numeric < 0)) d)::text   -- quieta: el detalle de una carga en prueba no cambia
     from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 16, 'carga del 2024 de QBO · emitidas fuera por venir dos veces',
+         (select count(*) from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x
+           where x->>'marca' = 'fuera' and x->>'porque' = 'ERP10 la trae dos veces, igual')::text   -- quieta: el detalle de una carga en prueba no cambia
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
 ) t order by o, clave;
