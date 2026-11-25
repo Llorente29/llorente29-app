@@ -165,17 +165,6 @@ async function mandarInvocar(body: Fila): Promise<Fila> {
   throw new Error(str(cuerpo?.error) ?? (ctx?.status === 404 ? 'Mandar a Cegid aún no está publicado en este entorno.' : `No se ha podido mandar a Cegid: ${error.message}`))
 }
 
-/** Vuelve a leer la ficha de Cegid de esos clientes (de 40 en 40): los que aún tienen conceptos fijos. */
-export async function releerFichasCegid(companyId: string, codigos: number[], avance: (frase: string) => void = () => undefined): Promise<number[]> {
-  const parados: number[] = []
-  for (let i = 0; i < codigos.length; i += 40) {
-    avance(`Leyendo en Cegid las fichas… (${i} de ${codigos.length})`)
-    const r = await mandarInvocar({ company_id: companyId, accion: 'releer', codigos: codigos.slice(i, i + 40) })
-    for (const p of (r.parados as { codigo: number }[] | undefined) ?? []) parados.push(Number(p.codigo))
-  }
-  return parados
-}
-
 /** Manda a Cegid los cobros de UN cliente; devuelve su frase o lanza con el porqué. */
 export async function mandarClienteCegid(companyId: string, mes: string, cliente: number, cobros: string[]): Promise<string> {
   const r = await mandarInvocar({ company_id: companyId, accion: 'mandar', mes, cliente, cobros })

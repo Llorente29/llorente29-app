@@ -6,8 +6,8 @@
 //
 // LA REGLA (Julio, de siempre): no se factura nada sin el cobro confirmado. Solo salen cobros de GoCardless en estado
 // confirmed o paid_out, con su cliente atado, con código de Cegid y con un concepto de la tabla aprobada. Lo demás no
-// sale y se dice por qué. Un cliente que aún tiene conceptos fijos en su ficha de Cegid NO se manda (Cegid le
-// facturaría dos veces): sale en la lista de «quítalos antes».
+// sale y se dice por qué. Los conceptos fijos de la ficha de Cegid NO paran a nadie (añadido a la respuesta 3): Julio
+// quita «Noviembre» del periodo MENSUAL en Cegid, y la API los sigue devolviendo en la ficha.
 //
 // LA TABLA DE EQUIVALENCIAS, aprobada por Julio el 25/11 (respuesta 3):
 //   Gestoría mensual → 00001 (serie 1) · Gestión laboral → 0008 (1) · Contasimple → 0016 (3) ·
@@ -73,7 +73,6 @@ export interface CobroParaMandar {
   nombre: string | null
   codigoCegid: number | null
 }
-export interface ClienteCegidFijos { codigo: number; conceptos: { codigoConcepto: string | null; descripcion: string | null; totalLinea: number | null }[] | null }
 
 export interface LineaIncidencia {
   gcId: string
@@ -85,14 +84,12 @@ export interface LineaIncidencia {
   totalCent: number
 }
 export interface ClienteParaMandar { codigo: number; nombre: string; lineas: LineaIncidencia[]; totalCent: number }
-export interface Parado { codigo: number; nombre: string; conceptos: { codigo: string; descripcion: string; total: number | null }[]; cobros: number; totalCent: number }
 export type PorQueNoSale = 'no_cobrado' | 'sin_cliente' | 'sin_codigo' | 'sin_concepto' | 'no_cuadra' | 'ya_mandado'
 export interface NoSale { gcId: string; nombre: string | null; concepto: string | null; totalCent: number; porque: PorQueNoSale; frase: string }
 
 export interface PlanMandar {
   mes: string
   listos: ClienteParaMandar[]
-  parados: Parado[]
   noSalen: NoSale[]
   yaMandados: number
   listosCent: number
@@ -111,10 +108,9 @@ const eur = (c: number) => `${new Intl.NumberFormat('es-ES', { minimumFractionDi
 
 /**
  * El plan de un mes: por cliente de Cegid, sus incidencias (una por cobro, con su concepto y su serie). Un cliente con
- * conceptos fijos en su ficha va a «parados» con todos sus cobros. Los cobros ya mandados no vuelven a salir.
+ * Los cobros ya mandados no vuelven a salir.
  */
-export function planMandar(mes: string, cobros: readonly CobroParaMandar[], clientesCegid: readonly ClienteCegidFijos[], yaMandados: ReadonlySet<string>): PlanMandar {
-  const fijos = new Map(clientesCegid.map((c) => [c.codigo, c.conceptos ?? []]))
+export function planMandar(mes: string, cobros: readonly CobroParaMandar[], yaMandados: ReadonlySet<string>): PlanMandar {
   const por = new Map<number, ClienteParaMandar>()
   const noSalen: NoSale[] = []
   let ya = 0
@@ -135,16 +131,11 @@ export function planMandar(mes: string, cobros: readonly CobroParaMandar[], clie
     k.totalCent += totalCent
     por.set(c.codigoCegid, k)
   }
-  const listos: ClienteParaMandar[] = [], parados: Parado[] = []
-  for (const k of [...por.values()].sort((a, b) => a.codigo - b.codigo)) {
-    k.lineas.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.gcId.localeCompare(b.gcId))
-    const f = (fijos.get(k.codigo) ?? []).filter((x) => (x.codigoConcepto ?? '').trim())
-    if (f.length) parados.push({ codigo: k.codigo, nombre: k.nombre, conceptos: f.map((x) => ({ codigo: String(x.codigoConcepto).trim(), descripcion: (x.descripcion ?? '').trim(), total: x.totalLinea })), cobros: k.lineas.length, totalCent: k.totalCent })
-    else listos.push(k)
-  }
+  const listos = [...por.values()].sort((a, b) => a.codigo - b.codigo)
+  for (const k of listos) k.lineas.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.gcId.localeCompare(b.gcId))
   const listosCent = listos.reduce((t, k) => t + k.totalCent, 0)
-  const frase = `Listos para mandar: ${listos.length} ${listos.length === 1 ? 'cliente' : 'clientes'}, ${eur(listosCent)}. Parados por conceptos fijos en Cegid: ${parados.length}.`
-  return { mes, listos, parados, noSalen, yaMandados: ya, listosCent, frase }
+  const frase = `Listos para mandar: ${listos.length} ${listos.length === 1 ? 'cliente' : 'clientes'}, ${eur(listosCent)}.`
+  return { mes, listos, noSalen, yaMandados: ya, listosCent, frase }
 }
 
 // ── La incidencia, como la pide la API (POST /api/Incidences/incidence) ───────────────

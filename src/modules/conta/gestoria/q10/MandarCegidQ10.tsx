@@ -2,12 +2,12 @@
 //
 // Q10 · respuesta 3 · El paso 2 de «Facturas del mes»: MANDAR A CEGID todo lo cobrado, como incidencias del mes. Pinta,
 // no lee nada (el plan lo hace _shared/cegidMandar.ts; las llamadas, pagina.tsx):
-//   · arriba, una línea: «Listos para mandar: N clientes, X €. Parados por conceptos fijos en Cegid: M»;
+//   · arriba, una línea: «Listos para mandar: N clientes, X €»; y antes de los botones, el aviso de quitar Noviembre
+//     del periodo MENSUAL en Cegid (añadido a la respuesta 3: los conceptos fijos no se cortan ficha a ficha, así que
+//     no paran a nadie);
 //   · un solo botón grande por paso: primero «Mandar solo este para probar» (un cliente que se elige); hecho eso,
 //     «Mandar los N listos»; y «Deshacer» lo mandado y aún no facturado. Cada uno, con su confirmación con contenido y
 //     su frase al acabar (regla 8); el que aún no toca, apagado y con el porqué;
-//   · la lista de PARADOS, como una lista de tareas: código de Cegid, nombre y los conceptos fijos que aún tiene;
-//     «Volver a leer las fichas» quita los que ya están cortados;
 //   · lo que no sale, con su porqué (sin cobro confirmado, sin código, sin concepto aprobado…).
 
 import { useState } from 'react'
@@ -23,7 +23,6 @@ export interface PropsMandarQ10 {
   alMandarUno: (codigo: number, avance: (f: string) => void) => Promise<string>
   alMandarTodos: (avance: (f: string) => void) => Promise<string>
   alDeshacer: () => Promise<string>
-  alReleer: (avance: (f: string) => void) => Promise<string>
 }
 
 type Hecho = { estado: 'trabajando' | 'bien' | 'mal'; frase: string } | null
@@ -47,11 +46,12 @@ export function MandarCegidQ10(p: PropsMandarQ10) {
     <section className="g4-bloque q10-mandar" aria-labelledby="q10-mandar" data-prueba="mandar">
       <h2 id="q10-mandar" className="g4-bloque-titulo">Paso 2 · Mandar a Cegid</h2>
       <p className="q10-linea">Cegid solo factura lo que manda Sumied: cada cobro confirmado, como una línea del mes de su cliente, con el texto de GoCardless. Sin cobro confirmado no se manda nada.</p>
-      {plan && <p className="q10-frase" data-prueba="mandar-frase" data-tono={plan.parados.length ? undefined : 'bien'}>{plan.frase}</p>}
+      {plan && <p className="q10-frase" data-prueba="mandar-frase">{plan.frase}</p>}
       {porQueNo && <p className="q10-linea" data-prueba="mandar-por-que-no">{porQueNo}</p>}
 
       {plan && p.puede.si && (
         <div className="q10-pasos">
+          <p className="q10-linea" data-prueba="mandar-aviso" role="note">Antes de facturar, quita Noviembre del periodo MENSUAL en Cegid y comprueba que el precálculo sale vacío.</p>
           {primero ? (
             <div className="q10-paso">
               <label className="q10-linea" htmlFor="q10-uno">Primero, un cliente para probar:</label>
@@ -59,7 +59,7 @@ export function MandarCegidQ10(p: PropsMandarQ10) {
                 {plan.listos.map((x) => <option key={x.codigo} value={x.codigo}>{x.codigo} · {x.nombre} · {x.lineas.length} {x.lineas.length === 1 ? 'cobro' : 'cobros'} · {eurQ10(x.totalCent)}</option>)}
               </select>
               <button type="button" className="g4-boton" data-tipo="primario" disabled={ocupado || !uno} onClick={() => setConfirmar('uno')}
-                title={uno ? undefined : 'No hay ningún cliente listo: todos tienen aún conceptos fijos en Cegid'}>Mandar solo este para probar</button>
+                title={uno ? undefined : 'No hay ningún cliente listo para mandar'}>Mandar solo este para probar</button>
             </div>
           ) : (
             <button type="button" className="g4-boton" data-tipo="primario" disabled={ocupado || !plan.listos.length} onClick={() => setConfirmar('todos')}
@@ -72,7 +72,7 @@ export function MandarCegidQ10(p: PropsMandarQ10) {
 
       {confirmar && plan && (
         <div className="g4-bloque q10-confirmar" role="alertdialog" aria-label="Confirmar">
-          {confirmar === 'uno' && uno && <p className="q10-linea">Se manda a Cegid el cliente {uno.codigo} ({uno.nombre}): {uno.lineas.length} {uno.lineas.length === 1 ? 'línea' : 'líneas'} de {plan.mes}, {eurQ10(uno.totalCent)}. Antes se vuelve a leer su ficha: si aún tiene conceptos fijos, no se manda.</p>}
+          {confirmar === 'uno' && uno && <p className="q10-linea">Se manda a Cegid el cliente {uno.codigo} ({uno.nombre}): {uno.lineas.length} {uno.lineas.length === 1 ? 'línea' : 'líneas'} de {plan.mes}, {eurQ10(uno.totalCent)}. Antes se vuelve a leer su ficha en Cegid: si no existe o su NIF no es el de la ficha, no se manda.</p>}
           {confirmar === 'todos' && <p className="q10-linea">Se mandan a Cegid {plan.listos.length} clientes, {plan.listos.reduce((t, x) => t + x.lineas.length, 0)} líneas de {plan.mes}, {eurQ10(plan.listosCent)}. Uno a uno; si uno falla, se para y se dice.</p>}
           {confirmar === 'deshacer' && <p className="q10-linea">Se borran en Cegid las {p.mandadas} líneas que mandó Sumied este mes y aún no están facturadas. Las ya facturadas no se tocan.</p>}
           <div className="g4-cabecera-acciones">
@@ -84,29 +84,6 @@ export function MandarCegidQ10(p: PropsMandarQ10) {
       )}
       {hecho && <p className="q10-linea" data-prueba="mandar-hecho" data-tono={hecho.estado === 'bien' ? 'bien' : hecho.estado === 'mal' ? 'mal' : undefined}
         role={hecho.estado === 'mal' ? 'alert' : 'status'}>{hecho.frase}</p>}
-
-      {plan && plan.parados.length > 0 && (
-        <div data-prueba="parados">
-          <h3 className="q10-subtitulo">Aún tiene conceptos fijos en Cegid: quítalos antes ({plan.parados.length})</h3>
-          <p className="q10-linea">Con conceptos fijos, la «Facturación automática» de Cegid les facturaría dos veces. Quítalos en su ficha de Cegid y vuelve a leer: los cortados salen de la lista.</p>
-          <button type="button" className="g4-boton" disabled={ocupado} onClick={() => void hacer(p.alReleer)}>Volver a leer las fichas</button>
-          <div className="q10-tabla-caja">
-            <table className="q10-tabla" aria-label="Parados por conceptos fijos">
-              <thead><tr><th>Código</th><th>Cliente</th><th>Conceptos fijos que tiene</th><th className="q10-num">Cobrado</th></tr></thead>
-              <tbody>
-                {plan.parados.map((x) => (
-                  <tr key={x.codigo} data-codigo={x.codigo}>
-                    <td>{x.codigo}</td>
-                    <td className="q10-cliente">{x.nombre}</td>
-                    <td>{x.conceptos.map((k) => `${k.codigo} ${k.descripcion}`.trim()).join(' · ')}</td>
-                    <td className="q10-num">{x.cobros} · {eurQ10(x.totalCent)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {plan && plan.noSalen.length > 0 && (
         <details data-prueba="no-salen">

@@ -85,7 +85,8 @@ async function simular(page: Page, Q: string, A: string, conectada = true, fijos
   let leido = false
   const clientesCegid = [[101, 'A00000000'], [102, 'B00000000'], [103, '00000000T'], [104, 'B00000001']]
     .map(([codigo, nif]) => ({ codigo, nombre_comercial: null, nombre_fiscal: `Cliente Cegid ${codigo}`, nif, conceptos: [] as Fila[], leido_at: '2026-11-25T17:00:00Z' }))
-  // Respuesta 3: con «fijos», el 102 aún tiene un concepto fijo en su ficha de Cegid (hasta que «Volver a leer» lo ve cortado).
+  // Respuesta 3: con «fijos», el 102 tiene un concepto fijo en su ficha de Cegid. No lo para: Julio quita Noviembre
+  // del periodo MENSUAL en Cegid, y la API los sigue devolviendo.
   if (fijos) clientesCegid[1].conceptos = [{ codigoConcepto: '0002', descripcion: 'SERVICIOS DE GESTORÍA', totalLinea: 43.8, cantidad: 1, importe: 43.8 }]
   const conceptosCegid = [['0001', 'HONORARIOS MENSUALES'], ['0002', 'SERVICIOS DE GESTORÍA'], ['0008', 'GESTIÓN LABORAL']]
     .map(([codigo, descripcion]) => ({ codigo, descripcion, por_iva: 21, con_retencion: false, iva_incluido: false }))
@@ -130,7 +131,6 @@ async function simular(page: Page, Q: string, A: string, conectada = true, fijos
   await page.route(/\/functions\/v1\/conta-cegid-mandar/, (r) => {
     const b = (r.request().postDataJSON() ?? {}) as Fila
     pedidas.push(b)
-    if (b.accion === 'releer') { clientesCegid[1].conceptos = []; return objeto(r, { ok: true, leidos: (b.codigos as number[]).length, parados: [] }) }
     if (b.accion === 'mandar') {
       const ids = b.cobros as string[]
       for (const gc of ids) mandadas.push({ gc_cobro_id: gc, cliente: b.cliente, incidencia: ++numero, estado: 'mandada', total: Number(cobros.find((c) => c.gc_id === gc)?.importe ?? 0) })
@@ -239,7 +239,7 @@ test('«Facturas del mes» sin la conexión con Cegid: «Leer de Cegid» se ve, 
 })
 
 for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
-  test(`«Mandar a Cegid» a ${ancho}: lo cobrado, primero uno, los parados por conceptos fijos, todos y deshacer (Cegid simulado)`, async ({ page }, info) => {
+  test(`«Mandar a Cegid» a ${ancho}: lo cobrado, el aviso del periodo MENSUAL, primero uno, todos y deshacer (Cegid simulado)`, async ({ page }, info) => {
     test.skip(info.project.name === 'movil', 'Las facturas del mes, en el ordenador')
     test.setTimeout(180_000)
     await page.setViewportSize({ width: ancho, height: alto })
@@ -252,12 +252,10 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     const mandar = page.locator('[data-prueba="mandar"]')
     await expect(mandar.locator('[data-prueba="mandar-por-que-no"]')).toHaveText('Aún no se ha leído lo de Cegid.', { timeout: 30_000 })
     await page.locator('[data-prueba="cegid"]').getByRole('button', { name: 'Leer de Cegid' }).click()
-    // Listos: 101 (121 + 36,30 de Contasimple), 103 (24,20) y 104 (60,50) = 242,00 €. El 102 aún tiene un concepto fijo.
-    await expect(mandar.locator('[data-prueba="mandar-frase"]')).toHaveText('Listos para mandar: 3 clientes, 242,00 €. Parados por conceptos fijos en Cegid: 1.', { timeout: 30_000 })
-    const parados = mandar.getByRole('table', { name: 'Parados por conceptos fijos' }).locator('tbody tr')
-    await expect(parados).toHaveCount(1)
-    await expect(parados.first()).toContainText('102')
-    await expect(parados.first()).toContainText('0002 SERVICIOS DE GESTORÍA')
+    // Listos: 101 (121 + 36,30 de Contasimple), 102 (53, aunque su ficha de Cegid tenga un concepto fijo), 103 (24,20) y 104 (60,50).
+    await expect(mandar.locator('[data-prueba="mandar-frase"]')).toHaveText('Listos para mandar: 4 clientes, 295,00 €.', { timeout: 30_000 })
+    await expect(mandar.locator('[data-prueba="mandar-aviso"]')).toHaveText('Antes de facturar, quita Noviembre del periodo MENSUAL en Cegid y comprueba que el precálculo sale vacío.')
+    await expect(mandar.locator('[data-prueba="parados"]')).toHaveCount(0)
     // Lo que no sale, con su porqué: lo no cobrado (fallido y devuelto) y las fichas sin código de Cegid.
     await mandar.locator('[data-prueba="no-salen"] summary').click()
     await expect(mandar.locator('[data-prueba="no-salen"] li[data-porque="no_cobrado"]')).toHaveCount(2)
@@ -272,14 +270,8 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await expect(mandar.getByRole('alertdialog')).toContainText('Se manda a Cegid el cliente 101 (Construcciones Ficticias, S.A.): 2 líneas de 2026-11, 157,30 €.')
     await mandar.getByRole('button', { name: 'Sí, adelante' }).click()
     await expect(mandar.locator('[data-prueba="mandar-hecho"]')).toHaveText('Mandado a Cegid el cliente 101: 2 cobros.', { timeout: 30_000 })
-    await expect(mandar.locator('[data-prueba="mandar-frase"]')).toHaveText('Listos para mandar: 2 clientes, 84,70 €. Parados por conceptos fijos en Cegid: 1.')
+    await expect(mandar.locator('[data-prueba="mandar-frase"]')).toHaveText('Listos para mandar: 3 clientes, 137,70 €.')
     await expect(mandar.getByRole('button', { name: 'Deshacer lo mandado (2)' })).toBeVisible()
-
-    // Julio corta el concepto fijo del 102 en Cegid y vuelve a leer: sale de la lista de parados.
-    await mandar.getByRole('button', { name: 'Volver a leer las fichas' }).click()
-    await expect(mandar.locator('[data-prueba="mandar-hecho"]')).toHaveText('Leídas 1 fichas en Cegid: 1 ya sin conceptos fijos, 0 aún con ellos.', { timeout: 30_000 })
-    await expect(mandar.locator('[data-prueba="mandar-frase"]')).toHaveText('Listos para mandar: 3 clientes, 137,70 €. Parados por conceptos fijos en Cegid: 0.', { timeout: 30_000 })
-    await expect(mandar.locator('[data-prueba="parados"]')).toHaveCount(0)
 
     await mandar.getByRole('button', { name: 'Mandar los 3 listos' }).click()
     await expect(mandar.getByRole('alertdialog')).toContainText('Se mandan a Cegid 3 clientes, 3 líneas de 2026-11, 137,70 €.')

@@ -3,20 +3,19 @@
 // Q10 · respuesta 3 (25/11) · MANDAR A CEGID TODO LO COBRADO, como incidencias del mes (API DiezREC). Cegid solo
 // factura lo que manda Sumied. Escribe en Cegid SOLO incidencias (el cliente de _shared/diezRec.ts con
 // escribe: 'incidencias'): nunca conceptos ni fichas.
-//   · { company_id, accion: 'releer', codigos }: vuelve a leer la ficha de esos clientes de Cegid (hasta 40), guarda
-//     sus conceptos fijos (conta_cegid_cliente) y dice cuáles aún los tienen. No escribe en Cegid.
 //   · { company_id, accion: 'mandar', mes, cliente, cobros }: manda los cobros de UN cliente de Cegid, una incidencia
 //     por cobro. Antes, lo comprueba todo otra vez y PARA si algo no cuadra:
 //       - cada cobro: de la empresa, cobrado (confirmed o paid_out), del mes, con un concepto de la tabla aprobada
 //         (_shared/cegidMandar.ts) y con una base al 21 % que da el cobro al céntimo;
 //       - el cliente de Cegid existe y su NIF es el de la ficha atada al cobro (conta_cobro_cliente o el enlace);
-//       - su ficha de Cegid NO tiene conceptos fijos (se lee en ese momento): si los tiene, Cegid le facturaría dos
-//         veces;
 //       - el cobro no está ya mandado (conta_cegid_incidencia: un cobro, una incidencia viva).
 //     Cada incidencia se apunta ANTES de mandarla («mandando») y se cierra con su número de Cegid («mandada») o con su
 //     porqué («fallo»): nada sale dos veces aunque se pulse dos veces.
 //   · { company_id, accion: 'deshacer', mes, cliente? }: borra en Cegid las incidencias que mandó Sumied y que aún no
 //     están facturadas; las ya facturadas no se tocan (quedan «facturada», con su factura).
+// Los conceptos fijos de la ficha NO paran a nadie (añadido a la respuesta 3, 25/11): Julio no los corta ficha a ficha,
+// quita «Noviembre» de los meses del periodo 1 (MENSUAL) en Cegid, y la API sigue devolviéndolos en la ficha. Lo avisa
+// la pantalla antes de mandar.
 // La autónoma (una empresa que factura con retención): no se le manda nada todavía (respuesta 3, punto 6).
 // Solo un administrador de la cuenta. En una cuenta de demostración, no se escribe (puerta.ts).
 // verify_jwt = true (config.toml).
@@ -24,7 +23,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
-import { ClienteDiezRec, conceptosFijos, FalloDiezRec, rutaCliente } from "../_shared/diezRec.ts";
+import { ClienteDiezRec, FalloDiezRec, rutaCliente } from "../_shared/diezRec.ts";
 import { baseDelCobro, COBRADO_GC, conceptoAprobado, cuerpoIncidencia, type LineaIncidencia } from "../_shared/cegidMandar.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -58,15 +57,13 @@ async function conexion(srv: Srv, accountId: string, companyId: string): Promise
     fetch: (url, init) => fetch(url, init), escribe: "incidencias" }) };
 }
 
-/** La ficha de Cegid de un cliente, leída ahora: sus conceptos fijos y su NIF; y se guardan los conceptos en Sumied. */
-async function fichaAhora(srv: Srv, api: ClienteDiezRec, companyId: string, codigo: number): Promise<{ existe: boolean; nif: string | null; fijos: ReturnType<typeof conceptosFijos> }> {
+/** La ficha de Cegid de un cliente, leída ahora: si existe y su NIF. */
+async function fichaAhora(api: ClienteDiezRec, codigo: number): Promise<{ existe: boolean; nif: string | null }> {
   const r = await api.get(rutaCliente(codigo));
-  if (r.status === 204) return { existe: false, nif: null, fijos: [] };
+  if (r.status === 204) return { existe: false, nif: null };
   if (r.status !== 200) throw new FalloDiezRec(`Cegid contesta ${r.status} al leer el cliente ${codigo}`, r.status);
   const j = (r.json ?? {}) as Fila;
-  const fijos = conceptosFijos(j).filter((x) => (x.codigoConcepto ?? "").trim());
-  await srv.from("conta_cegid_cliente").update({ conceptos: fijos, leido_at: new Date().toISOString() }).eq("company_id", companyId).eq("codigo", codigo);
-  return { existe: true, nif: (j.nif as string | null) ?? null, fijos };
+  return { existe: true, nif: (j.nif as string | null) ?? null };
 }
 
 Deno.serve(async (req) => {
@@ -79,8 +76,8 @@ Deno.serve(async (req) => {
   let b: Fila = {};
   try { b = await req.json(); } catch { /* vacío */ }
   const companyId = typeof b.company_id === "string" && /^[0-9a-f-]{36}$/i.test(b.company_id) ? b.company_id : "";
-  const accion = b.accion === "releer" || b.accion === "mandar" || b.accion === "deshacer" ? b.accion : "";
-  if (!companyId || !accion) return json({ error: "faltan company_id o accion (releer, mandar o deshacer)" }, 400);
+  const accion = b.accion === "mandar" || b.accion === "deshacer" ? b.accion : "";
+  if (!companyId || !accion) return json({ error: "faltan company_id o accion (mandar o deshacer)" }, 400);
   const mes = typeof b.mes === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(b.mes) ? b.mes : "";
   if ((accion === "mandar" || accion === "deshacer") && !mes) return json({ error: "falta el mes (AAAA-MM)" }, 400);
 
@@ -100,16 +97,6 @@ Deno.serve(async (req) => {
   const quien = String((u.user.user_metadata as Fila | undefined)?.full_name ?? u.user.email ?? "alguien");
 
   try {
-    if (accion === "releer") {
-      const codigos = (Array.isArray(b.codigos) ? b.codigos : []).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 40);
-      const parados: { codigo: number; conceptos: unknown[] }[] = [];
-      for (const cod of codigos) {
-        const f = await fichaAhora(srv, api, companyId, cod);
-        if (f.fijos.length) parados.push({ codigo: cod, conceptos: f.fijos });
-      }
-      return json({ ok: true, leidos: codigos.length, parados });
-    }
-
     if (accion === "mandar") {
       const cliente = Number(b.cliente);
       const ids = (Array.isArray(b.cobros) ? b.cobros : []).map(String).slice(0, 60);
@@ -137,8 +124,8 @@ Deno.serve(async (req) => {
         lineas.push({ gcId: id, concepto, texto: String(s?.nombre ?? "").replace(/\s+/g, " ").trim(), fecha: String(x.fecha), baseCent, totalCent });
       }
       if (malos.length) return json({ error: `No se manda nada de este cliente: ${malos.join("; ")}.` }, 409);
-      // La ficha de Cegid, ahora: existe, mismo NIF que la ficha atada y sin conceptos fijos.
-      const f = await fichaAhora(srv, api, companyId, cliente);
+      // La ficha de Cegid, ahora: existe y tiene el mismo NIF que la ficha atada.
+      const f = await fichaAhora(api, cliente);
       if (!f.existe) return json({ error: `El cliente ${cliente} no existe en la facturación de Cegid.` }, 409);
       const { data: cc } = await srv.from("conta_cobro_cliente").select("party_id").eq("company_id", companyId).in("gc_cliente_id", [...gcClientes]);
       const { data: en } = await srv.from("conta_gc_enlace").select("party_id").eq("company_id", companyId).eq("estado", "atado").in("gc_cliente_id", [...gcClientes]);
@@ -146,9 +133,6 @@ Deno.serve(async (req) => {
       const { data: ps } = partes.length ? await srv.from("party").select("tax_id").eq("account_id", co.account_id).in("id", partes) : { data: [] };
       const nifs = new Set(((ps ?? []) as Fila[]).map((x) => nifLimpio(x.tax_id)).filter(Boolean));
       if (!nifs.has(nifLimpio(f.nif))) return json({ error: `El cliente ${cliente} de Cegid tiene otro NIF que la ficha de estos cobros: no se manda.` }, 409);
-      if (f.fijos.length) {
-        return json({ error: `El cliente ${cliente} aún tiene conceptos fijos en Cegid (${f.fijos.map((x) => x.codigoConcepto).join(", ")}): quítalos antes, o se le facturaría dos veces.`, parado: true }, 409);
-      }
       // Una a una: se apunta antes de mandarla y se cierra con su número o con su porqué.
       let hechas = 0, totalCent = 0;
       for (const l of lineas) {

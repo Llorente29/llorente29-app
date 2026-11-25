@@ -15,7 +15,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { deshacerCegid, leerConexionCegid, leerGuardadoCegid, leerMandadoCegid, leerTodoCegid, mandarClienteCegid, releerFichasCegid } from '@/modules/conta/services/cegidService'
+import { deshacerCegid, leerConexionCegid, leerGuardadoCegid, leerMandadoCegid, leerTodoCegid, mandarClienteCegid } from '@/modules/conta/services/cegidService'
 import { planMandar, type CobroParaMandar } from '../../../../../supabase/functions/_shared/cegidMandar'
 import { MandarCegidQ10 } from './MandarCegidQ10'
 import { COBRADO, facturasDelMes, nombreDelMesQ10 } from './facturasDelMes'
@@ -90,7 +90,7 @@ export function FacturasQ10Page() {
         partyId: f?.partyId ?? null, nombre: f?.nombre ?? null, codigoCegid: f ? cegid.codigos.get(f.partyId)?.codigo ?? null : null }
     })
     const vivos = new Set((md.datos ?? []).filter((x) => ['mandando', 'mandada', 'facturada'].includes(x.estado)).map((x) => x.gcCobroId))
-    return planMandar(mes, cobros, cg.datos.clientes, vivos)
+    return planMandar(mes, cobros, vivos)
   }, [d.datos, base, cg.datos, cegid, md.datos, mes])
 
   if (d.error) return <ErrorConReintento mensaje={`No se han podido leer los cobros del mes: ${d.error}`} reintentar={d.recargar} />
@@ -143,13 +143,7 @@ export function FacturasQ10Page() {
         return `Mandados a Cegid ${hechos} clientes, ${lineas} líneas. Ahora, en Cegid, «Facturación automática» de ${nombreDelMesQ10(mes).toLowerCase()}.`
       }}
       alDeshacer={async () => { try { return await deshacerCegid(empresa.id, mes) } finally { tras() } }}
-      alReleer={async (avance) => {
-        const codigos = (plan?.parados ?? []).map((x) => x.codigo)
-        try {
-          const siguen = await releerFichasCegid(empresa.id, codigos, avance)
-          return `Leídas ${codigos.length} fichas en Cegid: ${codigos.length - siguen.length} ya sin conceptos fijos, ${siguen.length} aún con ellos.`
-        } finally { tras() }
-      }} />
+      />
   )
 
   return (
