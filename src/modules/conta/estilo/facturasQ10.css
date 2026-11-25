@@ -1,0 +1,31 @@
+/* src/modules/conta/estilo/facturasQ10.css
+ *
+ * Q10 · «Las facturas de noviembre», con el estilo de Clientes y cuotas
+ * (clientesG04.css: sus colores, bloques y botones). Aquí solo lo suyo: la
+ * línea de arriba, la tabla de facturas y las listas de lo pendiente. A 1366
+ * la tabla cabe entera; en móvil, se desplaza dentro de su caja.
+ */
+.q10-frase { margin: 0; padding: 14px 18px; border-radius: 12px; font-family: var(--g4-display); font-size: 20px; font-weight: 700;
+  background: var(--g4-aviso-fondo); color: var(--g4-aviso); }
+.q10-frase[data-tono='bien'] { background: var(--g4-bien-fondo); color: var(--g4-bien); }
+.q10-nota { margin: -12px 0 0; font-size: 13px; color: var(--g4-apoyo); }
+.q10-linea { margin: 0; font-size: 14px; color: var(--g4-neutro); }
+.q10-linea[data-tono='bien'] { color: var(--g4-bien); font-weight: 600; }
+.q10-linea[data-tono='mal'] { color: var(--g4-mal); font-weight: 600; }
+.q10-erp10 { gap: 10px; align-items: flex-start; }
+.q10-tabla-caja { overflow-x: auto; margin: 0 -8px; }
+.q10-tabla { width: 100%; border-collapse: collapse; font-size: 14px; }
+.q10-tabla th { text-align: left; font-size: 12px; font-weight: 600; color: var(--g4-apoyo); padding: 8px; border-bottom: 1px solid var(--g4-borde); white-space: nowrap; }
+.q10-tabla td { padding: 10px 8px; border-bottom: 1px solid var(--g4-linea); vertical-align: top; }
+.q10-num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.q10-total { font-weight: 700; }
+.q10-numero { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--g4-neutro); }
+.q10-cliente { font-weight: 600; }
+.q10-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.q10-lista li { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(160px, 1fr) 2fr; gap: 4px 16px; padding: 10px 0; border-bottom: 1px solid var(--g4-linea); font-size: 14px; }
+.q10-importe { color: var(--g4-neutro); font-variant-numeric: tabular-nums; }
+.q10-porque { color: var(--g4-apoyo); }
+@media (max-width: 760px) {
+  .q10-lista li { grid-template-columns: 1fr; }
+  .q10-frase { font-size: 17px; }
+}
