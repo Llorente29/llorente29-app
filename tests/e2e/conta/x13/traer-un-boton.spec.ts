@@ -149,13 +149,28 @@ for (const tam of TAMANOS) {
       await page.screenshot({ path: `${DIR}/parado-${tam.width}.png` })
       await p.getByRole('button', { name: 'Seguir trayendo de ERP10' }).click()
 
-      // 3 · Al acabar: entra en prueba solo, y cuadra.
-      await expect(p.getByRole('status').filter({ hasText: '✓ Leído y cuadra con ERP10' })).toBeVisible({ timeout: 90_000 })
+      // 3 · Al acabar: entra en prueba solo. X14 · 2: sin el sumas y saldos de ERP10 no ha comparado nada, y lo dice (el de
+      // la conexión se calcula de los mismos asientos). Con su fichero (el del ejemplo), compara cuenta a cuenta, y cuadra.
+      await expect(p.getByRole('status').filter({ hasText: /^(En prueba · falta comparar el sumas y saldos|✓ Leído y cuadra con ERP10)$/ })).toBeVisible({ timeout: 90_000 })
+      // Staging recibe el X14 · 2 (la base que dice cuántas cuentas ha comparado) de verdad al fusionar: desde la rama, solo
+      // en ROLLBACK. Hasta entonces, esto se salta y lo dice; la de la noche sobre main lo corre entero.
+      const [carga] = (await rest<{ id: string }[]>(s, 'GET', `import_run?select=id&company_id=eq.${empresa}&kind=eq.carga&status=eq.en_prueba`)).datos
+      const sonda = await rest<Record<string, unknown>>(s, 'POST', 'rpc/conta_traer_antes_de_dar_por_bueno', { p_carga: carga.id })
+      test.skip(!('cuentas' in (sonda.datos ?? {})), 'Staging aún no tiene el X14 · 2 (sumas y saldos de ERP10, de su fichero): llega a staging al fusionar.')
+      await expect(p.getByRole('status').filter({ hasText: 'En prueba · falta comparar el sumas y saldos' })).toBeVisible({ timeout: 30_000 })
+      await expect(fila(page, 'Sumas y saldos')).toContainText('Sin comparar')
+      await expect(fila(page, 'Sumas y saldos')).toContainText('No se ha podido comparar: suelta el sumas y saldos de ERP10')
+      await expect(p.getByRole('button', { name: 'Darlo por bueno' })).toHaveAttribute('title', /No se ha podido comparar con el sumas y saldos de ERP10/)
+      await page.screenshot({ path: `${DIR}/sin-comparar-${tam.width}.png` })
+      await p.getByLabel('El sumas y saldos de ERP10').setInputFiles('tests/conta/fixtures/importar/erp10/sumas_y_saldos.xlsx')
+      await expect(page.getByRole('status').filter({ hasText: /^Comparado con el sumas y saldos de ERP10: las \d+ cuentas, iguales al céntimo en el debe y en el haber\.$/ })).toBeVisible({ timeout: 60_000 })
+      await expect(p.getByRole('status').filter({ hasText: '✓ Leído y cuadra con ERP10' })).toBeVisible({ timeout: 30_000 })
       await expect(fila(page, 'Diario')).toContainText('10 asientos')
       await expect(fila(page, 'Diario')).toContainText('igual que en ERP10, mes a mes')
       await expect(fila(page, 'Facturas emitidas')).toContainText('2 facturas')
       await expect(fila(page, 'Facturas recibidas')).toContainText('3 facturas')
       await expect(fila(page, 'Sumas y saldos')).toContainText('Cuadra', { timeout: 30_000 })
+      await expect(fila(page, 'Sumas y saldos')).toContainText(/las \d+ cuentas, iguales en Sumied y en ERP10 al céntimo, debe y haber/)
       await expect(fila(page, 'Proveedores y acreedores')).toContainText('1 sin NIF')
       await expect(p.locator('.cxe-botones button')).toHaveText(['Descartar lo traído', 'Darlo por bueno'])
       // Nada cortado ni escondido: la pastilla y los botones, dentro de la pantalla; si no caben en una línea (a 1366),

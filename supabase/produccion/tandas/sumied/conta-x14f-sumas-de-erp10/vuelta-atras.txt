@@ -1,0 +1,3 @@
+# X14 · 2 · la vuelta atrás: quita conta_traer_poner_sumas y devuelve las tres funciones de sus respaldos.
+cuenta: scripts/conta/produccion/cuentas/x14f-sumas.sql
+supabase/vuelta-atras/20261125T1533_x14f_sumas_de_erp10.down.sql

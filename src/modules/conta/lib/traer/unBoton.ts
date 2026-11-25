@@ -36,7 +36,7 @@ export interface LectorVisto {
 /** Lo traído en prueba (traerService.EnPrueba), lo que se usa aquí. */
 export interface EnPruebaVisto { cuentas: Record<string, number>; mirar: { frase: string }[]; sumas: { debe: number; haber: number }[] }
 /** La comparación de la base antes de darlo por bueno (traerService.AntesDeDarlo). */
-export interface AntesVisto { puede: boolean; texto: string; comparado: boolean; diferencias: Diferencia[] }
+export interface AntesVisto { puede: boolean; texto: string; comparado: boolean; /** X14 · 2 · las cuentas comparadas con el de ERP10 */ cuentas?: number; diferencias: Diferencia[] }
 
 export interface EntradaUnBoton {
   lector: LectorVisto | null
@@ -131,6 +131,8 @@ export function pastillaUnBoton(e: EntradaUnBoton): { texto: string; tono: 'azul
   if (est === 'fallo') return { texto: 'No ha entrado en prueba', tono: 'ambar' }
   if (est === 'acabado') {
     if (!e.antes) return { texto: 'En prueba · comparando', tono: 'azul' }
+    // X14 · 2 · Sin el sumas y saldos de ERP10 comparado, cuenta a cuenta, no se dice que cuadra (el resumen del mes solo no).
+    if (!e.antes.comparado || !e.antes.cuentas) return { texto: 'En prueba · falta comparar el sumas y saldos', tono: 'ambar' }
     return cuadra(e).todo ? { texto: '✓ Leído y cuadra con ERP10', tono: 'verde' } : { texto: 'No cuadra con ERP10', tono: 'ambar' }
   }
   return null
@@ -215,13 +217,17 @@ function alAcabar(e: EntradaUnBoton, tipo: TipoUnBoton, base: FilaUnBoton): Fila
     case 'sumas_saldos': {
       const a = e.antes
       if (!a) return { ...base, linea: 'Comparando…' }
-      if (!a.comparado) return fila('Sin comparar', 'no hay saldos con los que comparar', null)
+      // X14 · 2 · Sin el sumas y saldos de ERP10 (su fichero), no se ha comparado nada: nunca «Cuadra» (Julio, 25/11).
+      if (!a.comparado || !a.cuentas) {
+        return fila('Sin comparar', '', { texto: 'No se ha podido comparar: suelta el sumas y saldos de ERP10',
+          lista: ['El sumas y saldos que se ve sin el fichero sale de sumar los mismos asientos leídos: no compara nada.',
+                  'Sácalo de ERP10 (el sumas y saldos del ejercicio, en Excel) y suéltalo aquí. Sin compararlo, no se da por bueno.'] })
+      }
       if (a.diferencias.length) {
         const lista = a.diferencias.map((d) => `${d.cuenta} · ${d.nombre}: en ERP10, ${euros(Number(d.alli_debe) - Number(d.alli_haber))}; en Sumied, ${euros(Number(d.traido_debe) - Number(d.traido_haber))}.`)
         return fila('No cuadra', '', { texto: `${cuantos(a.diferencias.length, 'cuenta no queda igual', 'cuentas no quedan igual')}`, lista })
       }
-      const conSaldo = (e.enPrueba?.sumas ?? []).filter((s) => s.debe !== s.haber).length
-      return fila('Cuadra', `las ${n(conSaldo)} cuentas con saldo, igual en Sumied que en ERP10`, null)
+      return fila('Cuadra', `las ${n(a.cuentas)} cuentas, iguales en Sumied y en ERP10 al céntimo, debe y haber`, null)
     }
   }
 }

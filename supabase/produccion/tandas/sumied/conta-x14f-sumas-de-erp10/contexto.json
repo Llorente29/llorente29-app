@@ -1,0 +1,23 @@
+{
+ "_que": "X14 · 2 · Las sumas y saldos de ERP10, de su fichero · contexto medido en la BASE LOCAL con la estructura de staging (main 5188e8d, como en producción), en SOLO LECTURA: no en producción. Una función nueva y tres reemplazadas (la misma firma), con respaldo y con su prueba de staging. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-25T14:43Z",
+ "tanda": {
+  "supabase/migrations/20261125T1533_x14f_sumas_de_erp10.sql": "ff9a0f479827ef21e88533664f76ddfa"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public._conta_traer_comparar(uuid)",
+   "public.conta_traer_antes_de_dar_por_bueno(uuid)",
+   "public.conta_traer_dar_por_bueno(uuid,text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

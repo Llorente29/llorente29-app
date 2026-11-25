@@ -39,6 +39,7 @@ export * from './pantalla'
 export * from './casarPagos'
 export * from './conexion'
 export * from './unBoton'
+export * from './sumasDeErp10'
 
 /** Cómo está cada fichero en la lista de la maqueta: «Leído», «Mira esto» o «Falta». */
 export type Estado = 'leido' | 'mira' | 'falta'
