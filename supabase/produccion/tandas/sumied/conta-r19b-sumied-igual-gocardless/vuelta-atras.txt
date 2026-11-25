@@ -1,0 +1,4 @@
+# R19 · paso 1 · la vuelta atrás: cada línea igualada como estaba, sin lo apuntado, sin los tres tipos nuevos y con las
+# dos funciones de «Cobros de GoCardless sin cliente» de su respaldo.
+cuenta: scripts/conta/produccion/cuentas/r19b-sumied-igual-gocardless.sql
+supabase/vuelta-atras/20261125T1329_r19b_sumied_igual_gocardless.down.sql

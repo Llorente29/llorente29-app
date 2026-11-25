@@ -230,7 +230,7 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
   ] as Tarea[]).filter((t) => t.n > 0).sort((a, b) => (b.centimos ?? 0) - (a.centimos ?? 0))
   const tareas: Tarea[] = [
     ...(sinCliente.n ? [{ id: 'sin-cliente', n: sinCliente.n, titulo: 'Cobros de GoCardless sin cliente',
-      texto: `${sinCliente.n} ${sinCliente.n === 1 ? 'suscripción' : 'suscripciones'} de GoCardless${sinCliente.cent !== null ? ` (${euros(sinCliente.cent)} al mes)` : ''} que aún no ${sinCliente.n === 1 ? 'está unida' : 'están unidas'} a su cliente en Sumied.`,
+      texto: `${sinCliente.n} ${sinCliente.n === 1 ? 'suscripción' : 'suscripciones'} de GoCardless${sinCliente.cent !== null ? ` (${euros(sinCliente.cent)} este mes)` : ''} que aún no ${sinCliente.n === 1 ? 'está atada' : 'están atadas'} a su ficha en Sumied.`,
       boton: 'Asignar a un cliente', centimos: sinCliente.cent, tono: 'mal' as Tono, filtro: null }] : []),
     ...resto,
   ]

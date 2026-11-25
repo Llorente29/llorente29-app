@@ -1,0 +1,6 @@
+{
+ "_que": "R19 · paso 1 · Sumied igual a GoCardless · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA. 1329: añade una tabla, amplía un CHECK y cambia dos funciones de pantalla con su respaldo. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-25T12:42Z",
+ "tanda": { "supabase/migrations/20261125T1329_r19b_sumied_igual_gocardless.sql": "2b5aa699590af9080d1484d7587b9b97" },
+ "contexto": { "tablas": ["public.conta_gestoria_diferencia"], "funciones": ["public.conta_lista_que_hacer(uuid)", "public.conta_pantalla_asignar(uuid)"], "filas": {}, "otras": {}, "camino": { "tablas": [], "funciones": [] }, "usos": {}, "registro": [] }
+}

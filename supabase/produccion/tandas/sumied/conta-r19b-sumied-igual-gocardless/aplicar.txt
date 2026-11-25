@@ -1,0 +1,10 @@
+# R19 · paso 1 · Sumied igual a GoCardless (Julio, 25/11). Rama conta/r19b-sumied-igual-gocardless. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1329  Añade lo igualado (conta_gc_igualado); amplía el CHECK de «Pendiente de revisar» con tres tipos; y cambia, con
+#         su respaldo, las dos funciones de «Cobros de GoCardless sin cliente» para que cuenten lo SIN ATAR con la forma
+#         de contar de la copia. Lo que se iguala lo hace la lectura de GoCardless (conta-gocardless-leer/igualar.ts).
+#
+# Nada en el camino del pedido, ni de cobros ni de facturas. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r19b-sumied-igual-gocardless.sql
+supabase/migrations/20261125T1329_r19b_sumied_igual_gocardless.sql

@@ -24,6 +24,24 @@ export interface PorAsignar {
   propuesta: Propuesta
   /** Q08 · Lo que escribió QBO en su Excel para este cliente (un nombre en vez del nº de ficha), con las fichas que encajan. */
   deQbo: DeQbo | null
+  /** R19 · Lo que propuso la lectura de GoCardless (por correo o por nombre) y nadie ha confirmado aún. */
+  propuestoPorSumied: boolean
+  /** R19 · Sus mandatos (banco y últimos dígitos), para distinguirlo cuando el correo se repite. */
+  mandatos: { banco: string | null; cuentaFinal: string | null; estado: string | null }[]
+  /** R19 · El correo lo tienen también otros clientes de GoCardless, o varias fichas: se enseñan el banco y los dígitos. */
+  correoRepetido: boolean
+}
+
+/** R19 · Los apuntados como «No tiene ficha: apuntar para QBO» (conta_gc_enlace en «sin_ficha»), para la lista que se da a QBO. */
+export interface ApuntadoParaQbo {
+  empresaId: string
+  empresa: string
+  gcClienteId: string
+  nombre: string
+  correo: string | null
+  nif: string | null
+  alMesCent: number
+  quien: string | null
 }
 
 /**
@@ -76,36 +94,84 @@ export function clientesParaCasar(d: DatosClientes): ClienteParaCasar[] {
   return [...vistos.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
 }
 
-/** Las suscripciones activas y los clientes de GoCardless que las pagan llegan en su propia llamada (conta_pantalla_asignar). */
+/**
+ * Las suscripciones activas y los clientes de GoCardless que las pagan llegan en su propia llamada (conta_pantalla_asignar).
+ * R19 (Julio, 25/11): salen TODAS las que GoCardless cobrará en el mes y no están ATADAS a una ficha (conta_gc_enlace en
+ * «atado»), también las propuestas por correo sin confirmar: la misma forma de contar que la copia (próximo cobro dentro
+ * del mes del próximo cobro, y su próximo importe). Las apuntadas «sin ficha» van aparte (apuntadosParaQbo).
+ */
 export function porAsignar(d: DatosClientes, suscripciones: readonly Fila[], gcClientes: readonly Fila[], empresas: readonly { id: string; nombre: string }[], elegidas: readonly string[],
   pendientesQbo: readonly Fila[] = []): PorAsignar[] {
   const deQbo = new Map<string, string>()
   for (const e of pendientesQbo) { const t = textoDelPendiente(texto(e.porque)); if (t) deQbo.set(`${String(e.company_id)}|${String(e.gc_cliente_id)}`, t) }
-  const unidos = new Set(d.clientes.filter((c) => c.cliente_en_gocardless && c.empresa_id).map((c) => `${String(c.empresa_id)}|${String(c.cliente_en_gocardless)}`))
   const delGc = new Map(gcClientes.map((g) => [`${String(g.company_id)}|${String(g.gc_id)}`, g]))
+  const enlace = (k: string) => (delGc.get(k)?.enlace ?? null) as Fila | null
+  const correos = new Map<string, number>()
+  for (const g of gcClientes) { const c = texto(g.correo)?.toLowerCase(); if (c) correos.set(c, (correos.get(c) ?? 0) + 1) }
   const grupos = new Map<string, PorAsignar>()
   const casar = clientesParaCasar(d)
-  for (const s of suscripciones) {
+  const existe = new Set(casar.map((c) => c.id))
+  for (const s of cuentan(suscripciones)) {
     const empresaId = String(s.company_id)
-    if (!elegidas.includes(empresaId) || s.estado !== 'active' || !s.gc_cliente_id) continue
+    if (!elegidas.includes(empresaId) || !s.gc_cliente_id) continue
     const k = `${empresaId}|${String(s.gc_cliente_id)}`
-    if (unidos.has(k)) continue
+    const e = enlace(k)
+    if (e && (e.estado === 'atado' || e.estado === 'sin_ficha')) continue
     let g = grupos.get(k)
     if (!g) {
       const gc = delGc.get(k)
       const nombre = texto(gc?.nombre) ?? String(s.gc_cliente_id)
       const correo = texto(gc?.correo)
       const nif = texto(gc?.nif)
-      g = { empresaId, empresa: empresas.find((e) => e.id === empresaId)?.nombre ?? '', gcClienteId: String(s.gc_cliente_id), nombre, correo, nif, suscripciones: [], alMesCent: 0,
-        propuesta: proponerCliente({ nombre: texto(gc?.nombre), correo, nif }, casar), deQbo: deQbo.has(k) ? fichasDeQbo(deQbo.get(k)!, casar) : null }
+      // La propuesta de la lectura (propuesto por correo o por nombre, sin confirmar) manda sobre la de la pantalla.
+      const candidatas = (Array.isArray(e?.candidatas) ? (e!.candidatas as unknown[]).map(String) : []).filter((id) => existe.has(id))
+      const por: 'NIF' | 'email' | 'nombre' = e?.por === 'correo' ? 'email' : e?.por === 'nif' ? 'NIF' : 'nombre'
+      const deLaLectura = e?.estado === 'propuesto' && candidatas.length > 0
+      const propuesta: Propuesta = deLaLectura
+        ? (candidatas.length === 1 ? { tipo: 'una', clienteId: candidatas[0], por } : { tipo: 'varias', clienteIds: candidatas, por })
+        : proponerCliente({ nombre: texto(gc?.nombre), correo, nif }, casar)
+      const mandatos = (Array.isArray(gc?.mandatos) ? (gc!.mandatos as Fila[]) : []).map((m) => ({ banco: texto(m.banco), cuentaFinal: texto(m.cuenta_final), estado: texto(m.estado) }))
+      g = { empresaId, empresa: empresas.find((x) => x.id === empresaId)?.nombre ?? '', gcClienteId: String(s.gc_cliente_id), nombre, correo, nif, suscripciones: [], alMesCent: 0,
+        propuesta, deQbo: deQbo.has(k) ? fichasDeQbo(deQbo.get(k)!, casar) : null, propuestoPorSumied: deLaLectura, mandatos,
+        correoRepetido: (!!correo && (correos.get(correo.toLowerCase()) ?? 0) > 1) || (propuesta.tipo === 'varias' && propuesta.por === 'email') }
       grupos.set(k, g)
     }
-    const al = cent(s.al_mes)
+    const al = cobraEnElMes(s)
     g.suscripciones.push({ nombre: String(s.nombre ?? 'Suscripción'), alMesCent: al })
     g.alMesCent += al
   }
   // Q08: los que QBO contestó en su Excel van primero (son los que hay que confirmar ahora).
   return [...grupos.values()].sort((a, b) => Number(!!b.deQbo) - Number(!!a.deQbo) || b.alMesCent - a.alMesCent || a.nombre.localeCompare(b.nombre, 'es'))
+}
+
+/** R19 · Las que cuentan: activas y con su próximo cobro en el mes que se cuenta (lo dice la base: cobra_en_el_mes). */
+const cuentan = (xs: readonly Fila[]) => xs.filter((s) => s.estado === 'active' && (s.cobra_en_el_mes === undefined ? true : s.cobra_en_el_mes === true))
+/** R19 · Lo que cobrará: su próximo importe (si no lo trae, lo de al mes). */
+const cobraEnElMes = (s: Fila) => cent(s.proximo_cobro_importe ?? s.al_mes)
+
+/** R19 · Los apuntados «sin ficha», para dárselos a QBO, con lo que GoCardless les cobrará en el mes. */
+export function apuntadosParaQbo(suscripciones: readonly Fila[], gcClientes: readonly Fila[], empresas: readonly { id: string; nombre: string }[], elegidas: readonly string[]): ApuntadoParaQbo[] {
+  const out = new Map<string, ApuntadoParaQbo>()
+  const delGc = new Map(gcClientes.map((g) => [`${String(g.company_id)}|${String(g.gc_id)}`, g]))
+  for (const s of cuentan(suscripciones)) {
+    const empresaId = String(s.company_id)
+    const k = `${empresaId}|${String(s.gc_cliente_id)}`
+    const gc = delGc.get(k)
+    const e = (gc?.enlace ?? null) as Fila | null
+    if (!elegidas.includes(empresaId) || e?.estado !== 'sin_ficha') continue
+    const x = out.get(k) ?? { empresaId, empresa: empresas.find((y) => y.id === empresaId)?.nombre ?? '', gcClienteId: String(s.gc_cliente_id),
+      nombre: texto(gc?.nombre) ?? String(s.gc_cliente_id), correo: texto(gc?.correo), nif: texto(gc?.nif), alMesCent: 0,
+      quien: texto(e?.porque)?.replace(/ dijo que no tiene ficha en Bitrix24\.$/, '') ?? null }
+    x.alMesCent += cobraEnElMes(s)
+    out.set(k, x)
+  }
+  return [...out.values()].sort((a, b) => b.alMesCent - a.alMesCent || a.nombre.localeCompare(b.nombre, 'es'))
+}
+
+/** R19 · «Banco Ejemplo · ···1234», de los mandatos de un cliente de GoCardless. */
+export function textoDeMandatos(ms: PorAsignar['mandatos']): string | null {
+  const t = ms.filter((m) => m.banco || m.cuentaFinal).map((m) => [m.banco, m.cuentaFinal ? `···${m.cuentaFinal}` : null].filter(Boolean).join(' · '))
+  return t.length ? `Mandato: ${[...new Set(t)].join(' / ')}` : null
 }
 
 /** «Propuesto por NIF», «2 posibles por nombre», «Sin propuesta». */
