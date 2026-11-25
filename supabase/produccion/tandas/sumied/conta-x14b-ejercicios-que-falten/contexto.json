@@ -1,0 +1,22 @@
+{
+ "_que": "X14 · 1b · «Traer» crea los ejercicios que falten · contexto medido en la BASE LOCAL con la estructura de staging (main d6cdc0e, con la 1552 del X14 · 1 delante, como en producción), en SOLO LECTURA: no en producción. 0816 reemplaza conta_traer_cargar y conta_traer_deshacer (la misma firma), con respaldo y con su prueba de staging. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-25T07:40Z",
+ "tanda": {
+  "supabase/migrations/20261125T0816_x14b_ejercicios_que_falten.sql": "789e8fa1a0f588cfc5cd2ce360206413"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_traer_cargar(uuid,text,jsonb,text)",
+   "public.conta_traer_deshacer(uuid,text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

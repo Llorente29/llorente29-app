@@ -1,0 +1,3 @@
+# X14 · 1b · «Traer» crea los ejercicios que falten: la 0816 y su prueba en ROLLBACK.
+supabase/migrations/20261125T0816_x14b_ejercicios_que_falten.sql
+supabase/staging/sql/20261125_x14b_ejercicios_que_falten_prueba.sql
