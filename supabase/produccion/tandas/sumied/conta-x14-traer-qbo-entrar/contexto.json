@@ -1,0 +1,25 @@
+{
+ "_que": "X14 · 1 · La carga por trozos · contexto medido en la BASE LOCAL con la estructura de staging (main 930112b), en SOLO LECTURA: no en producción. 1552 amplía el CHECK del estado de import_run con «cargando», añade la cola conta_traer_trozo y tres funciones, y cambia conta_traer_cargar (la misma firma), conta_traer_deshacer y _journal_entry_proponer (trozos exactos), todo con respaldo y con su prueba de staging. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-24T15:05Z",
+ "tanda": {
+  "supabase/migrations/20261124T1552_x14_traer_por_trozos.sql": "8d03255abb283e953356e0f9b4643e26"
+ },
+ "contexto": {
+  "tablas": [
+   "public.import_run"
+  ],
+  "funciones": [
+   "public.conta_traer_cargar(uuid,text,jsonb,text)"
+  ],
+  "filas": {
+   "public.import_run": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

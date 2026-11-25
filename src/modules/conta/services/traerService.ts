@@ -129,10 +129,49 @@ export async function asientosApuntados(accountId: string, companyId: string, de
 
 export const diaDeInicio = (companyId: string) => rpc<string | null>('conta_empresa_dia_de_inicio', { p_company: companyId })
 
-/** «Traerlo»: todo en prueba, en una transacción. Devuelve el texto de la base (regla 8). */
-export async function traer(companyId: string, ejercicio: string | null, datos: DatosDeLaCarga, quien: string | null): Promise<{ carga: string; texto: string; cuentas: Record<string, number> }> {
-  const r = await rpc<{ carga: string; texto: string; cuentas: Record<string, number> }>('conta_traer_cargar', { p_company: companyId, p_ejercicio: ejercicio, p_datos: datos, p_quien_nombre: quien })
-  return { carga: r.carga, texto: r.texto, cuentas: r.cuentas ?? {} }
+/** X14 · Cuántos asientos y facturas lleva metidos en prueba una carga, de cuántos. */
+export interface AvanceCarga { asientos: { hechos: number; de: number }; facturas: { hechos: number; de: number } }
+type RespuestaCarga = { carga: string; acabado?: boolean; texto?: string; cuentas?: Record<string, number>; asientos?: AvanceCarga['asientos']; facturas?: AvanceCarga['facturas'] }
+const avanceDe = (r: RespuestaCarga): AvanceCarga => ({ asientos: r.asientos ?? { hechos: 0, de: 0 }, facturas: r.facturas ?? { hechos: 0, de: 0 } })
+
+/**
+ * X14 · Llama a conta_traer_seguir hasta que la carga queda en prueba, diciendo cuánto lleva. Cada llamada mete lo que le cabe
+ * en unos segundos (muy por debajo del corte de la sesión), sea la carga del tamaño que sea. Sin «acabado» (una base de antes
+ * del X14), la carga ya entró entera.
+ */
+async function hastaAcabar(r: RespuestaCarga, avance?: (a: AvanceCarga) => void): Promise<{ carga: string; texto: string; cuentas: Record<string, number> }> {
+  for (let i = 0; r.acabado === false; i++) {
+    if (i > 20_000) throw new Error('La carga no avanza: vuelve a intentarlo.')
+    avance?.(avanceDe(r))
+    r = await rpc<RespuestaCarga>('conta_traer_seguir', { p_carga: r.carga })
+  }
+  avance?.(avanceDe(r))
+  return { carga: r.carga, texto: r.texto ?? '', cuentas: r.cuentas ?? {} }
+}
+
+/** «Traerlo»: en prueba (X14: por trozos, hasta el final). Devuelve el texto de la base (regla 8). */
+export async function traer(companyId: string, ejercicio: string | null, datos: DatosDeLaCarga, quien: string | null,
+  avance?: (a: AvanceCarga) => void): Promise<{ carga: string; texto: string; cuentas: Record<string, number> }> {
+  const r = await rpc<RespuestaCarga>('conta_traer_cargar', { p_company: companyId, p_ejercicio: ejercicio, p_datos: datos, p_quien_nombre: quien })
+  return hastaAcabar(r, avance)
+}
+
+/** X14 · Sigue con una carga a medias (otra pestaña, o una vuelta que se cortó) hasta dejarla en prueba. */
+export async function seguirCarga(carga: string, avance?: (a: AvanceCarga) => void): Promise<{ carga: string; texto: string; cuentas: Record<string, number> }> {
+  return hastaAcabar(await rpc<RespuestaCarga>('conta_traer_seguir', { p_carga: carga }), avance)
+}
+
+/** X14 · La carga a medias de la empresa («cargando»), con lo que lleva; null si no hay. */
+export async function leerAMedias(accountId: string, companyId: string): Promise<{ id: string; avance: AvanceCarga } | null> {
+  const { data, error } = await tabla('import_run').select('id, detail')
+    .eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'carga').eq('status', 'cargando')
+    .order('started_at', { ascending: false }).limit(1)
+  if (error) throw new Error(mensaje('No se ha podido leer si hay algo a medias', error))
+  const r = (data ?? [])[0] as Record<string, unknown> | undefined
+  if (!r) return null
+  const e = (((r.detail ?? {}) as Record<string, unknown>).estado ?? {}) as Record<string, unknown>
+  const n = (x: unknown) => Number(x ?? 0) || 0
+  return { id: String(r.id), avance: { asientos: { hechos: n(e.hechos_a), de: n(e.n_asientos) }, facturas: { hechos: n(e.hechos_f), de: n(e.n_facturas) } } }
 }
 
 export interface AntesDeDarlo { puede: boolean; texto: string; comparado: boolean; diferencias: Diferencia[]; asientos: number; facturas: number; si_hay_un_error: string }

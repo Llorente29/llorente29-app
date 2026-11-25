@@ -44,10 +44,27 @@ export interface EntradaUnBoton {
   carga: Carga | null
   enPrueba: EnPruebaVisto | null
   antes: AntesVisto | null
-  /** Meterlo en prueba: en marcha, o la frase de la base si no lo ha dejado. */
-  meter: { estado: 'metiendo' } | { estado: 'fallo'; texto: string } | null
+  /** Meterlo en prueba: en marcha (X14: con lo que lleva), o la frase de la base si no lo ha dejado. */
+  meter: { estado: 'metiendo'; avance?: AvanceMeter } | { estado: 'fallo'; texto: string } | null
   /** «Pararlo» deja este motivo (lectorTraer.PARADO). */
   parado: string
+}
+
+/**
+ * X14 · Lo que lleva metido en prueba una carga grande (conta_traer_cargar y conta_traer_seguir, por trozos): los asientos y
+ * las facturas, hechos de cuántos, del ejercicio que se trae.
+ */
+export interface AvanceMeter { ejercicio: string | null; asientos: { hechos: number; de: number }; facturas: { hechos: number; de: number } }
+
+const miles = (n: number) => new Intl.NumberFormat('es-ES', { useGrouping: true }).format(n).replace(/^(\d)(\d{3})$/, '$1.$2')
+
+/** X14 · «Trayendo 2024: asientos 2.100 de 4.425» (después, las facturas); sin avance todavía, que está entrando. */
+export function fraseMetiendo(a: AvanceMeter | null | undefined): string {
+  if (!a) return 'Leído de ERP10. Ahora entra en prueba en Sumied.'
+  const que = a.ejercicio ? `Trayendo ${a.ejercicio}` : 'Trayendo'
+  if (a.asientos.hechos < a.asientos.de) return `${que}: asientos ${miles(a.asientos.hechos)} de ${miles(a.asientos.de)}`
+  if (a.facturas.hechos < a.facturas.de) return `${que}: facturas ${miles(a.facturas.hechos)} de ${miles(a.facturas.de)}`
+  return `${que}: acabando`
 }
 
 export function estadoUnBoton(e: EntradaUnBoton): EstadoUnBoton {
@@ -110,7 +127,7 @@ export function pastillaUnBoton(e: EntradaUnBoton): { texto: string; tono: 'azul
   const est = estadoUnBoton(e)
   if (est === 'trayendo') { const q = queda(e.lector?.quedaMs ?? null); return { texto: q ? `Trayendo · ${q}` : 'Trayendo', tono: 'azul' } }
   if (est === 'parado') return e.lector?.fallo === e.parado ? { texto: 'Parado · sigue donde se quedó', tono: 'gris' } : { texto: 'Se ha cortado · sigue donde se quedó', tono: 'ambar' }
-  if (est === 'metiendo') return { texto: 'Leído · metiéndolo en prueba', tono: 'azul' }
+  if (est === 'metiendo') return { texto: e.meter?.estado === 'metiendo' && e.meter.avance ? fraseMetiendo(e.meter.avance) : 'Leído · metiéndolo en prueba', tono: 'azul' }
   if (est === 'fallo') return { texto: 'No ha entrado en prueba', tono: 'ambar' }
   if (est === 'acabado') {
     if (!e.antes) return { texto: 'En prueba · comparando', tono: 'azul' }
