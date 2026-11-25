@@ -1,0 +1,5 @@
+# X14 · 2 · Los negativos: la 1042 y la 1132, y sus pruebas en ROLLBACK.
+supabase/migrations/20261125T1042_x14d_clase_del_apunte.sql
+supabase/staging/sql/20261125_x14d_clase_del_apunte_prueba.sql
+supabase/migrations/20261125T1132_x14d_negativos.sql
+supabase/staging/sql/20261125_x14d_negativos_prueba.sql

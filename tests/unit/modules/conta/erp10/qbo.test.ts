@@ -6,7 +6,7 @@
 // Todo inventado (T11).
 
 import { describe, expect, it } from 'vitest'
-import { aAsientosGc, aFacturasFuera, enOrden, fraseDePreparar, notaFacturasFuera, quienLoCambio, resumenGc } from '@/modules/conta/erp10/qbo'
+import { aAsientosGc, aFacturasFuera, comoEsta, enOrden, fraseDePreparar, notaFacturasFuera, quienLoCambio, resumenGc } from '@/modules/conta/erp10/qbo'
 import { lineaErp10, type DatosLinea } from '@/modules/conta/erp10/salidaSola'
 import {
   asientoDeLaDevolucion, asientoDelCobro, asientoDelIngreso, conceptoDelCobro, CUENTAS_DE_QBO, subcuentaDelCliente,
@@ -97,6 +97,16 @@ describe('X33 · los asientos de GoCardless del mes en la pantalla', () => {
   it('«Preparar» confirma con números (regla 8)', () => {
     expect(fraseDePreparar({ preparados: 3, ya_estaban: 0, pendientes: 1 })).toBe('3 preparados · 0 ya estaban · 1 en «Pendiente de revisar».')
     expect(fraseDePreparar({ preparados: 0, ya_estaban: 1, pendientes: 0 })).toBe('0 preparados · 1 ya estaba · 0 en «Pendiente de revisar».')
+  })
+
+  it('X33b · «Cómo está»: el pendiente, la nota de la factura ya cobrada, o su asiento', () => {
+    const f = { pendiente: [] as string[], nota: null as string | null, estado: 'propuesto', numero: null, entryId: 'e1' }
+    expect(comoEsta({ ...f, pendiente: ['El cliente no tiene su 430'] })).toBe('Pendiente de revisar: El cliente no tiene su 430')
+    expect(comoEsta({ ...f, nota: 'La factura 2026/1/2746 ya está cobrada en Sumied: su cobro ya tiene su asiento y no se escribe otro.' }))
+      .toBe('La factura 2026/1/2746 ya está cobrada en Sumied: su cobro ya tiene su asiento y no se escribe otro.')
+    expect(comoEsta(f)).toBe('Por revisar')
+    expect(comoEsta({ ...f, estado: 'validado', numero: '4/12' })).toBe('Validado · 4/12')
+    expect(comoEsta({ ...f, entryId: null })).toBe('—')
   })
 
   it('una fila rara no tumba la pantalla', () => {

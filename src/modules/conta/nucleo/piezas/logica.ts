@@ -51,7 +51,9 @@ export function sumaDeControl(lineas: readonly { debe: number; haber: number }[]
   const c = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100)
   const debe = lineas.reduce((s, l) => s + c(l.debe), 0)
   const haber = lineas.reduce((s, l) => s + c(l.haber), 0)
-  return { debe: debe / 100, haber: haber / 100, descuadre: (debe - haber) / 100, cuadra: debe === haber && debe > 0 }
+  // X14 · 2 · También en negativo: cuadra si el debe es el haber y alguna línea lleva importe (antes, «debe > 0»).
+  const conImporte = lineas.some((l) => c(l.debe) !== 0 || c(l.haber) !== 0)
+  return { debe: debe / 100, haber: haber / 100, descuadre: (debe - haber) / 100, cuadra: debe === haber && conImporte }
 }
 
 /** «2 líneas», «1 línea». */

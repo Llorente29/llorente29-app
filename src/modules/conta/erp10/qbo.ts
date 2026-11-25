@@ -46,6 +46,8 @@ export type ClaseGc = 'cobro' | 'devolucion' | 'ingreso'
 export type FilaGc = {
   clase: ClaseGc; gcId: string; fecha: string; importe: number; nombre: string | null; cuenta: string | null; concepto: string
   pendiente: string[]; entryId: string | null; numero: string | null; estado: string | null
+  /** X33b · Lo que se dice de la fila sin ser un pendiente (la factura ya estaba cobrada en Sumied). */
+  nota: string | null
 }
 
 export type AsientosGc = { porPreparar: number; filas: FilaGc[] }
@@ -60,7 +62,7 @@ export function aAsientosGc(x: Record<string, unknown> | null | undefined): Asie
       clase: (['cobro', 'devolucion', 'ingreso'].includes(String(f.clase)) ? f.clase : 'cobro') as ClaseGc,
       gcId: String(f.gc_id ?? ''), fecha: String(f.fecha ?? ''), importe: Number(f.importe ?? 0), nombre: t(f.nombre), cuenta: t(f.cuenta),
       concepto: t(f.concepto) ?? '', pendiente: Array.isArray(f.pendiente) ? (f.pendiente as unknown[]).map(String) : [],
-      entryId: t(f.entry_id), numero: t(f.numero), estado: t(f.estado),
+      entryId: t(f.entry_id), numero: t(f.numero), estado: t(f.estado), nota: t(f.nota),
     })),
   }
 }
@@ -81,6 +83,14 @@ export function resumenGc(a: AsientosGc, mes: string): { fuerte: string; resto: 
   const partes = [`${prep} ${prep === 1 ? 'preparado' : 'preparados'}`, `${pend} en «Pendiente de revisar»`]
   if (a.porPreparar) partes.push(`${a.porPreparar} por preparar`)
   return { fuerte: `Asientos de GoCardless de ${mes} · ${a.filas.length + a.porPreparar}`, resto: `${partes.join(' · ')}. Se preparan por revisar: no sale ninguno hasta que se valida.` }
+}
+
+/** X33b · «Cómo está» de una fila preparada: la nota si la hay (ya cobrada en Sumied: no se escribió otro asiento), o su asiento. */
+export function comoEsta(f: Pick<FilaGc, 'pendiente' | 'nota' | 'estado' | 'numero' | 'entryId'>): string {
+  if (f.pendiente.length) return `Pendiente de revisar: ${f.pendiente.join(' · ')}`
+  if (f.nota) return f.nota
+  if (!f.entryId) return '—'
+  return f.estado === 'validado' ? `Validado · ${f.numero ?? '—'}` : 'Por revisar'
 }
 
 /** Lo que dice «Preparar» al acabar (regla 8): con números, nunca «Hecho». */

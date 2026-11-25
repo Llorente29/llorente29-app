@@ -211,7 +211,7 @@ describe('el ERP10 simulado de la e2e', () => {
 describe('regla 31 · el mismo ejercicio por fichero y por la conexión deja lo mismo', () => {
   const huella = (x: unknown) => createHash('md5').update(JSON.stringify(x)).digest('hex').slice(0, 12)
   const partes = (d: DatosDeLaCarga) => ({
-    cuentas: d.cuentas, terceros: d.terceros, asientos: d.asientos, facturas: d.facturas, aprendido: d.aprendido, pendientesNoExactos: d.pendientesNoExactos, raros: d.raros, sumas: d.sumas,
+    cuentas: d.cuentas, terceros: d.terceros, asientos: d.asientos, facturas: d.facturas, aprendido: d.aprendido, pendientesNoExactos: d.pendientesNoExactos, raros: d.raros,
   })
 
   it('con los ficheros de prueba del N07 y su versión en el ERP10 simulado', async () => {
@@ -224,7 +224,7 @@ describe('regla 31 · el mismo ejercicio por fichero y por la conexión deja lo 
     const cifras = (d: ReturnType<typeof partes>) => ({
       cuentas: d.cuentas.length, terceros: d.terceros.length, asientos: d.asientos.length, apuntes: d.asientos.reduce((s, x) => s + x.apuntes.length, 0),
       debe: d.asientos.reduce((s, x) => s + x.apuntes.reduce((t, y) => t + y.debe, 0), 0), facturas: d.facturas.length, total: d.facturas.reduce((s, x) => s + x.total, 0),
-      conAsiento: d.facturas.filter((x) => x.asiento).length, aprendidos: d.aprendido.length, sumas: d.sumas.length, huella: huella(d),
+      conAsiento: d.facturas.filter((x) => x.asiento).length, aprendidos: d.aprendido.length, huella: huella(partes(d)),
     })
     // Las dos cifras, tomadas igual a los dos lados (las pega el parte).
     const [x, y] = [cifras(a), cifras(b)]
@@ -232,5 +232,9 @@ describe('regla 31 · el mismo ejercicio por fichero y por la conexión deja lo 
     for (const k of Object.keys(a) as (keyof typeof a)[]) expect([k, huella(b[k])]).toEqual([k, huella(a[k])])
     expect(y).toEqual(x)
     expect(porLaConexion.conexion?.resumen).toMatchObject({ cuadra: true })
+    // X14 · 2 · Lo único distinto, y a propósito: el sumas y saldos. El del fichero es de ERP10 y va a la base; el de la
+    // conexión se calcula de los mismos asientos y no se manda, porque no compara nada.
+    expect(paraLaBase(porFichero).sumas.length).toBeGreaterThan(0)
+    expect(paraLaBase(porLaConexion).sumas).toEqual([])
   })
 })

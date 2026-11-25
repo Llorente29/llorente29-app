@@ -1,0 +1,20 @@
+[
+ {
+  "id": "811-1",
+  "pr": 811,
+  "fecha": "2026-11-25T17:33:39Z",
+  "producto": "sumied",
+  "apartado": "Traer de ERP10",
+  "frase": "las líneas en negativo entran tal cual, como en ERP10; las que vienen a cero no entran y se dice por qué.",
+  "ruta": null
+ },
+ {
+  "id": "811-2",
+  "pr": 811,
+  "fecha": "2026-11-25T17:33:39Z",
+  "producto": "sumied",
+  "apartado": "Asiento general",
+  "frase": "se puede escribir un asiento en negativo; cuadra y la contrapartida se propone también en negativo.",
+  "ruta": null
+ }
+]

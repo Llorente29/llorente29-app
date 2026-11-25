@@ -1,0 +1,31 @@
+{
+ "_que": "X14 · 2 · Los negativos en el diario · contexto medido en la BASE LOCAL con la estructura de staging (main 1b02e43, con el X14 · 1, el 1b y el 2 delante, como en producción), en SOLO LECTURA: no en producción. 1042 añade una función que no lee tablas; 1132 cambia las restricciones de journal_line (AUTORIZO de Julio) y seis funciones enteras con respaldo. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-25T10:39Z",
+ "tanda": {
+  "supabase/migrations/20261125T1042_x14d_clase_del_apunte.sql": "97f7e724c31350400ba3a82da6c55ae7",
+  "supabase/migrations/20261125T1132_x14d_negativos.sql": "2b9e4a8bb452481309fcc8e822b2e701"
+ },
+ "contexto": {
+  "tablas": [
+   "public.journal_line"
+  ],
+  "funciones": [
+   "public._conta_traer_seguir(uuid,timestamp with time zone)",
+   "public._s01p_nomina_retencion_poner(uuid,text,numeric)",
+   "public.conta_apunte_pago_modelo(uuid,integer,text,text)",
+   "public.conta_asiento_modificar(uuid,jsonb,jsonb,text)",
+   "public.conta_cierre_validar(uuid,integer,text,text,text,text,integer,text)",
+   "public.conta_motivos_para_validar(uuid)"
+  ],
+  "filas": {
+   "public.journal_line": 6
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

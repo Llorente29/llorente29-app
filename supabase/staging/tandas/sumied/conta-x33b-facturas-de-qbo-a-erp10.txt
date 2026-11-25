@@ -1,0 +1,7 @@
+# X33b · Una factura con cobro nunca lleva dos asientos de cobro; la factura de un cobro es solo la atada a él. La 1320
+# cambia tres funciones de los asientos de GoCardless (desde la rama, en ROLLBACK; de verdad desde main al fusionar). Su
+# prueba, por los caminos, con la vuelta atrás dentro. Y el enlace del cobro de la semilla del X33 (W07), detrás de la
+# 1320, para que su e2e siga preparándolo.
+supabase/migrations/20261125T1320_x33b_un_cobro_por_factura.sql
+supabase/staging/sql/20261125_x33b_un_cobro_por_factura_prueba.sql
+supabase/seeds/conta/seed_x33b_enlace_staging.sql

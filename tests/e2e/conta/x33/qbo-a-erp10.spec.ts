@@ -74,8 +74,9 @@ test('X33 · 1366 × 768 y 1920 × 1080: los asientos de GoCardless del mes, «P
   // Lo pendiente, arriba (regla 7: está todo).
   await expect(filas.nth(0)).toContainText('Pendiente de revisar:')
   await expect(filas.nth(1)).toContainText('Pendiente de revisar:')
-  await expect(bloque).toContainText('Pendiente de revisar: El cliente no tiene su 430 · Falta el número de factura')
-  await expect(bloque).toContainText('Pendiente de revisar: El cobro no está atado a ningún cliente de Sumied · Falta el número de factura')
+  // X33b (20261125T1320): sin factura atada a su cobro, el motivo es «Sin factura atada» (antes, «Falta el número de factura»).
+  await expect(bloque).toContainText(/Pendiente de revisar: El cliente no tiene su 430 · (Falta el número de factura|Sin factura atada)/)
+  await expect(bloque).toContainText(/Pendiente de revisar: El cobro no está atado a ningún cliente de Sumied · (Falta el número de factura|Sin factura atada)/)
   await expect(bloque.getByRole('link', { name: 'Por revisar' })).toHaveCount(2)
   await enLasDos(page, 'x33-preparados', () => bloque.scrollIntoViewIfNeeded())
 

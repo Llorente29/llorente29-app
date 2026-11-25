@@ -11,7 +11,7 @@ import { Link } from 'react-router-dom'
 import { rutaAsiento } from '@/config/navegacion'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { importe } from '@/modules/conta/erp10/salida'
-import { aAsientosGc, enOrden, fraseDePreparar, queEs, resumenGc } from '@/modules/conta/erp10/qbo'
+import { aAsientosGc, comoEsta, enOrden, fraseDePreparar, queEs, resumenGc } from '@/modules/conta/erp10/qbo'
 import { leerAsientosGc, prepararAsientosGc } from '@/modules/conta/services/erp10Service'
 
 const dia = (f: string) => (/^\d{4}-\d{2}-\d{2}/.test(f) ? `${f.slice(8, 10)}/${f.slice(5, 7)}` : '—')
@@ -67,10 +67,9 @@ export function AsientosGocardless({ companyId, mes, mesTexto, quien, vuelta }: 
                 <td className="cxe-num">{dia(f.fecha)}</td>
                 <td title={f.cuenta ? `${f.cuenta} · ${f.concepto}` : f.concepto}>{f.nombre ?? (f.clase === 'ingreso' ? 'GoCardless' : '—')}</td>
                 <td className="cxe-num">{importe(f.importe)}</td>
-                <td className="cxe-hoy-estado" title={f.pendiente.join(' · ') || undefined}>
-                  {f.pendiente.length
-                    ? <>Pendiente de revisar: {f.pendiente.join(' · ')}</>
-                    : f.entryId ? <Link className="cx-enlace" to={rutaAsiento(f.entryId)}>{f.estado === 'validado' ? `Validado · ${f.numero ?? '—'}` : 'Por revisar'}</Link> : '—'}
+                <td className="cxe-hoy-estado" title={f.pendiente.join(' · ') || f.nota || undefined}>
+                  {/* X33b · Con asiento (el suyo o, si la factura ya estaba cobrada, el que ya tenía), enlazado a él. */}
+                  {f.entryId && !f.pendiente.length ? <Link className="cx-enlace" to={rutaAsiento(f.entryId)}>{comoEsta(f)}</Link> : comoEsta(f)}
                 </td>
               </tr>
             ))}

@@ -153,7 +153,16 @@ async function hastaAcabar(r: RespuestaCarga, avance?: (a: AvanceCarga) => void)
 export async function traer(companyId: string, ejercicio: string | null, datos: DatosDeLaCarga, quien: string | null,
   avance?: (a: AvanceCarga) => void): Promise<{ carga: string; texto: string; cuentas: Record<string, number> }> {
   const r = await rpc<RespuestaCarga>('conta_traer_cargar', { p_company: companyId, p_ejercicio: ejercicio, p_datos: datos, p_quien_nombre: quien })
-  return hastaAcabar(r, avance)
+  const hecho = await hastaAcabar(r, avance)
+  // X14 · 2 · Con el sumas y saldos de ERP10 (su fichero), se compara en cuanto la carga está en prueba. El calculado de los
+  // asientos no llega aquí (paraLaBase): no compara nada.
+  if (datos.sumas?.length) await ponerSumas(hecho.carga, datos.sumas, quien)
+  return hecho
+}
+
+/** X14 · 2 · El sumas y saldos de ERP10 (su fichero, en céntimos) en la carga en prueba: la base lo compara cuenta a cuenta. */
+export async function ponerSumas(carga: string, sumas: DatosDeLaCarga['sumas'], quien: string | null): Promise<{ texto: string; comparado: boolean; cuentas: number; diferencias: Diferencia[] }> {
+  return rpc('conta_traer_poner_sumas', { p_carga: carga, p_sumas: sumas, p_quien_nombre: quien })
 }
 
 /** X14 · Sigue con una carga a medias (otra pestaña, o una vuelta que se cortó) hasta dejarla en prueba. */
@@ -162,8 +171,8 @@ export async function seguirCarga(carga: string, avance?: (a: AvanceCarga) => vo
 }
 
 /** X14 · La carga a medias de la empresa («cargando»), con lo que lleva; null si no hay. */
-export async function leerAMedias(accountId: string, companyId: string): Promise<{ id: string; avance: AvanceCarga } | null> {
-  const { data, error } = await tabla('import_run').select('id, detail')
+export async function leerAMedias(accountId: string, companyId: string): Promise<{ id: string; avance: AvanceCarga; ejercicio?: string } | null> {
+  const { data, error } = await tabla('import_run').select('id, detail, period_from')
     .eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'carga').eq('status', 'cargando')
     .order('started_at', { ascending: false }).limit(1)
   if (error) throw new Error(mensaje('No se ha podido leer si hay algo a medias', error))
@@ -171,10 +180,11 @@ export async function leerAMedias(accountId: string, companyId: string): Promise
   if (!r) return null
   const e = (((r.detail ?? {}) as Record<string, unknown>).estado ?? {}) as Record<string, unknown>
   const n = (x: unknown) => Number(x ?? 0) || 0
-  return { id: String(r.id), avance: { asientos: { hechos: n(e.hechos_a), de: n(e.n_asientos) }, facturas: { hechos: n(e.hechos_f), de: n(e.n_facturas) } } }
+  return { id: String(r.id), avance: { asientos: { hechos: n(e.hechos_a), de: n(e.n_asientos) }, facturas: { hechos: n(e.hechos_f), de: n(e.n_facturas) } },
+    ...(r.period_from ? { ejercicio: String(r.period_from).slice(0, 4) } : {}) }
 }
 
-export interface AntesDeDarlo { puede: boolean; texto: string; comparado: boolean; diferencias: Diferencia[]; asientos: number; facturas: number; si_hay_un_error: string }
+export interface AntesDeDarlo { puede: boolean; texto: string; comparado: boolean; /** X14 · 2 · las cuentas comparadas */ cuentas?: number; diferencias: Diferencia[]; asientos: number; facturas: number; si_hay_un_error: string }
 export const antesDeDarlo = (carga: string) => rpc<AntesDeDarlo>('conta_traer_antes_de_dar_por_bueno', { p_carga: carga })
 
 export async function darPorBueno(carga: string, quien: string | null): Promise<string> {

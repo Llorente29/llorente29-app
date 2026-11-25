@@ -21,12 +21,12 @@ import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import {
   FRASES_UN_BOTON, confirmarDarlo, fraseMetiendo, confirmarDescartar, conLoDeLaTabla, estadoUnBoton, filasUnBoton, leerCarga, leidoDeLaConexion, lineaDadoPorBueno,
-  lineaDeshecho, loQueMirar, paraLaBase, pastillaUnBoton, queSeTrajoSoloCuentas, type EntradaUnBoton, type FilaUnBoton,
+  lineaDeshecho, loQueMirar, paraLaBase, pastillaUnBoton, queSeTrajoSoloCuentas, abrirExcel, sumasDelFichero, type EntradaUnBoton, type FilaUnBoton,
 } from '@/modules/conta/lib/traer'
 import { PARADO, lectorDe, type LectorTraer, type VistaLector } from '@/modules/conta/erp10/lectorTraer'
 import { almacenDelNavegador } from '@/modules/conta/erp10/almacenTraer'
 import { traerPaginaErp10, type ConexionErp10 } from '@/modules/conta/services/erp10ApiService'
-import { antesDeDarlo, darPorBueno, deshacer, leerAMedias, leerEnPrueba, leerUltima, seguirCarga, traer, type AvanceCarga, type Ultima } from '@/modules/conta/services/traerService'
+import { antesDeDarlo, darPorBueno, deshacer, leerAMedias, leerEnPrueba, leerUltima, ponerSumas, seguirCarga, traer, type AvanceCarga, type Ultima } from '@/modules/conta/services/traerService'
 
 const hoyMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
 const SIN_LECTOR = () => () => undefined
@@ -62,6 +62,7 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
   const [confirmar, setConfirmar] = useState<'dar' | 'descartar' | null>(null)
   const [haciendo, setHaciendo] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
+  const [comparado, setComparado] = useState<string | null>(null)
   // Julio (20/11): si la cabecera no cabe en una línea (a 1366), la pastilla baja a una segunda, debajo del título.
   // Nada cortado ni escondido. Se mide lo que pide cada pieza en una sola línea, quepa o no.
   const cabeza = useRef<HTMLDivElement | null>(null)
@@ -105,7 +106,7 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
 
   const entrada: EntradaUnBoton = {
     lector: vista, carga, enPrueba: p, meter, parado: PARADO,
-    antes: antes.datos ? { puede: antes.datos.puede, texto: antes.datos.texto, comparado: antes.datos.comparado, diferencias: antes.datos.diferencias ?? [] } : null,
+    antes: antes.datos ? { puede: antes.datos.puede, texto: antes.datos.texto, comparado: antes.datos.comparado, cuentas: antes.datos.cuentas ?? 0, diferencias: antes.datos.diferencias ?? [] } : null,
   }
   const estado = estadoUnBoton(entrada)
   const filas = filasUnBoton(entrada)
@@ -113,7 +114,9 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
   const mirar = estado === 'acabado' ? loQueMirar(entrada, filas) : null
   const darlo = confirmarDarlo(entrada)
   const anioHoy = Number(hoyMadrid().slice(0, 4))
-  const anios = [...new Set([...L.ejercicios.map((x) => x.code), ...[anioHoy, anioHoy - 1, anioHoy - 2].map(String)])].sort().reverse()
+  // X14 · 2 · Con una carga en prueba o a medias, el selector dice SU ejercicio (el 2024 traído decía «Ejercicio 2026»).
+  const ejercicioVisto = p?.desde?.slice(0, 4) ?? medias?.ejercicio ?? ejercicio
+  const anios = [...new Set([...L.ejercicios.map((x) => x.code), ...[anioHoy, anioHoy - 1, anioHoy - 2].map(String), ejercicioVisto])].sort().reverse()
 
   async function hacer(que: string, f: () => Promise<unknown>) {
     setHaciendo(que); setFallo(null)
@@ -125,6 +128,19 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
     } catch (e) {
       setFallo(e instanceof Error ? e.message : 'No ha contestado.')
     } finally { setHaciendo(null); setConfirmar(null) }
+  }
+  // X14 · 2 · El sumas y saldos de ERP10, de su fichero: la base lo compara cuenta a cuenta y lo dice (regla 8).
+  async function compararCon(fi: File) {
+    setHaciendo('Comparando con el sumas y saldos de ERP10…'); setFallo(null); setComparado(null)
+    try {
+      const leido = sumasDelFichero(abrirExcel(fi.name, await fi.arrayBuffer()))
+      if ('porque' in leido) { setFallo(leido.porque); return }
+      const r = await ponerSumas(p!.id, leido.sumas, L.quien)
+      setComparado(r.texto)
+      setVuelta((v) => v + 1)
+    } catch (e) {
+      setFallo(e instanceof Error ? e.message : 'No ha contestado.')
+    } finally { setHaciendo(null) }
   }
   const reintentar = () => { setMeter(null); if (clave) METIENDO.delete(clave); setVuelta((v) => v + 1) }
   // X14 · Descartar lo leído deshace también la carga a medias, si la hay: si no, la siguiente no entraría.
@@ -173,7 +189,7 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
     <section className="cxe cxt cxu" aria-labelledby="cxu-titulo">
       <div className={`cxe-cabeza cxu-cabeza${dosLineas ? ' cxu-dos-lineas' : ''}`} ref={cabeza}>
         <h1 className="cxe-titulo" id="cxu-titulo">Traer de ERP10</h1>
-        <select className="cxe-mes" aria-label="Ejercicio" value={ejercicio} disabled={estado !== 'antes'} onChange={(e) => setEjercicio(e.target.value)}>
+        <select className="cxe-mes" aria-label="Ejercicio" value={ejercicioVisto} disabled={estado !== 'antes'} onChange={(e) => setEjercicio(e.target.value)}>
           {anios.map((x) => <option key={x} value={x}>Ejercicio {x}</option>)}
         </select>
         <span className="cxu-conectada">Conectada con ERP10 · empresa {conexion.codigo}</span>
@@ -196,6 +212,13 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
                   {f.linea}
                   {f.barra != null && <span className="cxu-barra" aria-hidden="true"><span style={{ width: `${Math.round(f.barra * 100)}%` }} /></span>}
                   {f.verlos && <> · <button type="button" className="cxe-enlace" onClick={() => setVerlos(f.verlos)}>Verlos</button></>}
+                  {f.tipo === 'sumas_saldos' && estado === 'acabado' && p && (
+                    <> · <label className="cxe-enlace cxu-soltar">
+                      {antes.datos?.comparado ? 'Volver a comparar con otro fichero' : 'Soltar el sumas y saldos de ERP10'}
+                      <input type="file" accept=".xlsx,.xls" aria-label="El sumas y saldos de ERP10" hidden disabled={!!haciendo}
+                        onChange={(ev) => { const fi = ev.target.files?.[0]; ev.target.value = ''; if (fi) void compararCon(fi) }} />
+                    </label></>
+                  )}
                 </span>
               </li>
             ))}
@@ -250,7 +273,7 @@ export function TraerPorLaConexion({ conexion, alFicheros }: { conexion: Conexio
         </div>
       )}
 
-      <div className="cxe-estado" role="status" aria-live="polite">{haciendo && <span>{haciendo}</span>}</div>
+      <div className="cxe-estado" role="status" aria-live="polite">{haciendo ? <span>{haciendo}</span> : comparado && <span>{comparado}</span>}</div>
       {fallo && <div className="cxe-estado cxe-mal" role="alert">{fallo}</div>}
     </section>
   )

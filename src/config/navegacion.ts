@@ -275,6 +275,8 @@ export const CONTA = {
     clienteGestoria: 'ventas/clientes-y-cuotas/cliente',
     /** G05 · «Revisar el cobro» del mes de una empresa de la gestoría: revisar, enviar a GoCardless y ver cómo va. */
     cobroGestoria: 'ventas/clientes-y-cuotas/cobro',
+    /** Q10 · Las facturas de las cuotas ya cobradas por GoCardless en un mes, en borrador hasta emitirlas. */
+    facturasCuotas: 'ventas/clientes-y-cuotas/facturas',
     liquidacionPlataforma: 'ventas/liquidaciones/plataforma/:clave',
     /** S01j·2 · La ficha de UNA liquidación de plataforma: sus cifras, su factura de comisión y el correo del que salió. */
     liquidacionFicha: 'ventas/liquidaciones/liquidacion/:id',
@@ -501,6 +503,13 @@ export const rutaCobroGestoria = (empresa?: string | null, mes?: string | null):
   if (mes) q.set('mes', mes)
   const t = q.toString()
   return `${rutaConta(CONTA.rutas.cobroGestoria)}${t ? `?${t}` : ''}`
+}
+export const rutaFacturasCuotas = (empresa?: string | null, mes?: string | null): string => {
+  const q = new URLSearchParams()
+  if (empresa) q.set('empresa', empresa)
+  if (mes) q.set('mes', mes)
+  const t = q.toString()
+  return `${rutaConta(CONTA.rutas.facturasCuotas)}${t ? `?${t}` : ''}`
 }
 export const rutaClienteGestoria = (cliente: string, empresa: string | null): string =>
   `${rutaConta(CONTA.rutas.clienteGestoria)}/${cliente}${empresa ? `?${new URLSearchParams({ empresa })}` : ''}`
