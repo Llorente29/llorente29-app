@@ -117,21 +117,21 @@ const intro = async (page: Page, n = 1) => { for (let k = 0; k < n; k++) await p
  * El asiento de pago, solo con el teclado: fecha, concepto; el acreedor con su atajo, Intro por concepto, local,
  * marca y plataforma, y el debe; el banco con su atajo, Intro hasta el haber que propone Sumied, e Intro.
  */
-async function pagoConElTeclado(page: Page, e: Empresa, haber = '') {
+async function pagoConElTeclado(page: Page, e: Empresa, haber = '', debe = '63,60', concepto = 'Pago de la factura de prueba K12') {
   await expect(ventana(page).locator('#ag-fecha')).toBeFocused({ timeout: 10_000 })
   await page.keyboard.press('Control+A'); await escribe(page, '12/11/2026')
   await expect(ventana(page).locator('#ag-concepto')).toBeFocused()
-  await escribe(page, 'Pago de la factura de prueba K12')
+  await escribe(page, concepto)
   await expect(ventana(page).locator('#ag-ed-subcuenta')).toBeFocused()
   await escribe(page, atajo(e.acreedor))
-  await expect(ventana(page).locator('#ag-ed-concepto')).toHaveValue('Pago de la factura de prueba K12')
+  await expect(ventana(page).locator('#ag-ed-concepto')).toHaveValue(concepto)
   await intro(page, 4) // concepto, local, marca, plataforma
   await expect(ventana(page).locator('#ag-ed-debe')).toBeFocused()
-  await escribe(page, '63,60')
+  await escribe(page, debe)
   await expect(ventana(page).getByRole('table', { name: 'Apuntes' }).locator('tbody tr')).toHaveCount(1)
   await expect(ventana(page).locator('#ag-ed-subcuenta')).toBeFocused()
-  // La nueva trae en ámbar lo que falta para cuadrar.
-  await expect(ventana(page).locator('#ag-ed-haber')).toHaveValue('63,60')
+  // La nueva trae en ámbar lo que falta para cuadrar (X14 · 2: en negativo, también en negativo).
+  await expect(ventana(page).locator('#ag-ed-haber')).toHaveValue(debe)
   await expect(ventana(page).locator('.kp-casilla[data-ambar="si"] #ag-ed-haber')).toHaveCount(1)
   await escribe(page, atajo(e.banco))
   await intro(page, 5) // concepto, local, marca, plataforma, debe (vacío)
@@ -189,6 +189,33 @@ test('K12 · 1 · un asiento de pago con dos apuntes, solo con el teclado; y val
   const [x] = (await rest<{ number: number; concept: string; status: string }[]>(s, 'GET', `journal_entry?select=number,concept,status&id=eq.${id}`)).datos
   expect(x).toEqual({ number: numero, concept: 'Pago de la factura de prueba K12, cambiado', status: 'validado' })
   await page.screenshot({ path: `${DIR}/asiento-cambiado-1456.png` })
+  expect(errores).toEqual([])
+})
+
+test('K12 · 7 · X14 · 2 · un asiento en negativo (un abono, como en ERP10): cuadra, propone en negativo y se valida', async ({ page }) => {
+  const errores = vigilar(page)
+  const s = await entrarComo(page, NUCLEO.email)
+  const e = await crearEmpresa(s, '7')
+  await elegirEmpresa(page, NUCLEO.id, e.id)
+  await abrirNuevo(page)
+  await pagoConElTeclado(page, e, '', '-63,60', 'Abono en negativo de prueba K12')
+  await expect(ventana(page).locator('#ag-descuadre')).toHaveValue('0,00')
+  await expect(ventana(page).locator('#ag-total-debe')).toHaveValue('-63,60')
+  await page.screenshot({ path: `${DIR}/asiento-negativo-1456.png` })
+  await ventana(page).locator('#ag-ed-subcuenta').focus()
+  await intro(page)
+  const hecho = ventana(page).getByRole('status').filter({ hasText: /^Guardado y validado: 4 \/ \d{4} · Abono en negativo de prueba K12/ })
+  await expect(hecho).toBeVisible({ timeout: 60_000 })
+  const id = (await hecho.getByRole('link', { name: 'Verlo' }).getAttribute('href'))!.split('/').pop()!
+  const f = (await filas(s, id)) as unknown as { status: string; journal_line: { cuenta: string; debit: number; credit: number }[] }
+  expect(f.status).toBe('validado')
+  expect(f.journal_line.map((l) => [l.cuenta, Number(l.debit), Number(l.credit)])).toEqual([[e.acreedor, -63.6, 0], [e.banco, 0, -63.6]])
+  await page.setViewportSize({ width: 1366, height: 768 })
+  await page.goto(`/conta/libros/diario/${id}`, { waitUntil: 'load' })
+  await expect(ventana(page).locator('#ag-total-debe')).toHaveValue('-63,60', { timeout: 40_000 })
+  await page.screenshot({ path: `${DIR}/asiento-negativo-1366.png` })
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await page.screenshot({ path: `${DIR}/asiento-negativo-1920.png` })
   expect(errores).toEqual([])
 })
 

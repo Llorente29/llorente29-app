@@ -27,7 +27,8 @@ export function problemasDeLaLinea(a: ApunteEd): string[] {
   if (!a.cuentaId) r.push('la subcuenta')
   const d = a.debe.trim() ? leerImporte(a.debe) : 0
   const h = a.haber.trim() ? leerImporte(a.haber) : 0
-  if (Number.isNaN(d) || Number.isNaN(h) || d < 0 || h < 0) r.push('un importe que sea un número')
+  // X14 · 2 · También en negativo, como ERP10 (la base lo admite: un importe en un solo lado, distinto de 0).
+  if (Number.isNaN(d) || Number.isNaN(h)) r.push('un importe que sea un número')
   else if ((d === 0) === (h === 0)) r.push('un importe, al debe o al haber')
   return r
 }
@@ -45,6 +46,13 @@ export function subirLinea(apuntes: readonly ApunteEd[], linea: ApunteEd, en: nu
   const nueva: ApunteEd = { ...apunteVacio(linea.concepto), local: linea.local, marca: linea.marca, plataforma: linea.plataforma }
   const t = totalesDe(lista)
   if (t.descuadre === 0) return { apuntes: lista, nueva, propuesto: null }
+  // X14 · 2 · Si la línea que sube va en negativo (un abono, como en ERP10), lo que falta va al otro lado y también en
+  // negativo: −63,60 al debe propone −63,60 al haber. Si no, como siempre: al lado que falta y en positivo.
+  const dl = leerImporte(fija.debe) || 0, hl = leerImporte(fija.haber) || 0
+  if (dl < 0 || hl < 0) {
+    const ladoNeg = dl < 0 ? 'haber' as const : 'debe' as const
+    return { apuntes: lista, nueva: { ...nueva, [ladoNeg]: formatoImporte(ladoNeg === 'haber' ? t.descuadre : -t.descuadre) }, propuesto: ladoNeg }
+  }
   const lado = t.descuadre > 0 ? 'haber' as const : 'debe' as const
   return { apuntes: lista, nueva: { ...nueva, [lado]: formatoImporte(Math.abs(t.descuadre)) }, propuesto: lado }
 }

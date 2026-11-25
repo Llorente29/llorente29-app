@@ -1,3 +1,5 @@
-# X14 · 2 · la vuelta atrás: quita la función de la clase de una línea.
+# X14 · 2 · la vuelta atrás, en orden inverso: las restricciones de antes (solo sin líneas en negativo) y las seis funciones
+# de sus respaldos; y la función de la clase de una línea.
 cuenta: scripts/conta/produccion/cuentas/x14d-lineas.sql
+supabase/vuelta-atras/20261125T1132_x14d_negativos.down.sql
 supabase/vuelta-atras/20261125T1042_x14d_clase_del_apunte.down.sql
