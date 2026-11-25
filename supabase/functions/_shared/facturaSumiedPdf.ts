@@ -96,6 +96,9 @@ export const QUE_INCLUYE_POR_DEFECTO: Record<string, string> = {
   gestion_laboral: 'Nóminas y seguros sociales',
 }
 
+/** El signo de restar en el PDF: «–» (U+2013), el que trae la letra incrustada (el «−», U+2212, no está). */
+export const MENOS = '\u2013'
+
 /** Los textos fijos del modelo (los de la maqueta). */
 export const SUMIED_PDF = {
   marca: 'DEMOSTRACIÓN · SIN VALIDEZ',
@@ -305,7 +308,9 @@ export function facturaSumiedPdf(JsPDF: JsPdfCtor, d: DatosFacturaSumied): Uint8
   const fila = (etiqueta: string, valor: string) => { texto(etiqueta, totX, y, 'Inter', 12.5, APOYO); texto(valor, DER, y, 'Inter', 12.5, TINTA, { align: 'right' }); y += 6.2 }
   fila('Base imponible', eur(d.baseCent))
   for (const t of d.porTipo) fila(`IVA ${pct(t.tipo)}`, eur(t.ivaCent))
-  if (d.retencion && d.retencion.cent) fila(`Retención IRPF ${pct(d.retencion.pct)}`, `−${eur(d.retencion.cent)}`)
+  // La retención resta, con su signo (Julio, 25/11: «−15,00 €»). Con «–» (U+2013): la letra incrustada no trae el «−» de
+  // las matemáticas (U+2212) y jsPDF lo dejaba en blanco; el «–» sí está y se ve igual.
+  if (d.retencion && d.retencion.cent) fila(`Retención IRPF ${pct(d.retencion.pct)}`, `${MENOS}${eur(d.retencion.cent)}`)
   y += 0.5
   raya(y, NOCHE, 2, totX, DER)
   texto('Total', totX, y + 5.5, 'InterBold', 13, TINTA)

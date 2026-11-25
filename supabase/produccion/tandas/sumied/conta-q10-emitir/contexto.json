@@ -1,0 +1,16 @@
+{
+ "_que": "Q10 · emitir las cuotas · contexto de producción de la tanda (1610), medido en SOLO LECTURA el 25/11 a las 15:20Z con la consulta de analizar.mjs sql-contexto: la función no existe, nada en el camino del pedido y nada en el historial.",
+ "medido": "2026-11-25T15:20Z",
+ "tanda": {
+  "supabase/migrations/20261125T1610_q10_emitir_cuotas.sql": "9274175c6642c947bbe9f1ee7f4fa6e7"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": { "tablas": [], "funciones": [] },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,10 @@
+# Q10 · Emitir las cuotas ya cobradas por GoCardless (25/11). Rama conta/q10-emitir. Se ensaya y se aplica desde main
+# nombrando la rama, antes de fusionar (lo lanza Julio, T10).
+#
+#   1610  Añade una función (conta_cuotas_emitir): emite un trozo de las facturas de las cuotas cobradas, con la serie
+#         de Cegid y la fecha de hoy, y ata cada una a su cobro en conta_gc_cobro_factura (la tabla del #816). No toca
+#         ninguna fila al aplicarse: emitir lo hace Julio desde la pantalla, por empresa.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/q10-emitir.sql
+supabase/migrations/20261125T1610_q10_emitir_cuotas.sql

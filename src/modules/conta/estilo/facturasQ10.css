@@ -29,3 +29,4 @@
   .q10-lista li { grid-template-columns: 1fr; }
   .q10-frase { font-size: 17px; }
 }
+.q10-confirmar { border: 2px solid var(--g4-azul); gap: 10px; }

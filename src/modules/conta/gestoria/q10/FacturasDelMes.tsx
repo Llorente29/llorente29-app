@@ -6,8 +6,10 @@
 // «Pendiente de revisar» con su motivo y lo que GoCardless no cobró. Con el
 // estilo de Clientes y cuotas (clientesG04.css) y lo suyo en facturasQ10.css.
 //
-// Emitir no está aquí: va en el PR siguiente, cuando Julio dé el diseño del PDF
-// por cerrado. El botón se ve y dice por qué aún no (regla 8).
+// «Emitir las de noviembre» (Q10 · PR 2): con la serie comprobada en ERP10, pide
+// confirmar con su contenido (cuántas, de qué número a cuál, la fecha y el
+// total) y dice al acabar lo emitido, o hasta dónde llegó y por qué paró
+// (regla 8). Sin poder, el botón dice por qué.
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -34,6 +36,9 @@ export interface PropsQ10 {
   alVerPdf: (i: number) => Promise<string | null>
   rutaVolver: string
   rutaSinCliente: string
+  emitir: { puede: boolean; porque: string; cuantas: number; primera: string | null; ultima: string | null; totalCent: number; fecha: string }
+  /** Emite todas (por trozos); llama a `avance` con por dónde va. Devuelve la frase de lo hecho o lanza con lo que paró. */
+  alEmitir: (avance: (frase: string) => void) => Promise<string>
 }
 
 const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
@@ -42,6 +47,14 @@ export function FacturasDelMes(p: PropsQ10) {
   const m = p.modelo
   const [aviso, setAviso] = useState<string | null>(null)
   const [abriendo, setAbriendo] = useState<number | null>(null)
+  const [confirmar, setConfirmar] = useState(false)
+  const [emision, setEmision] = useState<{ estado: 'emitiendo' | 'hecho' | 'fallo'; frase: string } | null>(null)
+  const emitir = async () => {
+    setConfirmar(false)
+    setEmision({ estado: 'emitiendo', frase: 'Emitiendo…' })
+    try { setEmision({ estado: 'hecho', frase: await p.alEmitir((frase) => setEmision({ estado: 'emitiendo', frase })) }) }
+    catch (e) { setEmision({ estado: 'fallo', frase: e instanceof Error ? e.message : String(e) }) }
+  }
   const verPdf = async (i: number) => {
     setAbriendo(i); setAviso(null)
     try { setAviso(await p.alVerPdf(i)) } catch (e) { setAviso(e instanceof Error ? e.message : String(e)) } finally { setAbriendo(null) }
@@ -54,12 +67,28 @@ export function FacturasDelMes(p: PropsQ10) {
           <h1 className="g4-titulo">Las facturas de {p.mes}</h1>
         </div>
         <div className="g4-cabecera-acciones">
-          <button type="button" className="g4-boton" disabled title="Va en el PR siguiente, cuando el diseño del PDF esté cerrado">Emitir las de {p.mes}</button>
+          <button type="button" className="g4-boton" data-tipo="primario" disabled={!p.emitir.puede || emision?.estado === 'emitiendo'}
+            title={p.emitir.puede ? undefined : p.emitir.porque} onClick={() => setConfirmar(true)}>Emitir las de {p.mes}</button>
         </div>
       </header>
 
       <p className="q10-frase" data-prueba="cabecera" data-tono={m.cuadra ? 'bien' : 'mal'} role="status">{m.frase}</p>
-      <p className="q10-nota">En borrador: nada se ha emitido ni enviado. «Emitir» llega cuando el diseño del PDF esté cerrado.</p>
+      {!p.emitir.puede && !emision && <p className="q10-nota" data-prueba="por-que-no">{p.emitir.porque || 'En borrador: nada se ha emitido.'}</p>}
+      {confirmar && (
+        <section className="g4-bloque q10-confirmar" role="alertdialog" aria-labelledby="q10-confirmar" data-prueba="confirmar">
+          <h2 id="q10-confirmar" className="g4-bloque-titulo">¿Emitir {p.emitir.cuantas} {p.emitir.cuantas === 1 ? 'factura' : 'facturas'} de {p.mes}?</h2>
+          <p className="q10-linea">De la {p.emitir.primera} a la {p.emitir.ultima}, con fecha de hoy ({dmy(p.emitir.fecha)}), por {eurQ10(p.emitir.totalCent)}. Cada una queda atada a su cobro.</p>
+          <p className="q10-linea">Una factura emitida no se borra: si algo está mal, se corrige con una rectificativa. Aún no se envía a nadie.</p>
+          <div className="g4-cabecera-acciones">
+            <button type="button" className="g4-boton" data-tipo="primario" onClick={() => void emitir()}>Sí, emitirlas</button>
+            <button type="button" className="g4-boton" onClick={() => setConfirmar(false)}>No, volver</button>
+          </div>
+        </section>
+      )}
+      {emision && (
+        <p className="q10-frase" data-prueba="emision" data-tono={emision.estado === 'hecho' ? 'bien' : emision.estado === 'fallo' ? 'mal' : undefined}
+          role={emision.estado === 'fallo' ? 'alert' : 'status'}>{emision.frase}</p>
+      )}
 
       <section className="g4-bloque q10-erp10" aria-labelledby="q10-erp10" data-prueba="erp10" data-estado={p.erp10.estado}>
         <h2 id="q10-erp10" className="g4-bloque-titulo">ERP10: la serie y las retenciones</h2>
@@ -96,6 +125,21 @@ export function FacturasDelMes(p: PropsQ10) {
           </div>
         )}
       </section>
+
+      {m.emitidas.length > 0 && (
+        <section className="g4-bloque" aria-labelledby="q10-emitidas" data-prueba="emitidas">
+          <h2 id="q10-emitidas" className="g4-bloque-titulo">Ya emitidas ({m.emitidas.length}) · {eurQ10(m.emitidas.reduce((t, x) => t + x.totalCent, 0))}</h2>
+          <ul className="q10-lista">
+            {m.emitidas.map((x) => (
+              <li key={x.cobro.gcId}>
+                <span className="q10-cliente">{x.numero} · {x.ficha?.nombre ?? ''}</span>
+                <span className="q10-importe">{eurQ10(x.totalCent)} · cobrada el {dmy(x.cobro.fecha)}{x.concepto ? ` · ${x.concepto}` : ''}</span>
+                <span className="q10-porque">Atada a su cobro de GoCardless.</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="g4-bloque" aria-labelledby="q10-pendientes" data-prueba="pendientes">
         <h2 id="q10-pendientes" className="g4-bloque-titulo">Pendiente de revisar ({m.pendientes.length}) · {eurQ10(m.pendientesCent)}</h2>

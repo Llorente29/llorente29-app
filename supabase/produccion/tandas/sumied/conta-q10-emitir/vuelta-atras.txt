@@ -1,0 +1,3 @@
+# Q10 · Emitir las cuotas · vuelta atrás: quita la función (lo emitido no se des-emite).
+cuenta: scripts/conta/produccion/cuentas/q10-emitir.sql
+supabase/vuelta-atras/20261125T1610_q10_emitir_cuotas.down.sql

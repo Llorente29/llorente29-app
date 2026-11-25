@@ -1,0 +1,5 @@
+# Q10 · Emitir las cuotas (1610). Su prueba (ROLLBACK), con datos inventados: la serie que no cuadra para; un trozo
+# emitido con la retención y la 430 de ERP10, atado a su cobro; un cobro, una factura; un trozo con un cliente sin NIF
+# o un cobro fallido para entero; ERP10 por delante para; otra cuenta no puede; y la vuelta atrás.
+supabase/migrations/20261125T1610_q10_emitir_cuotas.sql
+supabase/staging/sql/20261125_q10_emitir_cuotas_prueba.sql

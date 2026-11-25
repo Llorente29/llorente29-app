@@ -59,7 +59,7 @@ export interface BorradorQ10 {
   totalCent: number
 }
 
-export type MotivoPendiente = 'sin_cliente' | 'sin_nif' | 'sin_retencion' | 'sin_suscripcion' | 'no_cuadra'
+export type MotivoPendiente = 'sin_cliente' | 'sin_nif' | 'sin_retencion' | 'sin_suscripcion' | 'no_cuadra' | 'sin_cuenta'
 export interface PendienteQ10 {
   cobro: CobroQ10
   motivo: MotivoPendiente
@@ -70,11 +70,16 @@ export interface PendienteQ10 {
   ficha: FichaQ10 | null
   concepto: string | null
 }
+/** Un cobro que ya tiene su factura emitida (conta_gc_cobro_factura). */
+export interface EmitidaQ10 { cobro: CobroQ10; numero: string; totalCent: number; ficha: FichaQ10 | null; concepto: string | null }
 export interface SinFacturaQ10 { cobro: CobroQ10; porque: string; gcClienteId: string | null; ficha: FichaQ10 | null; concepto: string | null }
 
 export interface MesQ10 {
   mes: string
+  /** Las que faltan por emitir, en el orden de numerar. */
   facturas: BorradorQ10[]
+  /** Las ya emitidas (un cobro, una factura): no se vuelven a emitir. */
+  emitidas: EmitidaQ10[]
   pendientes: PendienteQ10[]
   /** Lo que GoCardless no dio por cobrado: no lleva factura. */
   sinFactura: SinFacturaQ10[]
@@ -130,6 +135,7 @@ const PORQUE: Record<MotivoPendiente, string> = {
   sin_retencion: 'No se sabe si lleva retención: su última factura en ERP10 no lo dice (o no tiene ninguna).',
   sin_suscripcion: 'Es un cobro suelto, sin suscripción: GoCardless no dice qué servicio es, y no se adivina.',
   no_cuadra: 'Con el IVA y la retención, ninguna base da el total al céntimo.',
+  sin_cuenta: 'No tiene subcuenta de cliente (430) en Sumied ni en su última factura de ERP10: lee ERP10 o ponle su código en la ficha.',
 }
 
 export interface EntradaQ10 {
@@ -145,6 +151,13 @@ export interface EntradaQ10 {
    * 15, 0… Solo cuenta si la empresa retiene. Sin la ficha en el mapa: no se sabe.
    */
   retenciones: ReadonlyMap<string, number>
+  /** Los cobros que ya tienen su factura emitida: gc_id → su número y su total. */
+  emitidas?: ReadonlyMap<string, { numero: string; totalCent: number }>
+  /**
+   * La 430 de cada ficha (por party_id): la suya en Sumied o, si no, la de su última factura en ERP10. Sin darlo, no
+   * se mira; dado, una ficha sin ninguna va a «Pendiente de revisar» (al emitir, la 430 hace falta).
+   */
+  cuentas?: ReadonlyMap<string, string>
 }
 
 /** Las facturas del mes, en el orden en que se numeran: por el día del cobro, el cliente y el cobro. */
@@ -157,6 +170,7 @@ export function facturasDelMes(e: EntradaQ10): MesQ10 {
   const facturas: BorradorQ10[] = []
   const pendientes: PendienteQ10[] = []
   const sinFactura: SinFacturaQ10[] = []
+  const emitidas: EmitidaQ10[] = []
   for (const c of delMes) {
     const s = c.suscripcionId ? sus.get(c.suscripcionId) ?? null : null
     const gcClienteId = s?.gcClienteId ?? (c.mandatoId ? man.get(c.mandatoId)?.gcClienteId ?? null : null)
@@ -167,10 +181,13 @@ export function facturasDelMes(e: EntradaQ10): MesQ10 {
       sinFactura.push({ cobro: c, porque: porqueSinFactura(c), gcClienteId, ficha, concepto })
       continue
     }
+    const ya = e.emitidas?.get(c.gcId)
+    if (ya) { emitidas.push({ cobro: c, numero: ya.numero, totalCent: ya.totalCent, ficha, concepto }); continue }
     const pendiente = (motivo: MotivoPendiente) => pendientes.push({ cobro: c, motivo, porque: PORQUE[motivo], gcClienteId, ficha, concepto })
     if (!ficha) { pendiente('sin_cliente'); continue }
     if (!ficha.nif?.trim()) { pendiente('sin_nif'); continue }
     if (!concepto) { pendiente('sin_suscripcion'); continue }
+    if (e.cuentas && !e.cuentas.get(ficha.partyId)) { pendiente('sin_cuenta'); continue }
     const retPct = e.empresa.retiene ? e.retenciones.get(ficha.partyId) : 0
     if (retPct === undefined) { pendiente('sin_retencion'); continue }
     const totalCent = cent(c.importe)
@@ -184,14 +201,17 @@ export function facturasDelMes(e: EntradaQ10): MesQ10 {
   facturas.sort((a, b) => a.cobro.fecha.localeCompare(b.cobro.fecha) || a.ficha.nombre.localeCompare(b.ficha.nombre, 'es') || a.cobro.gcId.localeCompare(b.cobro.gcId))
   const suma = (xs: readonly { cobro: CobroQ10 }[]) => xs.reduce((t, x) => t + cent(x.cobro.importe), 0)
   const cobradoCent = suma(delMes.filter((c) => (COBRADO as readonly string[]).includes(c.estado)).map((cobro) => ({ cobro })))
-  const facturasCent = facturas.reduce((t, f) => t + f.totalCent, 0)
+  emitidas.sort((a, b) => (partirNumero(a.numero)?.numero ?? 0) - (partirNumero(b.numero)?.numero ?? 0))
+  const emitidasCent = emitidas.reduce((t, f) => t + f.totalCent, 0)
+  const facturasCent = facturas.reduce((t, f) => t + f.totalCent, 0) + emitidasCent
   const pendientesCent = suma(pendientes)
   const cuadra = pendientes.length === 0 && facturasCent === cobradoCent
   const mes = MESES[Number(e.mes.slice(5, 7)) - 1]
   const Mes = mes[0].toUpperCase() + mes.slice(1)
-  const frase = `${Mes}: ${n(facturas.length, 'factura', 'facturas')}, ${eurQ10(facturasCent)}. GoCardless cobró ${eurQ10(cobradoCent)}. `
+  const total = facturas.length + emitidas.length
+  const frase = `${Mes}: ${n(total, 'factura', 'facturas')}${!emitidas.length ? '' : emitidas.length === total ? (total === 1 ? ' (ya emitida)' : ' (todas ya emitidas)') : ` (${emitidas.length} ya ${emitidas.length === 1 ? 'emitida' : 'emitidas'})`}, ${eurQ10(facturasCent)}. GoCardless cobró ${eurQ10(cobradoCent)}. `
     + (cuadra ? 'Cuadra.' : `Faltan ${pendientes.length} (${eurQ10(pendientesCent)}): mira abajo.`)
-  return { mes: e.mes, facturas, pendientes, sinFactura, cobradoCent, facturasCent, pendientesCent, frase, cuadra }
+  return { mes: e.mes, facturas, emitidas, pendientes, sinFactura, cobradoCent, facturasCent, pendientesCent, frase, cuadra }
 }
 
 // ── La numeración y la fecha de emisión ─────────────────────────────────────────
@@ -273,6 +293,20 @@ export function retencionesDeErp10(facturas: readonly FacturaErp10Q10[], fichas:
     if (!f.retencion || !f.retencion.importe) r.set(ficha.partyId, 0)
     else if (f.retencion.tipo) r.set(ficha.partyId, f.retencion.tipo)
   }
+  return r
+}
+
+/** La 430 de cada ficha en ERP10 (la CuentaCliente de su última factura emitida allí, por su NIF). */
+export function cuentasDeErp10(facturas: readonly FacturaErp10Q10[], fichas: readonly FichaQ10[]): Map<string, string> {
+  const ultima = new Map<string, FacturaErp10Q10>()
+  for (const f of facturas) {
+    const k = nifLimpio(f.nif)
+    if (!k || !f.cuenta.startsWith('430')) continue
+    const ya = ultima.get(k)
+    if (!ya || f.fecha > ya.fecha) ultima.set(k, f)
+  }
+  const r = new Map<string, string>()
+  for (const ficha of fichas) { const f = ultima.get(nifLimpio(ficha.nif)); if (f) r.set(ficha.partyId, f.cuenta) }
   return r
 }
 

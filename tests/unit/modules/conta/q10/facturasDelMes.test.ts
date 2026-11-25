@@ -194,3 +194,31 @@ describe('Q10 · quién factura con retención y por dónde sigue la serie', asy
     expect(Object.values(SERIE_Q10).map((x) => `${x.anio}/${x.serie}/${x.desde}`).sort()).toEqual(['2026/1/2745', '2026/1/574'])
   })
 })
+
+describe('Q10 · PR 2 · lo ya emitido y la 430 de cada cliente', async () => {
+  const { cuentasDeErp10 } = await import('@/modules/conta/gestoria/q10/facturasDelMes')
+  it('un cobro con su factura no se vuelve a emitir: sale en «ya emitidas» y cuenta en el cuadre', () => {
+    const m = facturasDelMes(entrada([cobro('A', 121), cobro('B', 53)], { emitidas: new Map([['A', { numero: '2026/1/2745', totalCent: 12100 }]]) }))
+    expect(m.facturas.map((f) => f.cobro.gcId)).toEqual(['B'])
+    expect(m.emitidas).toEqual([expect.objectContaining({ numero: '2026/1/2745', totalCent: 12100, concepto: 'GESTORIA MENSUAL' })])
+    expect(m.frase).toBe('Noviembre: 2 facturas (1 ya emitida), 174,00 €. GoCardless cobró 174,00 €. Cuadra.')
+  })
+  it('todas emitidas', () => {
+    const m = facturasDelMes(entrada([cobro('A', 121)], { emitidas: new Map([['A', { numero: '2026/1/2745', totalCent: 12100 }]]) }))
+    expect(m.frase).toBe('Noviembre: 1 factura (ya emitida), 121,00 €. GoCardless cobró 121,00 €. Cuadra.')
+  })
+  it('sin la 430 en Sumied ni en ERP10, a «Pendiente de revisar»; con una de las dos, se factura', () => {
+    const m = facturasDelMes(entrada([cobro('A', 121), cobro('B', 121)], { cuentas: new Map([['p-A', '43000101']]) }))
+    expect(m.facturas.map((f) => f.cobro.gcId)).toEqual(['A'])
+    expect(m.pendientes).toEqual([expect.objectContaining({ motivo: 'sin_cuenta' })])
+    expect(m.pendientes[0].porque).toMatch(/subcuenta de cliente \(430\)/)
+  })
+  it('la 430 de ERP10: la de la última factura emitida de cada NIF', () => {
+    const r = cuentasDeErp10([
+      { cuenta: '43000001', nif: 'B00000000', numero: '2026/1/1', fecha: 20260901, retencion: null },
+      { cuenta: '43000009', nif: 'B00000000', numero: '2026/1/9', fecha: 20261001, retencion: null },
+      { cuenta: '40000001', nif: 'B00000001', numero: 'F-1', fecha: 20261001, retencion: null },
+    ], [ficha('p1', 'B00000000'), ficha('p2', 'B00000001')])
+    expect([...r.entries()]).toEqual([['p1', '43000009']])
+  })
+})

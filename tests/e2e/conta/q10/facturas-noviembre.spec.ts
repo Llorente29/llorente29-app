@@ -9,7 +9,9 @@
 //   3. las facturas con su número seguido, base, IVA, retención y total; lo
 //      pendiente con su motivo; lo que GoCardless no cobró, aparte;
 //   4. el PDF de un borrador se abre (sin emitir nada);
-//   5. «Emitir» se ve y no se puede pulsar todavía.
+//   5. «Emitir» se ve; sin la serie dicha por Julio (la empresa de pruebas), no se
+//      puede y dice por qué. Emitir de verdad nunca se prueba aquí (la emisión
+//      la prueba staging en ROLLBACK; la pantalla, su unitaria).
 //
 // La sesión, el marco y la cuenta de prueba son staging y el código de verdad.
 // Lo que la pantalla LEE se simula (como en ../q08/decisiones-qbo.spec.ts):
@@ -72,8 +74,11 @@ async function simular(page: Page, Q: string, A: string) {
     ['p4', 'Comercial Ejemplo, S.L.', 'B00000001'], ['p5', 'Sin Atar de Prueba, S.L.', 'B00000002'], ['p6', 'Sin NIF de Prueba, S.L.', null],
     ['p7', 'Suelto de Prueba, S.L.', 'B00000003'], ['p8', 'Fallido de Prueba, S.L.', 'B00000004'], ['p9', 'Devuelto de Prueba, S.L.', 'B00000005'],
   ].map(([id, name, tax_id]) => ({ id, name, tax_id }))
-  const TABLAS: Record<string, unknown[]> = { conta_gc_cobro: cobros, conta_gc_suscripcion: suscripciones, conta_gc_mandato: mandatos, conta_gc_enlace: enlaces, party: fichas, customer_fiscal: [] }
-  await page.route(/\/rest\/v1\/(conta_gc_cobro|conta_gc_suscripcion|conta_gc_mandato|conta_gc_enlace|party|customer_fiscal)\?/, (r) => {
+  // La 430 de cada ficha en Sumied (todas la tienen) y lo ya emitido (nada).
+  const enlaces430 = fichas.map((f, i) => ({ entity_id: f.id, company_account: { code: `4300000${i + 1}` } }))
+  const TABLAS: Record<string, unknown[]> = { conta_gc_cobro: cobros, conta_gc_suscripcion: suscripciones, conta_gc_mandato: mandatos, conta_gc_enlace: enlaces, party: fichas, customer_fiscal: [],
+    company_account_link: enlaces430, conta_gc_cobro_factura: [] }
+  await page.route(/\/rest\/v1\/(conta_gc_cobro_factura|conta_gc_cobro|conta_gc_suscripcion|conta_gc_mandato|conta_gc_enlace|party|customer_fiscal|company_account_link)\?/, (r) => {
     if (r.request().method() !== 'GET') return r.fallback()
     const t = /\/rest\/v1\/([a-z_]+)\?/.exec(r.request().url())![1]
     // La segunda página (range desde 1000) va vacía.
@@ -111,7 +116,9 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     const cabecera = page.locator('[data-prueba="cabecera"]')
     // 4 facturas (121 + 53 + 24,20 + 60,50 = 258,70); cobrado 258,70 + 121 + 36,30 + 99 = 515,00; faltan 3 (256,30).
     await expect(cabecera).toHaveText('Noviembre: 4 facturas, 258,70 €. GoCardless cobró 515,00 €. Faltan 3 (256,30 €): mira abajo.')
+    // 5. «Emitir» se ve; en una empresa sin su serie dicha (la de pruebas), no se puede, y lo dice.
     await expect(page.getByRole('button', { name: 'Emitir las de noviembre de 2026' })).toBeDisabled()
+    await expect(page.locator('[data-prueba="por-que-no"]')).toHaveText('Esta empresa no tiene un número de partida dicho por Julio: no se emite.')
     const filas = page.getByRole('table', { name: 'Facturas' }).locator('tbody tr')
     await expect(filas).toHaveCount(4)
     await expect(filas.first()).toContainText('Sin número')

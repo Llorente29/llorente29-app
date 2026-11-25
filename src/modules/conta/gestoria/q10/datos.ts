@@ -10,7 +10,7 @@
 //     facturas emitidas de los meses de antes, para la retención de cada
 //     cliente (su última factura) y el último número de la serie.
 
-import { tabla, mensaje } from '@/modules/conta/services/bd'
+import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import { traerPaginaErp10 } from '@/modules/conta/services/erp10ApiService'
 import type { CobroQ10, EnlaceQ10, FacturaErp10Q10, FichaQ10, MandatoQ10, SuscripcionQ10 } from './facturasDelMes'
 
@@ -36,6 +36,10 @@ export interface DatosQ10 {
   mandatos: (MandatoQ10 & { final: string | null })[]
   enlaces: EnlaceQ10[]
   fichas: FichaQ10[]
+  /** Los cobros que ya tienen su factura (conta_gc_cobro_factura, del #816): gc_id → número y total. */
+  emitidas: Map<string, { numero: string; totalCent: number }>
+  /** La 430 de cada ficha en Sumied (company_account_link «customer», principal). */
+  cuentas: Map<string, string>
 }
 
 const finDeMes = (mes: string) => {
@@ -74,7 +78,25 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
       fichas.push({ partyId: String(x.id), nombre: s(d?.legal_name) ?? s(x.name) ?? 'Sin nombre', nif: s(x.tax_id), direccion })
     }
   }
+  // Lo ya emitido: si la tabla del #816 aún no está, nada (y emitir para en la base, diciéndolo).
+  const emitidas = new Map<string, { numero: string; totalCent: number }>()
+  const atadas = await tabla('conta_gc_cobro_factura').select('gc_id, customer_invoice(number_text, total)').eq('company_id', empresa)
+  if (!atadas.error) {
+    for (const x of (atadas.data ?? []) as Fila[]) {
+      const f = x.customer_invoice as Fila | null
+      if (f?.number_text) emitidas.set(String(x.gc_id), { numero: String(f.number_text), totalCent: Math.round(Number(f.total) * 100) })
+    }
+  }
+  // La 430 de cada ficha atada (company_account_link + company_account; columnas comprobadas el 25/11, regla 40).
+  const cuentas = new Map<string, string>()
+  for (let i = 0; i < partes.length; i += 200) {
+    const l = await tabla('company_account_link').select('entity_id, company_account(code)').eq('company_id', empresa).eq('entity', 'customer').eq('role', 'principal')
+      .in('entity_id', partes.slice(i, i + 200))
+    if (l.error) throw new Error(mensaje('No se han podido leer las subcuentas de los clientes', l.error as never))
+    for (const x of (l.data ?? []) as Fila[]) { const c = s((x.company_account as Fila | null)?.code); if (c) cuentas.set(String(x.entity_id), c) }
+  }
   return {
+    emitidas, cuentas,
     empresa: emp.data as Fila,
     cobros: cobros.map((c) => ({ gcId: String(c.gc_id), estado: String(c.estado), fecha: String(c.fecha), importe: Number(c.importe), suscripcionId: s(c.suscripcion_gc_id), mandatoId: s(c.mandato_gc_id), motivo: s(c.motivo_es) })),
     suscripciones: suscripciones.map((x) => ({ gcId: String(x.gc_id), nombre: s(x.nombre), gcClienteId: s(x.gc_cliente_id) })),
@@ -107,4 +129,13 @@ export async function facturasErp10DelMes(empresa: string, mes: string): Promise
     if (pag.ultima) break
   }
   return r.filter((f) => f.cuenta.startsWith('43'))
+}
+
+/** Lo que se manda a emitir de cada factura: el cobro, su retención y la 430 de ERP10 (si no la tiene en Sumied). */
+export interface AEmitir { gc_id: string; retencion_pct: number; cuenta_cliente: string | null }
+export interface Emitido { emitidas: { gc_id: string; numero: string; total: number }[]; siguiente: number; frase: string }
+
+/** Emite UN trozo (conta_cuotas_emitir, 1610): entero o nada. La pantalla manda los trozos uno detrás de otro. */
+export async function emitirTrozo(empresa: string, mes: string, desde: number, ultimoErp10: string, facturas: AEmitir[]): Promise<Emitido> {
+  return rpc<Emitido>('conta_cuotas_emitir', { p_company: empresa, p_mes: mes, p_desde: desde, p_ultimo_erp10: ultimoErp10, p_facturas: facturas })
 }

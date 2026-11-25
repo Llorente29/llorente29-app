@@ -18,8 +18,9 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { facturaSumiedPdf } from '../../../../../supabase/functions/_shared/facturaSumiedPdf'
-import { comprobarSerie, facturasDelMes, nifLimpio, nombreDelMesQ10, numerar, partirNumero, retencionesDeErp10, ultimaDeErp10, type FacturaErp10Q10 } from './facturasDelMes'
-import { facturasErp10DelMes, leerFacturasDelMes, mesesHaciaAtras } from './datos'
+import { comprobarSerie, cuentasDeErp10, facturasDelMes, numeroQ10, nifLimpio, nombreDelMesQ10, numerar, partirNumero, retencionesDeErp10, ultimaDeErp10, type FacturaErp10Q10 } from './facturasDelMes'
+import { emitirPorTrozos } from './emitir'
+import { emitirTrozo, facturasErp10DelMes, leerFacturasDelMes, mesesHaciaAtras } from './datos'
 import { datosPdfQ10, emisorQ10 } from './pdf'
 import { FacturasDelMes, type Erp10Q10 } from './FacturasDelMes'
 import { SERIE_Q10, retieneQ10 } from './serie'
@@ -40,9 +41,12 @@ export function FacturasQ10Page() {
 
   const modelo = useMemo(() => {
     if (!d.datos || !empresa) return null
-    const retenciones = retiene && deEsta?.estado === 'leido' ? retencionesDeErp10(deEsta.facturas, d.datos.fichas) : new Map<string, number>()
+    const leido = deEsta?.estado === 'leido'
+    const retenciones = retiene && leido ? retencionesDeErp10(deEsta.facturas, d.datos.fichas) : new Map<string, number>()
+    // La 430 de cada cliente: la suya en Sumied; si no tiene, la de su última factura en ERP10 (la da de alta la emisión).
+    const cuentas = new Map([...(leido ? cuentasDeErp10(deEsta.facturas, d.datos.fichas) : new Map<string, string>()), ...d.datos.cuentas])
     return facturasDelMes({ mes, empresa: { id: empresa.id, nombre: empresa.nombre, retiene }, cobros: d.datos.cobros, suscripciones: d.datos.suscripciones,
-      mandatos: d.datos.mandatos, enlaces: d.datos.enlaces, fichas: d.datos.fichas, retenciones })
+      mandatos: d.datos.mandatos, enlaces: d.datos.enlaces, fichas: d.datos.fichas, retenciones, emitidas: d.datos.emitidas, cuentas })
   }, [d.datos, empresa, mes, retiene, deEsta])
 
   if (d.error) return <ErrorConReintento mensaje={`No se han podido leer los cobros del mes: ${d.error}`} reintentar={d.recargar} />
@@ -54,7 +58,8 @@ export function FacturasQ10Page() {
     const poner = (estado: Erp10Q10['estado'], frase: string) => setErp({ clave, estado, frase, facturas: [...leidas] })
     try {
       // Con retención: hasta dar con la última factura de cada cliente que tiene cobros este mes, o hasta enero.
-      const buscados = new Set(retiene ? modelo.pendientes.filter((p) => p.motivo === 'sin_retencion' && p.ficha?.nif).map((p) => nifLimpio(p.ficha!.nif)) : [])
+      // Y la 430 de los que no la tienen en Sumied.
+      const buscados = new Set(modelo.pendientes.filter((p) => (p.motivo === 'sin_cuenta' || (retiene && p.motivo === 'sin_retencion')) && p.ficha?.nif).map((p) => nifLimpio(p.ficha!.nif)))
       for (const m of mesesHaciaAtras(mes)) {
         poner('leyendo', `Leyendo de ERP10 las facturas de ${nombreDelMesQ10(m)}… (${leidas.length} leídas)`)
         const xs = await facturasErp10DelMes(empresa.id, m)
@@ -73,7 +78,14 @@ export function FacturasQ10Page() {
   // Sin la serie que dijo Julio (una empresa que no es de las dos), se propone seguir la de ERP10, y se dice.
   const ultimaErp = deEsta?.estado === 'leido' ? ultimaDeErp10(deEsta.facturas.map((x) => x.numero), Number(mes.slice(0, 4))) : null
   const sigue = serie ?? (ultimaErp ? { anio: ultimaErp.anio, serie: ultimaErp.serie, desde: ultimaErp.numero + 1 } : null)
+  // Con facturas ya emitidas por Sumied: la última de ERP10 puede ser la de antes de la primera o una de las de Sumied
+  // (cuando ya han salido a ERP10), nunca una de más allá.
+  const anio = Number(mes.slice(0, 4))
+  const maxEmitida = Math.max(0, ...modelo.emitidas.map((x) => partirNumero(x.numero)?.numero ?? 0))
   const comprobacion = deEsta?.estado !== 'leido' ? null
+    : serie && maxEmitida > 0 ? (ultimaErp && ultimaErp.numero >= serie.desde - 1 && ultimaErp.numero <= maxEmitida
+        ? { ok: true, frase: `Sumied va por la ${numeroQ10(anio, serie.serie, maxEmitida)} y la última en ERP10 es la ${numeroQ10(anio, ultimaErp.serie, ultimaErp.numero)}: la siguiente será la ${numeroQ10(anio, serie.serie, maxEmitida + 1)}.` }
+        : { ok: false, frase: `Sumied va por la ${numeroQ10(anio, serie.serie, maxEmitida)} y en ERP10 la última es la ${ultimaErp ? numeroQ10(anio, ultimaErp.serie, ultimaErp.numero) : 'ninguna'}: no cuadra. No se emite.` })
     : serie ? comprobarSerie(deEsta.facturas.map((x) => x.numero), serie)
     : ultimaErp ? { ok: false, frase: `Para esta empresa no hay un número de partida dicho: se seguiría la serie de ERP10 desde la ${ultimaErp.anio}/${ultimaErp.serie}/${ultimaErp.numero + 1}. Antes de emitir, que lo confirme Julio.` }
     : { ok: false, frase: `En ERP10 no hay facturas de ${mes.slice(0, 4)}: no se sabe por dónde sigue la serie.` }
@@ -82,7 +94,26 @@ export function FacturasQ10Page() {
     : { estado: 'sin_leer', frase: retiene
         ? 'Esta empresa factura con retención: hasta leer de ERP10 la última factura de cada cliente, sus facturas esperan en «Pendiente de revisar». Y se comprueba el último número de la serie.'
         : 'Antes de emitir se comprueba en ERP10 el último número de la serie.', serie: null }
-  const numeros = sigue ? numerar(modelo.facturas, sigue.anio, sigue.serie, sigue.desde) : null
+  const desde = sigue ? Math.max(sigue.desde, maxEmitida + 1) : null
+  const numeros = sigue && desde ? numerar(modelo.facturas, sigue.anio, sigue.serie, desde) : null
+
+  // Emitir: con la serie comprobada en ERP10 y una empresa con su serie dicha. Por trozos de 10, cada uno entero o nada.
+  const puede = !!(serie && desde && comprobacion?.ok && ultimaErp && modelo.facturas.length > 0)
+  const porque = !serie ? 'Esta empresa no tiene un número de partida dicho por Julio: no se emite.'
+    : deEsta?.estado !== 'leido' ? 'Antes de emitir, lee de ERP10: se comprueba el último número de la serie.'
+    : !comprobacion?.ok ? 'La serie no cuadra con ERP10: no se emite.'
+    : modelo.facturas.length === 0 ? 'No hay facturas por emitir.' : ''
+  const emitir = async (avance: (frase: string) => void): Promise<string> => {
+    if (!puede || !serie || !desde || !ultimaErp) throw new Error(porque || 'No se puede emitir.')
+    const ultimo = numeroQ10(anio, ultimaErp.serie, ultimaErp.numero)
+    const deErp10 = cuentasDeErp10(deEsta!.facturas, datos.fichas)
+    const todas = modelo.facturas.map((f) => ({ gc_id: f.cobro.gcId, retencion_pct: f.retencion?.pct ?? 0, cuenta_cliente: datos.cuentas.has(f.ficha.partyId) ? null : (deErp10.get(f.ficha.partyId) ?? null) }))
+    try {
+      return await emitirPorTrozos(todas, desde, nombreDelMesQ10(mes), (de, trozo) => emitirTrozo(empresa.id, mes, de, ultimo, trozo), avance)
+    } finally {
+      d.recargar()
+    }
+  }
   const mandatos = new Map(datos.mandatos.map((m) => [m.gcId, m]))
 
   const verPdf = async (i: number) => {
@@ -98,6 +129,8 @@ export function FacturasQ10Page() {
   return (
     <FacturasDelMes empresa={empresa.nombre} mes={nombreDelMesQ10(mes)} modelo={modelo} numeros={numeros} erp10={estadoErp}
       alLeerErp10={() => void leerErp10()} alVerPdf={verPdf}
+      emitir={{ puede, porque, cuantas: modelo.facturas.length, primera: numeros?.[0] ?? null, ultima: numeros?.[numeros.length - 1] ?? null, totalCent: modelo.facturas.reduce((t, f) => t + f.totalCent, 0), fecha: hoy }}
+      alEmitir={emitir}
       rutaVolver={rutaClientesCuotas()} rutaSinCliente={`${rutaClientesCuotas()}?ver=sin-cliente`} />
   )
 }
