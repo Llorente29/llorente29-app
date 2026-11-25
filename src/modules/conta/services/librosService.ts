@@ -396,7 +396,9 @@ export async function retenciones(accountId: string, companyId: string, desde: s
   if (error) throw new Error(mensaje('No se han podido leer las retenciones', error))
   return ((data ?? []) as Fila[]).map((f) => ({
     entryId: String(f.entry_id), fecha: String(f.entry_date), modelo: String(f.withholding_model), base: num(f.withholding_base),
-    importe: Math.abs(num(f.credit) - num(f.debit)), cuenta: String(f.account_code), concepto: String(f.concept ?? ''), terceroId: txt(f.party_id),
+    // X14 · 2 · Con su signo: una retención en negativo (una devolución o una regularización) resta, no suma. La 4730 (la
+    // que nos retienen) va al debe; la 4751 (la que retenemos), al haber.
+    importe: String(f.account_code).startsWith('473') ? num(f.debit) - num(f.credit) : num(f.credit) - num(f.debit), cuenta: String(f.account_code), concepto: String(f.concept ?? ''), terceroId: txt(f.party_id),
   }))
 }
 
