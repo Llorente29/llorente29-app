@@ -1,0 +1,20 @@
+[
+ {
+  "id": "810-1",
+  "pr": 810,
+  "fecha": "2026-11-25T11:10:45Z",
+  "producto": "sumied",
+  "apartado": "Clientes y cuotas",
+  "frase": "«Bajar la copia de GoCardless», al lado de «Exportar»: el Excel de lo que había en GoCardless (resumen, clientes, mandatos, suscripciones y cobros), de la última copia o de una de antes.",
+  "ruta": null
+ },
+ {
+  "id": "810-2",
+  "pr": 810,
+  "fecha": "2026-11-25T11:10:45Z",
+  "producto": "sumied",
+  "apartado": "GoCardless",
+  "frase": "cada lectura (cada noche, «Leer ahora» o al conectar) guarda antes una copia fechada y sin poder cambiarse. Si no se puede guardar, la lectura para y no cambia nada de Sumied.",
+  "ruta": null
+ }
+]
