@@ -1,0 +1,20 @@
+[
+ {
+  "id": "817-1",
+  "pr": 817,
+  "fecha": "2026-11-25T18:41:33Z",
+  "producto": "sumied",
+  "apartado": "Traer de ERP10",
+  "frase": "lo traído es una foto fiel de ERP10: la cuenta de cada cliente y proveedor, el nombre de cada cuenta y el código de cliente quedan como en ERP10.",
+  "ruta": null
+ },
+ {
+  "id": "817-2",
+  "pr": 817,
+  "fecha": "2026-11-25T18:41:33Z",
+  "producto": "sumied",
+  "apartado": "Traer de ERP10",
+  "frase": "el 2024 de QBO, ya dado por bueno, se ajusta igual a ERP10.",
+  "ruta": null
+ }
+]
