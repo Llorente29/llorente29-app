@@ -5,13 +5,13 @@
 -- 1415 no cambia ningún dato; la 1649 ajusta a ERP10 el 2024 de QBO. conta_cobro_cliente, sin corte (no tiene created_at y su
 -- updated_at lo mueven el ajuste y su vuelta atrás): quieta, ver la medida. Las cargas, con su corte fijo (W06).
 --   1. Regla 31, por cuenta (regla 9): sus clientes del cobro (cuántos · con código · huella de empresa, cliente y código).
---   2 a 4. X14 · 2 · «Gana ERP10» (la 1649 ajusta el 2024 de QBO): por cuenta y carga de ERP10 dada por buena, los terceros
+--   2 a 4. X14 · 2 · «Gana ERP10» (la 1649 ajusta el 2024 de QBO): por cuenta y carga de ERP10 en prueba o dada por buena, los terceros
 --      traídos cuya cuenta principal no es la de ERP10, los clientes cuyo código no es el de su 430 y las cuentas que no se
 --      llaman como en el sumas y saldos de ERP10. Con la tanda, a 0.
 --   0. Y la tabla entera, etiquetada como tal (regla 9).
-with c as (   -- X14 · 2 · las cargas de ERP10 dadas por buenas: de cada cuenta 40/41/43/44 traída, su tercero
+with c as (   -- X14 · 2 · las cargas de ERP10 en prueba o dadas por buenas: de cada cuenta 40/41/43/44 traída, su tercero
   select r.id carga, r.account_id cuenta, r.company_id, r.detail
-    from public.import_run r where r.kind = 'carga' and r.program = 'erp10' and r.status = 'dada_por_buena' and r.started_at < timestamptz '2026-11-25 17:00:00+01'
+    from public.import_run r where r.kind = 'carga' and r.program = 'erp10' and r.status in ('en_prueba', 'dada_por_buena') and r.started_at < timestamptz '2026-11-25 17:00:00+01'
 ), t as (
   select distinct c.carga, c.cuenta, c.company_id, a.id cta, a.code, l.party_id,
          case when a.code ~ '^4[01]' then 'supplier' else 'customer' end entidad,
@@ -40,6 +40,8 @@ select clave, valor from (
     -- quieta: el nombre de una cuenta lo cambian solo el plan de cuentas (a mano) y esta tanda
     join public.company_account a on a.company_id = c.company_id and a.code = s->>'cuenta'
    where nullif(trim(s->>'nombre'), '') is not null group by c.cuenta, c.carga
+  union all
+  select 1, 'tabla entera · cargas de ERP10 en prueba o dadas por buenas (cuántas · ya ajustadas a ERP10)', count(*) || ' · ' || count(*) filter (where c.detail ? 'ajuste_erp10') from c
   union all
   select 0 o, 'tabla entera · clientes del cobro (cuántos · con código · huella)' clave,
          count(*) || ' · ' || count(codigo_cliente) || ' · ' || coalesce(md5(string_agg(concat_ws('|', company_id, party_id, codigo_cliente), ',' order by company_id, party_id)), 'ninguno') valor

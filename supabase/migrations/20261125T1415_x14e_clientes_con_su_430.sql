@@ -82,7 +82,7 @@ begin
 end $$;
 revoke all on function public._conta_traer_como_erp10_deshacer(jsonb) from public, anon, authenticated;
 
--- X14 · 2 · Lo traído ANTES de esta regla (cargas ya dadas por buenas), ajustado a ERP10: la cuenta principal de cada
+-- X14 · 2 · Lo traído ANTES de esta regla (cargas en prueba o ya dadas por buenas), ajustado a ERP10: la cuenta principal de cada
 -- proveedor y cliente (sacada de las líneas traídas: la cuenta y su tercero), el código de cada cliente (su 430) y el
 -- nombre de cada cuenta (el del sumas y saldos de ERP10, si se soltó su fichero). Lo deja todo en la carga
 -- (detail.ajuste_erp10) para poder volver atrás. Interna: la llama la migración, no el navegador.
@@ -94,7 +94,7 @@ declare
   n_mov int := 0; n_quit int := 0; n_nue int := 0; n_nom int := 0; n_cod int := 0;
 begin
   select * into v_r from public.import_run where id = p_carga;
-  if v_r.id is null or v_r.kind <> 'carga' or v_r.status <> 'dada_por_buena' then return null; end if;
+  if v_r.id is null or v_r.kind <> 'carga' or v_r.status not in ('en_prueba', 'dada_por_buena') then return null; end if;
   if v_r.detail ? 'ajuste_erp10' then return v_r.detail->'ajuste_erp10'->'cuentas'; end if;   -- una sola vez
   v_prog := case v_r.program when 'erp10' then 'ERP10' when 'diez' then 'Diez' else 'el programa de antes' end;
   v_quien := coalesce(nullif(trim(p_quien), ''), 'X14 · 2');
@@ -152,8 +152,32 @@ begin
   return jsonb_build_object('enlaces_movidos', n_mov, 'enlaces_quitados', n_quit, 'enlaces_nuevos', n_nue, 'nombres', n_nom, 'codigos', n_cod);
 end $$;
 comment on function public._conta_traer_ajustar_a_erp10(uuid, text) is
-  'X14 · 2: lo traído antes de «gana ERP10» (carga dada por buena), ajustado a ERP10: cuentas principales, códigos de cliente y nombres de cuenta. Una vez por carga; lo que deshace, en detail.ajuste_erp10.';
+  'X14 · 2: lo traído antes de «gana ERP10» (carga en prueba o dada por buena), ajustado a ERP10: cuentas principales, códigos de cliente y nombres de cuenta. Una vez por carga; lo que deshace, en detail.ajuste_erp10.';
 revoke all on function public._conta_traer_ajustar_a_erp10(uuid, text) from public, anon, authenticated;
+
+-- X14 · 2 · Devuelve el ajuste a ERP10 de una carga (detail.ajuste_erp10), en orden inverso: los códigos, los nombres de las
+-- cuentas y los enlaces. Lo usan deshacer la carga (si se ajustó en prueba) y la vuelta atrás de la 1649.
+create or replace function public._conta_traer_ajustar_deshacer(p_carga uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_r public.import_run; v_a jsonb; x jsonb;
+begin
+  select * into v_r from public.import_run where id = p_carga and detail ? 'ajuste_erp10';
+  if v_r.id is null then return; end if;
+  v_a := v_r.detail->'ajuste_erp10'->'deshacer';
+  for x in select value from jsonb_array_elements(coalesce(v_a->'codigos', '[]')) with ordinality e(value, o) order by o desc loop
+    if (x->>'fila')::boolean then
+      update public.conta_cobro_cliente set codigo_cliente = (x->>'antes')::int, updated_at = now(), updated_by_name = 'X14 · 2 · deshecho'
+       where company_id = v_r.company_id and party_id = (x->>'party')::uuid;
+    else
+      delete from public.conta_cobro_cliente where company_id = v_r.company_id and party_id = (x->>'party')::uuid;
+    end if;
+  end loop;
+  update public.company_account a set name = y->>'name' from jsonb_array_elements(coalesce(v_a->'nombres', '[]')) y where a.id = (y->>'id')::uuid;
+  perform public._conta_traer_como_erp10_deshacer(v_a->'enlaces');
+  update public.import_run set detail = detail - 'ajuste_erp10' where id = v_r.id;
+end $$;
+revoke all on function public._conta_traer_ajustar_deshacer(uuid) from public, anon, authenticated;
+
 
 -- 1 · conta_traer_cargar: el código de cada cliente -----------------------------------------------------------------------
 select public._respaldar_funcion('public.conta_traer_cargar(uuid,text,jsonb,text)', '20261125T1415_x14e_clientes_con_su_430');
@@ -564,6 +588,8 @@ begin
   update public.supplier set legal_name = null where id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_d->'fichas', '[]')));   -- N06b
   delete from public.company_account_link where id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_d->'enlaces', '[]')));
   get diagnostics n_enlaces = row_count;
+  -- X14 · 2 · Si se ajustó a ERP10 estando en prueba (la 1649), primero eso, como estaba.
+  perform public._conta_traer_ajustar_deshacer(p_carga);
   -- X14 · 2 · Lo que la carga ajustó a ERP10, como estaba: los enlaces, los nombres de las cuentas y los códigos.
   perform public._conta_traer_como_erp10_deshacer(v_d->'enlaces_erp10');
   update public.company_account a set name = y->>'name' from jsonb_array_elements(coalesce(v_d->'nombres', '[]')) y where a.id = (y->>'id')::uuid;

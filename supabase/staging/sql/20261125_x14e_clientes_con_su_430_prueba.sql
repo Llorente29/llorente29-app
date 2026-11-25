@@ -13,8 +13,9 @@
 --   1. Traer: el «829» pasa a la 43000829 y al código 829; la 43000830 y el código 830 pasan al nuevo (el «830» se queda sin
 --      ellos); la 43000999 se llama «NUEVO» y la 43000830, como el nuevo; y lo dice, los 6 cambios, en lo que hay que mirar.
 --   2. Deshacer: todo como estaba (enlaces, códigos y nombre).
---   3. Lo ya traído (_conta_traer_ajustar_a_erp10): la misma carga dada por buena con lo de Sumied puesto a mano se ajusta a
---      ERP10 igual (1 enlace movido, 1 quitado, 1 nuevo, 2 códigos, 1 nombre), una sola vez; y la vuelta atrás de la
+--   3. Lo ya traído (_conta_traer_ajustar_a_erp10): la misma carga en prueba con lo de Sumied puesto a mano se ajusta a
+--      ERP10 igual (1 enlace movido, 1 quitado, 1 nuevo, 2 códigos, 1 nombre), una sola vez; deshacer la carga devuelve
+--      también el ajuste; y la vuelta atrás de la
 --      20261125T1649 la devuelve.
 --   4. La vuelta atrás de la 20261125T1415: las dos funciones de antes y las nuevas, fuera.
 
@@ -132,8 +133,8 @@ begin
   insert into _x14e values ('cargaC', r->>'carga');
 end $$;
 reset role;
--- Como si se hubiera traído con la regla de antes: lo de Sumied, puesto a mano otra vez; y dada por buena, con el sumas y
--- saldos de su fichero (la 43000999 se llama «NUEVO» en ERP10).
+-- Como si se hubiera traído con la regla de antes: lo de Sumied, puesto a mano otra vez; en prueba, con el sumas y saldos de
+-- su fichero (la 43000999 se llama «NUEVO» en ERP10).
 do $$
 declare c uuid := pg_temp.p('empresa')::uuid; v_r public.import_run;
 begin
@@ -143,9 +144,8 @@ begin
   delete from public.conta_cobro_cliente where company_id = c and party_id in (select (value #>> '{}')::uuid from jsonb_array_elements(coalesce(v_r.detail->'deshacer'->'codigos_nuevos', '[]')));
   update public.conta_cobro_cliente cc set codigo_cliente = (x->>'antes')::int from jsonb_array_elements(coalesce(v_r.detail->'deshacer'->'codigos_cambiados', '[]')) x where cc.company_id = c and cc.party_id = (x->>'party')::uuid;
   update public.conta_cobro_cliente cc set codigo_cliente = (x->>'codigo')::int from jsonb_array_elements(coalesce(v_r.detail->'deshacer'->'codigos_quitados', '[]')) x where cc.company_id = c and cc.party_id = (x->>'party')::uuid;
-  update public.import_run set status = 'dada_por_buena', finished_at = now(),
-         detail = detail || jsonb_build_object('sumas_de', 'fichero', 'sumas', '[{"cuenta": "43000999", "nombre": "NUEVO", "debe": 0, "haber": 0}]'::jsonb)
-   where id = v_r.id;
+  update public.import_run set detail = detail || jsonb_build_object('sumas_de', 'fichero', 'sumas', '[{"cuenta": "43000999", "nombre": "NUEVO", "debe": 0, "haber": 0}]'::jsonb)
+   where id = v_r.id;   -- en prueba, como el 2024 de QBO cuando se ajusta
   -- El cliente nuevo de ERP10 sigue en Sumied (lo creó la carga), sin cuenta ni código: como con la regla de antes.
   insert into _x14e values ('antesC', 'CLIENTE X14E 829→43000999·999 CLIENTE X14E 830→43000830·830 CLIENTE X14E 831→—·— | 43000999=VIEJO');
   if pg_temp.estado() is distinct from pg_temp.p('antesC') then raise exception 'PRUEBA X14e · 3: no ha quedado como lo de antes de la regla: %', pg_temp.estado(); end if;
@@ -167,6 +167,16 @@ do $$ begin
   if pg_temp.estado() is distinct from pg_temp.p('antesC') then raise exception 'PRUEBA X14e · 3: la vuelta atrás de la 20261125T1649 no lo devuelve: %', pg_temp.estado(); end if;
   raise notice 'PRUEBA X14e · 3: y la vuelta atrás de la 20261125T1649 lo devuelve a «%».', pg_temp.estado();
 end $$;
+-- Ajustada otra vez (como la migración) y deshecha la carga (como el administrador, en la pantalla): deshacerla devuelve
+-- también el ajuste, y todo queda como antes de traerla.
+select public._conta_traer_ajustar_a_erp10(pg_temp.p('cargaC')::uuid, 'Prueba X14e');
+set local role authenticated;
+do $$ begin
+  perform public.conta_traer_deshacer(pg_temp.p('cargaC')::uuid, 'Prueba X14e');
+  if pg_temp.estado() is distinct from pg_temp.p('antes') then raise exception 'PRUEBA X14e · 3: deshacer la carga ajustada no lo deja como estaba: %', pg_temp.estado(); end if;
+  raise notice 'PRUEBA X14e · 3: ajustada en prueba y deshecha la carga, todo vuelve a «%».', pg_temp.estado();
+end $$;
+reset role;
 
 -- 4 · La vuelta atrás de la 20261125T1415 -----------------------------------------------------------------------------------------
 \i supabase/vuelta-atras/20261125T1415_x14e_clientes_con_su_430.down.sql
