@@ -1,0 +1,17 @@
+# X33 · La contabilidad de QBO a ERP10 (25/11). Rama conta/x33-qbo-a-erp10. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   1205  Añade el ajuste «Las facturas las emite Cegid: no se suben las de Sumied» por empresa (con su fecha y quién lo
+#         cambió) y lo enciende en las dos empresas de QBO (decisión de Julio). Funciones nuevas.
+#   1206  Cambia conta_erp10_por_salir, conta_erp10_cola y conta_erp10_atascados (misma firma, con su respaldo): con el
+#         ajuste encendido no sale ninguna factura (emitida o recibida) de la empresa. Con el ajuste apagado (todas las
+#         demás empresas), lo mismo que antes. No escribe en ninguna fila.
+#   1207  Añade lo que prepara los asientos de GoCardless del mes (cobro, devolución e ingreso) desde lo que ya trae Sumied
+#         de GoCardless: los deja por revisar, y lo que no tiene su cliente, su 430 o su factura va a «Pendiente de
+#         revisar». No prepara nada al aplicarse: lo prepara una persona con el botón.
+#
+# Nada en el camino del pedido. Lo cuenta x33-qbo-a-erp10.sql (regla 31). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x33-qbo-a-erp10.sql
+supabase/migrations/20261125T1205_x33_facturas_las_emite_cegid.sql
+supabase/migrations/20261125T1206_x33_freno_en_la_salida.sql
+supabase/migrations/20261125T1207_x33_asientos_de_gocardless.sql

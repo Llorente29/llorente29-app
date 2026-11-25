@@ -1,0 +1,8 @@
+# X33 · La contabilidad de QBO a ERP10. La 1205 y la 1207 solo añaden (de verdad desde la rama, W05); la 1206 cambia
+# las tres funciones de la salida (desde la rama, en ROLLBACK; de verdad desde main al fusionar). Su prueba, por los
+# caminos, con la vuelta atrás dentro. Y la semilla de la e2e (W07): GoCardless de noviembre en la empresa de la cuenta A.
+supabase/migrations/20261125T1205_x33_facturas_las_emite_cegid.sql
+supabase/migrations/20261125T1206_x33_freno_en_la_salida.sql
+supabase/migrations/20261125T1207_x33_asientos_de_gocardless.sql
+supabase/staging/sql/20261125_x33_qbo_a_erp10_prueba.sql
+supabase/seeds/conta/seed_x33_gocardless_staging.sql
