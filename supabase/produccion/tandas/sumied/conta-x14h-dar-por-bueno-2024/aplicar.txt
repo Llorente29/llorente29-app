@@ -9,3 +9,6 @@
 cuenta: scripts/conta/produccion/cuentas/x14h-dar-por-bueno.sql
 supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql
 sin-vuelta-atras: supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql · motivo: lo dado por bueno no se deshace; un error en lo traído se corrige con un asiento a mano.
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · estado = dada_por_buena
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · asientos traídos sin validar = 0
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas de la carga sin crear = 0
