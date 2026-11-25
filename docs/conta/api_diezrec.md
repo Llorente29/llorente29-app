@@ -1,6 +1,6 @@
 # API DiezREC (facturación de Cegid) · documentación
 
-Copia de la documentación oficial que facilitó Julio el 25/11/2026 (última actualización del proveedor: 06/11/2026). Sin claves.
+Copia de la documentación oficial que facilitó Julio el 25/11/2026 (última actualización del proveedor: 06/11/2026). Sin claves; el token de los ejemplos, como «{token}».
 
 ```
 API DiezREC
@@ -29,7 +29,7 @@ USUARIO	Usuario de Diez Software (principal o secundario) cuyos datos se van a c
 Obtención y uso del token
 Con los cuatro datos anteriores se llama a WS Login, que devuelve un token de acceso (auth_token). Ese token debe enviarse en todas las demás llamadas, en la cabecera Authorization precedido de la palabra Bearer:
 
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Authorization: Bearer {token}
 El token tiene una validez de 2 horas (el campo expires_in de la respuesta indica los segundos). Una vez caducado, las llamadas devuelven 401 Unauthorized y es necesario volver a llamar a WS Login.
 
 El usuario principal puede indicar en el campo empresa de WS Login la empresa a la que quiere acceder. Los usuarios secundarios acceden a la empresa que tienen asignada.
@@ -136,7 +136,7 @@ curl -X POST "https://apirec.diezsoftware.com/api/Auth/login" \
 Respuesta
 {
   "id": "1234",
-  "auth_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "auth_token": "{token}",
   "expires_in": 7200
 }
 WS Clientes
