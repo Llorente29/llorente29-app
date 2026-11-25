@@ -1,0 +1,29 @@
+[
+ {
+  "id": "815-1",
+  "pr": 815,
+  "fecha": "2026-11-25T21:53:16Z",
+  "producto": "sumied",
+  "apartado": "GoCardless es la verdad",
+  "frase": "cada lectura deja las líneas de los clientes atados como las cobra GoCardless (bajas e importes), apuntado; lo no atado va a «Pendiente de revisar».",
+  "ruta": null
+ },
+ {
+  "id": "815-2",
+  "pr": 815,
+  "fecha": "2026-11-25T21:53:16Z",
+  "producto": "sumied",
+  "apartado": "Cobros de GoCardless sin cliente",
+  "frase": "salen todas las suscripciones sin atar, también las propuestas por correo, contadas como la copia; unir las deja atadas de verdad.",
+  "ruta": null
+ },
+ {
+  "id": "815-3",
+  "pr": 815,
+  "fecha": "2026-11-25T21:53:16Z",
+  "producto": "sumied",
+  "apartado": "Cada tarjeta",
+  "frase": "la propuesta de Sumied, el buscador, el banco y los dígitos del mandato si el correo se repite, y «No tiene ficha: apuntar para QBO», con su lista y su Excel.",
+  "ruta": null
+ }
+]
