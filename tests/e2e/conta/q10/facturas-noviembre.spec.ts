@@ -134,10 +134,16 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await expect(page.locator('[data-prueba="sin-factura"] li')).toHaveCount(2)
     await expect(page.locator('[data-prueba="sin-factura"] li[data-estado="failed"]')).toContainText('Fallido: GoCardless no lo pudo cobrar (Fondos insuficientes)')
 
-    // El PDF de un borrador se abre en otra pestaña.
-    const [pdf] = await Promise.all([page.waitForEvent('popup'), filas.nth(0).getByRole('button', { name: 'PDF' }).click()])
-    expect(pdf.url()).toMatch(/^blob:/)
-    await pdf.close()
+    // El PDF de un borrador se abre en otra pestaña: se apunta lo que abre (la pestaña de un PDF de blob, en el
+    // Chromium sin pantalla, no tiene aún su dirección cuando salta «popup»: e2e 45625540114, url «»).
+    await page.evaluate(() => {
+      const w = window as unknown as { __abiertas: string[] }
+      w.__abiertas = []
+      window.open = ((u?: string | URL) => { w.__abiertas.push(String(u)); return {} as Window }) as typeof window.open
+    })
+    await filas.nth(0).getByRole('button', { name: 'PDF' }).click()
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __abiertas: string[] }).__abiertas)).toEqual([expect.stringMatching(/^blob:/)])
+    await expect(page.locator('section').filter({ hasText: 'Facturas (4)' }).getByRole('alert')).toHaveCount(0)
 
     mkdirSync(DIR, { recursive: true })
     await page.evaluate(() => document.fonts.ready)
