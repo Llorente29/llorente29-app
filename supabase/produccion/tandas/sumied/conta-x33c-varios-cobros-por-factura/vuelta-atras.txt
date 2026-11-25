@@ -1,0 +1,4 @@
+# X33c · la vuelta atrás: conta_gc_asientos_preparar desde su respaldo y otra vez el UNIQUE de la factura (para si ya
+# hay una factura con más de un cobro: esos enlaces se miran a mano antes).
+cuenta: scripts/conta/produccion/cuentas/x33c-varios-cobros-por-factura.sql
+supabase/vuelta-atras/20261125T1810_x33c_varios_cobros_por_factura.down.sql

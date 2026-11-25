@@ -1,0 +1,16 @@
+{
+ "_que": "X33c · Una factura, varios cobros · contexto medido en producción en SOLO LECTURA (conta_gc_cobro_factura con 0 filas y su restricción conta_gc_cobro_factura_invoice_id_key) y en la base local con la estructura de staging. 1810 quita esa restricción y cambia conta_gc_asientos_preparar con la misma firma; no escribe en ninguna fila. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-25T18:33Z",
+ "tanda": {
+  "supabase/migrations/20261125T1810_x33c_varios_cobros_por_factura.sql": "8135fd1fe8463b37cd864307f8ef33a4"
+ },
+ "contexto": {
+  "tablas": ["public.conta_gc_cobro_factura"],
+  "funciones": ["public.conta_gc_asientos_preparar(uuid,date,text)"],
+  "filas": {},
+  "otras": {},
+  "camino": { "tablas": [], "funciones": [] },
+  "usos": {},
+  "registro": []
+ }
+}
