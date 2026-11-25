@@ -40,9 +40,11 @@ import { loQueHaEntrado, queVaAEntrar } from '@/modules/conta/erp10/conexion'
 import { salePorLaConexion } from '@/modules/conta/erp10/ficheros'
 import { ConexionErp10Tarjeta } from '@/modules/conta/libros/ConexionErp10'
 import { YaEstaEnErp10 } from '@/modules/conta/libros/YaEstaEnErp10'
+import { AsientosGocardless } from '@/modules/conta/libros/AsientosGocardless'
+import { aFacturasFuera, notaFacturasFuera } from '@/modules/conta/erp10/qbo'
 import {
   apuntarLote, bajarPdf, carpetaDeLaSalida, leerAsientosPorSalir, leerCambiadas, leerComprobar, leerDiasTpvPorSalir, leerEmitidasPorSalir, leerLotes, leerPorSalir, leerRecibidasPorSalir, leerSalidaEmpresa,
-  ponerAMano, ponerIgualado, volverASacar,
+  leerFacturasFuera, ponerAMano, ponerIgualado, volverASacar,
 } from '@/modules/conta/services/erp10Service'
 
 function bajar(bytes: ArrayBuffer | Uint8Array, nombre: string, tipo: string) {
@@ -134,6 +136,9 @@ export function SalidaErp10() {
   const filasHoy = listaDeHoy(hoyErp10.datos ?? [])
   // X31 · 2 · Lo que ya estaba en ERP10 y espera a una persona.
   const dudas = useLeer(() => leerDudasErp10(L.accountId, L.companyId), `${L.companyId}:dudas:${vueltaEsc}:${L.vuelta}`)
+  // X33 · «Las facturas las emite Cegid»: lo que no sale este mes por el ajuste (regla 7: se cuenta, no se esconde).
+  const fuera = useLeer(encendida && mes ? () => leerFacturasFuera(L.companyId, mes) : null, `${L.companyId}:fuera:${mes}:${vuelta}:${L.vuelta}`)
+  const notaFuera = fuera.datos ? notaFacturasFuera(aFacturasFuera(fuera.datos)) : null
   const [confirmar, setConfirmar] = useState(false)
   // X31 · 2 · Al ir a mandar: si en la serie de ERP10 hay asientos del mes metidos a mano, se avisa antes.
   const intercalados = useLeer(confirmar && mes ? () => leerIntercalados(L.companyId, mes) : null, `${L.companyId}:inter:${mes}:${confirmar}`)
@@ -496,6 +501,8 @@ export function SalidaErp10() {
             <h2 className="cxe-der-titulo" id="cxe-mirar">Qué mirar antes de sacarlo · {nMirar}</h2>
             <div className="cxe-der-cuerpo">
               <YaEstaEnErp10 dudas={dudas.datos ?? []} quien={L.quien} decidido={() => setVueltaEsc((v) => v + 1)} />
+              {notaFuera && <div className="cxe-nota" data-prueba="facturas-fuera"><p><strong>{notaFuera.fuerte}</strong> {notaFuera.resto}</p></div>}
+              {mes && <AsientosGocardless companyId={L.companyId} mes={mes} mesTexto={mesEnPalabras(mes)} quien={L.quien} vuelta={vuelta + L.vuelta} />}
               {filasHoy.length > 0 && (
                 <div className="cxe-nota cxe-hoy">
                   <p><strong>Hoy en ERP10 · {filasHoy.length}</strong></p>
