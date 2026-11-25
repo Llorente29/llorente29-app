@@ -2,10 +2,11 @@
 # ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
 #
 #   1320  Cambia _conta_gc_asientos_plan, conta_gc_asientos_preparar y conta_gc_asientos_del_mes (misma firma, con su
-#         respaldo): la factura de un cobro es la del mismo cliente, importe y MES; si ya está cobrada en Sumied (el
-#         camino del G05 al emitir), «Preparar» no escribe otro asiento de cobro y señala el que tiene; si lo prepara él,
-#         deja el cobro apuntado en la factura con ese asiento. Añade dos columnas que admiten nulos (factura_id, nota)
-#         y una función. No escribe en ninguna fila.
+#         respaldo): la factura de un cobro es la atada a él en conta_gc_cobro_factura (nueva; la escribe la emisión
+#         del Q10, una factura por cobro) o, sin enlace, la del mismo cliente e importe emitida después del cobro; si ya
+#         está cobrada en Sumied (el G05 al emitir), «Preparar» no escribe otro asiento de cobro y señala el que tiene;
+#         si lo prepara él, deja el cobro apuntado en la factura con ese asiento. Añade una tabla, dos columnas que
+#         admiten nulos (factura_id, nota) y una función. No escribe en ninguna fila.
 #
 # Nada en el camino del pedido. Lo cuenta x33b-un-cobro-por-factura.sql (regla 31). El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/x33b-un-cobro-por-factura.sql
