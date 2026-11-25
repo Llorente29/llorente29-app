@@ -1,0 +1,5 @@
+# Q08 · El reparto por la cuenta del mandato (1207). Su prueba (ROLLBACK), con datos inventados que llevan los mismos
+# ids de GoCardless y nº de Bitrix24: la guarda para con un mandato que no casa; cada uno a su ficha con su decisión;
+# lo de correo de la lectura no lo pisa; y la vuelta atrás.
+supabase/migrations/20261125T1207_q08_reparto_por_mandato.sql
+supabase/staging/sql/20261125_q08_reparto_por_mandato_prueba.sql

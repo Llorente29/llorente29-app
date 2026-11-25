@@ -1,0 +1,31 @@
+{
+ "_que": "Q08 · el reparto por la cuenta del mandato · contexto de producción de la tanda (1207), medido en SOLO LECTURA el 25/11 a las 11:09Z con la consulta de analizar.mjs sql-contexto: existen las cinco tablas que toca; nada en el camino del pedido y nada en el historial.",
+ "medido": "2026-11-25T11:09Z",
+ "tanda": {
+  "supabase/migrations/20261125T1207_q08_reparto_por_mandato.sql": "5516bd5f2b5de0e44100b7988c2710a0"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_cobro_cliente",
+   "public.conta_gc_cliente",
+   "public.conta_gc_enlace",
+   "public.conta_gestoria_decision",
+   "public.conta_mandato"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_cobro_cliente": 965,
+   "public.conta_gc_cliente": 2204,
+   "public.conta_gc_enlace": 1133,
+   "public.conta_gestoria_decision": 0,
+   "public.conta_mandato": 1264
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,3 @@
+# Q08 · El reparto por la cuenta del mandato · vuelta atrás: los tres como estaban (de conta_gc_enlace.antes).
+cuenta: scripts/conta/produccion/cuentas/q08-reparto-por-mandato.sql
+supabase/vuelta-atras/20261125T1207_q08_reparto_por_mandato.down.sql
