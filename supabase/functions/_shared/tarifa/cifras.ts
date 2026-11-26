@@ -239,11 +239,20 @@ export interface CargoParaDeuda {
   cobradoPorOtraVia: boolean
 }
 
-/** Lo que dice la tabla del K14 (el casado del extracto con cada cliente): qué recibos quedan pagados por el banco. */
+/**
+ * Lo que dice el K14 (el casado del extracto del banco con cada cliente: conta_banco_cobro y conta_banco_cobro_recibo,
+ * leídos por conta_cifras_del_banco): qué empresas están ya cruzadas, qué recibos de GoCardless pagó el banco y el TPV
+ * que aún no es de nadie.
+ */
 export interface CruceConElBanco {
-  pagadosPorElBanco: ReadonlySet<string>
-  /** Lo cobrado con tarjeta que aún no está asignado a ningún cliente: va en su línea, no se descuenta. Null: sin dato. */
-  tarjetaSinAsignarCent: number | null
+  /** Las empresas elegidas ya cruzadas con el banco. */
+  cruzadas: ReadonlySet<string>
+  /** Las elegidas que aún no lo están, por su nombre: mientras quede alguna, la tarjeta no es «Te deben». */
+  faltan: string[]
+  /** «empresa|recibo de GoCardless» → cómo lo pagó el banco. */
+  pagadosPorElBanco: ReadonlyMap<string, { fecha: string; via: string; importeCent: number }>
+  /** El TPV sin asignar, entrada a entrada: va en su línea y no se descuenta de nadie. */
+  tarjeta: Lista
 }
 
 export interface NoCobrado {
@@ -258,12 +267,17 @@ export interface NoCobrado {
   tramos: { texto: string; lista: Lista }[]
   /** Los de un mandato ya cancelado (están dentro de la lista, no aparte). */
   conMandatoCancelado: Lista
-  /** Lo que ya pagó por el banco (solo cuando está cruzado): no cuenta. */
+  /** Lo que ya pagó por el banco (de las empresas cruzadas): no cuenta. */
   pagadoPorElBanco: Lista | null
-  tarjetaSinAsignarCent: number | null
+  /** El TPV sin asignar (de las empresas cruzadas): no se descuenta. */
+  tarjetaSinAsignar: Lista | null
+  /** Las empresas que aún no están cruzadas con el banco. */
+  faltanPorCruzar: string[]
 }
 
 const COBRADO = new Set(['paid_out', 'confirmed'])
+/** La vía del banco, en palabras (las del K14: _shared/cobro/porBanco.ts y el CHECK de conta_banco_cobro.via). */
+const VIA: Record<string, string> = { transferencia: 'transferencia', traspaso: 'traspaso', bizum: 'Bizum', cajero: 'ingreso en cajero', tarjeta: 'tarjeta', otra: 'otra vía' }
 const NO_COBRADO = new Set(['failed', 'charged_back'])
 
 export function noCobrado(cargos: readonly CargoParaDeuda[], hoy: string, banco: CruceConElBanco | null): NoCobrado {
@@ -272,25 +286,34 @@ export function noCobrado(cargos: readonly CargoParaDeuda[], hoy: string, banco:
   // suscripción) ni marcado como cobrado por otra vía. El mandato da igual: uno cancelado también se debe.
   const candidatos = cargos.filter((c) => NO_COBRADO.has(c.estado) && !c.cobradoPorOtraVia && !c.cobradoDespues
     && !cargos.some((p) => COBRADO.has(p.estado) && p.empresaId === c.empresaId && c.suscripcionId !== null && p.suscripcionId === c.suscripcionId && p.fecha > c.fecha))
-  const pagados = banco ? candidatos.filter((c) => banco.pagadosPorElBanco.has(c.id)) : []
-  const quedan = banco ? candidatos.filter((c) => !banco.pagadosPorElBanco.has(c.id)) : candidatos
+  const pagadoPor = (c: CargoParaDeuda) => (banco && banco.cruzadas.has(c.empresaId) ? banco.pagadosPorElBanco.get(`${c.empresaId}|${c.id}`) ?? null : null)
+  const pagados = candidatos.filter((c) => pagadoPor(c))
+  const quedan = candidatos.filter((c) => !pagadoPor(c))
   const fila = (c: CargoParaDeuda): FilaDeLista => ({ id: c.id, texto: c.nombre, fichaId: c.fichaId, fecha: c.fecha, importeCent: c.importeCent,
     detalle: `${c.estado === 'charged_back' ? 'Devuelto por el banco' : 'Fallido'} el ${Number(c.fecha.slice(8, 10))}/${c.fecha.slice(5, 7)}/${c.fecha.slice(0, 4)}${c.mandatoActivo ? '' : ' · mandato ya cancelado'}` })
   const filas = quedan.map(fila).sort((a, b) => (a.fecha ?? '').localeCompare(b.fecha ?? '') || a.texto.localeCompare(b.texto, 'es'))
-  const titulo = banco ? 'Te deben' : 'GoCardless no cobró'
+  // «Te deben» solo cuando TODAS las empresas elegidas están cruzadas con el banco; si falta alguna, lo que no cobró
+  // GoCardless no es aún deuda (pudo pagarse por transferencia, Bizum o tarjeta) y se dice cuál falta.
+  const cruzado = banco !== null && banco.faltan.length === 0
+  const titulo = cruzado ? 'Te deben' : 'GoCardless no cobró'
+  const filaPagada = (c: CargoParaDeuda): FilaDeLista => {
+    const b = pagadoPor(c)!
+    return { ...fila(c), detalle: `${fila(c).detalle} · pagado por el banco (${VIA[b.via] ?? b.via}) el ${Number(b.fecha.slice(8, 10))}/${b.fecha.slice(5, 7)}/${b.fecha.slice(0, 4)}` }
+  }
   const TRAMOS: [string, (d: number) => boolean][] = [
     ['Hasta 30 días', (d) => d <= 30], ['De 31 a 60 días', (d) => d > 30 && d <= 60], ['De 61 a 90 días', (d) => d > 60 && d <= 90], ['Más de 90 días', (d) => d > 90],
   ]
   return {
-    titulo, cruzado: banco !== null,
+    titulo, cruzado,
     lista: lista(titulo, filas),
     recibos: filas.length,
     clientes: new Set(quedan.map((c) => c.fichaId ?? `sin:${c.id}`)).size,
     desde: filas[0]?.fecha ?? null,
     tramos: TRAMOS.map(([texto, en]) => ({ texto, lista: lista(`${titulo} · ${texto.toLowerCase()}`, filas.filter((f) => en(dias(f.fecha!)))) })),
     conMandatoCancelado: lista(`${titulo} · con el mandato ya cancelado`, filas.filter((f) => f.detalle.endsWith('mandato ya cancelado'))),
-    pagadoPorElBanco: banco ? lista('Pagado después por el banco (no cuenta)', pagados.map(fila)) : null,
-    tarjetaSinAsignarCent: banco ? banco.tarjetaSinAsignarCent : null,
+    pagadoPorElBanco: banco ? lista('Pagado después por el banco (no cuenta)', pagados.map(filaPagada)) : null,
+    tarjetaSinAsignar: banco ? banco.tarjeta : null,
+    faltanPorCruzar: banco ? banco.faltan : [],
   }
 }
 
@@ -373,4 +396,26 @@ export function cargosParaDeuda(filas: readonly Fila[], nombreDe: (fichaId: stri
       suscripcionId: texto(c.suscripcion_gc_id), estado: String(c.estado), fecha: String(c.fecha).slice(0, 10), importeCent: centDe(c.importe),
       mandatoActivo: c.mandato_activo === true, cobradoDespues: c.cobrado_despues === true, cobradoPorOtraVia: !!c.otra_via }
   })
+}
+
+/**
+ * Lo que devuelve conta_cifras_del_banco, para las empresas elegidas. Null si ninguna está cruzada con el banco todavía
+ * (entonces la tarjeta es «GoCardless no cobró», sin más).
+ */
+export function cruceDelBanco(j: unknown, elegidas: readonly string[], nombreDeEmpresa: (id: string) => string): CruceConElBanco | null {
+  const o = (j && typeof j === 'object' ? j : {}) as Fila
+  const filas = (x: unknown) => (Array.isArray(x) ? (x as Fila[]) : [])
+  const todas = new Set((Array.isArray(o.cruzadas) ? o.cruzadas : []).map(String))
+  const cruzadas = new Set(elegidas.filter((e) => todas.has(e)))
+  if (!cruzadas.size) return null
+  const pagados = new Map(filas(o.recibos).filter((r) => cruzadas.has(String(r.empresa_id)))
+    .map((r) => [`${String(r.empresa_id)}|${String(r.gc_id)}`, { fecha: String(r.fecha).slice(0, 10), via: String(r.via ?? 'otra'), importeCent: centDe(r.importe) }]))
+  const tarjeta = filas(o.tarjeta).filter((t) => cruzadas.has(String(t.empresa_id))).map((t): FilaDeLista => {
+    const f = String(t.fecha).slice(0, 10)
+    return { id: String(t.movement_id), texto: 'Cobrado con tarjeta (TPV)', detalle: `Abono del ${Number(f.slice(8, 10))}/${f.slice(5, 7)}/${f.slice(0, 4)}`, importeCent: centDe(t.importe), fichaId: null, fecha: f }
+  })
+  return {
+    cruzadas, faltan: elegidas.filter((e) => !todas.has(e)).map(nombreDeEmpresa), pagadosPorElBanco: pagados,
+    tarjeta: lista('Cobrado con tarjeta, sin asignar a ningún cliente (no se descuenta)', tarjeta),
+  }
 }

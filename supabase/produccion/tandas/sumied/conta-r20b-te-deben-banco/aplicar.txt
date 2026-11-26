@@ -1,0 +1,8 @@
+# R20b · «Te deben», cruzado con el banco (Julio, 26/11). Rama conta/r20b-te-deben-banco. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   1139  Añade conta_cifras_del_banco: los recibos de GoCardless que pagó el banco (K14) y el TPV sin asignar.
+#
+# Nada en el camino del pedido, ni de cobros ni de facturas. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r20b-te-deben-banco.sql
+supabase/migrations/20261126T1139_r20b_cifras_del_banco.sql

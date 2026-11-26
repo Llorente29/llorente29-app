@@ -1,0 +1,6 @@
+{
+ "_que": "R20b · «Te deben», cruzado con el banco · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA. 1139: añade una función que lee lo del K14. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-26T11:41Z",
+ "tanda": { "supabase/migrations/20261126T1139_r20b_cifras_del_banco.sql": "d580be981de48f8150450014e270f7f8" },
+ "contexto": { "tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": { "tablas": [], "funciones": [] }, "usos": {}, "registro": [] }
+}

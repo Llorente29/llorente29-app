@@ -9,7 +9,7 @@
 // security_invoker y se filtran aquí por la cuenta (regla 9); conta_cifras_del_cobro contesta al servidor.
 
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
-import { avisosDeLasCifras, cargosParaDeuda, cifrasDeCuotas, delCobro, mesAnterior, noCobrado, recibosDeLaEmpresa } from '../_shared/tarifa/cifras.ts'
+import { avisosDeLasCifras, cargosParaDeuda, cifrasDeCuotas, cruceDelBanco, delCobro, mesAnterior, noCobrado, recibosDeLaEmpresa } from '../_shared/tarifa/cifras.ts'
 import type { FilasDeLaTarifa } from '../_shared/cobro/datos.ts'
 import { leerTodas } from './paginas.ts'
 import type { DiferenciaAEscribir } from './plan.ts'
@@ -46,7 +46,10 @@ export async function comprobarCifras(db: SupabaseClient, cuenta: string, empres
   const nombreDe = (id: string) => nombres.get(id) ?? null
   const c = cifrasDeCuotas(mes, del.suscripciones.filter((s) => s.empresaId === empresa),
     recibosDeLaEmpresa(filas, empresa, mes, nombreDe), recibosDeLaEmpresa(filas, empresa, mesAnterior(mes), nombreDe), nombreDe)
-  const n = noCobrado(cargosParaDeuda(cargos, nombreDe), hoy, null)
+  // R20b · Cruzado con el banco (K14), como en la pantalla: lo que pagó el banco no es deuda.
+  const { data: ban, error: eBan } = await db.rpc('conta_cifras_del_banco', { p_cuenta: cuenta })
+  if (eBan) throw new Error(`conta_cifras_del_banco: ${eBan.message}`)
+  const n = noCobrado(cargosParaDeuda(cargos, nombreDe), hoy, cruceDelBanco(ban, [empresa], () => 'esta empresa'))
   const avisos = avisosDeLasCifras(c, n)
   console.log(JSON.stringify({ r20: 'cifras', empresa, mes, gocardless: c.gocardless.lista.totalCent, sumied: c.sumied.lista.totalCent,
     diferencia: c.diferencia.cent, no_cobrado: n.lista.totalCent, avisos: avisos.map((a) => a.codigo) }))

@@ -14,7 +14,7 @@ import { figura } from '../vista'
 import { euros, reciboDelMes } from '../../../../../supabase/functions/_shared/tarifa/precio'
 import { catalogoYAsignaciones } from '../../../../../supabase/functions/_shared/cobro/datos'
 import { SE_COBRA, SIN_EMPRESA, type CargoDeGoCardless, type FilaDeCliente, type Situacion } from '../../../../../supabase/functions/_shared/tarifa/lista'
-import { cargosParaDeuda, cifrasDeCuotas, delCobro, fraseDiferencia, nombreDelMes, mesAnterior, noCobrado, recibosDeLaEmpresa, type CifrasDeCuotas, type CruceConElBanco, type NoCobrado } from '../../../../../supabase/functions/_shared/tarifa/cifras'
+import { cargosParaDeuda, cifrasDeCuotas, delCobro, fraseDiferencia, nombreDelMes, mesAnterior, noCobrado, recibosDeLaEmpresa, cruceDelBanco, type CifrasDeCuotas, type NoCobrado } from '../../../../../supabase/functions/_shared/tarifa/cifras'
 import { cifraDeCobro, type CifraDeCobro } from '../../../../../supabase/functions/_shared/tarifa/mandaEnLosCobros'
 import type { DatosClientes, DatosFicha, Fila } from './datos'
 
@@ -91,9 +91,7 @@ function serviciosEnTexto(lineas: ReturnType<typeof reciboDelMes>['lineas']): st
   return lineas.map((l) => (l.trabajadores !== null ? `${l.texto.replace(/ · \d+ trabajadores?$/, '')} (${l.trabajadores})` : l.texto)).join(' · ')
 }
 
-export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], elegidas: readonly string[], hoy: string,
-  /** R20 · Lo pagado por el banco (la tabla del K14). Null mientras no esté: la tarjeta es «GoCardless no cobró». */
-  banco: CruceConElBanco | null = null): ModeloClientes {
+export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], elegidas: readonly string[], hoy: string): ModeloClientes {
   const mes = hoy.slice(0, 7)
   const { catalogo, asignaciones } = catalogoYAsignaciones(d)
   const nombreEmpresa = new Map(empresas.map((e) => [e.id, e.nombre]))
@@ -109,6 +107,8 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
   // dice cada fila («Devuelto», «Debe») sale de la misma lista: el filtro suma lo mismo que la tarjeta.
   const nombreDeFicha = new Map(d.clientes.map((r) => [String(r.cliente_id), String(r.cliente ?? '')]))
   const nombreDe = (id: string) => nombreDeFicha.get(id) || null
+  // R20b · Cruzado con el banco (K14, conta_cifras_del_banco): lo que pagó el banco no es deuda; el TPV sin asignar, aparte.
+  const banco = cruceDelBanco(d.delBanco, elegidas, (id) => nombreEmpresa.get(id) ?? 'la otra empresa')
   const nc = noCobrado(cargosParaDeuda(d.cargos.filter((c) => enElegidas(c.empresa_id)), nombreDe), hoy, banco)
   const enLaLista = new Set(nc.lista.filas.map((f) => f.id))
   const deben = { cargos: cargos.filter((c) => enLaLista.has(c.id)) }

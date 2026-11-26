@@ -1,0 +1,4 @@
+# R20b · «Te deben», cruzado con el banco.
+# 1139 (añade: de verdad desde la rama, se puede pasar dos veces), con su prueba.
+supabase/migrations/20261126T1139_r20b_cifras_del_banco.sql
+supabase/staging/sql/20261126_r20b_cifras_del_banco_prueba.sql

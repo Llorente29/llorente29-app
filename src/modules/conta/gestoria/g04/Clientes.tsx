@@ -153,10 +153,12 @@ export function Clientes(p: PropsClientes) {
             )}
         </div>
         <div className="g4-cifra" data-tono="mal" data-cifra="no-cobrado">
-          <div className="g4-cifra-titulo">{nc.titulo} <span className="g4-fuente">· según GoCardless{nc.cruzado ? ' y el banco' : ''}</span></div>
+          <div className="g4-cifra-titulo">{nc.titulo} <span className="g4-fuente">· según GoCardless{nc.pagadoPorElBanco ? ' y el banco' : ''}</span></div>
           <div className="g4-cifra-valor"><button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: nc.lista, fuente: 'Según GoCardless' })}>{euros(nc.lista.totalCent)}</button></div>
           <div className="g4-cifra-linea">{fraseNoCobrado(nc)}</div>
-          {!nc.cruzado && <div className="g4-cifra-linea">Falta cruzar con el banco: lo pagado por transferencia, Bizum o tarjeta aún no se descuenta.</div>}
+          {!nc.cruzado && (nc.faltanPorCruzar.length
+            ? <div className="g4-cifra-linea">Falta cruzar con el banco lo de {nc.faltanPorCruzar.join(' y ')}: lo que se pagó por transferencia, Bizum o tarjeta aún no se descuenta.</div>
+            : <div className="g4-cifra-linea">Falta cruzar con el banco: lo pagado por transferencia, Bizum o tarjeta aún no se descuenta.</div>)}
           <table className="g4-ambar-tabla"><tbody>
             {nc.tramos.map((t) => (
               <tr key={t.texto}><td>{t.lista.filas.length ? <button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: t.lista, fuente: 'Según GoCardless' })}>{t.texto}</button> : t.texto}</td><td>{euros(t.lista.totalCent)}</td></tr>
@@ -168,8 +170,8 @@ export function Clientes(p: PropsClientes) {
           {nc.pagadoPorElBanco && nc.pagadoPorElBanco.filas.length > 0 && (
             <div className="g4-cifra-linea">Pagado después por el banco, que ya no cuenta: <button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: nc.pagadoPorElBanco!, fuente: 'Según el banco' })}>{euros(nc.pagadoPorElBanco.totalCent)}</button></div>
           )}
-          {nc.tarjetaSinAsignarCent !== null && nc.tarjetaSinAsignarCent > 0 && (
-            <div className="g4-cifra-linea">Cobrado con tarjeta sin asignar a nadie (no se descuenta): {euros(nc.tarjetaSinAsignarCent)}</div>
+          {nc.tarjetaSinAsignar && nc.tarjetaSinAsignar.filas.length > 0 && (
+            <div className="g4-cifra-linea">Cobrado con tarjeta sin asignar a ningún cliente (no se descuenta): <button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: nc.tarjetaSinAsignar!, fuente: 'Según el banco' })}>{euros(nc.tarjetaSinAsignar.totalCent)}</button> ({nc.tarjetaSinAsignar.filas.length.toLocaleString('es-ES')} abonos)</div>
           )}
         </div>
         <div className="g4-cifra" data-tono="aviso">
