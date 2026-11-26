@@ -38695,6 +38695,38 @@ COMMENT ON FUNCTION public.conta_cegid_atar(p_company uuid, p_party uuid, p_codi
 
 
 --
+-- Name: conta_cegid_elegir_concepto(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_cegid_elegir_concepto(p_company uuid, p_que text, p_gc_id text, p_concepto text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare v_cuenta uuid := public._conta_gestoria_puede(p_company); v_c text := upper(trim(coalesce(p_concepto, '')));
+begin
+  if p_que not in ('cobro', 'suscripcion') then raise exception 'Qué se elige: cobro o suscripcion.' using errcode = '22023'; end if;
+  if v_c !~ '^[0-9A-Z]{1,5}$' then raise exception 'El concepto de Cegid tiene hasta 5 letras o cifras.' using errcode = '22023'; end if;
+  if p_que = 'cobro' and not exists (select 1 from public.conta_gc_cobro where company_id = p_company and gc_id = p_gc_id) then
+    raise exception 'Ese cobro no está en lo leído de GoCardless.' using errcode = 'P0002';
+  end if;
+  if p_que = 'suscripcion' and not exists (select 1 from public.conta_gc_suscripcion where company_id = p_company and gc_id = p_gc_id) then
+    raise exception 'Esa suscripción no está en lo leído de GoCardless.' using errcode = 'P0002';
+  end if;
+  insert into public.conta_cegid_concepto_elegido (company_id, account_id, que, gc_id, concepto, quien)
+  values (p_company, v_cuenta, p_que, p_gc_id, v_c, public.conta_nombre_actor())
+  on conflict (company_id, que, gc_id) do update set concepto = excluded.concepto, quien = excluded.quien, at = now();
+  return jsonb_build_object('concepto', v_c, 'frase', format('Confirmado: va al concepto %s de Cegid.', v_c));
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_cegid_elegir_concepto(p_company uuid, p_que text, p_gc_id text, p_concepto text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_cegid_elegir_concepto(p_company uuid, p_que text, p_gc_id text, p_concepto text) IS 'Q10 · «Confirmar»: el concepto de Cegid de un cobro suelto o de una suscripción fuera de la tabla aprobada. Solo quien puede en la gestoría.';
+
+
+--
 -- Name: conta_cerrado_hasta(uuid, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -121293,6 +121325,31 @@ COMMENT ON TABLE public.conta_cegid_concepto IS 'Q10 · Los conceptos de factura
 
 
 --
+-- Name: conta_cegid_concepto_elegido; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_cegid_concepto_elegido (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    que text NOT NULL,
+    gc_id text NOT NULL,
+    concepto text NOT NULL,
+    quien text,
+    at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_cegid_concepto_elegido_concepto_check CHECK ((concepto ~ '^[0-9A-Z]{1,5}$'::text)),
+    CONSTRAINT conta_cegid_concepto_elegido_que_check CHECK ((que = ANY (ARRAY['cobro'::text, 'suscripcion'::text])))
+);
+
+
+--
+-- Name: TABLE conta_cegid_concepto_elegido; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_cegid_concepto_elegido IS 'Q10 · El concepto de Cegid elegido por una persona para un cobro suelto o una suscripción fuera de la tabla aprobada. Manda sobre la tabla.';
+
+
+--
 -- Name: conta_cegid_factura; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -122034,7 +122091,8 @@ CREATE TABLE public.conta_gc_cobro (
     leido_at timestamp with time zone DEFAULT now() NOT NULL,
     payout_gc_id text,
     causa text,
-    motivo_es text
+    motivo_es text,
+    descripcion text
 );
 
 
@@ -122064,6 +122122,13 @@ COMMENT ON COLUMN public.conta_gc_cobro.causa IS 'G05 · El código del motivo d
 --
 
 COMMENT ON COLUMN public.conta_gc_cobro.motivo_es IS 'G05 · El motivo en palabras de oficina («Sin saldo en la cuenta»).';
+
+
+--
+-- Name: COLUMN conta_gc_cobro.descripcion; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gc_cobro.descripcion IS 'Q10 · El texto del cobro en GoCardless (description); el de un cobro suelto va de texto a su incidencia de Cegid.';
 
 
 --
@@ -122313,7 +122378,7 @@ CREATE TABLE public.conta_gestoria_diferencia (
     tipo_ficha text,
     id_externo text,
     CONSTRAINT conta_gestoria_diferencia_ficha_check CHECK ((((id_externo IS NULL) AND (tipo_ficha IS NULL)) OR ((id_externo IS NOT NULL) AND (crm IS NOT NULL) AND (tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text]))))),
-    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['crm_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_crm'::text, 'correo_repetido_en_crm'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text, 'contacto_solo_negociacion'::text, 'contacto_empresa_con_datos'::text, 'ya_no_es_cliente_en_crm'::text, 'falta_codigo_cliente'::text, 'cliente_no_de_acuerdo'::text, 'falta_cuenta_stripe'::text, 'bitrix_cambiado'::text, 'linea_sin_atar'::text, 'linea_en_otra_ficha'::text, 'gc_sin_atar'::text])))
+    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['crm_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_crm'::text, 'correo_repetido_en_crm'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text, 'contacto_solo_negociacion'::text, 'contacto_empresa_con_datos'::text, 'ya_no_es_cliente_en_crm'::text, 'falta_codigo_cliente'::text, 'cliente_no_de_acuerdo'::text, 'falta_cuenta_stripe'::text, 'bitrix_cambiado'::text, 'linea_sin_atar'::text, 'linea_en_otra_ficha'::text, 'gc_sin_atar'::text, 'cifras_no_cuadran'::text])))
 );
 
 
@@ -141541,6 +141606,22 @@ ALTER TABLE ONLY public.conta_cegid_cliente
 
 
 --
+-- Name: conta_cegid_concepto_elegido conta_cegid_concepto_elegido_company_id_que_gc_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_concepto_elegido
+    ADD CONSTRAINT conta_cegid_concepto_elegido_company_id_que_gc_id_key UNIQUE (company_id, que, gc_id);
+
+
+--
+-- Name: conta_cegid_concepto_elegido conta_cegid_concepto_elegido_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_concepto_elegido
+    ADD CONSTRAINT conta_cegid_concepto_elegido_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_cegid_concepto conta_cegid_concepto_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -158365,6 +158446,22 @@ ALTER TABLE ONLY public.conta_cegid_concepto
 
 
 --
+-- Name: conta_cegid_concepto_elegido conta_cegid_concepto_elegido_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_concepto_elegido
+    ADD CONSTRAINT conta_cegid_concepto_elegido_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cegid_concepto_elegido conta_cegid_concepto_elegido_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_concepto_elegido
+    ADD CONSTRAINT conta_cegid_concepto_elegido_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_cegid_factura conta_cegid_factura_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -171313,6 +171410,19 @@ CREATE POLICY conta_cegid_cliente_leer ON public.conta_cegid_cliente FOR SELECT 
 --
 
 ALTER TABLE public.conta_cegid_concepto ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_cegid_concepto_elegido; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_cegid_concepto_elegido ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_cegid_concepto_elegido conta_cegid_concepto_elegido_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_cegid_concepto_elegido_leer ON public.conta_cegid_concepto_elegido FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
 
 --
 -- Name: conta_cegid_concepto conta_cegid_concepto_leer; Type: POLICY; Schema: public; Owner: -
@@ -187663,6 +187773,15 @@ GRANT ALL ON FUNCTION public.conta_cegid_atar(p_company uuid, p_party uuid, p_co
 
 
 --
+-- Name: FUNCTION conta_cegid_elegir_concepto(p_company uuid, p_que text, p_gc_id text, p_concepto text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_cegid_elegir_concepto(p_company uuid, p_que text, p_gc_id text, p_concepto text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_cegid_elegir_concepto(p_company uuid, p_que text, p_gc_id text, p_concepto text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_cegid_elegir_concepto(p_company uuid, p_que text, p_gc_id text, p_concepto text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_cerrado_hasta(p_company uuid, p_ahora timestamp with time zone); Type: ACL; Schema: public; Owner: -
 --
 
@@ -202251,6 +202370,14 @@ GRANT ALL ON TABLE public.conta_cegid_cliente TO service_role;
 
 GRANT ALL ON TABLE public.conta_cegid_concepto TO authenticated;
 GRANT ALL ON TABLE public.conta_cegid_concepto TO service_role;
+
+
+--
+-- Name: TABLE conta_cegid_concepto_elegido; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_cegid_concepto_elegido TO authenticated;
+GRANT ALL ON TABLE public.conta_cegid_concepto_elegido TO service_role;
 
 
 --
