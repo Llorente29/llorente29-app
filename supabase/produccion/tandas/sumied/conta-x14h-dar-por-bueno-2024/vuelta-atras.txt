@@ -1,0 +1,2 @@
+# X14 · 2 · Sin vuelta atrás: lo dado por bueno no se deshace (ver aplicar.txt).
+cuenta: scripts/conta/produccion/cuentas/x14h-dar-por-bueno.sql

@@ -1,0 +1,25 @@
+# X14 · 2 · «Darlo por bueno» del 2024 de QBO Integrity desde «Aplicar SQL en producción» (Julio, 25/11, urgente): desde la
+# pantalla da 500 «canceling statement due to statement timeout» (4.425 asientos y 2.123 facturas). Rama conta/x14h-dar-por-bueno-2024. Se ensaya y
+# se aplica desde main nombrando esta rama.
+#
+#   2119  conta_traer_dar_por_bueno de la carga e694df2e… (si sigue en prueba), como quien la trajo. No crea ni cambia
+#         objetos; TOCA DATOS (valida sus asientos y crea sus emitidas). Sin vuelta atrás: lo dado por bueno no se deshace.
+#
+# ANTES, la tanda de conta/x14i-repetida-en-erp10 (la 0710, «repetida en ERP10»): sin ella, darlo por bueno para en las 9
+# emitidas que el libro de expedidas trae dos veces (XH004). Una tanda sin vuelta atrás va sola: por eso son dos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x14h-dar-por-bueno.sql
+supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql
+sin-vuelta-atras: supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql · motivo: lo dado por bueno no se deshace; un error en lo traído se corrige con un asiento a mano.
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · en prueba = 0
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · asientos traídos sin validar = 0
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas de la carga sin crear = 0
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · marcadas repetida en ERP10, menos las que el libro trae repetidas = 0
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas que el libro trae repetidas = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas: grupos = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas: grupos con alguna diferencia (fecha, cliente o importes) = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas: grupos con un importe en negativo = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas repetidas: grupos del día de inicio o después = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · emitidas que ya estaban en Sumied fuera de la carga = como antes
+esperado: x14h-dar-por-bueno · carga del 2024 de QBO · día de inicio de la empresa = como antes
