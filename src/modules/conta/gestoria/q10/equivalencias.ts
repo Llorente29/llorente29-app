@@ -17,14 +17,14 @@
 
 type Fila = Record<string, unknown>
 
-export interface FichaCodigo { partyId: string; nif: string | null; cuenta430: string | null }
+export interface FichaCodigo { partyId: string; nif: string | null; cuenta430: string | null; /** Respuesta 4 · el código de cliente de «Clientes y cuotas» (conta_cobro_cliente.codigo_cliente): manda. */ codigo?: number | null }
 export interface ClienteCegidQ { codigo: number; nombre: string | null; nif: string | null; conceptos: { codigoConcepto: string | null; descripcion: string | null; totalLinea: number | null; importe: number | null; cantidad: number | null }[] | null }
 export interface ConceptoCegidQ { codigo: string; descripcion: string | null; porIva: number | null; conRetencion: boolean | null }
 export interface FacturaCegidQ { serie: string; codigo: number; cliente: number | null; total: number | null; retencion: number; porcentajeRetencion?: number | null; lineas: Fila[] }
 
 export const nifQ = (n: string | null | undefined) => (n ?? '').toUpperCase().replace(/[^0-9A-Z]/g, '').replace(/^ES(?=[0-9A-Z]{9}$)/, '')
 
-export type ComoAtado = '430' | '430_nif_distinto' | 'nif' | 'sin'
+export type ComoAtado = 'codigo' | '430' | '430_nif_distinto' | 'nif' | 'sin'
 export interface CodigoCegid { codigo: number | null; como: ComoAtado; porque: string }
 
 /** El código de cliente de Cegid de cada ficha. */
@@ -34,6 +34,11 @@ export function codigosCegid(fichas: readonly FichaCodigo[], clientes: readonly 
   for (const c of clientes) { const k = nifQ(c.nif); if (k) porNif.set(k, [...(porNif.get(k) ?? []), c]) }
   const r = new Map<string, CodigoCegid>()
   for (const f of fichas) {
+    // Respuesta 4 · El código del cliente, en un solo sitio (X14): si la ficha lo tiene en «Clientes y cuotas», es ése.
+    if (f.codigo != null) {
+      r.set(f.partyId, { codigo: f.codigo, como: 'codigo', porque: porCodigo.has(f.codigo) ? `Su código de cliente es el ${f.codigo} de Cegid.` : `Su código de cliente es el ${f.codigo}: aún no está en lo leído de Cegid (vuelve a leer).` })
+      continue
+    }
     const m = f.cuenta430 ? /^430(\d+)$/.exec(f.cuenta430) : null
     const cod = m ? Number(m[1]) : null
     const c = cod !== null ? porCodigo.get(cod) : undefined
@@ -164,10 +169,10 @@ export function tablaEquivalencias(cobros: readonly CobroQ[], codigos: ReadonlyM
 
 /** El resumen de los códigos de cliente, en una frase (para comprobar «el 430 es el código de Cegid»). */
 export function resumenCodigos(codigos: ReadonlyMap<string, CodigoCegid>): { frase: string; por: Record<ComoAtado, number> } {
-  const por: Record<ComoAtado, number> = { '430': 0, '430_nif_distinto': 0, nif: 0, sin: 0 }
+  const por: Record<ComoAtado, number> = { codigo: 0, '430': 0, '430_nif_distinto': 0, nif: 0, sin: 0 }
   for (const c of codigos.values()) por[c.como]++
   const total = codigos.size
-  const frase = `De ${total} fichas atadas: ${por['430']} con su 430 igual al código de Cegid (y el mismo NIF), ${por['430_nif_distinto']} con el código pero otro NIF en Cegid, `
+  const frase = `De ${total} fichas atadas: ${por.codigo ? `${por.codigo} con su código de cliente atado a mano, ` : ''}${por['430']} con su 430 igual al código de Cegid (y el mismo NIF), ${por['430_nif_distinto']} con el código pero otro NIF en Cegid, `
     + `${por.nif} por su NIF y ${por.sin} sin código de Cegid.`
   return { frase, por }
 }

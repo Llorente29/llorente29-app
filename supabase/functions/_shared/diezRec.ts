@@ -71,14 +71,16 @@ export function facturaCegid(x: Fila): FacturaCegid | null {
 // ── Las rutas ───────────────────────────────────────────────────────────────────
 
 const q = (o: Record<string, string | number>) => Object.entries(o).map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
-export type QueLeer = 'clientes' | 'conceptos' | 'facturas' | 'series'
-export function rutaListado(que: QueLeer, pagina: number, ejercicio?: number): string {
+export type QueLeer = 'clientes' | 'conceptos' | 'facturas' | 'series' | 'incidencias'
+export function rutaListado(que: QueLeer, pagina: number, ejercicio?: number, mes?: number): string {
   const pag = { $top: POR_PAGINA, $skip: pagina }
   switch (que) {
     case 'clientes': return `/api/Customers?${q({ $orderby: 'codigo', ...pag })}`
     case 'conceptos': return `/api/Concepts?${q({ $orderby: 'codigo', ...pag })}`
     case 'series': return `/api/Sets?${q({ $orderby: 'codigo', ...pag })}`
     case 'facturas': return `/api/Invoices?${q({ $filter: `ejercicio eq ${Number(ejercicio)}`, $orderby: 'codigo', ...pag })}`
+    // Q10 · respuesta 4 · Las incidencias de un mes (las de Sumied y las de cualquiera), para el cuadre con lo cobrado.
+    case 'incidencias': return `/api/Incidences?${q({ $filter: `ano eq ${Number(ejercicio)} and mes eq ${Number(mes)}`, $orderby: 'cliente', ...pag })}`
   }
 }
 export const rutaCliente = (codigo: number) => `/api/Customers/GetCustomer/${Math.trunc(codigo)}`
@@ -182,8 +184,8 @@ export class ClienteDiezRec {
   }
 
   /** Una página de un listado, con su total. */
-  async pagina(que: QueLeer, pagina: number, ejercicio?: number): Promise<{ filas: Fila[]; total: number | null; ultima: boolean }> {
-    const r = await this.get(rutaListado(que, pagina, ejercicio))
+  async pagina(que: QueLeer, pagina: number, ejercicio?: number, mes?: number): Promise<{ filas: Fila[]; total: number | null; ultima: boolean }> {
+    const r = await this.get(rutaListado(que, pagina, ejercicio, mes))
     if (r.status !== 200) throw new FalloDiezRec(`Cegid contesta ${r.status} al leer ${que}: ${motivoDeError(r.json)}`, r.status)
     const j = (r.json ?? {}) as Fila
     const filas = Array.isArray(j.datos) ? (j.datos as Fila[]) : []

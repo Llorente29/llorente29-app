@@ -6,7 +6,8 @@
 // habla con Cegid es conta-cegid-leer (el servidor): aquí solo se le llama y se lee lo guardado (conta_cegid_*).
 
 import { supabase } from '@/lib/supabase'
-import { hayBase, tabla } from '@/modules/conta/services/bd'
+import type { IncidenciaCegid } from '../../../../supabase/functions/_shared/cegidMandar'
+import { hayBase, rpc, tabla } from '@/modules/conta/services/bd'
 import { getConnectorCredentialsStatus, saveConnectorCredentials } from '@/modules/integrations/services/connectorCredentialsService'
 
 type Fila = Record<string, unknown>
@@ -122,7 +123,7 @@ export async function leerTodoCegid(companyId: string, ejercicio: number, avance
 // ── Lo guardado (para el cuadre y la tabla de equivalencias) ─────────────────────────────
 
 export interface LeidoCegid {
-  clientes: { codigo: number; nombre: string | null; nif: string | null; conceptos: { codigoConcepto: string | null; descripcion: string | null; totalLinea: number | null; cantidad: number | null; importe: number | null }[] | null }[]
+  clientes: { codigo: number; nombre: string | null; nif: string | null; email?: string | null; conceptos: { codigoConcepto: string | null; descripcion: string | null; totalLinea: number | null; cantidad: number | null; importe: number | null }[] | null }[]
   conceptos: { codigo: string; descripcion: string | null; porIva: number | null; conRetencion: boolean | null; ivaIncluido: boolean | null }[]
   facturas: { ejercicio: number; serie: string; codigo: number; cliente: number | null; nif: string | null; fecha: number | null; total: number | null; retencion: number; porcentajeRetencion: number | null; lineas: Fila[] }[]
   leidoAt: string | null
@@ -141,12 +142,12 @@ async function todas(nombre: string, columnas: string, companyId: string, orden:
 
 export async function leerGuardadoCegid(companyId: string, ejercicio: number): Promise<LeidoCegid> {
   const [cl, co, fa] = await Promise.all([
-    todas('conta_cegid_cliente', 'codigo, nombre_comercial, nombre_fiscal, nif, conceptos, leido_at', companyId, 'codigo'),
+    todas('conta_cegid_cliente', 'codigo, nombre_comercial, nombre_fiscal, nif, email, conceptos, leido_at', companyId, 'codigo'),
     todas('conta_cegid_concepto', 'codigo, descripcion, por_iva, con_retencion, iva_incluido', companyId, 'codigo'),
     todas('conta_cegid_factura', 'ejercicio, serie, codigo, cliente, nif, fecha_cegid, total, retencion, porcentaje_retencion, lineas', companyId, 'codigo'),
   ])
   return {
-    clientes: cl.map((x) => ({ codigo: Number(x.codigo), nombre: str(x.nombre_fiscal) ?? str(x.nombre_comercial), nif: str(x.nif), conceptos: (x.conceptos as LeidoCegid['clientes'][number]['conceptos']) ?? null })),
+    clientes: cl.map((x) => ({ codigo: Number(x.codigo), nombre: str(x.nombre_fiscal) ?? str(x.nombre_comercial), nif: str(x.nif), email: str(x.email), conceptos: (x.conceptos as LeidoCegid['clientes'][number]['conceptos']) ?? null })),
     conceptos: co.map((x) => ({ codigo: String(x.codigo), descripcion: str(x.descripcion), porIva: x.por_iva == null ? null : Number(x.por_iva), conRetencion: (x.con_retencion as boolean | null) ?? null, ivaIncluido: (x.iva_incluido as boolean | null) ?? null })),
     facturas: fa.filter((x) => Number(x.ejercicio) === ejercicio).map((x) => ({ ejercicio: Number(x.ejercicio), serie: String(x.serie), codigo: Number(x.codigo), cliente: x.cliente == null ? null : Number(x.cliente),
       nif: str(x.nif), fecha: x.fecha_cegid == null ? null : Number(x.fecha_cegid), total: x.total == null ? null : Number(x.total), retencion: Number(x.retencion ?? 0), porcentajeRetencion: x.porcentaje_retencion == null ? null : Number(x.porcentaje_retencion), lineas: (x.lineas as Fila[]) ?? [] })),
@@ -166,8 +167,8 @@ async function mandarInvocar(body: Fila): Promise<Fila> {
 }
 
 /** Manda a Cegid los cobros de UN cliente; devuelve su frase o lanza con el porqué. */
-export async function mandarClienteCegid(companyId: string, mes: string, cliente: number, cobros: string[]): Promise<string> {
-  const r = await mandarInvocar({ company_id: companyId, accion: 'mandar', mes, cliente, cobros })
+export async function mandarClienteCegid(companyId: string, mes: string, cliente: number, cobros: string[], serie: '1' | '3'): Promise<string> {
+  const r = await mandarInvocar({ company_id: companyId, accion: 'mandar', mes, cliente, cobros, serie })
   return String(r.frase ?? 'Mandado.')
 }
 
@@ -177,10 +178,29 @@ export async function deshacerCegid(companyId: string, mes: string, cliente?: nu
   return String(r.frase ?? 'Deshecho.')
 }
 
-export interface IncidenciaMandada { gcCobroId: string; cliente: number; incidencia: number | null; estado: string; total: number }
+export interface IncidenciaMandada { gcCobroId: string; cliente: number; incidencia: number | null; estado: string; total: number; serie: string; serieFactura: string | null }
 /** Lo mandado a Cegid de un mes (conta_cegid_incidencia, la 2336). Sin la tabla, nada. */
 export async function leerMandadoCegid(companyId: string, mes: string): Promise<IncidenciaMandada[]> {
-  const { data, error } = await tabla('conta_cegid_incidencia').select('gc_cobro_id, cliente, incidencia, estado, total').eq('company_id', companyId).eq('mes', mes)
+  const { data, error } = await tabla('conta_cegid_incidencia').select('gc_cobro_id, cliente, incidencia, estado, total, serie, serie_factura').eq('company_id', companyId).eq('mes', mes)
   if (error) return []
-  return ((data ?? []) as Fila[]).map((x) => ({ gcCobroId: String(x.gc_cobro_id), cliente: Number(x.cliente), incidencia: x.incidencia == null ? null : Number(x.incidencia), estado: String(x.estado), total: Number(x.total) }))
+  return ((data ?? []) as Fila[]).map((x) => ({ gcCobroId: String(x.gc_cobro_id), cliente: Number(x.cliente), incidencia: x.incidencia == null ? null : Number(x.incidencia), estado: String(x.estado), total: Number(x.total),
+    serie: String(x.serie ?? '1'), serieFactura: str(x.serie_factura) }))
+}
+
+/** Q10 · respuesta 4 · Las incidencias del mes que hay en Cegid (las de Sumied y las de cualquiera), para el cuadre. Solo lee. */
+export async function leerIncidenciasMesCegid(companyId: string, mes: string): Promise<{ incidencias: IncidenciaCegid[]; frase: string }> {
+  const r = await mandarInvocar({ company_id: companyId, accion: 'leer_mes', mes })
+  return { incidencias: (r.incidencias as IncidenciaCegid[] | undefined) ?? [], frase: String(r.frase ?? 'Leído de Cegid.') }
+}
+
+/** Q10 · respuesta 4 · «Confirmar»: el concepto de Cegid de un cobro suelto o de una suscripción fuera de la tabla. */
+export async function elegirConceptoCegid(companyId: string, que: 'cobro' | 'suscripcion', gcId: string, concepto: string): Promise<string> {
+  const r = await rpc<Fila | null>('conta_cegid_elegir_concepto', { p_company: companyId, p_que: que, p_gc_id: gcId, p_concepto: concepto })
+  return String(r?.frase ?? `Confirmado: va al concepto ${concepto} de Cegid.`)
+}
+
+/** Q10 · respuesta 4 · «Atar al N»: la ficha es el cliente N de Cegid (conta_cobro_cliente.codigo_cliente). */
+export async function atarFichaCegid(companyId: string, partyId: string, codigo: number, como: 'correo' | 'nombre' | 'a_mano'): Promise<string> {
+  const r = await rpc<Fila | null>('conta_cegid_atar', { p_company: companyId, p_party: partyId, p_codigo: codigo, p_como: como })
+  return String(r?.frase ?? `Atada al cliente ${codigo} de Cegid.`)
 }

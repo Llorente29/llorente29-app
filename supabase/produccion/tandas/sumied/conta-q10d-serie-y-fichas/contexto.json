@@ -1,0 +1,26 @@
+{
+ "_que": "Q10 · respuesta 4 · contexto de producción de la tanda (0651 a 0654), medido en SOLO LECTURA el 26/11 a las 08:02Z con la consulta de analizar.mjs sql-contexto: de lo que toca, solo existe conta_gc_cobro (2.974 filas, sin la columna descripcion); las tablas y funciones nuevas no existen; nada en el camino del pedido y nada en el historial. Aparte, el mismo día: las 19 fichas de la 0652 tienen su fila en conta_cobro_cliente, ninguna con código; los 8 cobros y las 3 suscripciones de la 0654 están en lo leído de GoCardless.",
+ "medido": "2026-11-26T08:02Z",
+ "tanda": {
+  "supabase/migrations/20261126T0651_q10d_cegid_atar.sql": "f0a2592b184abe605ad297c8e3ff94e7",
+  "supabase/migrations/20261126T0652_q10d_fichas_a_cegid.sql": "abb37edb3fe97e8d45972d24022017fe",
+  "supabase/migrations/20261126T0653_q10d_concepto_elegido.sql": "5fe8dd62551d3dbd8d87dda31b2cf57d",
+  "supabase/migrations/20261126T0654_q10d_conceptos_noviembre.sql": "09a9d8987406d8a43ce961b28c71adb5"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_gc_cobro"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_gc_cobro": 2974
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

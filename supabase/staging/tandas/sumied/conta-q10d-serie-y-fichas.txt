@@ -1,0 +1,9 @@
+# Q10 · respuesta 4 · atar fichas a Cegid (0651 y 0652) y el concepto elegido (0653 y 0654). Su prueba (ROLLBACK), con datos inventados: las dos, dos veces
+# (la 0652 no hace nada sin la empresa de QBO); A ata y cambia, con el de antes apuntado; el mismo código en dos fichas,
+# no; B ni ata ni ve; y las vueltas atrás.
+supabase/migrations/20261126T0651_q10d_cegid_atar.sql
+supabase/migrations/20261126T0652_q10d_fichas_a_cegid.sql
+supabase/staging/sql/20261126_q10d_cegid_atar_prueba.sql
+supabase/migrations/20261126T0653_q10d_concepto_elegido.sql
+supabase/migrations/20261126T0654_q10d_conceptos_noviembre.sql
+supabase/staging/sql/20261126_q10d_concepto_elegido_prueba.sql
