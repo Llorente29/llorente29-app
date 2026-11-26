@@ -2,4 +2,5 @@
 # (desde la rama, en ROLLBACK; de verdad desde main al fusionar). Su prueba: el mismo extracto dos veces, el mismo IBAN,
 # el día de inicio puesto y quitado (y por los ejercicios), juntar dos bancos y la vuelta atrás.
 supabase/migrations/20261126T1240_k14b_un_banco_y_el_inicio.sql
+supabase/migrations/20261126T1605_k14b_lectura_completa.sql
 supabase/staging/sql/20261126_k14b_un_banco_y_el_inicio_prueba.sql

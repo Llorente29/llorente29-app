@@ -5,7 +5,10 @@
 #         activo de la empresa. Añade _bank_antes_del_inicio_recalcular y dos disparadores que la llaman cuando cambia el
 #         día de inicio (bank_settings.cutover_date y los ejercicios), y _bank_juntar (juntar dos bancos en uno). No
 #         escribe en ninguna fila: lo de QBO Integrity lo arregla la tanda que va detrás, sola (conta/k14b-qbo-un-banco).
+#   1605  Añade la vista conta_banco_lectura_completa (pregunta de R): por banco activo, su última lectura completa del
+#         extracto (cuadra y sigue a la anterior sin hueco) y si los cobros de clientes del K14 se casaron después.
 #
 # Nada en el camino del pedido. Lo cuenta k14b-un-solo-banco.sql (regla 31). El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/k14b-un-solo-banco.sql
 supabase/migrations/20261126T1240_k14b_un_banco_y_el_inicio.sql
+supabase/migrations/20261126T1605_k14b_lectura_completa.sql

@@ -1,3 +1,4 @@
-# K14b · la vuelta atrás: bank_cuenta_alta desde su respaldo, y fuera los disparadores y las funciones nuevas.
+# K14b · la vuelta atrás: fuera la vista de la lectura completa; bank_cuenta_alta desde su respaldo, y fuera los disparadores y las funciones nuevas.
 cuenta: scripts/conta/produccion/cuentas/k14b-un-solo-banco.sql
+supabase/vuelta-atras/20261126T1605_k14b_lectura_completa.down.sql
 supabase/vuelta-atras/20261126T1240_k14b_un_banco_y_el_inicio.down.sql

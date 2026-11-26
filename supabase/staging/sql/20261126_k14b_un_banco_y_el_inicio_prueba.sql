@@ -1,9 +1,9 @@
 -- supabase/staging/sql/20261126_k14b_un_banco_y_el_inicio_prueba.sql
 --
--- SOLO STAGING. Prueba del K14b (20261126T1240_k14b_un_banco_y_el_inicio). Todo en
+-- SOLO STAGING. Prueba del K14b (20261126T1240_k14b_un_banco_y_el_inicio y 20261126T1605_k14b_lectura_completa). Todo en
 -- una transacción con ROLLBACK: staging no cambia. Lo que cambia: public.bank_cuenta_alta (nunca un segundo banco con
 -- el mismo IBAN), public.bank_settings y public.fiscal_year (un disparador nuevo en cada una). Lo que añade: _bank_antes_del_inicio_recalcular y
--- _bank_juntar.
+-- _bank_juntar, y la vista public.conta_banco_lectura_completa.
 --
 -- En la gestoría de ejemplo del núcleo (semillas K02, K04 y K05), con su «Banco principal», como el usuario del núcleo.
 -- Todo inventado (T11):
@@ -13,7 +13,9 @@
 --      «pendiente» sin su propuesta, lo casado no se toca. Quitarlo: vuelve. Y por los ejercicios (imported_until).
 --   3. Juntar dos bancos (_bank_juntar): los movimientos y el extracto del que se va pasan al que queda, sin borrar
 --      ninguno; sus enlaces se quitan y el banco se borra.
---   4. La vuelta atrás: bank_cuenta_alta como antes, sin disparadores ni funciones nuevas.
+--   4. La última lectura completa (conta_banco_lectura_completa): un extracto sin saldos no cuenta; uno que cuadra, sí;
+--      «cruzada» solo cuando el motor del K14 ha casado después de leerlo.
+--   5. La vuelta atrás: bank_cuenta_alta como antes, sin disparadores, funciones ni vista nuevas.
 
 begin;
 do $$ begin
@@ -22,6 +24,9 @@ do $$ begin
   end if;
   if to_regprocedure('public._bank_juntar(uuid,uuid)') is null or to_regprocedure('public._bank_antes_del_inicio_recalcular(uuid)') is null then
     raise exception 'PRUEBA K14b · 0: falta la 1240 delante.';
+  end if;
+  if to_regclass('public.conta_banco_lectura_completa') is null then
+    raise exception 'PRUEBA K14b · 0: falta la 1605 delante.';
   end if;
 end $$;
 set local statement_timeout = '120s';
@@ -124,22 +129,54 @@ begin
   raise notice 'PRUEBA K14b · 3: juntados: %; ningún movimiento de menos (%).', v_j, v_antes;
 end $$;
 
--- 4 · La vuelta atrás ----------------------------------------------------------------------------------------------------
+-- 4 · La última lectura completa ---------------------------------------------------------------------------------------
+do $$
+declare emp constant uuid := 'c0e20000-0000-4000-8000-0000000000e3'; b constant uuid := 'c0e20000-0000-4000-8000-0000000000b0'; r record; v_saldo numeric;
+begin
+  perform set_config('request.jwt.claims', '{"sub":"c0e20000-0000-4000-8000-0000000000e1","role":"authenticated"}', true);
+  -- Los extractos de antes de esta prueba no traían saldos (sin_saldo): no son una lectura completa.
+  select * into r from public.conta_banco_lectura_completa where treasury_account_id = b;
+  if r.treasury_account_id is null then raise exception 'PRUEBA K14b · 4: el banco no sale (regla 7: sale aunque no tenga lectura completa)'; end if;
+  if r.statement_id is not null and exists (select 1 from public.bank_statement where id = r.statement_id and continuity = 'sin_saldo') then
+    raise exception 'PRUEBA K14b · 4: un extracto sin saldos cuenta como completo';
+  end if;
+  -- Uno que cuadra: saldo inicial + 40,00 = saldo final.
+  select coalesce(max(closing_balance), 0) into v_saldo from public.bank_statement where treasury_account_id = b and balanced;
+  perform public.bank_importar(b, 'fichero', 'csv:diezbank', 'k14b-completo.xlsx', repeat('c', 64), date '2026-11-20', date '2026-11-21',
+                               v_saldo, v_saldo + 40, null, null,
+                               '[{"fecha":"2026-11-20","importe":40.00,"concepto_banco":"PRUEBA K14b COMPLETO","concepto_limpio":"Prueba K14b completo","huella":"k14b-completo","huella_suave":"k14bs-completo"}]'::jsonb);
+  select * into r from public.conta_banco_lectura_completa where treasury_account_id = b;
+  if r.hasta is distinct from date '2026-11-21' or r.saldo_final is distinct from v_saldo + 40 or r.cruzada then
+    raise exception 'PRUEBA K14b · 4: la lectura completa (%)', row_to_json(r);
+  end if;
+  -- El motor casa después de leerla: cruzada.
+  reset role;
+  insert into public.conta_banco_cobro (movement_id, account_id, company_id, fecha, importe, via, estado, party_id, porque, mes, motor, calculado_en)
+  select m.id, m.account_id, m.company_id, m.op_date, m.amount, 'transferencia', 'sin_cliente', null, 'Prueba K14b', date '2026-11-01', 'k14-1', clock_timestamp()
+    from public.bank_movement m where m.fingerprint = 'k14b-completo';
+  select * into r from public.conta_banco_lectura_completa where treasury_account_id = b;
+  if not r.cruzada then raise exception 'PRUEBA K14b · 4: casado después de leer y no sale cruzada (%)', row_to_json(r); end if;
+  raise notice 'PRUEBA K14b · 4: la última lectura completa hasta el %, saldo %, cruzada después de casar.', to_char(r.hasta, 'DD/MM'), r.saldo_final;
+end $$;
+
+-- 5 · La vuelta atrás ----------------------------------------------------------------------------------------------------
+\i supabase/vuelta-atras/20261126T1605_k14b_lectura_completa.down.sql
 \i supabase/vuelta-atras/20261126T1240_k14b_un_banco_y_el_inicio.down.sql
 do $$
 declare ok boolean := true;
 begin
   if to_regprocedure('public._bank_juntar(uuid,uuid)') is not null or to_regprocedure('public._bank_antes_del_inicio_recalcular(uuid)') is not null
-     or exists (select 1 from pg_trigger where tgname in ('trg_bank_settings_inicio_cambia', 'trg_fiscal_year_inicio_cambia')) then
-    raise exception 'PRUEBA K14b · 4: la vuelta atrás deja algo';
+     or exists (select 1 from pg_trigger where tgname in ('trg_bank_settings_inicio_cambia', 'trg_fiscal_year_inicio_cambia'))
+     or to_regclass('public.conta_banco_lectura_completa') is not null then
+    raise exception 'PRUEBA K14b · 5: la vuelta atrás deja algo';
   end if;
   perform set_config('request.jwt.claims', '{"sub":"c0e20000-0000-4000-8000-0000000000e1","role":"authenticated"}', true);
   begin
     perform public.bank_cuenta_alta('c0e20000-0000-4000-8000-0000000000e3', 'bank', 'Repetido otra vez', (select iban from public.treasury_account where id = 'c0e20000-0000-4000-8000-0000000000b0'), null, null, true);
   exception when unique_violation then ok := false;
   end;
-  if not ok then raise exception 'PRUEBA K14b · 4: bank_cuenta_alta no ha vuelto a la de antes'; end if;
-  raise notice 'PRUEBA K14b · 4: la vuelta atrás deja bank_cuenta_alta como antes y quita lo nuevo.';
+  if not ok then raise exception 'PRUEBA K14b · 5: bank_cuenta_alta no ha vuelto a la de antes'; end if;
+  raise notice 'PRUEBA K14b · 5: la vuelta atrás deja bank_cuenta_alta como antes y quita lo nuevo.';
 end $$;
 
 rollback;
