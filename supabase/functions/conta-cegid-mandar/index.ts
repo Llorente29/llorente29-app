@@ -7,10 +7,17 @@
 //     por cobro. Antes, lo comprueba todo otra vez y PARA si algo no cuadra:
 //       - cada cobro: de la empresa, cobrado (confirmed o paid_out), del mes, con un concepto de la tabla aprobada
 //         (_shared/cegidMandar.ts) y con una base al 21 % que da el cobro al céntimo;
-//       - el cliente de Cegid existe y su NIF es el de la ficha atada al cobro (conta_cobro_cliente o el enlace);
+//       - el cliente de Cegid existe y su NIF es el de la ficha atada al cobro (conta_cobro_cliente o el enlace), o esa
+//         ficha tiene ese código de cliente en «Clientes y cuotas» (conta_cobro_cliente.codigo_cliente, respuesta 4);
 //       - el cobro no está ya mandado (conta_cegid_incidencia: un cobro, una incidencia viva).
 //     Cada incidencia se apunta ANTES de mandarla («mandando») y se cierra con su número de Cegid («mandada») o con su
 //     porqué («fallo»): nada sale dos veces aunque se pulse dos veces.
+//   · Respuesta 4 · { …, serie: '1' | '3' } en «mandar»: una vuelta por serie (la incidencia no lleva serie; la pone la
+//     «Facturación automática»). La vuelta 1 es todo menos Contasimple; la 3, Contasimple, y solo cuando todo lo de la
+//     vuelta 1 del mes está ya facturado en la serie 1 (leído de Cegid con «leer_mes»).
+//   · Respuesta 4 · { company_id, accion: 'leer_mes', mes }: lee de Cegid TODAS las incidencias del mes (las de Sumied y
+//     las de cualquiera), para el cuadre cobro por cobro, y apunta como «facturada» (con su factura) lo que mandó Sumied
+//     y Cegid ya facturó. No escribe en Cegid.
 //   · { company_id, accion: 'deshacer', mes, cliente? }: borra en Cegid las incidencias que mandó Sumied y que aún no
 //     están facturadas; las ya facturadas no se tocan (quedan «facturada», con su factura).
 // Los conceptos fijos de la ficha NO paran a nadie (añadido a la respuesta 3, 25/11): Julio no los corta ficha a ficha,
@@ -76,10 +83,10 @@ Deno.serve(async (req) => {
   let b: Fila = {};
   try { b = await req.json(); } catch { /* vacío */ }
   const companyId = typeof b.company_id === "string" && /^[0-9a-f-]{36}$/i.test(b.company_id) ? b.company_id : "";
-  const accion = b.accion === "mandar" || b.accion === "deshacer" ? b.accion : "";
-  if (!companyId || !accion) return json({ error: "faltan company_id o accion (mandar o deshacer)" }, 400);
+  const accion = b.accion === "mandar" || b.accion === "deshacer" || b.accion === "leer_mes" ? b.accion : "";
+  if (!companyId || !accion) return json({ error: "faltan company_id o accion (mandar, leer_mes o deshacer)" }, 400);
   const mes = typeof b.mes === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(b.mes) ? b.mes : "";
-  if ((accion === "mandar" || accion === "deshacer") && !mes) return json({ error: "falta el mes (AAAA-MM)" }, 400);
+  if (!mes) return json({ error: "falta el mes (AAAA-MM)" }, 400);
 
   const { data: co } = await sb.from("company").select("id, account_id, tax_id").eq("id", companyId).maybeSingle();
   if (!co) return json({ error: "Esa sociedad no es de tu cuenta." }, 403);
@@ -97,7 +104,45 @@ Deno.serve(async (req) => {
   const quien = String((u.user.user_metadata as Fila | undefined)?.full_name ?? u.user.email ?? "alguien");
 
   try {
+    if (accion === "leer_mes") {
+      const [ano, m] = mes.split("-").map(Number);
+      const filas: Fila[] = [];
+      for (let pagina = 0; pagina < 100; pagina++) {
+        const p = await api.pagina("incidencias", pagina, ano, m);
+        filas.push(...p.filas);
+        if (p.ultima) break;
+      }
+      // Lo que mandó Sumied y Cegid ya facturó: «facturada», con su factura.
+      const { data: vivas } = await srv.from("conta_cegid_incidencia").select("id, cliente, incidencia").eq("company_id", companyId).eq("mes", mes).eq("estado", "mandada");
+      const porClave = new Map(filas.map((x) => [`${x.cliente}/${x.incidencia}`, x]));
+      let facturadas = 0;
+      for (const v of (vivas ?? []) as Fila[]) {
+        const x = porClave.get(`${v.cliente}/${v.incidencia}`);
+        if (x && x.estaFacturado === true) {
+          await srv.from("conta_cegid_incidencia").update({ estado: "facturada", ano_factura: x.anoFactura ?? null, serie_factura: x.serieFactura ?? null, numero_factura: x.numeroFactura ?? null }).eq("id", v.id);
+          facturadas++;
+        }
+      }
+      const incidencias = filas.map((x) => ({ cliente: Number(x.cliente), incidencia: Number(x.incidencia), concepto: (x.concepto as string | null) ?? null, titulo: (x.titulo as string | null) ?? null,
+        texto: (x.textoConcepto as string | null) ?? null, importe: x.importe == null ? null : Number(x.importe), total: x.total == null ? null : Number(x.total),
+        facturada: x.estaFacturado === true, serieFactura: (x.serieFactura as string | null) ?? null, numeroFactura: x.numeroFactura == null ? null : Number(x.numeroFactura) }));
+      return json({ ok: true, incidencias, facturadas, frase: `Leídas de Cegid ${incidencias.length} ${incidencias.length === 1 ? "incidencia" : "incidencias"} de ${mes}${facturadas ? `; ${facturadas} de las de Sumied ya están facturadas` : ""}. No se ha escrito nada en Cegid.` });
+    }
+
     if (accion === "mandar") {
+      const serie = b.serie === "3" ? "3" : b.serie === "1" ? "1" : "";
+      if (!serie) return json({ error: "mandar necesita la serie de la vuelta (1 o 3)" }, 400);
+      // La vuelta 3 (Contasimple), solo con todo lo de la vuelta 1 del mes ya facturado en la serie 1.
+      if (serie === "3") {
+        const { data: s1 } = await srv.from("conta_cegid_incidencia").select("estado, serie_factura").eq("company_id", companyId).eq("mes", mes).eq("serie", "1").in("estado", ["mandando", "mandada", "facturada"]);
+        const xs = (s1 ?? []) as Fila[];
+        const sinFacturar = xs.filter((x) => x.estado !== "facturada").length, otraSerie = xs.filter((x) => x.estado === "facturada" && String(x.serie_factura ?? "").trim() !== "1").length;
+        if (!xs.length || sinFacturar || otraSerie) {
+          return json({ error: !xs.length ? "Contasimple va después: primero se manda y se factura con la serie 1 todo lo demás."
+            : sinFacturar ? `Contasimple va después: aún hay ${sinFacturar} líneas de la vuelta 1 sin facturar en Cegid (lee de Cegid después de facturar con la serie 1).`
+            : `${otraSerie} líneas de la vuelta 1 se facturaron en otra serie que la 1: míralo en Cegid antes de mandar Contasimple.` }, 409);
+        }
+      }
       const cliente = Number(b.cliente);
       const ids = (Array.isArray(b.cobros) ? b.cobros : []).map(String).slice(0, 60);
       if (!Number.isInteger(cliente) || cliente <= 0 || !ids.length) return json({ error: "mandar necesita el cliente de Cegid y sus cobros" }, 400);
@@ -120,6 +165,7 @@ Deno.serve(async (req) => {
         if (!concepto) { malos.push(`${id}: su concepto no está en la tabla aprobada`); continue; }
         const totalCent = Math.round(Number(x.importe) * 100), baseCent = baseDelCobro(totalCent);
         if (baseCent === null) { malos.push(`${id}: ninguna base al 21 % da ${eur(totalCent)}`); continue; }
+        if (concepto.serie !== serie) { malos.push(`${id}: es de la serie ${concepto.serie} y esta vuelta es la ${serie}`); continue; }
         if (s?.gc_cliente_id) gcClientes.add(String(s.gc_cliente_id));
         lineas.push({ gcId: id, concepto, texto: String(s?.nombre ?? "").replace(/\s+/g, " ").trim(), fecha: String(x.fecha), baseCent, totalCent });
       }
@@ -127,12 +173,13 @@ Deno.serve(async (req) => {
       // La ficha de Cegid, ahora: existe y tiene el mismo NIF que la ficha atada.
       const f = await fichaAhora(api, cliente);
       if (!f.existe) return json({ error: `El cliente ${cliente} no existe en la facturación de Cegid.` }, 409);
-      const { data: cc } = await srv.from("conta_cobro_cliente").select("party_id").eq("company_id", companyId).in("gc_cliente_id", [...gcClientes]);
+      const { data: cc } = await srv.from("conta_cobro_cliente").select("party_id, codigo_cliente").eq("company_id", companyId).in("gc_cliente_id", [...gcClientes]);
+      const atadaAMano = ((cc ?? []) as Fila[]).some((x) => Number(x.codigo_cliente) === cliente);
       const { data: en } = await srv.from("conta_gc_enlace").select("party_id").eq("company_id", companyId).eq("estado", "atado").in("gc_cliente_id", [...gcClientes]);
       const partes = [...new Set([...(cc ?? []), ...(en ?? [])].map((x: Fila) => String(x.party_id ?? "")).filter(Boolean))];
       const { data: ps } = partes.length ? await srv.from("party").select("tax_id").eq("account_id", co.account_id).in("id", partes) : { data: [] };
       const nifs = new Set(((ps ?? []) as Fila[]).map((x) => nifLimpio(x.tax_id)).filter(Boolean));
-      if (!nifs.has(nifLimpio(f.nif))) return json({ error: `El cliente ${cliente} de Cegid tiene otro NIF que la ficha de estos cobros: no se manda.` }, 409);
+      if (!atadaAMano && !nifs.has(nifLimpio(f.nif))) return json({ error: `El cliente ${cliente} de Cegid tiene otro NIF que la ficha de estos cobros: no se manda.` }, 409);
       // Una a una: se apunta antes de mandarla y se cierra con su número o con su porqué.
       let hechas = 0, totalCent = 0;
       for (const l of lineas) {

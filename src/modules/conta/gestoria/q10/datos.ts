@@ -40,6 +40,10 @@ export interface DatosQ10 {
   cuentas: Map<string, string>
   /** Q10 (26/11) · El atado de «Clientes y cuotas»: cada ficha con su cliente de GoCardless (conta_cobro_cliente). */
   cobroCliente: { gcClienteId: string; partyId: string }[]
+  /** Q10 · respuesta 4 · El código de cliente de cada ficha (conta_cobro_cliente.codigo_cliente): el de Cegid en QBO. */
+  codigoCliente: Map<string, number>
+  /** Respuesta 4 · Los correos de GoCardless de cada ficha (para proponer su cliente de Cegid por correo). */
+  correos: Map<string, string[]>
 }
 
 const finDeMes = (mes: string) => {
@@ -48,7 +52,7 @@ const finDeMes = (mes: string) => {
 }
 
 export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: string): Promise<DatosQ10> {
-  const [emp, cobros, suscripciones, mandatos, enlaces, cobroCliente] = await Promise.all([
+  const [emp, cobros, suscripciones, mandatos, enlaces, cobroCliente, gcClientes] = await Promise.all([
     tabla('company').select('id, legal_name, trade_name, tax_id, fiscal_street_type, fiscal_street, fiscal_number, fiscal_extra, fiscal_postal_code, fiscal_city, email, phone')
       .eq('account_id', cuenta).eq('id', empresa).maybeSingle(),
     todas('los cobros de GoCardless', (a, b) => tabla('conta_gc_cobro').select('gc_id, estado, fecha, importe, suscripcion_gc_id, mandato_gc_id, motivo_es')
@@ -57,7 +61,9 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
     todas('los mandatos de GoCardless', (a, b) => tabla('conta_gc_mandato').select('gc_id, gc_cliente_id, cuenta_final').eq('company_id', empresa).order('gc_id').range(a, b)),
     todas('los enlaces de GoCardless', (a, b) => tabla('conta_gc_enlace').select('gc_cliente_id, party_id, estado').eq('company_id', empresa).order('gc_cliente_id').range(a, b)),
     // El atado que usa «Clientes y cuotas» (columnas comprobadas el 26/11, regla 40).
-    todas('los clientes de GoCardless de cada ficha', (a, b) => tabla('conta_cobro_cliente').select('party_id, gc_cliente_id').eq('company_id', empresa).not('gc_cliente_id', 'is', null).order('party_id').range(a, b)),
+    todas('los clientes de GoCardless de cada ficha', (a, b) => tabla('conta_cobro_cliente').select('party_id, gc_cliente_id, codigo_cliente').eq('company_id', empresa).not('gc_cliente_id', 'is', null).order('party_id').range(a, b)),
+    // Respuesta 4 · El correo de cada cliente de GoCardless, para proponer su cliente de Cegid (columnas comprobadas el 26/11).
+    todas('los correos de GoCardless', (a, b) => tabla('conta_gc_cliente').select('gc_id, correo').eq('company_id', empresa).not('correo', 'is', null).order('gc_id').range(a, b)),
   ])
   if (emp.error) throw new Error(mensaje('No se ha podido leer la empresa', emp.error as never))
   if (!emp.data) throw new Error('Esa empresa no es de esta cuenta.')
@@ -90,6 +96,13 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
   }
   return {
     cuentas,
+    correos: (() => {
+      const de = new Map(gcClientes.map((g) => [String(g.gc_id), String(g.correo)]))
+      const r = new Map<string, string[]>()
+      for (const x of cobroCliente) { const c = de.get(String(x.gc_cliente_id ?? '')); if (c && s(x.party_id)) r.set(String(x.party_id), [...(r.get(String(x.party_id)) ?? []), c]) }
+      return r
+    })(),
+    codigoCliente: new Map(cobroCliente.filter((x) => s(x.party_id) && x.codigo_cliente != null).map((x) => [String(x.party_id), Number(x.codigo_cliente)])),
     cobroCliente: cobroCliente.filter((x) => s(x.party_id) && s(x.gc_cliente_id)).map((x) => ({ gcClienteId: String(x.gc_cliente_id), partyId: String(x.party_id) })),
     empresa: emp.data as Fila,
     cobros: cobros.map((c) => ({ gcId: String(c.gc_id), estado: String(c.estado), fecha: String(c.fecha), importe: Number(c.importe), suscripcionId: s(c.suscripcion_gc_id), mandatoId: s(c.mandato_gc_id), motivo: s(c.motivo_es) })),

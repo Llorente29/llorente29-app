@@ -1,0 +1,12 @@
+# Q10 · respuesta 4 · Mandar por serie, el cuadre con Cegid y atar las fichas sin código (26/11). Rama
+# conta/q10d-serie-y-fichas. Se ensaya y se aplica desde main nombrando la rama, antes de fusionar (lo lanza Julio, T10).
+#
+#   0651  Añade conta_cegid_atado (quién ató qué ficha a qué código de Cegid) y las funciones _conta_cegid_atar y
+#         conta_cegid_atar: ponen el código de cliente en conta_cobro_cliente.codigo_cliente (el sitio único del X14).
+#   0652  Ata las 19 fichas de QBO con cobros y sin código a su cliente de Cegid (la tabla de la respuesta 4), por su id;
+#         para si alguna no está como se midió el 26/11. Ningún NIF cambia.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/q10d-serie-y-fichas.sql
+supabase/migrations/20261126T0651_q10d_cegid_atar.sql
+supabase/migrations/20261126T0652_q10d_fichas_a_cegid.sql

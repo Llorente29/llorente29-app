@@ -1,0 +1,17 @@
+{
+ "_que": "Q10 · respuesta 4 · contexto de producción de la tanda (0651 y 0652), medido en SOLO LECTURA el 26/11 a las 06:04Z con la consulta de analizar.mjs sql-contexto: ni la tabla ni las funciones existen; nada en el camino del pedido y nada en el historial. Aparte, el mismo día: las 19 fichas tienen su fila en conta_cobro_cliente, ninguna con código, y ningún código de la tabla lo tiene otra ficha.",
+ "medido": "2026-11-26T06:04Z",
+ "tanda": {
+  "supabase/migrations/20261126T0651_q10d_cegid_atar.sql": "f0a2592b184abe605ad297c8e3ff94e7",
+  "supabase/migrations/20261126T0652_q10d_fichas_a_cegid.sql": "abb37edb3fe97e8d45972d24022017fe"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": { "tablas": [], "funciones": [] },
+  "usos": {},
+  "registro": []
+ }
+}

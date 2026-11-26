@@ -253,6 +253,20 @@ export function cuadreCegid(mes: string, cobros: readonly CobroParaMandar[], inc
   return { filas, diferencias, cuadra: diferencias === 0, cegidCent, clientesCegid, cobradoCent, porSerie, frase }
 }
 
+/** Lo mandado a Cegid de un mes (conta_cegid_incidencia), lo justo para la puerta de la vuelta 3. */
+export interface MandadaQ10 { estado: string; serie: string; serieFactura: string | null }
+
+/** Si la vuelta 3 (Contasimple) se puede mandar ya: todo lo de la vuelta 1 del mes, facturado en la serie 1. */
+export function puertaContasimple(mandadas: readonly MandadaQ10[]): { abierta: boolean; porque: string } {
+  const s1 = mandadas.filter((x) => x.serie === '1' && ['mandando', 'mandada', 'facturada'].includes(x.estado))
+  if (!s1.length) return { abierta: false, porque: 'Primero se manda y se factura con la serie 1 todo lo demás.' }
+  const sin = s1.filter((x) => x.estado !== 'facturada').length
+  if (sin) return { abierta: false, porque: `Aún hay ${sin} ${sin === 1 ? 'línea' : 'líneas'} de la serie 1 sin facturar en Cegid: factura con la serie 1 y vuelve a leer de Cegid.` }
+  const otra = s1.filter((x) => (x.serieFactura ?? '').trim() !== '1').length
+  if (otra) return { abierta: false, porque: `${otra} ${otra === 1 ? 'línea' : 'líneas'} de la vuelta 1 se facturaron en otra serie que la 1: míralo en Cegid.` }
+  return { abierta: true, porque: '' }
+}
+
 // ── Q10 · respuesta 4 · Atar una ficha a su cliente de Cegid ──────────────────────────
 
 /** El tipo de un NIF: CIF de una empresa, DNI o NIE de una persona; y si su letra de control cuadra. */
