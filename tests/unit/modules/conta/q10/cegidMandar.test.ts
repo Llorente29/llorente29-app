@@ -27,7 +27,7 @@ describe('Q10 · mandar · qué sale', () => {
   it('sin ficha, sin código de Cegid o sin concepto aprobado (GESTORIA FISCAL, sin suscripción): no salen', () => {
     const p = planMandar('2026-11', [
       cobro({ gcId: 'A', partyId: null }), cobro({ gcId: 'B', codigoCegid: null }),
-      cobro({ gcId: 'C', concepto: 'GESTORIA FISCAL MENSUAL' }), cobro({ gcId: 'D', concepto: null }),
+      cobro({ gcId: 'C', concepto: 'TRAMITE INVENTADO' }), cobro({ gcId: 'D', concepto: null }),
     ], new Set())
     expect(p.listos).toEqual([])
     expect(p.noSalen.map((x) => x.porque)).toEqual(['sin_cliente', 'sin_codigo', 'sin_concepto', 'sin_concepto'])
@@ -56,7 +56,9 @@ describe('Q10 · mandar · una línea por cobro, con su concepto y su serie', ()
   })
   it('la tabla aprobada', () => {
     expect(['GESTION MENSUAL', 'GESTION LABORAL', 'CONTASIMPLE SOFTWARE', 'VIGILANCIA DE NOTIFICACIONES', 'OFICINA VIRTUAL MENSUAL'].map((n) => conceptoAprobado(n)?.codigo)).toEqual(['00001', '0008', '0016', '0021', '0034'])
-    expect(conceptoAprobado('GESTORIA FISCAL MENSUAL')).toBeNull()
+    // Respuesta 4: la GESTORIA FISCAL MENSUAL va al 00001, como su concepto fijo en Cegid.
+    expect(conceptoAprobado('GESTORIA FISCAL MENSUAL')?.codigo).toBe('00001')
+    expect(conceptoAprobado('TRAMITE INVENTADO')).toBeNull()
   })
   it('la base con el 21 % cuadra al céntimo, o no sale', () => {
     expect(baseDelCobro(6050)).toBe(5000)

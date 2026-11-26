@@ -13,8 +13,7 @@
 //   Gestoría mensual → 00001 (serie 1) · Gestión laboral → 0008 (1) · Contasimple → 0016 (3) ·
 //   Vigilancia de notificaciones → 0021 (1) · Oficina virtual → 0034 (1).
 // «Gestoría mensual» lleva las variantes que iban en su fila de la tabla (SERVICIOS GESTORIA, SERVICIOS MENSUALES,
-// GESTION MENSUAL y la de un cliente); GESTORIA FISCAL MENSUAL queda fuera hasta que Julio diga su concepto, y lo «sin
-// propuesta», también.
+// GESTION MENSUAL y la de un cliente); GESTORIA FISCAL MENSUAL, también (respuesta 4, 26/11).
 
 export const COBRADO_GC = ['confirmed', 'paid_out'] as const
 
@@ -44,6 +43,8 @@ export const CONCEPTOS_APROBADOS: Readonly<Record<string, ConceptoCegidAprobado>
   'SERVICIOS MENSUALES': GESTORIA,
   'GESTION MENSUAL': GESTORIA,
   'INVERSIONES LOYOLAMAR SL': GESTORIA,
+  // Respuesta 4 (Julio, 26/11): como su concepto fijo en Cegid y sus facturas de septiembre y octubre.
+  'GESTORIA FISCAL MENSUAL': GESTORIA,
   'GESTION LABORAL': { codigo: '0008', serie: '1', nombre: 'Gestión laboral' },
   'CONTASIMPLE SOFTWARE': { codigo: '0016', serie: '3', nombre: 'Contasimple' },
   'VIGILANCIA DE NOTIFICACIONES': { codigo: '0021', serie: '1', nombre: 'Vigilancia de notificaciones' },
