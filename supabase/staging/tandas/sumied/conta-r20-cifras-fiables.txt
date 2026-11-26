@@ -1,0 +1,5 @@
+# R20 · Las cifras de «Clientes y cuotas», 100 % fiables.
+# 0807 (añade: de verdad desde la rama, se puede pasar dos veces) y 0808 (cambia: solo en ROLLBACK), con su prueba.
+supabase/migrations/20261126T0807_r20_cifras_del_cobro.sql
+supabase/migrations/20261126T0808_r20_cifras_no_cuadran.sql
+supabase/staging/sql/20261126_r20_cifras_fiables_prueba.sql

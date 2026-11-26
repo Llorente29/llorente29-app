@@ -1,0 +1,12 @@
+# R20 · Las cifras de «Clientes y cuotas», 100 % fiables (Julio, 26/11). Rama conta/r20-cifras-fiables. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0807  Añade conta_cifras_del_cobro (lo que GoCardless cobrará en el mes del próximo cobro, suscripción a
+#         suscripción, con su ficha atada).
+#   0808  Amplía el CHECK de «Pendiente de revisar» con cifras_no_cuadran (la comprobación de cada noche).
+# Las cifras las calcula _shared/tarifa/cifras.ts, en la pantalla y en la lectura.
+#
+# Nada en el camino del pedido, ni de cobros ni de facturas. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r20-cifras-fiables.sql
+supabase/migrations/20261126T0807_r20_cifras_del_cobro.sql
+supabase/migrations/20261126T0808_r20_cifras_no_cuadran.sql

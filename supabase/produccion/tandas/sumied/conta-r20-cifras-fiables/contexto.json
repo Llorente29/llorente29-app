@@ -1,0 +1,22 @@
+{
+ "_que": "R20 · Las cifras de «Clientes y cuotas» · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA. 0807: añade una función; 0808: amplía un CHECK. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-26T08:08Z",
+ "tanda": {
+  "supabase/migrations/20261126T0807_r20_cifras_del_cobro.sql": "e592cbf5cae2e275f32b2f5b0106ba83",
+  "supabase/migrations/20261126T0808_r20_cifras_no_cuadran.sql": "894f86c6eabe2198d125b3d90b60204b"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_gestoria_diferencia"
+  ],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

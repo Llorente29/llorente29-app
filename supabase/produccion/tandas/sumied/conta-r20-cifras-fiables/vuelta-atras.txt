@@ -1,0 +1,4 @@
+# R20 · la vuelta atrás: sin la función de las cifras del cobro, sin los pendientes del tipo nuevo y con el CHECK de antes.
+cuenta: scripts/conta/produccion/cuentas/r20-cifras-fiables.sql
+supabase/vuelta-atras/20261126T0808_r20_cifras_no_cuadran.down.sql
+supabase/vuelta-atras/20261126T0807_r20_cifras_del_cobro.down.sql
