@@ -1,0 +1,20 @@
+[
+ {
+  "id": "831-1",
+  "pr": 831,
+  "fecha": "2026-11-26T11:05:06Z",
+  "producto": "sumied",
+  "apartado": "Tesorería",
+  "frase": "el extracto de DiezBank («Extracto de movimientos de DiezBank») se lee como los demás; el mismo fichero dos veces no mete nada.",
+  "ruta": null
+ },
+ {
+  "id": "831-2",
+  "pr": 831,
+  "fecha": "2026-11-26T11:05:06Z",
+  "producto": "sumied",
+  "apartado": "Cobros por el banco",
+  "frase": "al leer un extracto, cada transferencia o Bizum de un cliente se casa sola con su ficha y paga sus recibos devueltos de GoCardless; lo dudoso queda «por confirmar».",
+  "ruta": null
+ }
+]
