@@ -11,13 +11,11 @@
 cuenta: scripts/conta/produccion/cuentas/k14b-qbo-un-banco.sql
 supabase/migrations/20261126T1241_k14b_qbo_un_banco.sql
 sin-vuelta-atras: supabase/migrations/20261126T1241_k14b_qbo_un_banco.sql · motivo: un asiento validado se anula con un contraasiento, y el banco repetido se borra (no tenía nada).
-esperado: k14b-qbo-un-banco · QBO · bancos activos = 1
-esperado: k14b-qbo-un-banco · QBO · el banco de los movimientos: nombre · subcuenta = CaixaBank · 57200000
+esperado: k14b-qbo-un-banco · QBO · bancos activos con el IBAN ···7181 que no son «CaixaBank» con la 57200000 = 0
 esperado: k14b-qbo-un-banco · QBO · movimientos: filas · huella = como antes
-esperado: k14b-qbo-un-banco · QBO · movimientos de antes del inicio = 708
-esperado: k14b-qbo-un-banco · QBO · casados vivos: total · de antes del 01/11 · con su asiento en la 57200000 = 4 · 0 · 4
-esperado: k14b-qbo-un-banco · QBO · asientos de banco anulados = 37
+esperado: k14b-qbo-un-banco · QBO · movimientos con «antes del inicio» mal puesto = 0
+esperado: k14b-qbo-un-banco · QBO · casados vivos de antes del 01/11 = 0
+esperado: k14b-qbo-un-banco · QBO · ingresos de GoCardless de noviembre sin casar en la 57200000 = 0
+esperado: k14b-qbo-un-banco · QBO · asientos de banco validados de antes del 01/11 = 0
 esperado: k14b-qbo-un-banco · QBO · cobros casados del K14: filas · huella = como antes
-esperado: k14b-qbo-un-banco · cuenta 51ad1792-6629-4ef7-833a-b57b09a86710 · movimientos del banco: filas · huella = como antes
-esperado: k14b-qbo-un-banco · cuenta 623d946a-a0ce-4f34-8c00-9761dfed8331 · movimientos del banco: filas · huella = como antes
-esperado: k14b-qbo-un-banco · cuenta de000000-0000-4000-8000-0000000000a0 · movimientos del banco: filas · huella = como antes
+esperado: k14b-qbo-un-banco · las demás cuentas · movimientos del banco: filas · huella = como antes
