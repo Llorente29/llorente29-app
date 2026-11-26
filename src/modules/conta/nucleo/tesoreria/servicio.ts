@@ -22,6 +22,7 @@ import { saldosDelCuadre } from '../bancos/servicio'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { pendienteAntes } from './tesoreria'
+import { fraseCobros } from '../../../../../supabase/functions/_shared/cobro/porBancoBd.ts'
 
 type Fila = Record<string, unknown>
 const s = (x: unknown) => (x === null || x === undefined ? null : String(x))
@@ -169,10 +170,16 @@ export async function leerFicheroDelExtracto(f: File, banco: BancoVista, todos: 
   const r = await nucleo.importar(a, extracto, cuadre, asignacion, 'fichero', Object.fromEntries(todos.map((b) => [b.id, [...b.ibanes]])))
   if (r.length === 0) throw new Error(`«${f.name}» no es de ninguno de tus bancos.`)
   let agente = ''
-  try { await pasarAgente(ctx.accountId, ctx.companyId, ctx.hoy, 'extracto') } catch (e) { agente = ` Sumied no ha podido proponer todavía (${e instanceof Error ? e.message : String(e)}).` }
+  let cobros = ''
+  try {
+    const p = await pasarAgente(ctx.accountId, ctx.companyId, ctx.hoy, 'extracto')
+    // K14 · Lo cobrado por el banco, casado con su cliente (solo en las empresas que cobran por GoCardless).
+    if (p.cobros.resumen) cobros = ` ${fraseCobros(p.cobros.resumen)}`
+    else if (p.cobros.error) cobros = ` Sumied no ha podido casar los cobros de clientes (${p.cobros.error}).`
+  } catch (e) { agente = ` Sumied no ha podido proponer todavía (${e instanceof Error ? e.message : String(e)}).` }
   const nuevos = r.reduce((t, x) => t + x.nuevos, 0), repetidos = r.reduce((t, x) => t + x.repetidos, 0), borradas = r.reduce((t, x) => t + (x.borradas ?? 0), 0)
   if (r.every((x) => x.repetido)) return `«${f.name}» ya estaba leído: no cambia nada.`
-  return `Leído «${f.name}»: ${nuevos === 1 ? '1 movimiento nuevo' : `${nuevos} movimientos nuevos`}${repetidos ? ` y ${repetidos} que ya estaban` : ''}${borradas ? ` · ${borradas} ${borradas === 1 ? 'borrada' : 'borradas'} antes` : ''}.${agente}`
+  return `Leído «${f.name}»: ${nuevos === 1 ? '1 movimiento nuevo' : `${nuevos} movimientos nuevos`}${repetidos ? ` y ${repetidos} que ya estaban` : ''}${borradas ? ` · ${borradas} ${borradas === 1 ? 'borrada' : 'borradas'} antes` : ''}.${agente}${cobros}`
 }
 
 /** La frase del total de un movimiento contabilizado (para el aviso de la barra). */

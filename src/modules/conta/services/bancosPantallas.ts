@@ -17,6 +17,7 @@ import { LO_HECHO } from '@/modules/conta/bancos/marca'
 import type { ConexionCuenta } from '@/modules/conta/lib/agregadorBanco'
 import type { LineaRegla } from '@/modules/conta/lib/reparto'
 import { estadoHueco, type EstadoHueco } from '@/modules/conta/lib/huecoBanco'
+import { casarCobrosDelBanco, type ResumenCobros } from '../../../../supabase/functions/_shared/cobro/porBancoBd.ts'
 import { avisoDeFila, type AvisoAnulado } from '@/modules/conta/lib/cargoAnulado'
 
 type Fila = Record<string, unknown>
@@ -452,13 +453,25 @@ export async function ultimaPasada(accountId: string, companyId: string): Promis
  * seguro»— y su pasada registrada con el resumen. Corre después de cada
  * extracto y, si hoy no ha corrido, la primera vez que alguien abre Bancos.
  */
-export async function pasarAgente(accountId: string, companyId: string, hoy: string, disparo: 'extracto' | 'diario'): Promise<{ resultado: ResultadoConciliar; resumen: string }> {
+/**
+ * K14 · Lo cobrado por el banco, casado con su cliente (conta_banco_cobro), en las empresas que cobran por GoCardless.
+ * Si no se puede, la pasada sigue y lo dice (regla 8): `error`.
+ */
+export async function casarCobros(companyId: string): Promise<{ resumen: ResumenCobros | null; error: string | null }> {
+  try { return { resumen: await casarCobrosDelBanco(rpc, companyId), error: null } } catch (e) {
+    console.warn('[bancos] no se han podido casar los cobros de clientes', e)
+    return { resumen: null, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+export async function pasarAgente(accountId: string, companyId: string, hoy: string, disparo: 'extracto' | 'diario'): Promise<{ resultado: ResultadoConciliar; resumen: string; cobros: { resumen: ResumenCobros | null; error: string | null } }> {
   const resultado = await bancos.conciliarPendientes(accountId, companyId, hoy)
   const id = await rpc<string>('bank_agente_registrar', { p_company: companyId, p_disparo: disparo, p_resultado: {
     casados: resultado.casadosSolos, propuestos: resultado.propuestos, por_aclarar: resultado.porAclarar, antes_corte: resultado.antesDelCorte,
     fallos: resultado.fallos.length, fallos_detalle: resultado.fallos.slice(0, 20) } })
   const filas = await leer(tabla('bank_agent_run').select('summary').eq('id', id).limit(1), 'el resumen de la pasada')
-  return { resultado, resumen: String(filas[0]?.summary ?? '') }
+  const cobros = await casarCobros(companyId)
+  return { resultado, resumen: String(filas[0]?.summary ?? ''), cobros }
 }
 
 export const agenteTocaHoy = (companyId: string) => rpc<boolean>('bank_agente_toca_hoy', { p_company: companyId })

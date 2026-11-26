@@ -1,0 +1,16 @@
+{
+ "_que": "K14 · Lo cobrado por el banco · contexto medido en producción en SOLO LECTURA (conta_banco_cobro, conta_banco_cobro_recibo y sus funciones no existen el 26/11; conta_nombre_actor sí) y en la base local con la estructura de staging. 0915 solo añade dos tablas y cuatro funciones; no escribe en ninguna fila de lo que existe. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-26T08:55Z",
+ "tanda": {
+  "supabase/migrations/20261126T0915_k14_cobrado_por_banco.sql": "6b9d3578804fbc91e9c40dc3382eb723"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": { "tablas": [], "funciones": [] },
+  "usos": {},
+  "registro": []
+ }
+}
