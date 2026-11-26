@@ -96,6 +96,8 @@ export interface FacturaVenta {
   guardado: 'borrador' | 'emitida' | 'anulada'
   enviada: boolean
   rectificativa: boolean
+  /** X14i · Traída de ERP10, cuyo libro de expedidas la trae más de una vez con el mismo número (customer_invoice.import_repeated). */
+  repetidaEnErp10?: true
   localId: string | null
   diez: DiezFactura
   /** PC01 · El estado de cobro de la base (conta_factura_cobro); null en las del libro. */
@@ -544,4 +546,16 @@ export function conLibroTpv(libro: readonly Omit<FacturaVenta, 'diez'>[], filas:
     tpv: { clase: x.clase === 'serie' ? 'dia' : x.clase, diaId: x.dia_id, dia: x.dia, programa: x.programa_nombre, pdf: x.pdf, primero: x.numero, ultimo: x.hasta ?? x.numero, serie: x.serie },
   }))
   return [...fuera, ...tpv]
+}
+
+/**
+ * X14i · Los ids de las emitidas «repetida en ERP10», de lo que contesta la base a `customer_invoice.import_repeated = true`.
+ * Mientras la base no tenga la columna (antes de la 20261126T0710), ninguna lo está; cualquier otro error se dice, no se esconde.
+ */
+export function repetidasDeLaBase(filas: readonly { id?: unknown }[] | null, error: { code?: string | null; message?: string | null } | null): string[] {
+  if (error) {
+    if (/import_repeated|42703|PGRST204/i.test(`${error.code ?? ''} ${error.message ?? ''}`)) return []
+    throw new Error(`No he podido leer las facturas repetidas en ERP10: ${error.message ?? error.code ?? 'sin mensaje'}`)
+  }
+  return (filas ?? []).map((f) => String(f.id))
 }

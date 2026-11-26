@@ -1,0 +1,4 @@
+# X14 · 2 · la vuelta atrás: devuelve la función de su respaldo y la restricción de un solo número, y quita la marca y su guarda
+# (para si ya hay emitidas marcadas: con ellas no cabe la regla de antes).
+cuenta: scripts/conta/produccion/cuentas/x14i-repetida.sql
+supabase/vuelta-atras/20261126T0710_x14i_repetida_en_erp10.down.sql
