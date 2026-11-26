@@ -19,7 +19,8 @@
 --   4. Lo de antes del 01/11 (el día de inicio de QBO) queda «de antes del inicio» (_bank_antes_del_inicio_recalcular):
 --      708 movimientos. Ya no piden revisión, y el agente no propone ni valida nada de ellos.
 --   5. Los 4 ingresos de GoCardless de noviembre se vuelven a casar con su pago de GoCardless
---      (conta_abono_gocardless_casar): el ingreso, 57200000 / 57200002, que es el que el X33 da por hecho («una
+--      (conta_abono_gocardless_casar), quitando antes la marca de «descartado» que les dejó la anulación (los 33 de
+--      antes del 01/11 la conservan: el agente no los vuelve a proponer): el ingreso, 57200000 / 57200002, que es el que el X33 da por hecho («una
 --      liquidación ya casada en Bancos ya tiene su asiento»).
 --
 -- Cobros casados del K14 (conta_banco_cobro): 383, todos del banco que queda; no se tocan.
@@ -96,6 +97,10 @@ begin
 
   -- 5 · Los 4 de noviembre, otra vez con su pago de GoCardless (ahora, en la 57200000).
   for r in select x.movement_id, x.payout from _k14b_payout x where x.fecha >= v_corte order by x.fecha loop
+    -- Al anularlo, su asiento dejó el movimiento «descartado» (journal_dismissal) para que nadie lo vuelva a proponer
+    -- solo. Este sí se vuelve a casar, a propósito: se quita esa marca (solo la de estos 4; los 33 de antes la guardan).
+    delete from public.journal_dismissal d
+     where d.company_id = emp and d.source_type = 'bank' and d.source_key = r.movement_id::text;
     perform public.conta_abono_gocardless_casar(r.movement_id, r.payout, 'seguro',
       'K14b: el ingreso de su pago de GoCardless (el mismo importe y día), en la subcuenta del banco', 'folvy');
     v_recasados := v_recasados + 1;
