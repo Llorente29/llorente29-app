@@ -1,0 +1,29 @@
+[
+ {
+  "id": "834-1",
+  "pr": 834,
+  "fecha": "2026-11-26T16:24:22Z",
+  "producto": "sumied",
+  "apartado": "«Te deben», cruzado con el banco",
+  "frase": "con el extracto del banco casado (K14), lo que el cliente pagó por transferencia, Bizum o tarjeta ya no es deuda. Sale aparte, con su lista: «Pagado después por el banco».",
+  "ruta": null
+ },
+ {
+  "id": "834-2",
+  "pr": 834,
+  "fecha": "2026-11-26T16:24:22Z",
+  "producto": "sumied",
+  "apartado": "El TPV sin asignar, en su línea",
+  "frase": "lo cobrado con tarjeta que aún no es de ningún cliente sale en su línea, con su lista de abonos, y no se descuenta de nadie.",
+  "ruta": null
+ },
+ {
+  "id": "834-3",
+  "pr": 834,
+  "fecha": "2026-11-26T16:24:22Z",
+  "producto": "sumied",
+  "apartado": "Mientras una empresa no esté cruzada, sigue «GoCardless no cobró»",
+  "frase": "y se dice cuál falta. Con «Las dos», solo es «Te deben» si las dos están cruzadas.",
+  "ruta": null
+ }
+]
