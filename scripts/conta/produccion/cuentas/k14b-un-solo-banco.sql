@@ -17,10 +17,12 @@ select clave, valor from (
   union all
   select 0, null, 'todas las cuentas · ejercicios: filas · huella',
          count(*) || ' · ' || coalesce(left(md5(string_agg(concat_ws('|', y.id, y.starts_on, y.ends_on, y.origin, y.imported_until), ';' order by y.id)), 12), 'ninguno')
+    -- quieta: los ejercicios solo cambian al abrir uno o al traer otro programa, y nadie lo hace durante el ensayo
     from public.fiscal_year y
   union all
   select 0, null, 'todas las cuentas · ajustes del banco: filas · huella',
          count(*) || ' · ' || coalesce(left(md5(string_agg(concat_ws('|', b.company_id, b.cutover_date), ';' order by b.company_id)), 12), 'ninguno')
+    -- quieta: los ajustes del banco los cambia un administrador a mano, y nadie lo hace durante el ensayo
     from public.bank_settings b
   union all
   select 1, m.account_id, 'cuenta ' || m.account_id || ' · movimientos del banco: filas',
