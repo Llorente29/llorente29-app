@@ -6,8 +6,8 @@
 --   2. La persona de A confirma el concepto de un cobro suelto suyo, y lo cambia (queda uno); un concepto que no es
 --      un código, no; un cobro que no está en lo leído, no.
 --   3. La persona de B no elige en la empresa de A ni ve lo de A; nadie escribe lo elegido desde la pantalla.
---   4. Las vueltas atrás: la 0654 solo quita lo suyo; la 0653 deja la tabla si hay elegidos, la quita si no, y deja la
---      columna (la escribe la lectura de GoCardless).
+--   4. Las vueltas atrás: la 0654 solo quita lo suyo; la 0653 deja la tabla si hay elegidos, la quita si no, y quita la
+--      columna (todo como estaba).
 -- Datos inventados (T11). Nada sale a Cegid ni a GoCardless.
 
 begin;
@@ -96,10 +96,10 @@ delete from public.conta_cegid_concepto_elegido;
 \i supabase/vuelta-atras/20261126T0653_q10d_concepto_elegido.down.sql
 do $$ begin
   if to_regclass('public.conta_cegid_concepto_elegido') is not null then raise exception 'Q10 CONCEPTO · 4: sin elegidos, la vuelta atrás no quita la tabla.'; end if;
-  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_gc_cobro' and column_name = 'descripcion') then
-    raise exception 'Q10 CONCEPTO · 4: la vuelta atrás ha quitado la columna del texto del cobro.';
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_gc_cobro' and column_name = 'descripcion') then
+    raise exception 'Q10 CONCEPTO · 4: la vuelta atrás no quita la columna del texto del cobro.';
   end if;
-  raise notice 'Q10 CONCEPTO · 4: las vueltas atrás respetan lo elegido y dejan la columna. OK';
+  raise notice 'Q10 CONCEPTO · 4: las vueltas atrás respetan lo elegido y lo dejan todo como estaba. OK';
 end $$;
 \i supabase/migrations/20261126T0653_q10d_concepto_elegido.sql
 \echo 'Q10 CONCEPTO · 4: y otra vez la 0653. OK'
