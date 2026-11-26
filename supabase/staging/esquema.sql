@@ -121549,6 +121549,25 @@ COMMENT ON TABLE public.conta_cegid_concepto_elegido IS 'Q10 · El concepto de C
 
 
 --
+-- Name: conta_cegid_cuota_revisada; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_cegid_cuota_revisada (
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    cliente integer NOT NULL,
+    revisada_el date NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_cegid_cuota_revisada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_cegid_cuota_revisada IS 'Q10 · Los clientes de Cegid con cuotas fijas a los que ya se ha puesto «Facturar hasta». A uno con cuotas fijas que no está aquí no se le manda nada.';
+
+
+--
 -- Name: conta_cegid_factura; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -121605,6 +121624,8 @@ CREATE TABLE public.conta_cegid_incidencia (
     mandada_por text,
     deshecha_at timestamp with time zone,
     deshecha_por text,
+    corregida_at timestamp with time zone,
+    corregida_por text,
     CONSTRAINT conta_cegid_incidencia_estado_check CHECK ((estado = ANY (ARRAY['mandando'::text, 'mandada'::text, 'facturada'::text, 'deshecha'::text, 'fallo'::text]))),
     CONSTRAINT conta_cegid_incidencia_mes_check CHECK ((mes ~ '^\d{4}-(0[1-9]|1[0-2])$'::text))
 );
@@ -121615,6 +121636,13 @@ CREATE TABLE public.conta_cegid_incidencia (
 --
 
 COMMENT ON TABLE public.conta_cegid_incidencia IS 'Q10 · Cada cobro de GoCardless mandado a la facturación de Cegid como incidencia del mes, con su número en Cegid. Un cobro, como mucho una viva. Solo lo escribe conta-cegid-mandar.';
+
+
+--
+-- Name: COLUMN conta_cegid_incidencia.corregida_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_cegid_incidencia.corregida_at IS 'Q10 · Cuándo se corrigió por PUT la incidencia ya mandada (descripción, tipo de IVA y total igual a la base).';
 
 
 --
@@ -141774,6 +141802,14 @@ ALTER TABLE ONLY public.conta_cegid_concepto
 
 
 --
+-- Name: conta_cegid_cuota_revisada conta_cegid_cuota_revisada_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_cuota_revisada
+    ADD CONSTRAINT conta_cegid_cuota_revisada_pkey PRIMARY KEY (company_id, cliente);
+
+
+--
 -- Name: conta_cegid_factura conta_cegid_factura_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -158612,6 +158648,22 @@ ALTER TABLE ONLY public.conta_cegid_concepto_elegido
 
 
 --
+-- Name: conta_cegid_cuota_revisada conta_cegid_cuota_revisada_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_cuota_revisada
+    ADD CONSTRAINT conta_cegid_cuota_revisada_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cegid_cuota_revisada conta_cegid_cuota_revisada_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_cuota_revisada
+    ADD CONSTRAINT conta_cegid_cuota_revisada_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_cegid_factura conta_cegid_factura_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -171579,6 +171631,19 @@ CREATE POLICY conta_cegid_concepto_elegido_leer ON public.conta_cegid_concepto_e
 --
 
 CREATE POLICY conta_cegid_concepto_leer ON public.conta_cegid_concepto FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_cegid_cuota_revisada; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_cegid_cuota_revisada ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_cegid_cuota_revisada conta_cegid_cuota_revisada_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_cegid_cuota_revisada_leer ON public.conta_cegid_cuota_revisada FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -202561,6 +202626,14 @@ GRANT ALL ON TABLE public.conta_cegid_concepto TO service_role;
 
 GRANT ALL ON TABLE public.conta_cegid_concepto_elegido TO authenticated;
 GRANT ALL ON TABLE public.conta_cegid_concepto_elegido TO service_role;
+
+
+--
+-- Name: TABLE conta_cegid_cuota_revisada; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_cegid_cuota_revisada TO authenticated;
+GRANT ALL ON TABLE public.conta_cegid_cuota_revisada TO service_role;
 
 
 --
