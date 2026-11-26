@@ -7,8 +7,9 @@
 //   2. «Cuotas en Sumied · <mes>», según las cuotas de Sumied, con las altas y las bajas de las líneas de Sumied (una
 //      baja sale como baja, no «sin bajas»); como no cuadra con GoCardless, la diferencia en ámbar con sus partes, que
 //      suman exactamente la diferencia;
-//   3. «GoCardless no cobró» (aún sin cruzar con el banco, y lo dice), recibo a recibo, también el del mandato ya
-//      cancelado, por antigüedad: cada tramo se abre en su lista y los tramos suman la cifra.
+//   3. cruzada con el banco (R20b, K14): «Te deben», sin el recibo que el cliente pagó por transferencia; recibo a
+//      recibo, también el del mandato ya cancelado, por antigüedad (cada tramo se abre en su lista y los tramos suman la
+//      cifra); lo pagado por el banco y el TPV sin asignar, cada uno en su línea, con su lista, sin descontarse de nadie.
 //
 // La sesión, el marco y la cuenta de prueba son staging y el código de verdad. Lo que la pantalla LEE se simula con la
 // siembra inventada del G04 (../g04/siembra.ts), y lo de GoCardless es INVENTADO (T11). Nada se escribe.
@@ -71,7 +72,10 @@ async function simular(page: Page, Q: string, A: string) {
     if (r.request().method() !== 'GET' || !(nombre in datos)) return r.fallback()
     return json(r, datos[nombre])
   })
-  const LECTURAS: Record<string, (c: Record<string, unknown>) => unknown> = { ...pantallas(datos), conta_cifras_del_cobro: () => cobro }
+  // R20b · Cruzado con el banco (K14): el recibo devuelto de Panadería Muestra lo pagó por transferencia; dos abonos del TPV sin asignar.
+  const banco = { cruzadas: [Q], recibos: [{ empresa_id: Q, gc_id: 'PM1', movement_id: 'mov-1', importe: 108.9, fecha: dia(-60), via: 'transferencia' }],
+    tarjeta: [{ empresa_id: Q, movement_id: 'tpv-1', fecha: dia(-5), importe: 300 }, { empresa_id: Q, movement_id: 'tpv-2', fecha: dia(-4), importe: 20.28 }] }
+  const LECTURAS: Record<string, (c: Record<string, unknown>) => unknown> = { ...pantallas(datos), conta_cifras_del_cobro: () => cobro, conta_cifras_del_banco: () => banco }
   const llamadas: string[] = []
   await page.route(/\/rest\/v1\/rpc\/([a-z_]+)/, (r) => {
     const f = /\/rest\/v1\/rpc\/([a-z_]+)/.exec(r.request().url())![1]
@@ -144,15 +148,21 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
       await abrirYSumar(page, fila.locator('.g4-cifra-boton'), (await fila.locator('td').last().innerText()))
     }
 
-    // 3. «GoCardless no cobró», sin cruzar con el banco (y lo dice), con el mandato cancelado dentro, por antigüedad.
+    // 3. Cruzada con el banco: «Te deben», sin lo que pagó por transferencia; con el mandato cancelado dentro, por
+    //    antigüedad; lo pagado por el banco y el TPV sin asignar, cada uno en su línea y con su lista.
     const nc = page.locator('[data-cifra="no-cobrado"]')
-    await expect(nc.locator('.g4-cifra-titulo')).toHaveText('GoCardless no cobró · según GoCardless')
-    await expect(nc).toContainText('Falta cruzar con el banco')
-    await expect(nc.locator('.g4-cifra-valor')).toHaveText('169,40 €')
-    expect(await abrirYSumar(page, nc.locator('.g4-cifra-valor .g4-cifra-boton'))).toHaveLength(2)
+    await expect(nc.locator('.g4-cifra-titulo')).toHaveText('Te deben · según GoCardless y el banco')
+    await expect(nc).not.toContainText('Falta cruzar con el banco')
+    await expect(nc.locator('.g4-cifra-valor')).toHaveText('60,50 €')
+    expect(await abrirYSumar(page, nc.locator('.g4-cifra-valor .g4-cifra-boton'))).toHaveLength(1)
     await expect(nc).toContainText('De ellos, con el mandato ya cancelado: 60,50 €')
     expect((await nc.getByRole('row').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim()))
-      .toEqual(['Hasta 30 días 0,00 €', 'De 31 a 60 días 0,00 €', 'De 61 a 90 días 108,90 €', 'Más de 90 días 60,50 €'])
+      .toEqual(['Hasta 30 días 0,00 €', 'De 31 a 60 días 0,00 €', 'De 61 a 90 días 0,00 €', 'Más de 90 días 60,50 €'])
+    await expect(nc).toContainText('Pagado después por el banco, que ya no cuenta: 108,90 €')
+    const pagado = await abrirYSumar(page, nc.getByRole('button', { name: '108,90 €' }))
+    expect(pagado.join(' ')).toContain('pagado por el banco (transferencia)')
+    await expect(nc).toContainText('Cobrado con tarjeta sin asignar a ningún cliente (no se descuenta): 320,28 € (2 abonos)')
+    expect(await abrirYSumar(page, nc.getByRole('button', { name: '320,28 €' }))).toHaveLength(2)
     for (const fila of await nc.getByRole('row').all()) {
       if (await fila.locator('.g4-cifra-boton').count()) await abrirYSumar(page, fila.locator('.g4-cifra-boton'), await fila.locator('td').last().innerText())
     }

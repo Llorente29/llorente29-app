@@ -1,6 +1,6 @@
 // R20 · Las cifras de «Clientes y cuotas» (_shared/tarifa/cifras.ts). Datos inventados (T11).
 import { describe, expect, it } from 'vitest'
-import { avisosDeLasCifras, cifrasDeCuotas, fraseDiferencia, fraseNoCobrado, noCobrado, textoAltasBajas,
+import { avisosDeLasCifras, cifrasDeCuotas, cruceDelBanco, fraseDiferencia, fraseNoCobrado, noCobrado, textoAltasBajas,
   type CargoParaDeuda, type Lista, type ReciboDeFicha, type SuscripcionDelCobro } from '../../../../../supabase/functions/_shared/tarifa/cifras'
 
 const E = 'emp-1'
@@ -104,13 +104,28 @@ describe('R20 · «GoCardless no cobró»', () => {
     expect(fraseNoCobrado(n)).toBe('Fallidos y devueltos en GoCardless desde mayo, sin cobrar después · 3 recibos de 2 clientes')
   })
 
-  it('cruzado con el banco pasa a «Te deben» y descuenta lo pagado por el banco; la tarjeta sin asignar no se descuenta', () => {
-    const n = noCobrado(cargos, HOY, { pagadosPorElBanco: new Set(['c2']), tarjetaSinAsignarCent: 5000 })
-    expect(n.titulo).toBe('Te deben')
+  it('cruzado con el banco pasa a «Te deben» y descuenta lo pagado por el banco; el TPV sin asignar no se descuenta', () => {
+    const banco = cruceDelBanco({
+      cruzadas: [E],
+      recibos: [{ empresa_id: E, gc_id: 'c2', movement_id: 'm1', importe: 60.5, fecha: '2026-10-20', via: 'transferencia' }],
+      tarjeta: [{ empresa_id: E, movement_id: 't1', fecha: '2026-11-21', importe: 300 }, { empresa_id: E, movement_id: 't2', fecha: '2026-11-22', importe: 20.28 }],
+    }, [E], () => 'Empresa de prueba')
+    const n = noCobrado(cargos, HOY, banco)
+    expect([n.titulo, n.cruzado, n.faltanPorCruzar]).toEqual(['Te deben', true, []])
     expect(n.lista.filas.map((f) => f.id)).toEqual(['c1', 'c3'])
-    expect(n.pagadoPorElBanco?.totalCent).toBe(6050)
-    expect(n.tarjetaSinAsignarCent).toBe(5000)
     expect(n.lista.totalCent).toBe(8470)
+    expect(n.pagadoPorElBanco?.filas.map((f) => [f.id, f.detalle])).toEqual([['c2', 'Devuelto por el banco el 4/10/2026 · pagado por el banco (transferencia) el 20/10/2026']])
+    expect([n.tarjetaSinAsignar?.totalCent, n.tarjetaSinAsignar?.filas.length]).toEqual([32028, 2])
+  })
+
+  it('sin cruzar con el banco, sigue siendo «GoCardless no cobró»; con «Las dos» a medio cruzar, también, y dice cuál falta', () => {
+    expect(cruceDelBanco({ cruzadas: [], recibos: [], tarjeta: [] }, [E], () => 'x')).toBeNull()
+    const banco = cruceDelBanco({ cruzadas: [E], recibos: [{ empresa_id: E, gc_id: 'c2', movement_id: 'm1', importe: 60.5, fecha: '2026-10-20', via: 'bizum' }], tarjeta: [] },
+      [E, 'emp-2'], (id) => (id === 'emp-2' ? 'Otra empresa de prueba' : 'Empresa de prueba'))
+    const n = noCobrado(cargos, HOY, banco)
+    expect([n.titulo, n.cruzado, n.faltanPorCruzar]).toEqual(['GoCardless no cobró', false, ['Otra empresa de prueba']])
+    // Lo de la empresa cruzada que pagó el banco, ya no cuenta.
+    expect(n.lista.filas.map((f) => f.id)).toEqual(['c1', 'c3'])
   })
 })
 

@@ -42,21 +42,24 @@ export interface DatosClientes {
    * el «Este mes» de cada fila (sustituye a conta_gocardless_del_mes, que contaba el mes de hoy).
    */
   delCobro?: Fila
+  /** R20b · conta_cifras_del_banco: lo cruzado con el banco por el K14 (recibos de GoCardless que pagó el banco y el TPV sin asignar). */
+  delBanco?: Fila
 }
 
 const filas = (x: unknown): Fila[] => (Array.isArray(x) ? (x as Fila[]) : [])
 
 /** Todo lo de Clientes, el panel y la tarifa, de toda la cuenta (cada empresa lo filtra en la pantalla), y lo que GoCardless cobrará en el mes de su próximo cobro, a la vez. */
 export async function leerClientes(accountId: string): Promise<DatosClientes> {
-  const [pantalla, delCobro] = await Promise.all([
+  const [pantalla, delCobro, delBanco] = await Promise.all([
     rpc<Fila | null>('conta_pantalla_clientes', { p_cuenta: accountId }),
     rpc<Fila | null>('conta_cifras_del_cobro', { p_cuenta: accountId }),
+    rpc<Fila | null>('conta_cifras_del_banco', { p_cuenta: accountId }),
   ])
   const d = pantalla ?? {}
   return {
     clientes: filas(d.clientes), cuotasGc: filas(d.cuotas_gc), proximos: filas(d.proximos), cargos: filas(d.cargos), queHacer: filas(d.que_hacer),
     asignaciones: filas(d.asignaciones), precios: filas(d.precios), servicios: filas(d.servicios), niveles: filas(d.niveles), paquetes: filas(d.paquetes),
-    lineasDePaquete: filas(d.lineas_de_paquete), ajustes: filas(d.ajustes), crm: filas(d.crm), delCobro: delCobro ?? {},
+    lineasDePaquete: filas(d.lineas_de_paquete), ajustes: filas(d.ajustes), crm: filas(d.crm), delCobro: delCobro ?? {}, delBanco: delBanco ?? {},
   }
 }
 

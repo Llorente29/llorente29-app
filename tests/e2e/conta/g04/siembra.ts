@@ -187,6 +187,8 @@ export function pantallas(d: Record<string, Fila[]>): Record<string, (cuerpo: Fi
         }),
       }
     },
+    // R20b · Lo cruzado con el banco (como conta_cifras_del_banco): en esta siembra, ninguna empresa está cruzada.
+    conta_cifras_del_banco: () => ({ cruzadas: [], recibos: [], tarjeta: [] }),
     conta_pantalla_ficha: (cuerpo) => deCliente(String(cuerpo.p_cliente)),
     // nº 84 · La factura de cada cobro: en esta siembra ningún cobro salió de un recibo de Sumied.
     conta_ficha_facturas: () => [],
