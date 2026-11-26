@@ -206,7 +206,7 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     // a «Pendiente de revisar» (abajo, con las diferencias). Cada cambio queda apuntado con su copia (conta_gc_igualado).
     // R20 · TODOS los clientes de GoCardless atados (conta_gc_enlace en «atado»), no solo el que la vista
     // conta_gc_enlace_elegido escoge para cada ficha: con dos clientes atados a la misma ficha (el viejo y el nuevo),
-    // las líneas del viejo salían «sin atar» y no se daban de baja (Sayech y Alexandra Junior, 26/11).
+    // las líneas del viejo salían «sin atar» y no se daban de baja (2 fichas de QBO, 3 líneas, 26/11).
     const atados = await leerTodas<{ gc_cliente_id: string; party_id: string }>((d, h) => db.from('conta_gc_enlace')
       .select('gc_cliente_id, party_id').eq('company_id', empresa).eq('estado', 'atado').not('party_id', 'is', null).order('gc_cliente_id').range(d, h), 'los clientes atados')
     const atado = new Map(atados.map((e) => [e.gc_cliente_id, e.party_id]))
