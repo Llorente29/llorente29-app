@@ -121147,6 +121147,38 @@ COMMENT ON TABLE public.conta_banco_cobro_recibo IS 'K14 · Los recibos de GoCar
 
 
 --
+-- Name: conta_banco_cobro_tarjeta; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_banco_cobro_tarjeta (
+    company_id uuid NOT NULL,
+    pagado_en timestamp with time zone NOT NULL,
+    importe numeric(14,2) NOT NULL,
+    account_id uuid NOT NULL,
+    movement_id uuid,
+    crm_id text,
+    etapa text,
+    party_id uuid,
+    cegid_codigo integer,
+    estado text NOT NULL,
+    porque text NOT NULL,
+    creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_banco_cobro_tarjeta_check CHECK (((estado = 'sin_negociacion'::text) = (crm_id IS NULL))),
+    CONSTRAINT conta_banco_cobro_tarjeta_check1 CHECK (((crm_id IS NULL) = (etapa IS NULL))),
+    CONSTRAINT conta_banco_cobro_tarjeta_estado_check CHECK ((estado = ANY (ARRAY['casado'::text, 'por_confirmar'::text, 'sin_negociacion'::text]))),
+    CONSTRAINT conta_banco_cobro_tarjeta_etapa_check CHECK ((etapa = ANY (ARRAY['factura_final'::text, 'enlace_pago'::text]))),
+    CONSTRAINT conta_banco_cobro_tarjeta_importe_check CHECK ((importe > (0)::numeric))
+);
+
+
+--
+-- Name: TABLE conta_banco_cobro_tarjeta; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_banco_cobro_tarjeta IS 'K14c · Cada pago con tarjeta (TPV), con su abono del día (conta_banco_cobro, «tarjeta») y su negociación del CRM (crm_id, etapa). Q factura los casados en «enlace_pago» (estado = casado y etapa = enlace_pago): cliente party_id, código en Cegid cegid_codigo (null: no existe). Lo demás, para Julio, con su porqué.';
+
+
+--
 -- Name: treasury_account; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -141706,6 +141738,22 @@ ALTER TABLE ONLY public.conta_banco_cobro_recibo
 
 
 --
+-- Name: conta_banco_cobro_tarjeta conta_banco_cobro_tarjeta_company_id_crm_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_banco_cobro_tarjeta
+    ADD CONSTRAINT conta_banco_cobro_tarjeta_company_id_crm_id_key UNIQUE (company_id, crm_id);
+
+
+--
+-- Name: conta_banco_cobro_tarjeta conta_banco_cobro_tarjeta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_banco_cobro_tarjeta
+    ADD CONSTRAINT conta_banco_cobro_tarjeta_pkey PRIMARY KEY (company_id, pagado_en, importe);
+
+
+--
 -- Name: conta_bitrix_pestana_aviso conta_bitrix_pestana_aviso_account_id_tipo_ref_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -148372,6 +148420,13 @@ CREATE INDEX conta_banco_cobro_empresa_idx ON public.conta_banco_cobro USING btr
 --
 
 CREATE INDEX conta_banco_cobro_recibo_mov_idx ON public.conta_banco_cobro_recibo USING btree (movement_id);
+
+
+--
+-- Name: conta_banco_cobro_tarjeta_mov_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_banco_cobro_tarjeta_mov_idx ON public.conta_banco_cobro_tarjeta USING btree (movement_id);
 
 
 --
@@ -158485,6 +158540,38 @@ ALTER TABLE ONLY public.conta_banco_cobro_recibo
 
 ALTER TABLE ONLY public.conta_banco_cobro_recibo
     ADD CONSTRAINT conta_banco_cobro_recibo_movement_id_fkey FOREIGN KEY (movement_id) REFERENCES public.conta_banco_cobro(movement_id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_banco_cobro_tarjeta conta_banco_cobro_tarjeta_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_banco_cobro_tarjeta
+    ADD CONSTRAINT conta_banco_cobro_tarjeta_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_banco_cobro_tarjeta conta_banco_cobro_tarjeta_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_banco_cobro_tarjeta
+    ADD CONSTRAINT conta_banco_cobro_tarjeta_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_banco_cobro_tarjeta conta_banco_cobro_tarjeta_movement_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_banco_cobro_tarjeta
+    ADD CONSTRAINT conta_banco_cobro_tarjeta_movement_id_fkey FOREIGN KEY (movement_id) REFERENCES public.conta_banco_cobro(movement_id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_banco_cobro_tarjeta conta_banco_cobro_tarjeta_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_banco_cobro_tarjeta
+    ADD CONSTRAINT conta_banco_cobro_tarjeta_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE SET NULL;
 
 
 --
@@ -171508,6 +171595,19 @@ ALTER TABLE public.conta_banco_cobro_recibo ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_banco_cobro_recibo_leer ON public.conta_banco_cobro_recibo FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_banco_cobro_tarjeta; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_banco_cobro_tarjeta ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_banco_cobro_tarjeta conta_banco_cobro_tarjeta_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_banco_cobro_tarjeta_leer ON public.conta_banco_cobro_tarjeta FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -202531,6 +202631,14 @@ GRANT ALL ON TABLE public.conta_banco_cobro TO service_role;
 
 GRANT ALL ON TABLE public.conta_banco_cobro_recibo TO authenticated;
 GRANT ALL ON TABLE public.conta_banco_cobro_recibo TO service_role;
+
+
+--
+-- Name: TABLE conta_banco_cobro_tarjeta; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_banco_cobro_tarjeta TO authenticated;
+GRANT ALL ON TABLE public.conta_banco_cobro_tarjeta TO service_role;
 
 
 --
