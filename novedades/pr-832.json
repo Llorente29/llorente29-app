@@ -1,0 +1,29 @@
+[
+ {
+  "id": "832-1",
+  "pr": 832,
+  "fecha": "2026-11-26T11:24:57Z",
+  "producto": "sumied",
+  "apartado": "Clientes y cuotas, cifras fiables",
+  "frase": "«GoCardless cobrará en diciembre» y «Cuotas en Sumied · diciembre», del mismo mes; si no cuadran, la diferencia en ámbar con sus partes. Cada cifra se abre en su lista, que la suma exacta.",
+  "ruta": null
+ },
+ {
+  "id": "832-2",
+  "pr": 832,
+  "fecha": "2026-11-26T11:24:57Z",
+  "producto": "sumied",
+  "apartado": "«GoCardless no cobró»",
+  "frase": "los fallidos y devueltos sin cobrar después, recibo a recibo y también con el mandato cancelado, por antigüedad. Falta cruzarlo con el banco; entonces pasará a «Te deben».",
+  "ruta": null
+ },
+ {
+  "id": "832-3",
+  "pr": 832,
+  "fecha": "2026-11-26T11:24:57Z",
+  "producto": "sumied",
+  "apartado": "Altas y bajas de verdad",
+  "frase": "salen de las líneas de Sumied, trabajador a trabajador. Y cada noche, si GoCardless y Sumied no cuadran, avisa en «Lo que tienes que hacer».",
+  "ruta": null
+ }
+]
