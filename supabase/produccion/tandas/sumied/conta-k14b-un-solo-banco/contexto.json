@@ -4,7 +4,7 @@
  "tanda": {
   "supabase/migrations/20261126T1240_k14b_un_banco_y_el_inicio.sql": "bc5f7c80902e239dfce706314a4e7be8",
   "supabase/migrations/20261126T1605_k14b_lectura_completa.sql": "90a0f5d786810d8167ae48957339001a",
-  "supabase/migrations/20261126T1606_k14b_fechas_al_reves.sql": "ca6b91e3d3e5bf27914356fe1c6693bf"
+  "supabase/migrations/20261126T1606_k14b_fechas_al_reves.sql": "944f5e53cc8d0ae45b0a4d192bdda02e"
  },
  "contexto": {
   "tablas": [

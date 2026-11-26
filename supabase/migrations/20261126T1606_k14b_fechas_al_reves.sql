@@ -9,8 +9,8 @@
 --   1. Los 40, a su fecha de verdad: 2026-MM-11 pasa a 2026-11-MM (fecha y fecha valor), y su huella y su huella suave
 --      igual (empiezan por la fecha). Medido: con la fecha corregida, las 40 huellas son las mismas que da volver a
 --      leer el fichero con el lector arreglado; las otras 23 entran como nuevas al subirlo otra vez, sin duplicar.
---   2. Su extracto: del 01/11 al 12/11, y marcado «sin comprobar» (no es una lectura completa: le faltan 23 filas), y su
---      huella de fichero apartada para que el mismo fichero se pueda volver a subir.
+--   2. Su extracto: del 01/11 al 12/11, sin saldos y «sin comprobar» (no es una lectura completa: le faltan 23 filas),
+--      y sin su huella de fichero, para que el mismo fichero se pueda volver a subir (la de antes queda en el porqué).
 --   3. Sus cobros del K14 (conta_banco_cobro, 6 filas): la misma fecha y su mes. El motor los vuelve a casar al subir el
 --      extracto otra vez.
 --   4. Lo de antes del día de inicio, recalculado con las fechas buenas (_bank_antes_del_inicio_recalcular, de la 1240).
@@ -37,7 +37,7 @@ begin
                       or status in ('casado', 'ignorado')))
      or exists (select 1 from public.bank_match b join public.bank_movement m on m.id = b.movement_id where m.company_id = emp and b.status = 'vivo')
      or not exists (select 1 from public.bank_statement where id = ext and company_id = emp and period_from = date '2026-01-11' and period_to = date '2026-12-11'
-                    and unchecked_reason is null and file_sha256 not like '%:k14b') then
+                    and unchecked_reason is null and continuity = 'primero' and file_sha256 is not null) then
     raise exception 'K14b · 0: los movimientos de la empresa dc43e21d no están como se midieron el 26/11 (40, todos el día 11, sin casar).';
   end if;
 
@@ -52,10 +52,15 @@ begin
   get diagnostics v_n = row_count;
 
   -- 2 · Su extracto.
+  -- Sin saldos (los que guardó salían de las filas mal ordenadas) y «sin comprobar», con su porqué: así no cuenta
+  -- como lectura completa. La huella del fichero, fuera (y guardada en el porqué, para la vuelta atrás): así se puede
+  -- volver a subir el mismo fichero.
   update public.bank_statement
      set period_from = date '2026-11-01', period_to = (select max(op_date) from public.bank_movement where statement_id = ext),
-         unchecked_reason = 'K14b: leído con las fechas al revés y sin las filas del 13 en adelante; no es una lectura completa. Las fechas, corregidas el 26/11.',
-         file_sha256 = file_sha256 || ':k14b'
+         opening_balance = null, closing_balance = null, balanced = null, continuity = 'sin_saldo', continuity_gap = null,
+         unchecked_reason = format('K14b: leído con las fechas al revés y sin las filas del 13 en adelante; no es una lectura completa. Las fechas, corregidas el 26/11. Antes: saldos %s → %s, huella %s.',
+                                   opening_balance, closing_balance, file_sha256),
+         file_sha256 = null
    where id = ext;
 
   -- 3 · Sus cobros del K14.
