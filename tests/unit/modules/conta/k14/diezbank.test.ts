@@ -4,7 +4,9 @@
 // títulos en la fila 6, lo más reciente arriba, fecha e importe como números de Excel. Todo inventado (T11).
 
 import { describe, expect, it } from 'vitest'
-import { leerCsvBanco, reconocerBanco } from '@/modules/conta/lib/lectorCsvBanco'
+import { leerCsvBanco, reconocerBanco, subcuentaEnCabecera } from '@/modules/conta/lib/lectorCsvBanco'
+import { emparejar, type BancoFolvy } from '../../../../../supabase/functions/_shared/bancos/nucleo.ts'
+import { ibanSinBanco } from '@/modules/conta/bancos/bancoNuevo'
 
 const excel = (iso: string) => String((Date.parse(`${iso}T00:00:00Z`) - Date.UTC(1899, 11, 30)) / 86400000)
 
@@ -34,9 +36,10 @@ describe('K14 · DiezBank', () => {
     expect(c.saldoInicialCent).toBe(100000)
     expect(c.saldoFinalCent).toBe(110040)
     expect(c.movimientos[1].conceptoBanco).toBe('TRANSFER INMEDIATA, PERSONA INVENTADA UNO, 000001020261124, PERSONA INVENTADA UNO XXXXESMMXXX, gestoria')
-    // No trae IBAN: la cuenta se elige al subirlo, y se dice.
+    // No trae IBAN, pero dice su subcuenta (K14b): con ella se busca el banco, y no hay aviso.
     expect(c.iban).toBeNull()
-    expect(x.avisos).toContain('El fichero no dice de qué cuenta es: elige la cuenta al subirlo.')
+    expect(c.subcuenta).toBe('57200000')
+    expect(x.avisos).not.toContain('El fichero no dice de qué cuenta es: elige la cuenta al subirlo.')
   })
 
   it('leída como texto (como la lee la pantalla), la fecha viene con el mes delante y el importe con comas de miles', () => {
@@ -48,5 +51,33 @@ describe('K14 · DiezBank', () => {
 
   it('la misma exportación leída dos veces da los mismos movimientos (lo que repite, lo para la huella al subirlo)', () => {
     expect(leerCsvBanco(filas, 'diezbank')).toEqual(leerCsvBanco(filas, 'diezbank'))
+  })
+})
+
+describe('K14b · el extracto va al banco que ya existe: nunca otro', () => {
+  const banco = (id: string, iban: string | null, cuenta: string | null): BancoFolvy =>
+    ({ id, nombre: id, alias: null, iban, kind: 'bank', cuenta, localId: null, ibanRevision: null, ibanes: [] })
+  const bancos = [banco('caixa', 'ES0099990000000000007181', '57200000'), banco('otro', 'ES0099990000000000000002', '57200009')]
+
+  it('la subcuenta de la cabecera («Cuenta: 57200000 …»); sin ella, null', () => {
+    expect(subcuentaEnCabecera([['', 'Cuenta: 57200000 BANCOS E INSTITUCIONES']])).toBe('57200000')
+    expect(subcuentaEnCabecera([['Cuenta corriente'], ['Titular: Nadie']])).toBeNull()
+  })
+
+  it('sin IBAN, el banco que tiene esa subcuenta; y entonces no se ofrece «Nuevo banco»', () => {
+    const x = leerCsvBanco(filas, 'diezbank')
+    expect(emparejar(x, bancos)).toEqual(['caixa'])
+    expect(ibanSinBanco(null, bancos, '57200000')).toBe(false)
+  })
+
+  it('el IBAN manda sobre la subcuenta; sin ninguno de los dos, no hay banco y sí se ofrece', () => {
+    const x = leerCsvBanco(filas, 'diezbank')
+    expect(emparejar({ ...x, cuentas: [{ ...x.cuentas[0], iban: 'ES0099990000000000000002' }] }, bancos)).toEqual(['otro'])
+    expect(emparejar({ ...x, cuentas: [{ ...x.cuentas[0], subcuenta: '57200005' }] }, bancos)).toEqual([null])
+    expect(ibanSinBanco(null, bancos, '57200005')).toBe(true)
+  })
+
+  it('subido dos veces, el mismo banco las dos (la base no mete ningún movimiento la segunda: prueba de staging K14b)', () => {
+    expect(emparejar(leerCsvBanco(filas, 'diezbank'), bancos)).toEqual(emparejar(leerCsvBanco(filas, 'diezbank'), bancos))
   })
 })

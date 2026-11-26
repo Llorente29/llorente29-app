@@ -230,6 +230,18 @@ function valorDeCabecera(filas: string[][], etiqueta: RegExp): string | null {
 }
 
 /** Lee las filas de un Excel/CSV con el perfil de su banco. */
+/**
+ * K14b · La subcuenta 572 que el fichero dice de sí mismo en la cabecera («Cuenta: 57200000 BANCOS E INSTITUCIONES…»,
+ * el extracto de DiezBank). Sin ella, null.
+ */
+export function subcuentaEnCabecera(filas: string[][]): string | null {
+  for (const f of filas) for (const c of f) {
+    const m = /^\s*cuenta:?\s*(57\d{2,10})\b/i.exec(c ?? '')
+    if (m) return m[1]
+  }
+  return null
+}
+
 export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido {
   const p = PERFILES[banco]
   const ic = filaDeCabecera(filas, p)
@@ -286,15 +298,16 @@ export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido 
   const saldos = col.saldo >= 0 ? filasMov.map((x) => x.saldo) : null
   const conSaldo = saldos?.filter((s): s is number => s !== null) ?? []
   const iban = ibanEnCabecera(filas.slice(0, ic))
+  const subcuenta = subcuentaEnCabecera(filas.slice(0, ic))
   const cuenta: CuentaLeida = {
-    iban,
-    identificacion: iban ? `${p.nombre} ···· ${iban.slice(-4)}` : p.nombre,
+    iban, subcuenta,
+    identificacion: iban ? `${p.nombre} ···· ${iban.slice(-4)}` : subcuenta ? `${p.nombre} · subcuenta ${subcuenta}` : p.nombre,
     titular: valorDeCabecera(filas.slice(0, ic), /^titular:?$/i), divisa: 'EUR',
     desde: movimientos[0].fecha, hasta: movimientos[movimientos.length - 1].fecha,
     saldoInicialCent: saldos && saldos[0] !== null ? saldos[0] - movimientos[0].importeCent : null,
     saldoFinalCent: conSaldo.length ? conSaldo[conSaldo.length - 1] : null,
     movimientos, control: null, saldosPorFila: saldos,
   }
-  if (!iban) avisos.push('El fichero no dice de qué cuenta es: elige la cuenta al subirlo.')
+  if (!iban && !subcuenta) avisos.push('El fichero no dice de qué cuenta es: elige la cuenta al subirlo.')
   return { formato: `csv:${banco}`, cuentas: [cuenta], avisos }
 }

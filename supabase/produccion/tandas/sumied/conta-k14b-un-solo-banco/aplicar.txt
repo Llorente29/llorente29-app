@@ -1,0 +1,11 @@
+# K14b · Un IBAN, un banco; y lo de antes del día de inicio, recalculado cuando cambia (26/11). Rama conta/k14b-un-solo-banco.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1240  Cambia bank_cuenta_alta (misma firma, con su respaldo): no da de alta un segundo banco con el IBAN de otro
+#         activo de la empresa. Añade _bank_antes_del_inicio_recalcular y dos disparadores que la llaman cuando cambia el
+#         día de inicio (bank_settings.cutover_date y los ejercicios), y _bank_juntar (juntar dos bancos en uno). No
+#         escribe en ninguna fila: lo de QBO Integrity lo arregla la tanda que va detrás, sola (conta/k14b-qbo-un-banco).
+#
+# Nada en el camino del pedido. Lo cuenta k14b-un-solo-banco.sql (regla 31). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k14b-un-solo-banco.sql
+supabase/migrations/20261126T1240_k14b_un_banco_y_el_inicio.sql

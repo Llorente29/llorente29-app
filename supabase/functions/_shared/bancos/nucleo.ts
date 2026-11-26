@@ -72,9 +72,17 @@ export interface BancoFolvy {
   ibanes: string[]
 }
 
-/** Cada cuenta del fichero con su banco de Folvy por IBAN (el suyo o uno recordado); null si no hay (se pregunta). */
+/**
+ * El banco de cada cuenta del extracto: el que tiene su IBAN (o lo recuerda), y si el fichero no trae IBAN, el que tiene
+ * la subcuenta que dice el fichero (K14b: el extracto de DiezBank dice «Cuenta: 57200000»). Si ya hay un banco, ese:
+ * nunca se ofrece crear otro.
+ */
 export function emparejar(e: ExtractoLeido, bancos: readonly BancoFolvy[]): (string | null)[] {
-  return e.cuentas.map((c) => (c.iban ? bancos.find((b) => b.iban === c.iban || b.ibanes.includes(c.iban!))?.id ?? null : null))
+  return e.cuentas.map((c) => {
+    if (c.iban) { const b = bancos.find((x) => x.iban === c.iban || x.ibanes.includes(c.iban!)); if (b) return b.id }
+    if (c.subcuenta) { const b = bancos.find((x) => x.cuenta === c.subcuenta); if (b) return b.id }
+    return null
+  })
 }
 
 export interface ResultadoImportar { banco: string; repetido: boolean; mensaje: string | null; nuevos: number; repetidos: number; posiblesRepetidos: number; continuidad: string; hueco: number | null

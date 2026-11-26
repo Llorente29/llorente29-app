@@ -166,7 +166,10 @@ export async function leerFicheroDelExtracto(f: File, banco: BancoVista, todos: 
   const a = await abrirExtracto(f)
   const { extracto, cuadre } = leerYCuadrar(a)
   if (!cuadre.ok) throw new Error(`«${f.name}» no cuadra: ${cuadre.motivos.join(' ')}`)
-  const asignacion = extracto.cuentas.length === 1 ? [banco.id] : emparejar(extracto, todos)
+  // K14b · Si el fichero dice de qué banco es (su IBAN o su subcuenta), a ése; si trae una sola cuenta y no lo dice, al de
+  // la pantalla. Nunca a uno nuevo.
+  const emparejadas = emparejar(extracto, todos)
+  const asignacion = extracto.cuentas.length === 1 ? [emparejadas[0] ?? banco.id] : emparejadas
   const r = await nucleo.importar(a, extracto, cuadre, asignacion, 'fichero', Object.fromEntries(todos.map((b) => [b.id, [...b.ibanes]])))
   if (r.length === 0) throw new Error(`«${f.name}» no es de ninguno de tus bancos.`)
   let agente = ''
