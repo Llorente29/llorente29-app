@@ -87,8 +87,8 @@ async function simular(page: Page, Q: string, A: string, conectada = true, fijos
   let leido = false
   const clientesCegid = [[101, 'A00000000'], [102, 'B00000000'], [103, '00000000T'], [104, 'B00000001']]
     .map(([codigo, nif]) => ({ codigo, nombre_comercial: null, nombre_fiscal: `Cliente Cegid ${codigo}`, nif, conceptos: [] as Fila[], leido_at: '2026-11-25T17:00:00Z' }))
-  // Respuesta 3: con «fijos», el 102 tiene un concepto fijo en su ficha de Cegid. No lo para: Julio quita Noviembre
-  // del periodo MENSUAL en Cegid, y la API los sigue devolviendo.
+  // Respuesta 3: con «fijos», el 102 tiene un concepto fijo en su ficha de Cegid. Respuesta 6: no lo para porque está
+  // entre los revisados (ya lleva «Facturar hasta», conta_cegid_cuota_revisada).
   // Respuesta 4: el 105 de Cegid tiene el mismo correo que el cliente 5 de GoCardless (su ficha no tiene código): se propone atarla.
   if (fijos) clientesCegid.push({ codigo: 105, nombre_comercial: null, nombre_fiscal: 'Cliente Cegid 105', nif: '', conceptos: [], leido_at: '2026-11-25T17:00:00Z', email: 'cinco@ejemplo.test' } as unknown as typeof clientesCegid[number])
   if (fijos) clientesCegid[1].conceptos = [{ codigoConcepto: '0002', descripcion: 'SERVICIOS DE GESTORÍA', totalLinea: 43.8, cantidad: 1, importe: 43.8 }]
@@ -103,8 +103,9 @@ async function simular(page: Page, Q: string, A: string, conectada = true, fijos
     company_account_link: enlaces430,
     // El atado de «Clientes y cuotas»: el cliente 5 tiene su enlace solo «propuesto», pero su fila aquí lo ata.
     conta_cobro_cliente: [{ party_id: 'p5', gc_cliente_id: 'CU5' }] }
-  const CEGID: Record<string, unknown[]> = { conta_cegid_cliente: clientesCegid, conta_cegid_concepto: conceptosCegid, conta_cegid_factura: facturasCegid }
-  await page.route(/\/rest\/v1\/(conta_cegid_cliente|conta_cegid_concepto|conta_cegid_factura)\?/, (r) => {
+  const CEGID: Record<string, unknown[]> = { conta_cegid_cliente: clientesCegid, conta_cegid_concepto: conceptosCegid, conta_cegid_factura: facturasCegid,
+    conta_cegid_cuota_revisada: [{ cliente: 102 }] }
+  await page.route(/\/rest\/v1\/(conta_cegid_cliente|conta_cegid_concepto|conta_cegid_factura|conta_cegid_cuota_revisada)\?/, (r) => {
     const t = /\/rest\/v1\/([a-z_]+)\?/.exec(r.request().url())![1]
     return json(r, leido ? CEGID[t] : [])
   })
@@ -286,7 +287,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await expect(mandar.locator('[data-prueba="vuelta-3-frase"]')).toHaveText('Después: Contasimple, 1 cliente, 36,30 € → factura con la serie 3')
     await expect(mandar.getByRole('button', { name: 'Mandar Contasimple' })).toBeDisabled()
     await expect(mandar.locator('[data-prueba="vuelta-3-por-que"]')).toHaveText('Primero se manda y se factura con la serie 1 todo lo demás.')
-    await expect(mandar.locator('[data-prueba="mandar-aviso"]')).toHaveText('Antes de facturar, quita Noviembre del periodo MENSUAL en Cegid y comprueba que el precálculo sale vacío.')
+    await expect(mandar.locator('[data-prueba="mandar-aviso"]')).toHaveText('Antes de facturar, mira en el precálculo de Cegid que solo sale lo mandado: las cuotas fijas llevan «Facturar hasta 10/2026».')
 
     // Atar una ficha sin código: se propone el 105 por su correo de GoCardless; atada, entra en la serie 1.
     const cegid = page.locator('[data-prueba="cegid"]')

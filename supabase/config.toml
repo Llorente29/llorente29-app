@@ -203,6 +203,11 @@ verify_jwt = true
 [functions.conta-cegid-ver]
 verify_jwt = false
 
+# Q10 · respuesta 6 · Corregir en Cegid (PUT) las incidencias ya mandadas: descripción, tipo de IVA y total igual a la
+# base. Solo incidencias; la puerta es la clave de servicio (workflow «Corregir incidencias en Cegid», desde main).
+[functions.conta-cegid-corregir]
+verify_jwt = false
+
 # (19/11) conta-erp10-escribir · X10b. Sacar las recibidas a ERP10 (alta de factura y su PDF),
 # sin que nada salga dos veces. Con la sesión de un administrador.
 [functions.conta-erp10-escribir]

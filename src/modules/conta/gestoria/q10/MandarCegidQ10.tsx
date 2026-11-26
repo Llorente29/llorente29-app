@@ -3,7 +3,8 @@
 // Q10 · respuestas 3 y 4 · El paso 2 de «Facturas del mes»: MANDAR A CEGID todo lo cobrado, como incidencias del mes, y
 // comprobar antes de facturar que lo que hay en Cegid es exactamente lo cobrado. Pinta, no lee nada (el plan y el
 // cuadre los hace _shared/cegidMandar.ts; las llamadas, pagina.tsx):
-//   · el aviso de quitar Noviembre del periodo MENSUAL en Cegid (los conceptos fijos no paran a nadie);
+//   · el aviso de mirar el precálculo (respuesta 6: las cuotas fijas llevan «Facturar hasta 10/2026»; a un cliente nuevo
+//     con cuota fija sin él no se le manda nada);
 //   · DOS VUELTAS, porque la incidencia no lleva serie (la pone la «Facturación automática»): «Primero: N clientes,
 //     X € → factura con la serie 1» (todo menos Contasimple; primero uno para probar, después todos) y «Después:
 //     Contasimple, N clientes, X € → factura con la serie 3», apagado hasta que Sumied lee de Cegid que lo de la
@@ -69,7 +70,7 @@ export function MandarCegidQ10(p: PropsMandarQ10) {
 
       {plan && p.puede.si && v1 && v3 && (
         <>
-          <p className="q10-linea" data-prueba="mandar-aviso" role="note">Antes de facturar, quita Noviembre del periodo MENSUAL en Cegid y comprueba que el precálculo sale vacío.</p>
+          <p className="q10-linea" data-prueba="mandar-aviso" role="note">Antes de facturar, mira en el precálculo de Cegid que solo sale lo mandado: las cuotas fijas llevan «Facturar hasta 10/2026».</p>
 
           <div className="q10-paso" data-prueba="vuelta-1">
             <p className="q10-frase" data-prueba="vuelta-1-frase">{v1.frase}</p>

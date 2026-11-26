@@ -1,0 +1,23 @@
+{
+ "_que": "Q10 · respuesta 6 · contexto de producción de la tanda (2200), medido en SOLO LECTURA el 26/11 a las 22:11Z con la consulta de analizar.mjs sql-contexto: de lo que toca, solo existe conta_cegid_incidencia (234 filas según pg_class, sin las columnas corregida_at ni corregida_por); conta_cegid_cuota_revisada no existe; nada en el camino del pedido y nada en el historial. Aparte, el mismo día: 190 clientes de QBO con cuotas fijas en conta_cegid_cliente (leído de Cegid el 25/11 a las 21:23Z), los mismos códigos de la 2200.",
+ "medido": "2026-11-26T22:11Z",
+ "tanda": {
+  "supabase/migrations/20261126T2200_q10h_cuota_revisada.sql": "e432d39175afe90fee7b968a4f5e9709"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_cegid_incidencia"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_cegid_incidencia": 234
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -127,6 +127,8 @@ export interface LeidoCegid {
   conceptos: { codigo: string; descripcion: string | null; porIva: number | null; conRetencion: boolean | null; ivaIncluido: boolean | null }[]
   facturas: { ejercicio: number; serie: string; codigo: number; cliente: number | null; nif: string | null; fecha: number | null; total: number | null; retencion: number; porcentajeRetencion: number | null; lineas: Fila[] }[]
   leidoAt: string | null
+  /** Respuesta 6 · Los clientes de Cegid con cuotas fijas que ya llevan «Facturar hasta» (conta_cegid_cuota_revisada). */
+  revisados: number[]
 }
 
 async function todas(nombre: string, columnas: string, companyId: string, orden: string): Promise<Fila[]> {
@@ -141,10 +143,12 @@ async function todas(nombre: string, columnas: string, companyId: string, orden:
 }
 
 export async function leerGuardadoCegid(companyId: string, ejercicio: number): Promise<LeidoCegid> {
-  const [cl, co, fa] = await Promise.all([
+  const [cl, co, fa, rv] = await Promise.all([
     todas('conta_cegid_cliente', 'codigo, nombre_comercial, nombre_fiscal, nif, email, conceptos, leido_at', companyId, 'codigo'),
     todas('conta_cegid_concepto', 'codigo, descripcion, por_iva, con_retencion, iva_incluido', companyId, 'codigo'),
     todas('conta_cegid_factura', 'ejercicio, serie, codigo, cliente, nif, fecha_cegid, total, retencion, porcentaje_retencion, lineas', companyId, 'codigo'),
+    // Sin la tabla (antes de la 2200), ninguno: a nadie con cuotas fijas se le manda nada.
+    todas('conta_cegid_cuota_revisada', 'cliente', companyId, 'cliente').catch(() => [] as Fila[]),
   ])
   return {
     clientes: cl.map((x) => ({ codigo: Number(x.codigo), nombre: str(x.nombre_fiscal) ?? str(x.nombre_comercial), nif: str(x.nif), email: str(x.email), conceptos: (x.conceptos as LeidoCegid['clientes'][number]['conceptos']) ?? null })),
@@ -152,6 +156,7 @@ export async function leerGuardadoCegid(companyId: string, ejercicio: number): P
     facturas: fa.filter((x) => Number(x.ejercicio) === ejercicio).map((x) => ({ ejercicio: Number(x.ejercicio), serie: String(x.serie), codigo: Number(x.codigo), cliente: x.cliente == null ? null : Number(x.cliente),
       nif: str(x.nif), fecha: x.fecha_cegid == null ? null : Number(x.fecha_cegid), total: x.total == null ? null : Number(x.total), retencion: Number(x.retencion ?? 0), porcentajeRetencion: x.porcentaje_retencion == null ? null : Number(x.porcentaje_retencion), lineas: (x.lineas as Fila[]) ?? [] })),
     leidoAt: cl.reduce<string | null>((m, x) => { const t = str(x.leido_at); return t && (!m || t > m) ? t : m }, null),
+    revisados: rv.map((x) => Number(x.cliente)),
   }
 }
 
