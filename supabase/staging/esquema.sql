@@ -114649,6 +114649,8 @@ CREATE TABLE auth.custom_oauth_providers (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     custom_claims_allowlist text[] DEFAULT '{}'::text[] NOT NULL,
+    client_auth_method text DEFAULT 'client_secret'::text NOT NULL,
+    client_assertion_audience text,
     CONSTRAINT custom_oauth_providers_authorization_url_https CHECK (((authorization_url IS NULL) OR (authorization_url ~~ 'https://%'::text))),
     CONSTRAINT custom_oauth_providers_authorization_url_length CHECK (((authorization_url IS NULL) OR (char_length(authorization_url) <= 2048))),
     CONSTRAINT custom_oauth_providers_client_id_length CHECK (((char_length(client_id) >= 1) AND (char_length(client_id) <= 512))),
@@ -120952,6 +120954,44 @@ CREATE TABLE public.conta_cegid_factura (
 --
 
 COMMENT ON TABLE public.conta_cegid_factura IS 'Q10 · Las facturas emitidas en la facturación de Cegid (DiezREC) de cada empresa, con sus líneas. Solo lo escribe conta-cegid-leer.';
+
+
+--
+-- Name: conta_cegid_incidencia; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_cegid_incidencia (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    gc_cobro_id text NOT NULL,
+    mes text NOT NULL,
+    cliente integer NOT NULL,
+    incidencia integer,
+    concepto text NOT NULL,
+    serie text NOT NULL,
+    texto text NOT NULL,
+    base numeric NOT NULL,
+    total numeric NOT NULL,
+    estado text NOT NULL,
+    motivo text,
+    ano_factura integer,
+    serie_factura text,
+    numero_factura integer,
+    mandada_at timestamp with time zone DEFAULT now() NOT NULL,
+    mandada_por text,
+    deshecha_at timestamp with time zone,
+    deshecha_por text,
+    CONSTRAINT conta_cegid_incidencia_estado_check CHECK ((estado = ANY (ARRAY['mandando'::text, 'mandada'::text, 'facturada'::text, 'deshecha'::text, 'fallo'::text]))),
+    CONSTRAINT conta_cegid_incidencia_mes_check CHECK ((mes ~ '^\d{4}-(0[1-9]|1[0-2])$'::text))
+);
+
+
+--
+-- Name: TABLE conta_cegid_incidencia; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_cegid_incidencia IS 'Q10 · Cada cobro de GoCardless mandado a la facturación de Cegid como incidencia del mes, con su número en Cegid. Un cobro, como mucho una viva. Solo lo escribe conta-cegid-mandar.';
 
 
 --
@@ -141126,6 +141166,14 @@ ALTER TABLE ONLY public.conta_cegid_factura
 
 
 --
+-- Name: conta_cegid_incidencia conta_cegid_incidencia_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_incidencia
+    ADD CONSTRAINT conta_cegid_incidencia_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_cierre_ajuste conta_cierre_ajuste_company_id_sale_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -147687,6 +147735,20 @@ CREATE INDEX conta_bitrix_red_ficha ON public.conta_bitrix_red USING btree (acco
 --
 
 CREATE INDEX conta_cegid_factura_cliente_idx ON public.conta_cegid_factura USING btree (company_id, cliente);
+
+
+--
+-- Name: conta_cegid_incidencia_mes_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_cegid_incidencia_mes_idx ON public.conta_cegid_incidencia USING btree (company_id, mes, cliente);
+
+
+--
+-- Name: conta_cegid_incidencia_viva_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX conta_cegid_incidencia_viva_uq ON public.conta_cegid_incidencia USING btree (company_id, gc_cobro_id) WHERE (estado = ANY (ARRAY['mandando'::text, 'mandada'::text, 'facturada'::text]));
 
 
 --
@@ -157816,6 +157878,22 @@ ALTER TABLE ONLY public.conta_cegid_factura
 
 ALTER TABLE ONLY public.conta_cegid_factura
     ADD CONSTRAINT conta_cegid_factura_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cegid_incidencia conta_cegid_incidencia_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_incidencia
+    ADD CONSTRAINT conta_cegid_incidencia_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cegid_incidencia conta_cegid_incidencia_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_incidencia
+    ADD CONSTRAINT conta_cegid_incidencia_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
 
 
 --
@@ -170715,6 +170793,19 @@ ALTER TABLE public.conta_cegid_factura ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_cegid_factura_leer ON public.conta_cegid_factura FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_cegid_incidencia; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_cegid_incidencia ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_cegid_incidencia conta_cegid_incidencia_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_cegid_incidencia_leer ON public.conta_cegid_incidencia FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -201543,6 +201634,14 @@ GRANT ALL ON TABLE public.conta_cegid_concepto TO service_role;
 
 GRANT ALL ON TABLE public.conta_cegid_factura TO authenticated;
 GRANT ALL ON TABLE public.conta_cegid_factura TO service_role;
+
+
+--
+-- Name: TABLE conta_cegid_incidencia; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_cegid_incidencia TO authenticated;
+GRANT ALL ON TABLE public.conta_cegid_incidencia TO service_role;
 
 
 --
