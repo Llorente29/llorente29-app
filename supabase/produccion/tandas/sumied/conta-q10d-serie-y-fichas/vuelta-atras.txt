@@ -1,5 +1,8 @@
-# Q10 · respuesta 4 · vuelta atrás: primero quita los códigos que puso la 0652 (solo los suyos), después las funciones
-# y, si nadie más ha atado nada, la tabla de la 0651.
+# Q10 · respuesta 4 · vuelta atrás, en orden inverso: los conceptos de la 0654 (solo los suyos); la función y, si
+# nadie más ha elegido nada, la tabla de la 0653 (la columna del texto del cobro se queda); los códigos que puso la
+# 0652 (solo los suyos); y las funciones y, si nadie más ha atado nada, la tabla de la 0651.
 cuenta: scripts/conta/produccion/cuentas/q10d-serie-y-fichas.sql
+supabase/vuelta-atras/20261126T0654_q10d_conceptos_noviembre.down.sql
+supabase/vuelta-atras/20261126T0653_q10d_concepto_elegido.down.sql
 supabase/vuelta-atras/20261126T0652_q10d_fichas_a_cegid.down.sql
 supabase/vuelta-atras/20261126T0651_q10d_cegid_atar.down.sql

@@ -31,7 +31,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { ClienteDiezRec, FalloDiezRec, rutaCliente } from "../_shared/diezRec.ts";
-import { baseDelCobro, COBRADO_GC, conceptoAprobado, cuerpoIncidencia, type LineaIncidencia } from "../_shared/cegidMandar.ts";
+import { baseDelCobro, COBRADO_GC, conceptoAprobado, conceptoDeCodigo, cuerpoIncidencia, type LineaIncidencia } from "../_shared/cegidMandar.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -147,12 +147,20 @@ Deno.serve(async (req) => {
       const ids = (Array.isArray(b.cobros) ? b.cobros : []).map(String).slice(0, 60);
       if (!Number.isInteger(cliente) || cliente <= 0 || !ids.length) return json({ error: "mandar necesita el cliente de Cegid y sus cobros" }, 400);
       // Los cobros, de la base: cobrados, del mes, con concepto aprobado y base que cuadra.
-      const { data: cs, error: e1 } = await srv.from("conta_gc_cobro").select("gc_id, estado, fecha, importe, suscripcion_gc_id, mandato_gc_id").eq("company_id", companyId).in("gc_id", ids);
+      const { data: cs, error: e1 } = await srv.from("conta_gc_cobro").select("gc_id, estado, fecha, importe, suscripcion_gc_id, mandato_gc_id, descripcion").eq("company_id", companyId).in("gc_id", ids);
       if (e1) return json({ error: `no se han podido leer los cobros: ${e1.message}` }, 500);
       const cobros = (cs ?? []) as Fila[];
       const subsIds = cobros.map((x) => x.suscripcion_gc_id).filter(Boolean);
       const { data: ss } = subsIds.length ? await srv.from("conta_gc_suscripcion").select("gc_id, nombre, gc_cliente_id").eq("company_id", companyId).in("gc_id", subsIds) : { data: [] };
       const sus = new Map(((ss ?? []) as Fila[]).map((x) => [String(x.gc_id), x]));
+      // Respuesta 4 · Lo elegido por una persona (cobro suelto o suscripción fuera de la tabla) manda sobre la tabla.
+      const { data: el } = await srv.from("conta_cegid_concepto_elegido").select("que, gc_id, concepto").eq("company_id", companyId)
+        .in("gc_id", [...ids, ...subsIds.map(String)]);
+      const elegido = new Map(((el ?? []) as Fila[]).map((x) => [`${x.que}:${x.gc_id}`, String(x.concepto)]));
+      // Un cobro suelto no tiene suscripción: su cliente sale de su mandato.
+      const mandIds = cobros.filter((x) => !x.suscripcion_gc_id && x.mandato_gc_id).map((x) => String(x.mandato_gc_id));
+      const { data: mm } = mandIds.length ? await srv.from("conta_gc_mandato").select("gc_id, gc_cliente_id").eq("company_id", companyId).in("gc_id", mandIds) : { data: [] };
+      const clienteDeMandato = new Map(((mm ?? []) as Fila[]).map((x) => [String(x.gc_id), String(x.gc_cliente_id ?? "")]));
       const lineas: LineaIncidencia[] = [], malos: string[] = [];
       const gcClientes = new Set<string>();
       for (const id of ids) {
@@ -161,13 +169,17 @@ Deno.serve(async (req) => {
         if (!(COBRADO_GC as readonly string[]).includes(String(x.estado))) { malos.push(`${id}: no está cobrado («${x.estado}»)`); continue; }
         if (String(x.fecha).slice(0, 7) !== mes) { malos.push(`${id}: no es de ${mes}`); continue; }
         const s = sus.get(String(x.suscripcion_gc_id ?? ""));
-        const concepto = conceptoAprobado((s?.nombre as string | null) ?? null);
-        if (!concepto) { malos.push(`${id}: su concepto no está en la tabla aprobada`); continue; }
+        const elegidoAqui = s ? elegido.get(`suscripcion:${s.gc_id}`) : elegido.get(`cobro:${id}`);
+        const concepto = elegidoAqui ? conceptoDeCodigo(elegidoAqui) : conceptoAprobado((s?.nombre as string | null) ?? null);
+        if (!concepto) { malos.push(`${id}: su concepto no está en la tabla aprobada ni elegido`); continue; }
+        const texto = String((s ? s.nombre : x.descripcion) ?? "").replace(/\s+/g, " ").trim();
+        if (!texto) { malos.push(`${id}: falta el texto del cobro (vuelve a leer GoCardless)`); continue; }
         const totalCent = Math.round(Number(x.importe) * 100), baseCent = baseDelCobro(totalCent);
         if (baseCent === null) { malos.push(`${id}: ninguna base al 21 % da ${eur(totalCent)}`); continue; }
         if (concepto.serie !== serie) { malos.push(`${id}: es de la serie ${concepto.serie} y esta vuelta es la ${serie}`); continue; }
-        if (s?.gc_cliente_id) gcClientes.add(String(s.gc_cliente_id));
-        lineas.push({ gcId: id, concepto, texto: String(s?.nombre ?? "").replace(/\s+/g, " ").trim(), fecha: String(x.fecha), baseCent, totalCent });
+        const gcCliente = s?.gc_cliente_id ? String(s.gc_cliente_id) : clienteDeMandato.get(String(x.mandato_gc_id ?? "")) ?? "";
+        if (gcCliente) gcClientes.add(gcCliente);
+        lineas.push({ gcId: id, concepto, texto, fecha: String(x.fecha), baseCent, totalCent });
       }
       if (malos.length) return json({ error: `No se manda nada de este cliente: ${malos.join("; ")}.` }, 409);
       // La ficha de Cegid, ahora: existe y tiene el mismo NIF que la ficha atada.

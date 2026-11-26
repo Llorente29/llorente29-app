@@ -32,6 +32,9 @@ export interface PropsMandarQ10 {
   alDeshacer: () => Promise<string>
   alLeerCegid: (avance: (f: string) => void) => Promise<string>
   alBajarExcel: () => string | null
+  /** Respuesta 4 · «Confirmar» el concepto propuesto de lo que no lo tiene, y su frase (la guarda la página). */
+  alElegir: (x: { que: 'cobro' | 'suscripcion'; gcId: string; concepto: string }) => void
+  elegido: { gcId: string; estado: 'trabajando' | 'bien' | 'mal'; frase: string } | null
 }
 
 type Hecho = { estado: 'trabajando' | 'bien' | 'mal'; frase: string } | null
@@ -151,6 +154,8 @@ export function MandarCegidQ10(p: PropsMandarQ10) {
       {hecho && <p className="q10-linea" data-prueba="mandar-hecho" data-tono={hecho.estado === 'bien' ? 'bien' : hecho.estado === 'mal' ? 'mal' : undefined}
         role={hecho.estado === 'mal' ? 'alert' : 'status'}>{hecho.frase}</p>}
 
+      {p.elegido && <p className="q10-linea" data-prueba="elegido" data-tono={p.elegido.estado === 'bien' ? 'bien' : p.elegido.estado === 'mal' ? 'mal' : undefined}
+        role={p.elegido.estado === 'mal' ? 'alert' : 'status'}>{p.elegido.frase}</p>}
       {plan && plan.noSalen.length > 0 && (
         <details data-prueba="no-salen">
           <summary>No salen ({plan.noSalen.length}), con su porqué</summary>
@@ -160,6 +165,11 @@ export function MandarCegidQ10(p: PropsMandarQ10) {
                 <span className="q10-cliente">{x.nombre ?? 'Sin ficha'}</span>
                 <span className="q10-importe">{eurQ10(x.totalCent)}{x.concepto ? ` · ${x.concepto}` : ''}</span>
                 <span className="q10-porque">{x.frase}</span>
+                {x.propuesta && x.elegir && (
+                  <span><button type="button" className="g4-boton" disabled={p.elegido?.estado === 'trabajando'}
+                    onClick={() => p.alElegir({ que: x.elegir!.que, gcId: x.elegir!.gcId, concepto: x.propuesta!.codigo })}>Confirmar {x.propuesta.codigo}</button>
+                    {' '}<span className="g4-pequeno">{x.propuesta.nombre}{x.elegir.que === 'suscripcion' ? ' · para esta suscripción, todos los meses' : ''}</span></span>
+                )}
               </li>
             ))}
           </ul>

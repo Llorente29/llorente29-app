@@ -52,6 +52,39 @@ export const CONCEPTOS_APROBADOS: Readonly<Record<string, ConceptoCegidAprobado>
 }
 export const conceptoAprobado = (nombreGc: string | null | undefined): ConceptoCegidAprobado | null => CONCEPTOS_APROBADOS[familia(nombreGc)] ?? null
 
+/**
+ * Respuesta 4 · Los conceptos de Cegid que se pueden elegir para lo que no está en la tabla (un cobro suelto, una
+ * suscripción con nombre propio): todos en la serie 1, con IVA general. El 0039 es el global de Julio para lo que no
+ * tiene concepto propio.
+ */
+export const CONCEPTOS_CEGID: Readonly<Record<string, ConceptoCegidAprobado>> = {
+  '00001': GESTORIA,
+  '0008': { codigo: '0008', serie: '1', nombre: 'Gestión laboral' },
+  '0016': { codigo: '0016', serie: '3', nombre: 'Contasimple' },
+  '0017': { codigo: '0017', serie: '1', nombre: 'Renta' },
+  '00016': { codigo: '00016', serie: '1', nombre: 'Fiscalización' },
+  '00007': { codigo: '00007', serie: '1', nombre: 'Trámite de ayuda' },
+  '0021': { codigo: '0021', serie: '1', nombre: 'Vigilancia de notificaciones' },
+  '0034': { codigo: '0034', serie: '1', nombre: 'Oficina virtual' },
+  '0039': { codigo: '0039', serie: '1', nombre: 'Otros trámites y gestiones' },
+}
+export const conceptoDeCodigo = (codigo: string | null | undefined): ConceptoCegidAprobado | null => {
+  const c = String(codigo ?? '').trim().toUpperCase()
+  return CONCEPTOS_CEGID[c] ?? (/^[0-9A-Z]{1,5}$/.test(c) ? { codigo: c, serie: '1', nombre: `Concepto ${c}` } : null)
+}
+/**
+ * Respuesta 4 · La propuesta para lo que no tiene concepto, por palabras de su texto (Julio la confirma): laboral →
+ * 0008, renta → 0017, fiscalización → 00016, ayuda → 00007, lo demás → 0039.
+ */
+export function proponerConcepto(texto: string | null | undefined): ConceptoCegidAprobado {
+  const t = String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+  if (/LABORAL/.test(t)) return CONCEPTOS_CEGID['0008']
+  if (/\bRENTA\b/.test(t)) return CONCEPTOS_CEGID['0017']
+  if (/FISCALIZACION/.test(t)) return CONCEPTOS_CEGID['00016']
+  if (/\bAYUDAS?\b/.test(t)) return CONCEPTOS_CEGID['00007']
+  return CONCEPTOS_CEGID['0039']
+}
+
 /** La base (sin IVA, al 21 %) que da EXACTAMENTE el cobro, en céntimos; null si ninguna (no se manda: a revisar). */
 export function baseDelCobro(totalCent: number, ivaPct = 21): number | null {
   const cerca = Math.round(totalCent / (1 + ivaPct / 100))
@@ -67,8 +100,12 @@ export interface CobroParaMandar {
   /** AAAA-MM-DD */
   fecha: string
   importe: number
-  /** El nombre de la suscripción en GoCardless (el texto de la incidencia). */
+  /** El nombre de la suscripción en GoCardless (el texto de la incidencia); null en un cobro suelto. */
   concepto: string | null
+  /** Respuesta 4 · La suscripción del cobro (null: suelto), el texto del cobro y el concepto que eligió una persona. */
+  suscripcionId?: string | null
+  descripcion?: string | null
+  elegido?: string | null
   /** La ficha (party) y su código de cliente de Cegid; null si no tiene. */
   partyId: string | null
   nombre: string | null
@@ -85,8 +122,18 @@ export interface LineaIncidencia {
   totalCent: number
 }
 export interface ClienteParaMandar { codigo: number; nombre: string; lineas: LineaIncidencia[]; totalCent: number }
-export type PorQueNoSale = 'no_cobrado' | 'sin_cliente' | 'sin_codigo' | 'sin_concepto' | 'no_cuadra' | 'ya_mandado'
-export interface NoSale { gcId: string; nombre: string | null; concepto: string | null; totalCent: number; porque: PorQueNoSale; frase: string }
+export type PorQueNoSale = 'no_cobrado' | 'sin_cliente' | 'sin_codigo' | 'sin_concepto' | 'sin_texto' | 'no_cuadra' | 'ya_mandado'
+export interface NoSale {
+  gcId: string
+  nombre: string | null
+  concepto: string | null
+  totalCent: number
+  porque: PorQueNoSale
+  frase: string
+  /** Respuesta 4 · Sin concepto: lo que se propone y qué se confirma (el cobro suelto o su suscripción). */
+  propuesta?: ConceptoCegidAprobado
+  elegir?: { que: 'cobro' | 'suscripcion'; gcId: string }
+}
 
 /** Q10 · respuesta 4 · Una vuelta por serie: la incidencia no lleva serie (la pone la «Facturación automática»), así que
  * se manda primero todo menos Contasimple (Julio factura con la serie 1) y después Contasimple (con la serie 3). */
@@ -104,7 +151,8 @@ const FRASE_NO_SALE: Record<PorQueNoSale, string> = {
   no_cobrado: 'GoCardless no lo ha cobrado: no se factura (se sigue como deuda).',
   sin_cliente: 'El cobro no tiene su cliente atado a una ficha.',
   sin_codigo: 'La ficha no tiene código de cliente en Cegid.',
-  sin_concepto: 'Su concepto no está en la tabla aprobada: Julio dice cuál es.',
+  sin_concepto: 'Su concepto no está en la tabla aprobada: confirma el que se propone o elige otro.',
+  sin_texto: 'Falta el texto del cobro en GoCardless: vuelve a leer GoCardless.',
   no_cuadra: 'Ninguna base con el IVA del 21 % da el cobro al céntimo.',
   ya_mandado: 'Ya está mandado a Cegid.',
 }
@@ -126,13 +174,22 @@ export function planMandar(mes: string, cobros: readonly CobroParaMandar[], yaMa
     if (yaMandados.has(c.gcId)) { ya++; continue }
     if (!c.partyId) { no('sin_cliente'); continue }
     if (c.codigoCegid === null) { no('sin_codigo'); continue }
-    const concepto = conceptoAprobado(c.concepto)
-    if (!concepto) { no('sin_concepto'); continue }
+    const suelto = !c.concepto
+    const concepto = c.elegido ? conceptoDeCodigo(c.elegido) : conceptoAprobado(c.concepto)
+    if (!concepto) {
+      const texto = suelto ? c.descripcion : c.concepto
+      noSalen.push({ gcId: c.gcId, nombre: c.nombre, concepto: texto ?? null, totalCent, porque: 'sin_concepto', frase: FRASE_NO_SALE.sin_concepto,
+        propuesta: proponerConcepto(texto), elegir: suelto || !c.suscripcionId ? { que: 'cobro', gcId: c.gcId } : { que: 'suscripcion', gcId: c.suscripcionId } })
+      continue
+    }
+    // El texto de la incidencia: el nombre de la suscripción o, en un cobro suelto, el texto del cobro.
+    const texto = (suelto ? c.descripcion ?? '' : c.concepto ?? '').replace(/\s+/g, ' ').trim()
+    if (!texto) { no('sin_texto'); continue }
     const baseCent = baseDelCobro(totalCent)
     if (baseCent === null) { no('no_cuadra'); continue }
     const m = por[concepto.serie === '3' ? '3' : '1']
     const k = m.get(c.codigoCegid) ?? { codigo: c.codigoCegid, nombre: c.nombre ?? String(c.codigoCegid), lineas: [], totalCent: 0 }
-    k.lineas.push({ gcId: c.gcId, concepto, texto: (c.concepto ?? '').replace(/\s+/g, ' ').trim(), fecha: c.fecha, baseCent, totalCent })
+    k.lineas.push({ gcId: c.gcId, concepto, texto, fecha: c.fecha, baseCent, totalCent })
     k.totalCent += totalCent
     m.set(c.codigoCegid, k)
   }
@@ -224,14 +281,14 @@ export function cuadreCegid(mes: string, cobros: readonly CobroParaMandar[], inc
     const base = { gcId: c.gcId, fecha: c.fecha, cliente: c.nombre, importeCent: t }
     const x = pareja.get(c.gcId)
     if (!x) {
-      const ap = conceptoAprobado(c.concepto)
+      const ap = c.elegido ? conceptoDeCodigo(c.elegido) : conceptoAprobado(c.concepto)
       const porque = !c.partyId ? 'Cobrado y no está en Cegid: el cobro no tiene su ficha.' : c.codigoCegid === null ? 'Cobrado y no está en Cegid: la ficha no tiene código de Cegid.'
         : !ap ? 'Cobrado y no está en Cegid: su concepto no está en la tabla aprobada.' : 'Cobrado y no está en Cegid: falta mandarlo.'
       filas.push({ ...base, codigo: c.codigoCegid, nombreCegid: c.codigoCegid != null ? nombresCegid.get(c.codigoCegid) ?? null : null, concepto: ap?.codigo ?? null,
-        texto: c.concepto, importeCegidCent: null, serie: ap?.serie ?? null, cuadra: false, porque })
+        texto: c.concepto ?? c.descripcion ?? null, importeCegidCent: null, serie: ap?.serie ?? null, cuadra: false, porque })
       continue
     }
-    const ap = conceptoAprobado(c.concepto)
+    const ap = c.elegido ? conceptoDeCodigo(c.elegido) : conceptoAprobado(c.concepto)
     const malo = x.cliente !== c.codigoCegid ? `En Cegid está en el cliente ${x.cliente}, y su ficha es el ${c.codigoCegid ?? '(sin código)'}.`
       : totalIncidenciaCent(x) !== t ? `En Cegid son ${eur(totalIncidenciaCent(x))} y GoCardless cobró ${eur(t)}.`
       : ap && (x.concepto ?? '').trim() !== ap.codigo ? `En Cegid va con el concepto ${x.concepto ?? '(ninguno)'} y le toca el ${ap.codigo}.` : null

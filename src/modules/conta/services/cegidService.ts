@@ -193,6 +193,12 @@ export async function leerIncidenciasMesCegid(companyId: string, mes: string): P
   return { incidencias: (r.incidencias as IncidenciaCegid[] | undefined) ?? [], frase: String(r.frase ?? 'Leído de Cegid.') }
 }
 
+/** Q10 · respuesta 4 · «Confirmar»: el concepto de Cegid de un cobro suelto o de una suscripción fuera de la tabla. */
+export async function elegirConceptoCegid(companyId: string, que: 'cobro' | 'suscripcion', gcId: string, concepto: string): Promise<string> {
+  const r = await rpc<Fila | null>('conta_cegid_elegir_concepto', { p_company: companyId, p_que: que, p_gc_id: gcId, p_concepto: concepto })
+  return String(r?.frase ?? `Confirmado: va al concepto ${concepto} de Cegid.`)
+}
+
 /** Q10 · respuesta 4 · «Atar al N»: la ficha es el cliente N de Cegid (conta_cobro_cliente.codigo_cliente). */
 export async function atarFichaCegid(companyId: string, partyId: string, codigo: number, como: 'correo' | 'nombre' | 'a_mano'): Promise<string> {
   const r = await rpc<Fila | null>('conta_cegid_atar', { p_company: companyId, p_party: partyId, p_codigo: codigo, p_como: como })

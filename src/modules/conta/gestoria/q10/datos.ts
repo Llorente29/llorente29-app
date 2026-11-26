@@ -31,7 +31,9 @@ async function todas(que: string, pedir: (desde: number, hasta: number) => Promi
 
 export interface DatosQ10 {
   empresa: Fila
-  cobros: CobroQ10[]
+  cobros: (CobroQ10 & { descripcion: string | null })[]
+  /** Respuesta 4 · El concepto de Cegid que eligió una persona, por cobro suelto («cobro:PM…») o suscripción («suscripcion:SB…»). */
+  elegidos: Map<string, string>
   suscripciones: SuscripcionQ10[]
   mandatos: (MandatoQ10 & { final: string | null })[]
   enlaces: EnlaceQ10[]
@@ -55,7 +57,7 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
   const [emp, cobros, suscripciones, mandatos, enlaces, cobroCliente, gcClientes] = await Promise.all([
     tabla('company').select('id, legal_name, trade_name, tax_id, fiscal_street_type, fiscal_street, fiscal_number, fiscal_extra, fiscal_postal_code, fiscal_city, email, phone')
       .eq('account_id', cuenta).eq('id', empresa).maybeSingle(),
-    todas('los cobros de GoCardless', (a, b) => tabla('conta_gc_cobro').select('gc_id, estado, fecha, importe, suscripcion_gc_id, mandato_gc_id, motivo_es')
+    todas('los cobros de GoCardless', (a, b) => tabla('conta_gc_cobro').select('gc_id, estado, fecha, importe, suscripcion_gc_id, mandato_gc_id, motivo_es, descripcion')
       .eq('company_id', empresa).gte('fecha', `${mes}-01`).lte('fecha', finDeMes(mes)).order('gc_id').range(a, b)),
     todas('las suscripciones de GoCardless', (a, b) => tabla('conta_gc_suscripcion').select('gc_id, nombre, gc_cliente_id').eq('company_id', empresa).order('gc_id').range(a, b)),
     todas('los mandatos de GoCardless', (a, b) => tabla('conta_gc_mandato').select('gc_id, gc_cliente_id, cuenta_final').eq('company_id', empresa).order('gc_id').range(a, b)),
@@ -65,6 +67,9 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
     // Respuesta 4 · El correo de cada cliente de GoCardless, para proponer su cliente de Cegid (columnas comprobadas el 26/11).
     todas('los correos de GoCardless', (a, b) => tabla('conta_gc_cliente').select('gc_id, correo').eq('company_id', empresa).not('correo', 'is', null).order('gc_id').range(a, b)),
   ])
+  // Respuesta 4 · Lo elegido (la 0653): sin la tabla, nada elegido, y la página sigue.
+  const el = await tabla('conta_cegid_concepto_elegido').select('que, gc_id, concepto').eq('company_id', empresa)
+  const elegidos = new Map(el.error ? [] : ((el.data ?? []) as Fila[]).map((x) => [`${x.que}:${x.gc_id}`, String(x.concepto)]))
   if (emp.error) throw new Error(mensaje('No se ha podido leer la empresa', emp.error as never))
   if (!emp.data) throw new Error('Esa empresa no es de esta cuenta.')
   const partes = [...new Set([...enlaces, ...cobroCliente].map((e) => s(e.party_id)).filter((x): x is string => !!x))]
@@ -96,6 +101,7 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
   }
   return {
     cuentas,
+    elegidos,
     correos: (() => {
       const de = new Map(gcClientes.map((g) => [String(g.gc_id), String(g.correo)]))
       const r = new Map<string, string[]>()
@@ -105,7 +111,7 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
     codigoCliente: new Map(cobroCliente.filter((x) => s(x.party_id) && x.codigo_cliente != null).map((x) => [String(x.party_id), Number(x.codigo_cliente)])),
     cobroCliente: cobroCliente.filter((x) => s(x.party_id) && s(x.gc_cliente_id)).map((x) => ({ gcClienteId: String(x.gc_cliente_id), partyId: String(x.party_id) })),
     empresa: emp.data as Fila,
-    cobros: cobros.map((c) => ({ gcId: String(c.gc_id), estado: String(c.estado), fecha: String(c.fecha), importe: Number(c.importe), suscripcionId: s(c.suscripcion_gc_id), mandatoId: s(c.mandato_gc_id), motivo: s(c.motivo_es) })),
+    cobros: cobros.map((c) => ({ gcId: String(c.gc_id), estado: String(c.estado), fecha: String(c.fecha), importe: Number(c.importe), suscripcionId: s(c.suscripcion_gc_id), mandatoId: s(c.mandato_gc_id), motivo: s(c.motivo_es), descripcion: s(c.descripcion) })),
     suscripciones: suscripciones.map((x) => ({ gcId: String(x.gc_id), nombre: s(x.nombre), gcClienteId: s(x.gc_cliente_id) })),
     mandatos: mandatos.map((x) => ({ gcId: String(x.gc_id), gcClienteId: s(x.gc_cliente_id), final: s(x.cuenta_final) })),
     enlaces: enlaces.map((x) => ({ gcClienteId: String(x.gc_cliente_id), partyId: s(x.party_id), estado: String(x.estado) })),

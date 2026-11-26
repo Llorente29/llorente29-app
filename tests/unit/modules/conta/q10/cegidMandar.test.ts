@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  baseDelCobro, conceptoAprobado, cuadreCegid, cuerpoIncidencia, ganaNif, planMandar, proponerAtado, puertaContasimple, tipoNif,
+  baseDelCobro, conceptoAprobado, conceptoDeCodigo, cuadreCegid, proponerConcepto, cuerpoIncidencia, ganaNif, planMandar, proponerAtado, puertaContasimple, tipoNif,
   type CobroParaMandar, type IncidenciaCegid,
 } from '../../../../../supabase/functions/_shared/cegidMandar'
 import { ClienteDiezRec, rutaListado } from '../../../../../supabase/functions/_shared/diezRec'
@@ -81,6 +81,35 @@ describe('Q10 · mandar · dos vueltas, una por serie', () => {
     expect(cuerpoIncidencia(101, p.vueltas['1'].listos[0].lineas[0], '2026-11')).toMatchObject({
       cliente: 101, incidencia: 0, concepto: '0008', titulo: 'GESTION LABORAL TRABAJADOR UNO', importe: 25, porcentajeIva: 21, total: 30.25, llevaRetencion: false, estaFacturado: false, mes: 11, ano: 2026,
     })
+  })
+})
+
+describe('Q10 · respuesta 4 · lo que no está en la tabla: cobros sueltos y suscripciones con nombre propio', () => {
+  it('la propuesta por palabras del texto: laboral, renta, fiscalización, ayuda; lo demás, el 0039', () => {
+    expect(['GESTION LABORAL PERSONA INVENTADA OCTUBRE', 'Renta Anual Prueba 2023', 'DECLARACION DE LA RENTA 2025', 'FISCALIZACION IVA 2025',
+      'TRÁMITE AYUDA COMUNIDAD - PRUEBA', 'Tramite de cambio de titularidad de licencia', 'ALTA VAT INTRACOMUNITARIO PRUEBA SL', null]
+      .map((t) => proponerConcepto(t).codigo)).toEqual(['0008', '0017', '0017', '00016', '00007', '0039', '0039', '0039'])
+  })
+  it('un suelto sin concepto elegido no sale: se propone y se dice qué se confirma (el cobro)', () => {
+    const p = planMandar('2026-11', [cobro({ gcId: 'S1', concepto: null, suscripcionId: null, descripcion: 'Renta Anual Prueba 2023', importe: 96.8 })], new Set())
+    expect(p.noSalen.map((x) => [x.porque, x.propuesta?.codigo, x.elegir])).toEqual([['sin_concepto', '0017', { que: 'cobro', gcId: 'S1' }]])
+  })
+  it('con su concepto elegido, el suelto sale con el texto del cobro; sin texto, no', () => {
+    const p = planMandar('2026-11', [
+      cobro({ gcId: 'S1', concepto: null, suscripcionId: null, descripcion: 'Renta  Anual Prueba 2023', importe: 96.8, elegido: '0017' }),
+      cobro({ gcId: 'S2', concepto: null, suscripcionId: null, descripcion: null, importe: 121, elegido: '0039' }),
+    ], new Set())
+    expect(p.vueltas['1'].listos[0].lineas.map((l) => [l.gcId, l.concepto.codigo, l.texto])).toEqual([['S1', '0017', 'Renta Anual Prueba 2023']])
+    expect(p.noSalen.map((x) => [x.gcId, x.porque])).toEqual([['S2', 'sin_texto']])
+  })
+  it('una suscripción con nombre propio: lo elegido para ella manda (y se confirma para la suscripción)', () => {
+    const sin = planMandar('2026-11', [cobro({ gcId: 'A', concepto: 'Gestion INMOBILIARIA PRUEBA SL', suscripcionId: 'SB1', importe: 36.3 })], new Set())
+    expect(sin.noSalen[0].elegir).toEqual({ que: 'suscripcion', gcId: 'SB1' })
+    const con = planMandar('2026-11', [cobro({ gcId: 'A', concepto: 'Gestion INMOBILIARIA PRUEBA SL', suscripcionId: 'SB1', importe: 36.3, elegido: '0021' })], new Set())
+    expect(con.vueltas['1'].listos[0].lineas.map((l) => [l.concepto.codigo, l.texto])).toEqual([['0021', 'Gestion INMOBILIARIA PRUEBA SL']])
+  })
+  it('el catálogo: 00016 (fiscalización) es de la serie 1; 0016 (Contasimple), de la 3', () => {
+    expect([conceptoDeCodigo('00016')?.serie, conceptoDeCodigo('0016')?.serie, conceptoDeCodigo('0039')?.nombre]).toEqual(['1', '3', 'Otros trámites y gestiones'])
   })
 })
 

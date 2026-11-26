@@ -15,7 +15,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { atarFichaCegid, deshacerCegid, leerConexionCegid, leerGuardadoCegid, leerIncidenciasMesCegid, leerMandadoCegid, leerTodoCegid, mandarClienteCegid } from '@/modules/conta/services/cegidService'
+import { atarFichaCegid, deshacerCegid, elegirConceptoCegid, leerConexionCegid, leerGuardadoCegid, leerIncidenciasMesCegid, leerMandadoCegid, leerTodoCegid, mandarClienteCegid } from '@/modules/conta/services/cegidService'
 import { cuadreCegid, planMandar, proponerAtado, type CobroParaMandar, type IncidenciaCegid, type SerieVuelta } from '../../../../../supabase/functions/_shared/cegidMandar'
 import { exportarTabla } from '@/modules/conta/ui/tabla/exportar'
 import { MandarCegidQ10 } from './MandarCegidQ10'
@@ -36,6 +36,11 @@ export function FacturasQ10Page() {
   const anio = Number(mes.slice(0, 4))
   const [vuelta, setVuelta] = useState(0)
   const [vueltaMandado, setVueltaMandado] = useState(0)
+  // Respuesta 4 · Lo atado y lo elegido en esta visita, y su frase: se suman a lo leído sin volver a cargar la página.
+  const [atadosAhora, setAtadosAhora] = useState<Map<string, number>>(new Map())
+  const [elegidosAhora, setElegidosAhora] = useState<Map<string, string>>(new Map())
+  const [atado, setAtado] = useState<{ estado: 'trabajando' | 'bien' | 'mal'; frase: string } | null>(null)
+  const [elegido, setElegido] = useState<{ gcId: string; estado: 'trabajando' | 'bien' | 'mal'; frase: string } | null>(null)
   const [lectura, setLectura] = useState<{ clave: string; estado: 'leyendo' | 'leido' | 'fallo'; frase: string } | null>(null)
   const clave = `${empresa?.id}:${mes}`
   const listo = !cargando && accountId && empresa
@@ -57,7 +62,7 @@ export function FacturasQ10Page() {
     if (!d.datos || !base || !cg.datos || !cg.datos.clientes.length) return null
     // El código de Cegid de las fichas con algún cobro cobrado este mes (las que se facturan).
     const conCobro = new Map([...base.facturas.map((f) => f.ficha), ...base.pendientes.map((p) => p.ficha).filter((f): f is NonNullable<typeof f> => !!f)].map((f) => [f.partyId, f]))
-    const fichas = [...conCobro.values()].map((f) => ({ partyId: f.partyId, nif: f.nif, cuenta430: d.datos!.cuentas.get(f.partyId) ?? null, codigo: d.datos!.codigoCliente.get(f.partyId) ?? null }))
+    const fichas = [...conCobro.values()].map((f) => ({ partyId: f.partyId, nif: f.nif, cuenta430: d.datos!.cuentas.get(f.partyId) ?? null, codigo: atadosAhora.get(f.partyId) ?? d.datos!.codigoCliente.get(f.partyId) ?? null }))
     const codigos = codigosCegid(fichas, cg.datos.clientes)
     // Respuesta 4 · Cada ficha sin código, con lo que se le propone de Cegid: por su correo de GoCardless o por su nombre.
     const atables = cg.datos.clientes.map((c) => ({ codigo: c.codigo, nombre: c.nombre, nif: c.nif, email: c.email ?? null }))
@@ -65,7 +70,7 @@ export function FacturasQ10Page() {
       cuenta430: d.datos!.cuentas.get(partyId) ?? null, porque: c.porque,
       propuestas: proponerAtado(conCobro.get(partyId)?.nombre ?? null, d.datos!.correos.get(partyId) ?? [], atables) })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
     return { codigos, resumen: resumenCodigos(codigos).frase, sinCodigo, retenciones: retencionesDeCegid(codigos, cg.datos.facturas) }
-  }, [d.datos, base, cg.datos])
+  }, [d.datos, base, cg.datos, atadosAhora])
 
   const modelo = useMemo(() => {
     if (!d.datos || !empresa) return null
@@ -91,10 +96,13 @@ export function FacturasQ10Page() {
     const cobros: CobroParaMandar[] = d.datos.cobros.filter((c) => c.fecha.slice(0, 7) === mes).map((c) => {
       const f = fichaDe.get(c.gcId) ?? null
       return { gcId: c.gcId, estado: c.estado, fecha: c.fecha, importe: c.importe, concepto: (c.suscripcionId ? sus.get(c.suscripcionId)?.nombre : null) ?? null,
+        suscripcionId: c.suscripcionId, descripcion: c.descripcion,
+        elegido: (c.suscripcionId ? elegidosAhora.get(`suscripcion:${c.suscripcionId}`) ?? d.datos!.elegidos.get(`suscripcion:${c.suscripcionId}`)
+          : elegidosAhora.get(`cobro:${c.gcId}`) ?? d.datos!.elegidos.get(`cobro:${c.gcId}`)) ?? null,
         partyId: f?.partyId ?? null, nombre: f?.nombre ?? null, codigoCegid: f ? cegid.codigos.get(f.partyId)?.codigo ?? null : null }
     })
     return cobros
-  }, [d.datos, base, cg.datos, cegid, mes])
+  }, [d.datos, base, cg.datos, cegid, mes, elegidosAhora])
   const plan = useMemo(() => {
     if (!cobrosMes) return null
     const vivos = new Set((md.datos ?? []).filter((x) => ['mandando', 'mandada', 'facturada'].includes(x.estado)).map((x) => x.gcCobroId))
@@ -128,7 +136,12 @@ export function FacturasQ10Page() {
     <CegidQ10 conectada={conectada} rutaConectar={rutaApartadoEmpresa('ejercicio')}
       lectura={lectura?.clave === clave ? { estado: lectura.estado, frase: lectura.frase } : con.error ? { estado: 'fallo', frase: `No se ha podido leer la conexión con Cegid: ${con.error}` } : cg.error ? { estado: 'fallo', frase: `No se ha podido leer lo leído de Cegid: ${cg.error}` } : null}
       leidoAt={cg.datos?.leidoAt ?? null} alLeer={() => void leer()} codigos={cegid?.resumen ?? null} sinCodigo={cegid?.sinCodigo ?? null} tabla={tabla}
-      alAtar={async (party, codigo, como) => { const f = await atarFichaCegid(empresa.id, party, codigo, como); d.recargar(); return f }} />
+      atado={atado} alAtar={(party, codigo, como) => {
+        setAtado({ estado: 'trabajando', frase: `Atando al ${codigo}…` })
+        atarFichaCegid(empresa.id, party, codigo, como)
+          .then((f) => { setAtadosAhora((m) => new Map(m).set(party, codigo)); setAtado({ estado: 'bien', frase: f }) })
+          .catch((e: unknown) => setAtado({ estado: 'mal', frase: e instanceof Error ? e.message : String(e) }))
+      }} />
   )
 
   const puede = !conectada ? { si: false as const, porque: 'Primero conecta la facturación de Cegid y lee de Cegid (paso 1).' }
@@ -141,7 +154,13 @@ export function FacturasQ10Page() {
     try { return await mandarClienteCegid(empresa.id, mes, codigo, x.lineas.map((l) => l.gcId), '1') } finally { tras() }
   }
   const bloqueMandar = (
-    <MandarCegidQ10 plan={plan} puede={puede} mandadas={(md.datos ?? []).map((x) => ({ estado: x.estado, serie: x.serie, serieFactura: x.serieFactura }))} cuadre={cuadre}
+    <MandarCegidQ10 elegido={elegido} alElegir={(x) => {
+        setElegido({ gcId: x.gcId, estado: 'trabajando', frase: `Confirmando el ${x.concepto}…` })
+        elegirConceptoCegid(empresa.id, x.que, x.gcId, x.concepto)
+          .then((f) => { setElegidosAhora((m) => new Map(m).set(`${x.que}:${x.gcId}`, x.concepto)); setElegido({ gcId: x.gcId, estado: 'bien', frase: f }) })
+          .catch((e: unknown) => setElegido({ gcId: x.gcId, estado: 'mal', frase: e instanceof Error ? e.message : String(e) }))
+      }}
+      plan={plan} puede={puede} mandadas={(md.datos ?? []).map((x) => ({ estado: x.estado, serie: x.serie, serieFactura: x.serieFactura }))} cuadre={cuadre}
       alMandarUno={(codigo) => mandarUno(codigo)}
       alMandarVuelta={async (serie: SerieVuelta, avance) => {
         const listos = plan?.vueltas[serie].listos ?? []
