@@ -1,20 +1,15 @@
 {
- "_que": "X14 · 2 · «Repetida en ERP10» y dar por bueno el 2024 de QBO · contexto medido en la BASE LOCAL con la estructura de staging (como en producción), en SOLO LECTURA: no en producción. Una columna nueva y su guarda, el índice que sustituye a la restricción de un solo número, conta_traer_dar_por_bueno reemplazada (misma firma, con respaldo y prueba de staging) y la llamada que da por buena la carga. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
- "medido": "2026-11-26T06:40Z",
+ "_que": "X14 · 2 · Dar por bueno el 2024 de QBO desde Aplicar SQL · contexto medido en la BASE LOCAL (como en producción), en SOLO LECTURA. Solo llama a conta_traer_dar_por_bueno (sin cambiarla: la cambia antes la tanda de conta/x14i-repetida-en-erp10). El contexto de verdad lo mide el workflow en el ensayo.",
+ "medido": "2026-11-26T07:10Z",
  "tanda": {
-  "supabase/migrations/20261126T0710_x14h_repetida_en_erp10.sql": "b4c309fe20b6c54645a327ce8ba1a59d",
   "supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql": "4f55a7a3dd151caef4aca85c82bcd1e2"
  },
  "contexto": {
   "tablas": [
-   "public.customer_invoice",
    "public.import_run"
   ],
-  "funciones": [
-   "public.conta_traer_dar_por_bueno(uuid,text)"
-  ],
+  "funciones": [],
   "filas": {
-   "public.customer_invoice": 0,
    "public.import_run": 0
   },
   "otras": {},

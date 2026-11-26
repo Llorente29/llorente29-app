@@ -5,13 +5,11 @@
 #   2119  conta_traer_dar_por_bueno de la carga e694df2e… (si sigue en prueba), como quien la trajo. No crea ni cambia
 #         objetos; TOCA DATOS (valida sus asientos y crea sus emitidas). Sin vuelta atrás: lo dado por bueno no se deshace.
 #
-#   0710  (delante) «Repetida en ERP10»: lo traído de ERP10 anterior al día de inicio puede repetir número (el libro de
-#         expedidas del 2024 trae 9 facturas dos veces, iguales); entran todas, marcadas. Las nuevas, como hoy. Quita la
-#         restricción de un solo número (después de crear el índice que la sustituye): autorizo.
+# ANTES, la tanda de conta/x14i-repetida-en-erp10 (la 0710, «repetida en ERP10»): sin ella, darlo por bueno para en las 9
+# emitidas que el libro de expedidas trae dos veces (XH004). Una tanda sin vuelta atrás va sola: por eso son dos.
 #
 # Nada en el camino del pedido. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/x14h-dar-por-bueno.sql
-supabase/migrations/20261126T0710_x14h_repetida_en_erp10.sql
 supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql
 sin-vuelta-atras: supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql · motivo: lo dado por bueno no se deshace; un error en lo traído se corrige con un asiento a mano.
 esperado: x14h-dar-por-bueno · carga del 2024 de QBO · en prueba = 0

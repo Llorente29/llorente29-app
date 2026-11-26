@@ -1,3 +1,2 @@
-# X14 · 2 · Dar por bueno el 2024 de QBO: «repetida en ERP10» (0710) y, en staging, la carga no está y no hace nada (lo dice).
-supabase/migrations/20261126T0710_x14h_repetida_en_erp10.sql
+# X14 · 2 · Dar por bueno el 2024 de QBO: en staging no está esa carga y no hace nada (lo dice).
 supabase/migrations/20261125T2119_x14h_dar_por_bueno_2024.sql

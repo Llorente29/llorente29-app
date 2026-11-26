@@ -1,3 +1,2 @@
-# X14 · 2 · Lo dado por bueno no se deshace (ver aplicar.txt); la 0710, de su vuelta atrás, solo si no hay ninguna marcada.
+# X14 · 2 · Sin vuelta atrás: lo dado por bueno no se deshace (ver aplicar.txt).
 cuenta: scripts/conta/produccion/cuentas/x14h-dar-por-bueno.sql
-supabase/vuelta-atras/20261126T0710_x14h_repetida_en_erp10.down.sql
