@@ -1,6 +1,6 @@
 -- supabase/staging/sql/20261126_k14b_un_banco_y_el_inicio_prueba.sql
 --
--- SOLO STAGING. Prueba del K14b (20261126T1240_k14b_un_banco_y_el_inicio y 20261126T1605_k14b_lectura_completa). Todo en
+-- SOLO STAGING. Prueba del K14b (20261126T1240_k14b_un_banco_y_el_inicio, 1605_k14b_lectura_completa y 1606_k14b_fechas_al_reves, que aquí no encuentra a la empresa dc43e21d y no hace nada). Todo en
 -- una transacción con ROLLBACK: staging no cambia. Lo que cambia: public.bank_cuenta_alta (nunca un segundo banco con
 -- el mismo IBAN), public.bank_settings y public.fiscal_year (un disparador nuevo en cada una). Lo que añade: _bank_antes_del_inicio_recalcular y
 -- _bank_juntar, y la vista public.conta_banco_lectura_completa.
@@ -160,6 +160,7 @@ begin
 end $$;
 
 -- 5 · La vuelta atrás ----------------------------------------------------------------------------------------------------
+\i supabase/vuelta-atras/20261126T1606_k14b_fechas_al_reves.down.sql
 \i supabase/vuelta-atras/20261126T1605_k14b_lectura_completa.down.sql
 \i supabase/vuelta-atras/20261126T1240_k14b_un_banco_y_el_inicio.down.sql
 do $$

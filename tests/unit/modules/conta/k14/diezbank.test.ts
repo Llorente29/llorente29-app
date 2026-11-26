@@ -42,11 +42,23 @@ describe('K14 · DiezBank', () => {
     expect(x.avisos).not.toContain('El fichero no dice de qué cuenta es: elige la cuenta al subirlo.')
   })
 
-  it('leída como texto (como la lee la pantalla), la fecha viene con el mes delante y el importe con comas de miles', () => {
-    const texto = filas.map((f, i) => (i < 7 ? f : [['11/25/26', '11/24/26', '11/23/26'][i - 7], f[1], f[2], f[3], { 0: '1,100.40', 1: '1,052.00', 2: '989.50' }[i - 7] as string, '']))
-    const c = leerCsvBanco(texto, 'diezbank').cuentas[0]
+  it('K14b · leída como texto, la fecha va siempre día/mes/año; una fecha al estilo de EE. UU. («11/25/26») para la subida y lo dice', () => {
+    const conFechas = (fs: string[]) => filas.map((f, i) => (i < 7 ? f : [fs[i - 7], f[1], f[2], f[3], { 0: '1,100.40', 1: '1,052.00', 2: '989.50' }[i - 7] as string, '']))
+    const c = leerCsvBanco(conFechas(['25/11/2026', '24/11/2026', '23/11/2026']), 'diezbank', '2026-11-26').cuentas[0]
     expect(c.movimientos.map((m) => [m.fecha, m.importeCent])).toEqual([['2026-11-23', -1050], ['2026-11-24', 6250], ['2026-11-25', 4840]])
     expect(c.saldoFinalCent).toBe(110040)
+    expect(() => leerCsvBanco(conFechas(['11/25/26', '11/24/26', '11/23/26']), 'diezbank', '2026-11-26'))
+      .toThrow('Fila 8: «11/25/26» no es una fecha de día/mes/año (DiezBank). No se sube nada: revisa el fichero.')
+  })
+
+  it('K14b · una fecha posterior a hoy para la subida entera (la de la empresa dc43e21d: el 11/12/2026 era el 12/11)', () => {
+    expect(() => leerCsvBanco(filas, 'diezbank', '2026-11-24'))
+      .toThrow('Fila 8: la fecha 25/11/2026 es posterior a hoy. No se sube nada: revisa el fichero (las fechas se leen día/mes/año).')
+  })
+
+  it('K14b · un importe sin fecha no se salta: para la subida', () => {
+    const sinFecha = filas.map((f, i) => (i === 8 ? ['', ...f.slice(1)] : f))
+    expect(() => leerCsvBanco(sinFecha, 'diezbank', '2026-11-26')).toThrow(/^Fila 9: «sin fecha» no es una fecha de día\/mes\/año/)
   })
 
   it('la misma exportación leída dos veces da los mismos movimientos (lo que repite, lo para la huella al subirlo)', () => {

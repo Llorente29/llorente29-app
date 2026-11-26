@@ -49,8 +49,6 @@ export interface PerfilBanco {
   contraparte?: Patrones[]
   /** La tarjeta da los cargos en positivo: se les da la vuelta. */
   cargosEnPositivo?: boolean
-  /** K14 · Las fechas en texto vienen con el mes delante («11/25/26»: así las da el Excel de DiezBank al leerlo como texto). */
-  mesPrimero?: boolean
 }
 
 const r = (s: string) => new RegExp(`^${s}$`, 'i')
@@ -97,7 +95,7 @@ export const PERFILES: Record<BancoCsv, PerfilBanco> = {
   // No trae IBAN en la cabecera: la cuenta se elige al subirlo. Se reconoce por su título, no por sus columnas (que
   // también encajan con otros perfiles).
   // Su Excel guarda la fecha como fecha; leída como texto (como lo lee la pantalla) sale con el mes delante: «11/25/26».
-  diezbank: { nombre: 'DiezBank', entidad: null, fecha: [r('fecha')], mesPrimero: true,
+  diezbank: { nombre: 'DiezBank', entidad: null, fecha: [r('fecha')],
     concepto: [[r('concepto original')], [r('concepto')]], importe: [r('importe')], saldo: [r('saldo')] },
 }
 
@@ -149,12 +147,13 @@ export function leerImporte(bruto: string): number | null {
 }
 
 /** «13/10/2026», «13-10-26», «2026-10-13», o el número de serie de Excel → AAAA-MM-DD. Null si no es una fecha. */
-export function leerFecha(bruto: string, mesPrimero = false): string | null {
+/** Una fecha del extracto, SIEMPRE día/mes/año (K14b): «03/11/2026», «3-11-26», ISO o número de serie de Excel. */
+export function leerFecha(bruto: string): string | null {
   const s = bruto.trim()
   let d: number, m: number, a: number
   let x = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})(?:\s.*)?$/)
   if (x) {
-    d = Number(x[mesPrimero ? 2 : 1]); m = Number(x[mesPrimero ? 1 : 2]); a = Number(x[3]); if (a < 100) a += a >= 70 ? 1900 : 2000
+    d = Number(x[1]); m = Number(x[2]); a = Number(x[3]); if (a < 100) a += a >= 70 ? 1900 : 2000
   }
   else if ((x = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/))) { a = Number(x[1]); m = Number(x[2]); d = Number(x[3]) }
   else if (/^\d{5}(\.\d+)?$/.test(s)) {
@@ -242,7 +241,10 @@ export function subcuentaEnCabecera(filas: string[][]): string | null {
   return null
 }
 
-export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido {
+/** Hoy en Madrid (AAAA-MM-DD): una fecha del extracto posterior no puede ser. */
+const hoyMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
+
+export function leerCsvBanco(filas: string[][], banco: BancoCsv, hoy: string = hoyMadrid()): ExtractoLeido {
   const p = PERFILES[banco]
   const ic = filaDeCabecera(filas, p)
   if (ic < 0) {
@@ -261,10 +263,20 @@ export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido 
   const filasMov: { m: MovimientoLeido; saldo: number | null }[] = []
   for (let i = ic + 1; i < filas.length; i++) {
     const f = filas[i]
-    const fecha = leerFecha(f[col.fecha] ?? '', p.mesPrimero)
+    const brutaFecha = (f[col.fecha] ?? '').trim()
+    const fecha = leerFecha(brutaFecha)
+    // K14b · Nunca se salta un movimiento sin decirlo: una fecha que no es una fecha (o un importe sin fecha) para la
+    // subida entera. Solo se salta, avisando, una fila que no trae ni fecha ni importe (un título o un pie).
     if (!fecha) {
-      if (f.some((c) => c.trim() !== '')) avisos.push(`Fila ${i + 1}: sin fecha; no es un movimiento («${norm(f.join(' ')).slice(0, 40)}»).`)
+      const hayImporte = [col.importe, col.cargo, col.abono].some((j) => j >= 0 && leerImporte(f[j] ?? '') !== null)
+      if (brutaFecha !== '' || hayImporte) {
+        throw new CsvBancoNoValido(`Fila ${i + 1}: «${brutaFecha || 'sin fecha'}» no es una fecha de día/mes/año (${p.nombre}). No se sube nada: revisa el fichero.`)
+      }
+      if (f.some((c) => c.trim() !== '')) avisos.push(`Fila ${i + 1}: sin fecha ni importe; no es un movimiento («${norm(f.join(' ')).slice(0, 40)}»).`)
       continue
+    }
+    if (fecha > hoy) {
+      throw new CsvBancoNoValido(`Fila ${i + 1}: la fecha ${fecha.slice(8, 10)}/${fecha.slice(5, 7)}/${fecha.slice(0, 4)} es posterior a hoy. No se sube nada: revisa el fichero (las fechas se leen día/mes/año).`)
     }
     let imp: number | null
     if (col.importe >= 0) imp = leerImporte(f[col.importe] ?? '')
@@ -280,7 +292,7 @@ export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido 
     const concepto = partes.join(' · ')
     filasMov.push({
       m: {
-        fecha, fechaValor: (col.valor >= 0 ? leerFecha(f[col.valor] ?? '', p.mesPrimero) : null) ?? fecha, importeCent: imp,
+        fecha, fechaValor: (col.valor >= 0 ? leerFecha(f[col.valor] ?? '') : null) ?? fecha, importeCent: imp,
         conceptoBanco: concepto, conceptoComun: null, conceptoPropio: col.propio >= 0 ? (norm(f[col.propio] ?? '') || null) : null, numeroDocumento: null,
         referencia1: col.ref >= 0 ? (norm(f[col.ref] ?? '') || null) : null, referencia2: null, equivalencia: null,
         tipoMovimiento: col.tipo >= 0 ? (norm(f[col.tipo] ?? '') || null) : null,
