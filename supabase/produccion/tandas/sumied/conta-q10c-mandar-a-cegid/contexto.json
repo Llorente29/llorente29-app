@@ -1,0 +1,16 @@
+{
+ "_que": "Q10 · mandar a Cegid · contexto de producción de la tanda (2336), medido en SOLO LECTURA el 25/11 a las 22:36Z con la consulta de analizar.mjs sql-contexto: la tabla conta_cegid_incidencia no existe; nada en el camino del pedido y nada en el historial.",
+ "medido": "2026-11-25T22:36Z",
+ "tanda": {
+  "supabase/migrations/20261125T2336_q10c_cegid_incidencias.sql": "5ce3f91ed89b4f40bc95a50f194d920b"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": { "tablas": [], "funciones": [] },
+  "usos": {},
+  "registro": []
+ }
+}

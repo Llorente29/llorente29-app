@@ -1,0 +1,5 @@
+# Q10 · Mandar a Cegid (2336). Su prueba (ROLLBACK), con datos inventados: la tabla, dos veces; un cobro no puede tener
+# dos incidencias vivas, y sí una nueva después de deshacer; A la lee y B no, y nadie la escribe desde la pantalla; y la
+# vuelta atrás (con algo mandado no quita la tabla; sin nada, sí).
+supabase/migrations/20261125T2336_q10c_cegid_incidencias.sql
+supabase/staging/sql/20261125_q10c_cegid_incidencias_prueba.sql

@@ -1,0 +1,3 @@
+# Q10 · Mandar a Cegid · vuelta atrás: quita la tabla, solo si no hay nada mandado (si lo hay, antes «Deshacer»).
+cuenta: scripts/conta/produccion/cuentas/q10c-mandar-a-cegid.sql
+supabase/vuelta-atras/20261125T2336_q10c_cegid_incidencias.down.sql
