@@ -27,6 +27,7 @@ import { puedeLeer } from './salida.ts'
 import { leerTodas } from './paginas.ts'
 import { planEnlaces, personasDeDecisiones, type EstadoEnlace, type PorEnlace } from './enlace.ts'
 import { fraseNoIgualada, planIgualar } from './igualar.ts'
+import { comprobarCifras } from './cifras.ts'
 import { refDeFicha } from '../_shared/crm/ficha.ts'
 import { jsPDF } from 'npm:jspdf@4.2.1'
 import { rematarFacturasDeRecibos } from '../_shared/cobro/facturaRecibo.ts'
@@ -203,9 +204,12 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     // 2b · R19 · paso 1 · Sumied igual a GoCardless: las líneas que salieron de una suscripción, de un cliente ATADO a
     // esa misma ficha, se dan de baja si GoCardless ya no la cobra y llevan el importe que cobra GoCardless. Lo no atado,
     // a «Pendiente de revisar» (abajo, con las diferencias). Cada cambio queda apuntado con su copia (conta_gc_igualado).
-    const elegidos = await leerTodas<{ gc_cliente_id: string; party_id: string }>((d, h) => db.from('conta_gc_enlace_elegido')
-      .select('gc_cliente_id, party_id').eq('company_id', empresa).order('gc_cliente_id').range(d, h), 'los clientes atados')
-    const atado = new Map(elegidos.map((e) => [e.gc_cliente_id, e.party_id]))
+    // R20 · TODOS los clientes de GoCardless atados (conta_gc_enlace en «atado»), no solo el que la vista
+    // conta_gc_enlace_elegido escoge para cada ficha: con dos clientes atados a la misma ficha (el viejo y el nuevo),
+    // las líneas del viejo salían «sin atar» y no se daban de baja (Sayech y Alexandra Junior, 26/11).
+    const atados = await leerTodas<{ gc_cliente_id: string; party_id: string }>((d, h) => db.from('conta_gc_enlace')
+      .select('gc_cliente_id, party_id').eq('company_id', empresa).eq('estado', 'atado').not('party_id', 'is', null).order('gc_cliente_id').range(d, h), 'los clientes atados')
+    const atado = new Map(atados.map((e) => [e.gc_cliente_id, e.party_id]))
     const clienteDeMandatoGc = new Map(datos.mandatos.map((m) => [m.id, m.clienteId]))
     const nombreDeClienteGc = new Map(datos.clientes.map((c) => [c.id, c.nombre]))
     const proximos = datos.suscripciones.filter((x) => x.estado === 'active' && x.proximoCobro && x.proximoCobro.fecha >= hoy).map((x) => x.proximoCobro!.fecha).sort()
@@ -275,6 +279,12 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     // R19 · paso 1 · Lo no atado, a «Pendiente de revisar» (sin repetir a quien ya sale como «GoCardless sin ficha»).
     const sinFicha = new Set(dif.diferencias.filter((d) => d.tipo === 'gocardless_sin_ficha' && d.gc_cliente_id).map((d) => String(d.gc_cliente_id)))
     dif.diferencias.push(...igual.pendientes.filter((p) => !(p.tipo === 'gc_sin_atar' && p.gc_cliente_id && sinFicha.has(p.gc_cliente_id))) as typeof dif.diferencias)
+    // R20 · La comprobación de cada noche: si GoCardless y las cuotas de Sumied no cuadran en el mes del próximo cobro
+    // (o una cifra no es la suma de su lista), a «Pendiente de revisar», y de ahí a «Lo que tienes que hacer». Un fallo
+    // aquí no tumba la lectura: queda en el registro.
+    try {
+      dif.diferencias.push(...await comprobarCifras(db, cuenta, empresa, hoy))
+    } catch (e) { console.error(JSON.stringify({ r20: 'cifras_no', empresa, error: e instanceof Error ? e.message : String(e) })) }
     // Lo revisado no vuelve a salir mientras diga lo mismo.
     dif.diferencias = dif.diferencias.filter((d) => !revisadas.has(`${d.tipo}|${d.party_id ?? d.gc_cliente_id}|${d.porque}`))
     // Sin un CRM conectado (cada conector va aparte), no hay fichas con las que casar: lo del casado no se dice.

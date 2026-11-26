@@ -20,7 +20,7 @@ const Q = 'emp-prueba'
 const EMPRESAS = [{ id: Q, nombre: 'Gestoría de Prueba, S.L.' }]
 const DATOS: DatosClientes = {
   clientes: [], cuotasGc: [{ empresa_id: Q, al_mes: 121, altas_n: 0, altas_euros: 0, bajas_n: 0, bajas_euros: 0 }], proximos: [], cargos: [], queHacer: [],
-  asignaciones: [], precios: [], servicios: [], niveles: [], paquetes: [], lineasDePaquete: [], ajustes: [], crm: [], gcDelMes: [],
+  asignaciones: [], precios: [], servicios: [], niveles: [], paquetes: [], lineasDePaquete: [], ajustes: [], crm: [],
 }
 const nada = () => undefined
 
