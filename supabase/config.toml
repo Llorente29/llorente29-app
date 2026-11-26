@@ -199,6 +199,10 @@ verify_jwt = true
 [functions.conta-cegid-mandar]
 verify_jwt = true
 
+# Q10 · respuesta 5 · Ver en Cegid una incidencia y la ficha de su cliente, tal cual. Solo lee; la puerta es la clave de servicio.
+[functions.conta-cegid-ver]
+verify_jwt = false
+
 # (19/11) conta-erp10-escribir · X10b. Sacar las recibidas a ERP10 (alta de factura y su PDF),
 # sin que nada salga dos veces. Con la sesión de un administrador.
 [functions.conta-erp10-escribir]
