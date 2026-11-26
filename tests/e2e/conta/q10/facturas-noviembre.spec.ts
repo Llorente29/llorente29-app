@@ -344,7 +344,8 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
 
     // Solo lo cobrado, cada uno en su serie, y nada dos veces.
     const mandados = pedidas.filter((p) => p.accion === 'mandar').flatMap((p) => (p.cobros as string[]).map((c) => `${c}:${p.serie}`))
-    expect(mandados.sort()).toEqual(['PM1:1', 'PM10:3', 'PM11:1', 'PM2:1', 'PM3:1', 'PM4:1', 'PM5:1'])
+    const esperados = ['PM1:1', 'PM2:1', 'PM3:1', 'PM4:1', 'PM5:1', 'PM10:3', 'PM11:1']
+    expect([...mandados].sort()).toEqual([...esperados].sort())
 
     // Deshacer: solo lo no facturado (Contasimple).
     await mandar.getByRole('button', { name: 'Deshacer lo mandado (1)' }).click()
