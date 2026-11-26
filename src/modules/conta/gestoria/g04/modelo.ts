@@ -13,9 +13,9 @@
 import { figura } from '../vista'
 import { euros, reciboDelMes } from '../../../../../supabase/functions/_shared/tarifa/precio'
 import { catalogoYAsignaciones } from '../../../../../supabase/functions/_shared/cobro/datos'
-import { SE_COBRA, SIN_EMPRESA, teDeben, type CargoDeGoCardless, type FilaDeCliente, type Situacion } from '../../../../../supabase/functions/_shared/tarifa/lista'
+import { SE_COBRA, SIN_EMPRESA, type CargoDeGoCardless, type FilaDeCliente, type Situacion } from '../../../../../supabase/functions/_shared/tarifa/lista'
+import { cargosParaDeuda, cifrasDeCuotas, delCobro, fraseDiferencia, nombreDelMes, mesAnterior, noCobrado, recibosDeLaEmpresa, type CifrasDeCuotas, type CruceConElBanco, type NoCobrado } from '../../../../../supabase/functions/_shared/tarifa/cifras'
 import { cifraDeCobro, type CifraDeCobro } from '../../../../../supabase/functions/_shared/tarifa/mandaEnLosCobros'
-import { proximoCobro, type ProximoCobro } from '../../../../../supabase/functions/_shared/tarifa/proximoCobro'
 import type { DatosClientes, DatosFicha, Fila } from './datos'
 
 /** nº 90 · Los estados del mandato que ya ha firmado el cliente: con ellos GoCardless cobra. */
@@ -59,9 +59,12 @@ export interface Tarea { id: string; n: number; titulo: string; texto: string; b
 
 export interface ModeloClientes {
   filas: FilaDeLaLista[]
-  banda: ProximoCobro & { sumiedCent: number; porRevisar: number }
-  cuotas: { principal: CifraDeCobro; clientes: number; altas: { n: number; cent: number }; bajas: { n: number; cent: number } }
-  teDeben: { totalCent: number; clientes: number; masDe60Cent: number }
+  /**
+   * R20 · Las cifras de dinero, cada una con su lista (_shared/tarifa/cifras.ts): lo que GoCardless cobrará en el mes
+   * del próximo cobro, las cuotas de Sumied de ese mismo mes, su diferencia en sus listas, las altas y las bajas (de
+   * las líneas de Sumied), y «GoCardless no cobró» (o «Te deben», cruzado con el banco).
+   */
+  cifras: { cuotas: CifrasDeCuotas; noCobrado: NoCobrado; leidoAt: string | null; porRevisar: number }
   dejasDeCobrar: { activosSinCuota: number }
   tareas: Tarea[]
 }
@@ -80,12 +83,6 @@ export const ESTADO_DEL_COBRO: Record<string, { texto: string; tono: Tono }> = {
   charged_back: { texto: 'Retrocedido', tono: 'mal' }, cancelled: { texto: 'Cancelado', tono: 'neutro' }, pending_submission: { texto: 'En curso', tono: 'neutro' },
   submitted: { texto: 'En curso', tono: 'neutro' }, pending_customer_approval: { texto: 'Pendiente de aprobar', tono: 'neutro' }, customer_approval_denied: { texto: 'Rechazado', tono: 'mal' },
 }
-/** «+1 alta (109 €)», «sin altas»; «−2 bajas (121 €)», «sin bajas». */
-export function altasYBajas(x: { n: number; cent: number }, que: 'alta' | 'baja'): string {
-  if (x.n === 0) return que === 'alta' ? 'sin altas' : 'sin bajas'
-  const signo = que === 'alta' ? '+' : '−'
-  return `${signo}${x.n} ${x.n === 1 ? que : `${que}s`} (${String(Math.round(x.cent / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} €)`
-}
 const mesSiguiente = (m: string) => { const a = Number(m.slice(0, 4)); const n = Number(m.slice(5, 7)); return n === 12 ? `${a + 1}-01` : `${a}-${String(n + 1).padStart(2, '0')}` }
 const fechaCorta = (f: string) => `${Number(f.slice(8, 10))}/${f.slice(5, 7)}/${f.slice(0, 4)}`
 
@@ -94,7 +91,9 @@ function serviciosEnTexto(lineas: ReturnType<typeof reciboDelMes>['lineas']): st
   return lineas.map((l) => (l.trabajadores !== null ? `${l.texto.replace(/ · \d+ trabajadores?$/, '')} (${l.trabajadores})` : l.texto)).join(' · ')
 }
 
-export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], elegidas: readonly string[], hoy: string): ModeloClientes {
+export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], elegidas: readonly string[], hoy: string,
+  /** R20 · Lo pagado por el banco (la tabla del K14). Null mientras no esté: la tarjeta es «GoCardless no cobró». */
+  banco: CruceConElBanco | null = null): ModeloClientes {
   const mes = hoy.slice(0, 7)
   const { catalogo, asignaciones } = catalogoYAsignaciones(d)
   const nombreEmpresa = new Map(empresas.map((e) => [e.id, e.nombre]))
@@ -106,8 +105,13 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     clientes: Array.isArray(c.clientes) ? (c.clientes as string[]).map(String) : [], suscripcionId: str(c.suscripcion_gc_id), estado: String(c.estado),
     fecha: String(c.fecha), importeCent: cent(c.importe), mandatoActivo: c.mandato_activo === true, cobradoDespues: c.cobrado_despues === true,
   }))
-  const otraVia = new Set(d.cargos.filter((c) => c.otra_via).map((c) => String(c.gc_id)))
-  const deben = teDeben(cargos.filter((c) => enElegidas(c.empresaId)), otraVia, hoy)
+  // R20 · «GoCardless no cobró»: recibo a recibo, también con el mandato cancelado (_shared/tarifa/cifras.ts). Lo que
+  // dice cada fila («Devuelto», «Debe») sale de la misma lista: el filtro suma lo mismo que la tarjeta.
+  const nombreDeFicha = new Map(d.clientes.map((r) => [String(r.cliente_id), String(r.cliente ?? '')]))
+  const nombreDe = (id: string) => nombreDeFicha.get(id) || null
+  const nc = noCobrado(cargosParaDeuda(d.cargos.filter((c) => enElegidas(c.empresa_id)), nombreDe), hoy, banco)
+  const enLaLista = new Set(nc.lista.filas.map((f) => f.id))
+  const deben = { cargos: cargos.filter((c) => enLaLista.has(c.id)) }
   const debeDe = new Map<string, { cent: number; n: number; masAntiguo: string }>()
   for (const c of deben.cargos as typeof cargos) {
     for (const cl of c.clientes) {
@@ -124,17 +128,17 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     devueltosDe.set(k, [...(devueltosDe.get(k) ?? []), { id: c.id, fecha: c.fecha, importeCent: c.importeCent }])
   }
 
-  // nº 82 · Lo que GoCardless cobra EN el mes, por cliente y empresa (la anual, entera en su mes). La media
-  // (gocardless_al_mes, la anual entre 12) ya no se compara con nada: solo dice si tiene cuota.
-  const delMes = (d.gcDelMes ?? []).filter((x) => mesDe(x.mes) === mes)
-  const gcDelMesDe = new Map(delMes.filter((x) => x.que === 'cliente')
-    .map((x) => [`${String(x.cliente_id)}|${String(x.empresa_id)}`, cent(x.gocardless_del_mes)]))
-  // Y por empresa, todo lo suyo del mes, también lo que aún no está unido a ningún cliente: el total de las cuotas.
-  const gcDelMesEmpresa = delMes.filter((x) => x.que === 'empresa' && enElegidas(x.empresa_id)).reduce((t, x) => t + cent(x.gocardless_del_mes), 0)
+  // R20 · Las cuotas, del MES DEL PRÓXIMO COBRO de GoCardless a los dos lados (la forma de contar de la copia): lo que
+  // GoCardless cobrará ese mes, suscripción a suscripción con su ficha atada, y el recibo de Sumied de ese mismo mes.
+  // Con «Las dos», el más temprano de los dos. Sin GoCardless, el de hoy.
+  const cobro = delCobro(d.delCobro)
+  const mesCuota = cobro.meses.filter((m) => enElegidas(m.empresaId)).map((m) => m.mes).sort()[0] ?? mes
+  const filasTarifa = { servicios: d.servicios, precios: d.precios, asignaciones: d.asignaciones, niveles: d.niveles, paquetes: d.paquetes, lineasDePaquete: d.lineasDePaquete, ajustes: d.ajustes }
+  const recibosDe = (m: string) => elegidas.flatMap((e) => recibosDeLaEmpresa(filasTarifa, e, m, nombreDe))
+  const cuotasR20 = cifrasDeCuotas(mesCuota, cobro.suscripciones.filter((s) => enElegidas(s.empresaId)), recibosDe(mesCuota), recibosDe(mesAnterior(mesCuota)), nombreDe)
+  const leidoAt = cobro.meses.filter((m) => enElegidas(m.empresaId)).map((m) => m.leidoAt).filter((x): x is string => !!x).sort()[0] ?? null
 
   const filas: FilaDeLaLista[] = []
-  let sumiedTotal = 0
-  let porRevisar = 0
   for (const r of d.clientes) {
     const empresaId = str(r.empresa_id)
     if (empresaId !== null && !enElegidas(empresaId)) continue
@@ -144,11 +148,9 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     const recibo = empresaId ? reciboDelMes(catalogo, asignaciones, clienteId, empresaId, mes) : null
     const siguiente = empresaId ? reciboDelMes(catalogo, asignaciones, clienteId, empresaId, mesSiguiente(mes)) : null
     const gcAlMes = r.gocardless_al_mes == null ? null : cent(r.gocardless_al_mes)
-    const gcDelMes = empresaId ? gcDelMesDe.get(`${clienteId}|${empresaId}`) ?? null : null
-    const sumied = recibo && recibo.lineas.length ? recibo.totalCent : null
-    const esteMes = cifraDeCobro({ gocardlessCent: gcDelMes, sumiedCent: sumied })
-    if (empresaId) sumiedTotal += sumied ?? 0
-    if (esteMes.diferenciaCent !== null && esteMes.diferenciaCent !== 0) porRevisar++
+    // R20 · «Este mes» de cada fila: GoCardless y Sumied del mes del próximo cobro, los mismos que las tarjetas.
+    const deFicha = empresaId ? cuotasR20.porFicha.get(`${empresaId}|${clienteId}`) ?? null : null
+    const esteMes = cifraDeCobro({ gocardlessCent: deFicha?.gocardlessCent ?? null, sumiedCent: deFicha?.sumiedCent ?? null })
     const debe = debeDe.get(`${clienteId}|${empresaId}`) ?? null
     const mandatoGc = str(r.mandato)
     // nº 90 · En «pending_submission» y «submitted» ya lo ha firmado el cliente: GoCardless lo manda al banco con su
@@ -195,23 +197,7 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     })
   }
 
-  // Las cuotas: lo que cobra GoCardless este mes (manda hasta el G05; la base lo da sumado por empresa, nº 82) y lo que calcula Sumied, al lado.
-  const gcDe = d.cuotasGc.filter((x) => enElegidas(x.empresa_id))
-  const sumar = (k: string) => gcDe.reduce((s, x) => s + cent(x[k]), 0)
-  const contar = (k: string) => gcDe.reduce((s, x) => s + Number(x[k] ?? 0), 0)
-  const clientesConCuota = new Set(filas.filter((f) => f.empresaId && ((f.esteMes.principalCent ?? 0) > 0 || (f.esteMes.comparacionCent ?? 0) > 0)).map((f) => f.clienteId)).size
-  const cuotas = {
-    principal: cifraDeCobro({ gocardlessCent: gcDelMesEmpresa, sumiedCent: sumiedTotal }),
-    clientes: clientesConCuota,
-    altas: { n: contar('altas_n'), cent: sumar('altas_euros') },
-    bajas: { n: contar('bajas_n'), cent: sumar('bajas_euros') },
-  }
-
-  const elegidasConNombre = elegidas.map((id) => ({ id, nombre: nombreEmpresa.get(id) ?? '' }))
-  const banda = {
-    ...proximoCobro(d.proximos.map((p) => ({ empresaId: String(p.empresa_id), fecha: str(p.fecha), importeCent: cent(p.euros), cobros: Number(p.n ?? 0) })), elegidasConNombre, hoy),
-    sumiedCent: sumiedTotal, porRevisar,
-  }
+  const porRevisar = filas.filter((f) => f.esteMes.diferenciaCent !== null && f.esteMes.diferenciaCent !== 0).length
 
   // «Lo que tienes que hacer»: primero los cobros de GoCardless sin cliente (Julio, 08/11); después, por el dinero que mueve cada una.
   const qh = (tipo: string) => d.queHacer.filter((q) => q.tipo === tipo && enElegidas(q.empresa_id))
@@ -226,6 +212,11 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     { id: 'activos-sin-cuota', n: activosSinCuota, titulo: 'Activos sin cuota', texto: `Activos en ${crm} a los que no se cobra nada, ni en Sumied ni en GoCardless.`, boton: 'Revisarlos', centimos: null, tono: 'aviso', filtro: 'necesitan_algo' },
     { id: 'devueltos', n: devueltos.n, titulo: 'Recibos devueltos', texto: `${devueltos.cent !== null ? euros(devueltos.cent) : 'Lo'} devuelto este mes en GoCardless. Llama antes del próximo cobro.`, boton: 'Ver quiénes', centimos: devueltos.cent, tono: 'mal', filtro: 'devueltos' },
     { id: 'por-firmar', n: porFirmar.n, titulo: 'Mandatos por firmar', texto: `Sin mandato firmado no entran en el cobro${porFirmar.cent ? `: ${euros(porFirmar.cent)} al mes` : ''}.`, boton: 'Ver quiénes', centimos: porFirmar.cent, tono: 'neutro', filtro: 'sin_mandato' },
+    // R20 · La comprobación de cada noche (conta-gocardless-leer/cifras.ts): GoCardless y Sumied no cuadran.
+    { id: 'cifras-no-cuadran', n: qh('diferencia:cifras_no_cuadran').reduce((s, x) => s + Number(x.n ?? 0), 0), titulo: 'Las cuotas no cuadran con GoCardless',
+      texto: cuotasR20.diferencia.cent !== 0 ? `${fraseDiferencia(cuotasR20.diferencia.cent)} en ${nombreDelMes(cuotasR20.mes)}. Arriba, en «Cuotas en Sumied», cada parte con su lista.`
+        : 'La comprobación de esta noche vio una diferencia; con lo leído después, ya cuadran.',
+      boton: 'Ver la diferencia', centimos: Math.abs(cuotasR20.diferencia.cent), tono: 'aviso', filtro: null },
     { id: 'varios-clientes', n: varios.n, titulo: 'Clientes de GoCardless unidos a más de un cliente', texto: 'Un mismo cliente de GoCardless está unido a varios de Sumied: su cobro se cuenta en cada uno.', boton: 'Revisarlos', centimos: null, tono: 'aviso', filtro: null },
   ] as Tarea[]).filter((t) => t.n > 0).sort((a, b) => (b.centimos ?? 0) - (a.centimos ?? 0))
   const tareas: Tarea[] = [
@@ -236,8 +227,8 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
   ]
 
   return {
-    filas, banda, cuotas, tareas,
-    teDeben: { totalCent: deben.totalCent, clientes: deben.clientes, masDe60Cent: deben.masDe60Cent },
+    filas, tareas,
+    cifras: { cuotas: cuotasR20, noCobrado: nc, leidoAt, porRevisar },
     dejasDeCobrar: { activosSinCuota },
   }
 }

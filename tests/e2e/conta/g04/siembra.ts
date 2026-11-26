@@ -171,12 +171,22 @@ export function pantallas(d: Record<string, Fila[]>): Record<string, (cuerpo: Fi
       cargos: d.conta_consulta_cargo_devuelto, que_hacer: d.conta_consulta_que_hacer, asignaciones: d.conta_consulta_asignacion, precios: d.conta_consulta_tarifa_precio,
       servicios: d.conta_servicio, niveles: d.conta_servicio_nivel, paquetes: d.conta_paquete, lineas_de_paquete: d.conta_paquete_linea, ajustes: d.conta_gestoria_ajustes, crm: d.conta_crm,
     }),
-    // nº 82 · Lo que GoCardless cobra en el mes: aquí todas las suscripciones son mensuales, así que es su «al mes».
-    conta_gocardless_del_mes: (cuerpo) => [
-      ...clientes.filter((r) => r.empresa_id && r.gocardless_al_mes != null)
-        .map((r) => ({ que: 'cliente', cliente_id: r.cliente_id, empresa_id: r.empresa_id, mes: cuerpo.p_mes, gocardless_del_mes: r.gocardless_al_mes })),
-      ...empresas.map((e) => ({ que: 'empresa', cliente_id: null, empresa_id: e, mes: cuerpo.p_mes, gocardless_del_mes: suma(activas.filter((s) => String(s.company_id) === e), 'al_mes') })),
-    ],
+    // R20 · Lo que GoCardless cobrará en el mes del próximo cobro (como conta_cifras_del_cobro): las suscripciones
+    // activas con su próximo cobro en ese mes, con la ficha del cliente de GoCardless (aquí, atado si está en la lista).
+    conta_cifras_del_cobro: () => {
+      const hoy = dia(0)
+      const meses = empresas.map((e) => ({ empresa_id: e, mes: activas.filter((s) => String(s.company_id) === e && String(s.proximo_cobro_fecha) >= hoy)
+        .map((s) => String(s.proximo_cobro_fecha).slice(0, 7)).sort()[0], leido_at: `${hoy}T05:15:00Z` })).filter((m) => m.mes)
+      const fichaDeGc = new Map(clientes.filter((r) => r.empresa_id && r.cliente_en_gocardless).map((r) => [`${String(r.empresa_id)}|${String(r.cliente_en_gocardless)}`, r]))
+      return {
+        meses,
+        suscripciones: activas.filter((s) => meses.some((m) => m.empresa_id === s.company_id && String(s.proximo_cobro_fecha).slice(0, 7) === m.mes)).map((s) => {
+          const f = fichaDeGc.get(`${String(s.company_id)}|${String(s.gc_cliente_id)}`)
+          return { empresa_id: s.company_id, gc_id: s.gc_id, gc_cliente_id: s.gc_cliente_id, cliente_gc: f ? String(f.cliente).toUpperCase() : 'Cliente sin atar de prueba',
+            ficha_id: f ? f.cliente_id : null, nombre: s.nombre, fecha: s.proximo_cobro_fecha, importe: s.proximo_cobro_importe }
+        }),
+      }
+    },
     conta_pantalla_ficha: (cuerpo) => deCliente(String(cuerpo.p_cliente)),
     // nº 84 · La factura de cada cobro: en esta siembra ningún cobro salió de un recibo de Sumied.
     conta_ficha_facturas: () => [],

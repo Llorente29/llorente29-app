@@ -10,9 +10,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { euros } from '../../../../../supabase/functions/_shared/tarifa/precio'
-import { eurosRedondos, miles } from '../../../../../supabase/functions/_shared/tarifa/proximoCobro'
+import { miles } from '../../../../../supabase/functions/_shared/tarifa/proximoCobro'
+import { fraseDiferencia, fraseNoCobrado, nombreDelMes, textoAltasBajas, type Lista } from '../../../../../supabase/functions/_shared/tarifa/cifras'
 import { ordenar, pasaElFiltro, pasaLaBusqueda, grupoDe, type Filtro, type Grupo } from '../../../../../supabase/functions/_shared/tarifa/lista'
-import { altasYBajas, type Empresa, type FilaDeLaLista, type ModeloClientes, type Tarea } from './modelo'
+import { type Empresa, type FilaDeLaLista, type ModeloClientes, type Tarea } from './modelo'
 
 export interface PropsClientes {
   modelo: ModeloClientes
@@ -59,6 +60,11 @@ export function Clientes(p: PropsClientes) {
   const [busqueda, setBusqueda] = useState('')
   const [abierta, setAbierta] = useState<string | null>(null)
   const listaRef = useRef<HTMLElement>(null)
+  const cifrasRef = useRef<HTMLDivElement>(null)
+  // R20 · La lista que forma una cifra, abierta en el panel lateral (suma exactamente la cifra).
+  const [lista, setLista] = useState<{ lista: Lista; fuente: string } | null>(null)
+  const cu = m.cifras.cuotas
+  const nc = m.cifras.noCobrado
 
   const delGrupo = useMemo(() => m.filas.filter((f) => grupoDe(f) === grupo), [m.filas, grupo])
   const filas = useMemo(() => ordenar(delGrupo.filter((f) => pasaElFiltro(f, filtro) && pasaLaBusqueda(f, busqueda))), [delGrupo, filtro, busqueda])
@@ -68,7 +74,11 @@ export function Clientes(p: PropsClientes) {
   const lasDos = p.elegida === null
 
   const irA = (t: Tarea) => {
-    if (!t.filtro) { if (t.id === 'sin-cliente') p.alAsignar(); return }
+    if (!t.filtro) {
+      if (t.id === 'sin-cliente') p.alAsignar()
+      if (t.id === 'cifras-no-cuadran') cifrasRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
     setGrupo('se_cobra'); setFiltro(t.filtro)
     listaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -97,15 +107,21 @@ export function Clientes(p: PropsClientes) {
       </header>
       {p.decisiones?.resultado}
 
-      <section aria-labelledby="g4-proximo" className="g4-banda">
+      <div ref={cifrasRef} />
+      <section aria-labelledby="g4-proximo" className="g4-banda" data-cifra="gocardless">
         <div className="g4-banda-textos">
-          <div className="g4-banda-ante">Próximo cobro de GoCardless · los próximos 30 días</div>
-          <h2 id="g4-proximo" className="g4-banda-cifra">{m.banda.titulo}</h2>
-          {m.banda.desglose.map((l) => <div key={l} className="g4-banda-linea">{l}</div>)}
-          <div className="g4-banda-linea">
-            Sumied calcula {euros(m.banda.sumiedCent)} al mes{m.banda.porRevisar > 0 && <>; <b>{miles(m.banda.porRevisar)} {m.banda.porRevisar === 1 ? 'cliente' : 'clientes'} con totales distintos, por revisar</b></>}.
-            {m.banda.sinFecha > 0 && ` ${miles(m.banda.sinFecha)} ${m.banda.sinFecha === 1 ? 'suscripción activa no trae' : 'suscripciones activas no traen'} fecha.`}
-          </div>
+          <div className="g4-banda-ante">GoCardless cobrará en {nombreDelMes(cu.mes)} <span className="g4-fuente">· según GoCardless{m.cifras.leidoAt ? `, leído el ${horaDeLectura(m.cifras.leidoAt)}` : ''}</span></div>
+          <h2 id="g4-proximo" className="g4-banda-cifra">
+            <button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: cu.gocardless.lista, fuente: 'Según GoCardless' })}>{euros(cu.gocardless.lista.totalCent)}</button>
+            {' · '}{miles(cu.gocardless.cobros)} {cu.gocardless.cobros === 1 ? 'cobro' : 'cobros'}
+          </h2>
+          {cu.gocardless.porDia.length > 0 && (
+            <div className="g4-banda-linea">
+              {cu.gocardless.porDia.map((d, i) => (
+                <span key={d.texto}>{i > 0 && ' · '}{d.texto}: <button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: d.lista, fuente: 'Según GoCardless' })}>{euros(d.lista.totalCent)}</button> ({miles(d.cobros)} {d.cobros === 1 ? 'cobro' : 'cobros'})</span>
+              ))}
+            </div>
+          )}
         </div>
         {p.rutaCobro
           ? <Link className="g4-banda-boton" to={p.rutaCobro}>Revisar el cobro →</Link>
@@ -113,29 +129,53 @@ export function Clientes(p: PropsClientes) {
       </section>
 
       <section aria-label="Cómo va el despacho" className="g4-cifras">
-        <div className="g4-cifra">
-          <div className="g4-cifra-titulo">Cuotas al mes</div>
-          <div className="g4-cifra-valor">{m.cuotas.principal.principalCent === null ? '—' : euros(m.cuotas.principal.principalCent)}</div>
+        <div className="g4-cifra" data-cifra="sumied" data-tono={cu.diferencia.cent !== 0 ? 'aviso' : undefined}>
+          <div className="g4-cifra-titulo">Cuotas en Sumied · {nombreDelMes(cu.mes)} <span className="g4-fuente">· según las cuotas de Sumied</span></div>
+          <div className="g4-cifra-valor"><button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: cu.sumied.lista, fuente: 'Según las cuotas de Sumied' })}>{euros(cu.sumied.lista.totalCent)}</button></div>
           <div className="g4-cifra-linea">
-            {miles(m.cuotas.clientes)} clientes · <span className={m.cuotas.altas.n ? 'g4-sube' : undefined}>{altasYBajas(m.cuotas.altas, 'alta')}</span> · <span className={m.cuotas.bajas.n ? 'g4-baja' : undefined}>{altasYBajas(m.cuotas.bajas, 'baja')}</span>
+            {miles(cu.sumied.clientes)} {cu.sumied.clientes === 1 ? 'cliente' : 'clientes'} · Altas y bajas de {nombreDelMes(cu.mes)}:{' '}
+            {cu.altas.filas.length ? <button type="button" className="g4-cifra-boton g4-sube" onClick={() => setLista({ lista: cu.altas, fuente: 'Según las cuotas de Sumied' })}>{textoAltasBajas(cu.altas, 'alta')}</button> : 'sin altas'}
+            {' · '}
+            {cu.bajas.filas.length ? <button type="button" className="g4-cifra-boton g4-baja" onClick={() => setLista({ lista: cu.bajas, fuente: 'Según las cuotas de Sumied' })}>{textoAltasBajas(cu.bajas, 'baja')}</button> : 'sin bajas'}
           </div>
-          {m.cuotas.principal.alLado && <div className="g4-cifra-linea">En GoCardless · {m.cuotas.principal.alLado}</div>}
+          {cu.diferencia.cent === 0
+            ? <div className="g4-cifra-linea">Igual que lo que cobrará GoCardless.</div>
+            : (
+              <div className="g4-ambar" data-cifra="diferencia">
+                <b>{fraseDiferencia(cu.diferencia.cent)}.</b> Por qué (cada parte se abre en su lista):
+                <table className="g4-ambar-tabla"><tbody>
+                  {cu.diferencia.grupos.map((g) => (
+                    <tr key={g.titulo}><td><button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: g, fuente: 'GoCardless − Sumied' })}>{g.titulo}</button></td><td>{conSigno(g.totalCent)}</td></tr>
+                  ))}
+                  <tr><td><b>Diferencia</b></td><td><b>{conSigno(cu.diferencia.cent)}</b></td></tr>
+                </tbody></table>
+              </div>
+            )}
         </div>
-        <div className="g4-cifra" data-tono="mal">
-          <div className="g4-cifra-titulo">Te deben</div>
-          <div className="g4-cifra-valor">{euros(m.teDeben.totalCent)}</div>
-          <div className="g4-cifra-linea">{miles(m.teDeben.clientes)} {m.teDeben.clientes === 1 ? 'cliente' : 'clientes'} · {eurosRedondos(m.teDeben.masDe60Cent)} con más de 60 días</div>
-          <div className="g4-cifra-linea">Devuelto en GoCardless y sin cobrar después. Lo cobrado fuera de GoCardless aún no se ve: márcalo en la ficha.</div>
+        <div className="g4-cifra" data-tono="mal" data-cifra="no-cobrado">
+          <div className="g4-cifra-titulo">{nc.titulo} <span className="g4-fuente">· según GoCardless{nc.cruzado ? ' y el banco' : ''}</span></div>
+          <div className="g4-cifra-valor"><button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: nc.lista, fuente: 'Según GoCardless' })}>{euros(nc.lista.totalCent)}</button></div>
+          <div className="g4-cifra-linea">{fraseNoCobrado(nc)}</div>
+          {!nc.cruzado && <div className="g4-cifra-linea">Falta cruzar con el banco: lo pagado por transferencia, Bizum o tarjeta aún no se descuenta.</div>}
+          <table className="g4-ambar-tabla"><tbody>
+            {nc.tramos.map((t) => (
+              <tr key={t.texto}><td>{t.lista.filas.length ? <button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: t.lista, fuente: 'Según GoCardless' })}>{t.texto}</button> : t.texto}</td><td>{euros(t.lista.totalCent)}</td></tr>
+            ))}
+          </tbody></table>
+          {nc.conMandatoCancelado.filas.length > 0 && (
+            <div className="g4-cifra-linea">De ellos, con el mandato ya cancelado: <button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: nc.conMandatoCancelado, fuente: 'Según GoCardless' })}>{euros(nc.conMandatoCancelado.totalCent)}</button></div>
+          )}
+          {nc.pagadoPorElBanco && nc.pagadoPorElBanco.filas.length > 0 && (
+            <div className="g4-cifra-linea">Pagado después por el banco, que ya no cuenta: <button type="button" className="g4-cifra-boton" onClick={() => setLista({ lista: nc.pagadoPorElBanco!, fuente: 'Según el banco' })}>{euros(nc.pagadoPorElBanco.totalCent)}</button></div>
+          )}
+          {nc.tarjetaSinAsignarCent !== null && nc.tarjetaSinAsignarCent > 0 && (
+            <div className="g4-cifra-linea">Cobrado con tarjeta sin asignar a nadie (no se descuenta): {euros(nc.tarjetaSinAsignarCent)}</div>
+          )}
         </div>
         <div className="g4-cifra" data-tono="aviso">
           <div className="g4-cifra-titulo">Dejas de cobrar</div>
           <div className="g4-cifra-valor">{miles(m.dejasDeCobrar.activosSinCuota)} {m.dejasDeCobrar.activosSinCuota === 1 ? 'cliente' : 'clientes'}</div>
           <div className="g4-cifra-linea">Activos sin cuota: no se les cobra nada, ni en Sumied ni en GoCardless</div>
-        </div>
-        <div className="g4-cifra">
-          <div className="g4-cifra-titulo">Precio sin revisar</div>
-          <div className="g4-cifra-valor" data-sin-dato="">Aún sin dato</div>
-          <div className="g4-cifra-linea">Sumied guarda los cambios de precio desde el 07/11/2026 · <Link to={`${p.rutaTarifa}#cambiar-precios`}>Cambiar precios →</Link></div>
         </div>
       </section>
 
@@ -216,6 +256,7 @@ export function Clientes(p: PropsClientes) {
         </div>
       </section>
 
+      {lista && <PanelLista lista={lista.lista} fuente={lista.fuente} alCerrar={() => setLista(null)} />}
       {panel && <PanelCliente fila={panel} crm={p.crm} alCerrar={() => setAbierta(null)} rutaFicha={p.rutaFicha(panel.clienteId, panel.empresaId)} rutaTarifa={p.rutaTarifa} rutaCrm={p.rutaCrm(panel)}
         rutaPonerCuota={p.rutaPonerCuota(panel.clienteId, panel.empresaId)} hoy={p.hoy}
         alCobradoPorOtraVia={(cargos, via, fecha) => p.alCobradoPorOtraVia(panel.empresaId!, cargos, via, fecha)} />}
@@ -335,5 +376,50 @@ export function OtraVia({ cargos, hoy, alGuardar, alCancelar }: {
         <button type="button" className="g4-aviso-boton" data-tipo="sec" onClick={alCancelar}>Cancelar</button>
       </div>
     </form>
+  )
+}
+
+const conSigno = (cent: number) => `${cent > 0 ? '+' : ''}${euros(cent)}`
+/** «26/11 a las 07:15», en Madrid. */
+function horaDeLectura(iso: string): string {
+  const f = new Date(iso)
+  const dia = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'numeric' }).format(f)
+  const hora = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' }).format(f)
+  return `${dia} a las ${hora}`
+}
+
+/** R20 · La lista que forma una cifra: cada fila con su importe y, abajo, la suma, que es la cifra (regla 2). */
+export function PanelLista({ lista: l, fuente, alCerrar }: { lista: Lista; fuente: string; alCerrar: () => void }) {
+  const cerrarRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    cerrarRef.current?.focus()
+    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') alCerrar() }
+    window.addEventListener('keydown', tecla)
+    return () => window.removeEventListener('keydown', tecla)
+  }, [alCerrar])
+  return (
+    <>
+      <button type="button" className="g4-velo" aria-label="Cerrar la lista" tabIndex={-1} onClick={alCerrar} />
+      <aside aria-label={l.titulo} className="g4-panel" data-panel="lista">
+        <div className="g4-panel-cabeza">
+          <div className="g4-panel-fila">
+            <div>
+              <h2 className="g4-panel-nombre">{l.titulo}</h2>
+              <div className="g4-panel-linea">{fuente} · {l.filas.length.toLocaleString('es-ES')} {l.filas.length === 1 ? 'fila' : 'filas'}</div>
+            </div>
+            <button ref={cerrarRef} type="button" className="g4-cerrar" aria-label="Cerrar" onClick={alCerrar}>×</button>
+          </div>
+        </div>
+        <div className="g4-panel-seccion">
+          {l.filas.map((f) => (
+            <div key={f.id} className="g4-renglon" data-fila="lista">
+              <span><span>{f.texto}</span>{f.detalle && <span className="g4-renglon-detalle">{f.detalle}</span>}</span>
+              {!l.soloCuenta && <b>{euros(f.importeCent)}</b>}
+            </div>
+          ))}
+          <div className="g4-renglon" data-fila="total"><span><b>{l.soloCuenta ? 'En total' : 'Suma'}</b></span><b>{l.soloCuenta ? l.filas.length.toLocaleString('es-ES') : euros(l.totalCent)}</b></div>
+        </div>
+      </aside>
+    </>
   )
 }
