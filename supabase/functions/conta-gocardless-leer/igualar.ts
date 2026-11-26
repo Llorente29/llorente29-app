@@ -6,8 +6,11 @@
 // Después de convertir en línea las suscripciones nuevas (conversion.ts), cada lectura iguala las líneas que YA salieron
 // de una suscripción de GoCardless, solo si su cliente de GoCardless está ATADO a esa misma ficha
 // (conta_gc_enlace_elegido):
-//   · la suscripción ya no cobra (cancelada o acabada) y la línea sigue abierta → la línea se da de baja, con la fecha
-//     de fin de GoCardless o, si no la trae, el último día del mes de hoy;
+//   · la suscripción ya no cobra (cancelada o acabada) y la línea sigue abierta → la línea se da de baja con la regla
+//     de Sumied (conta_gestoria_baja_linea): «hasta» es el DÍA 1 del último mes que se cobra entero (la línea ya no se
+//     cobra desde el mes siguiente). Ese mes es el del último cobro antes del fin de GoCardless; sin fin, el de hoy. Si
+//     cae antes del alta de la línea, no se fuerza: va a «Pendiente de revisar» con su porqué (25/11: el CHECK de
+//     conta_linea pide «hasta» en día 1 y no antes de «desde», y el #815 ponía el último día del mes);
 //   · la suscripción cobra otro importe que la línea → la línea lleva el de GoCardless como importe propio.
 // Lo que no está atado no se adivina: va a «Pendiente de revisar», con su porqué, y no para lo demás:
 //   · linea_sin_atar: Sumied tiene una línea de una suscripción cuyo cliente de GoCardless no está atado a ninguna ficha;
@@ -38,6 +41,8 @@ export interface Cambio {
   lineaId: string
   partyId: string
   que: 'baja' | 'importe'
+  /** La línea, en palabras («Gestoría mensual» o «Gestión laboral · un trabajador»), para decir lo que no se ha podido igualar. */
+  linea: string
   /** Lo que se escribe en la línea. */
   hasta?: string
   importePropioCent?: number
@@ -47,7 +52,7 @@ export interface Cambio {
 }
 
 export interface Pendiente {
-  tipo: 'linea_sin_atar' | 'linea_en_otra_ficha' | 'gc_sin_atar'
+  tipo: 'linea_sin_atar' | 'linea_en_otra_ficha' | 'gc_sin_atar' | 'totales_distintos'
   porque_codigo: string
   porque: string
   company_id: string
@@ -59,11 +64,20 @@ export interface Pendiente {
 /** GoCardless ya no la cobra: cancelada o acabada. (Las demás —pendiente de aprobar, en pausa— se dejan como están.) */
 export const YA_NO_COBRA = new Set(['cancelled', 'finished'])
 
-const finDeMes = (hoy: string): string => {
-  const a = Number(hoy.slice(0, 4)); const m = Number(hoy.slice(5, 7))
-  const d = new Date(Date.UTC(a, m, 0))
-  return d.toISOString().slice(0, 10)
+/**
+ * El mes de la baja, como lo guarda Sumied: el día 1 del último mes que se cobra entero. Con fin en GoCardless (el día
+ * desde el que ya no se cobra), el mes del día anterior a ese fin; sin fin, el mes de hoy.
+ */
+export function mesDeBaja(fin: string | null, hoy: string): string {
+  if (fin) {
+    const d = new Date(`${fin.slice(0, 10)}T12:00:00Z`)
+    d.setUTCDate(d.getUTCDate() - 1)
+    return `${d.toISOString().slice(0, 7)}-01`
+  }
+  return `${hoy.slice(0, 7)}-01`
 }
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const enPalabras = (mes: string) => `${MESES[Number(mes.slice(5, 7)) - 1]} de ${mes.slice(0, 4)}`
 const texto = (l: Linea) => [l.nombreServicio, l.empleado ?? l.detalle].filter(Boolean).join(' · ')
 
 /** El importe que Sumied pone hoy a una línea en su periodo (el propio; si no, la tarifa propia; si no, la general). */
@@ -105,13 +119,22 @@ export function planIgualar(empresa: string, hoy: string, mes: Mes, lineas: Line
     const actual = importeDeLinea(l, tarifas, mes)
     const alMesAntes = actual === null ? null : l.periodo === 'anio' ? Math.round(actual / 12) : actual
     if (YA_NO_COBRA.has(s.estado)) {
-      const hasta = s.fin && s.fin >= `${mesHoy}-01` ? s.fin : finDeMes(hoy)
-      cambios.push({ lineaId: l.id, partyId: l.partyId, que: 'baja', hasta, antes: { hasta: l.hasta, importePropioCent: l.importePropioCent, alMesCent: alMesAntes },
-        porque: `GoCardless ya no cobra «${s.nombre}» (${s.estado === 'finished' ? 'acabada' : 'cancelada'}): «${texto(l)}» se da de baja el ${hasta}.` })
+      const hasta = mesDeBaja(s.fin, hoy)
+      const mesHasta = hasta.slice(0, 7)
+      // Ya de baja en ese mes o antes: no se toca (si no, cada lectura la «daría de baja» otra vez).
+      if (l.hasta !== null && l.hasta <= mesHasta) continue
+      if (mesHasta < l.desde) {
+        pendientes.push({ tipo: 'totales_distintos', porque_codigo: 'baja_antes_del_alta', company_id: empresa, party_id: l.partyId, gc_cliente_id: cliente,
+          porque: `GoCardless ya no cobra «${s.nombre}», pero «${texto(l)}» empieza en ${enPalabras(`${l.desde}-01`)} y la baja sería en ${enPalabras(hasta)}: Sumied no la da de baja antes de su alta. Revísala.`,
+          datos: { linea: l.id, suscripcion: s.id, baja: hasta } })
+        continue
+      }
+      cambios.push({ lineaId: l.id, partyId: l.partyId, que: 'baja', linea: texto(l), hasta, antes: { hasta: l.hasta, importePropioCent: l.importePropioCent, alMesCent: alMesAntes },
+        porque: `GoCardless ya no cobra «${s.nombre}» (${s.estado === 'finished' ? 'acabada' : 'cancelada'}): «${texto(l)}» se cobra entera ${enPalabras(hasta)} y ya no desde el mes siguiente.` })
       continue
     }
     if (s.estado === 'active' && vale(l.desde, l.hasta, mes) && s.periodo === l.periodo && actual !== s.importeCent) {
-      cambios.push({ lineaId: l.id, partyId: l.partyId, que: 'importe', importePropioCent: s.importeCent,
+      cambios.push({ lineaId: l.id, partyId: l.partyId, que: 'importe', linea: texto(l), importePropioCent: s.importeCent,
         antes: { hasta: l.hasta, importePropioCent: l.importePropioCent, alMesCent: alMesAntes },
         porque: `«${texto(l)}»: Sumied ${actual === null ? 'no tenía importe' : euros(actual)} y GoCardless cobra ${euros(s.importeCent)}${s.periodo === 'anio' ? ' al año' : ' al mes'}: se pone el de GoCardless.` })
     }
@@ -130,4 +153,17 @@ export function planIgualar(empresa: string, hoy: string, mes: Mes, lineas: Line
       datos: { suscripciones: ss.map((s) => s.id), al_mes_cent: total } })
   }
   return { cambios, pendientes }
+}
+
+/**
+ * R19c · Lo que se dice cuando una línea no se ha podido igualar: con el cliente y la línea, en palabras de la calle,
+ * nunca el texto de la base (el error técnico va al registro de la función).
+ */
+export function fraseNoIgualada(c: Cambio, cliente: string, error: string): string {
+  const que = c.que === 'baja' ? `dar de baja ${c.hasta ? `en ${enPalabras(c.hasta)}` : ''}`.trim() : 'poner el importe que cobra GoCardless'
+  const linea = c.linea || 'una línea'
+  const porque = /conta_linea_check|check constraint/i.test(error) ? 'la fecha de baja tiene que ser el día 1 de un mes y no antes de su alta'
+    : /permission|policy|42501/i.test(error) ? 'no hay permiso para cambiarla'
+    : 'la base no la ha dejado cambiar'
+  return `No se ha podido ${que} «${linea}» de ${cliente}: ${porque}. Lo demás se ha igualado; esta, revísala a mano.`
 }

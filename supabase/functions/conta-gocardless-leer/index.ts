@@ -26,7 +26,7 @@ import type { FichaParaCasar } from './casado.ts'
 import { puedeLeer } from './salida.ts'
 import { leerTodas } from './paginas.ts'
 import { planEnlaces, personasDeDecisiones, type EstadoEnlace, type PorEnlace } from './enlace.ts'
-import { planIgualar } from './igualar.ts'
+import { fraseNoIgualada, planIgualar } from './igualar.ts'
 import { refDeFicha } from '../_shared/crm/ficha.ts'
 import { jsPDF } from 'npm:jspdf@4.2.1'
 import { rematarFacturasDeRecibos } from '../_shared/cobro/facturaRecibo.ts'
@@ -228,18 +228,25 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
       }), atado, new Set())
     const copiaId = (copia as { copia?: string } | null)?.copia ?? null
     const quienIguala = `GoCardless (lectura ${por === 'persona' ? `de ${quien ?? 'una persona'}` : 'de cada noche'})`
+    // R19c · Una línea que no se puede igualar no para la lectura ni las demás: queda en «Pendiente de revisar», en
+    // palabras de la calle, con el cliente y la línea (25/11: el #815 paraba toda la lectura con el texto de Postgres).
+    const nombreDeFicha = new Map(fichas.map((f) => [f.partyId, f.nombre]))
+    const hechos: typeof igual.cambios = []
     for (const c of igual.cambios) {
       const campos = c.que === 'baja' ? { hasta: c.hasta } : { importe_propio: aEuros(c.importePropioCent ?? null) }
       const { error } = await db.from('conta_linea').update({ ...campos, updated_at: new Date().toISOString(), updated_by_name: quienIguala }).eq('id', c.lineaId).eq('company_id', empresa)
-      if (error) throw new Error(`No se ha podido igualar una línea a GoCardless: ${error.message}`)
+      if (!error) { hechos.push(c); continue }
+      console.error(JSON.stringify({ r19: 'igualar_no', empresa, linea: c.lineaId, que: c.que, error: error.message }))
+      igual.pendientes.push({ tipo: 'totales_distintos', porque_codigo: 'no_se_pudo_igualar', company_id: empresa, party_id: c.partyId, gc_cliente_id: null,
+        porque: fraseNoIgualada(c, nombreDeFicha.get(c.partyId) ?? 'este cliente', error.message), datos: { linea: c.lineaId, que: c.que } })
     }
-    if (igual.cambios.length) {
-      const { error } = await db.from('conta_gc_igualado').insert(igual.cambios.map((c) => ({ account_id: cuenta, company_id: empresa, lectura_id: lectura, copia_id: copiaId,
+    if (hechos.length) {
+      const { error } = await db.from('conta_gc_igualado').insert(hechos.map((c) => ({ account_id: cuenta, company_id: empresa, lectura_id: lectura, copia_id: copiaId,
         linea_id: c.lineaId, party_id: c.partyId, que: c.que, antes: c.antes, despues: c.que === 'baja' ? { hasta: c.hasta } : { importe_propio_cent: c.importePropioCent }, porque: c.porque })))
       if (error) throw new Error(`No se ha podido apuntar lo igualado a GoCardless: ${error.message}`)
     }
-    console.log(JSON.stringify({ r19: 'igualar', empresa, bajas: igual.cambios.filter((c) => c.que === 'baja').length,
-      importes: igual.cambios.filter((c) => c.que === 'importe').length, pendientes: igual.pendientes.length }))
+    console.log(JSON.stringify({ r19: 'igualar', empresa, bajas: hechos.filter((c) => c.que === 'baja').length,
+      importes: hechos.filter((c) => c.que === 'importe').length, no_igualadas: igual.cambios.length - hechos.length, pendientes: igual.pendientes.length }))
 
     // 3 · Las diferencias, con las líneas y tarifas como quedan ahora.
     const sinConvertir = await leerTodas<Record<string, string | null>>((d, h) => db.from('conta_gc_importacion')
