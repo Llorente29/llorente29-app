@@ -1,0 +1,4 @@
+# K14c · Los pagos con tarjeta, uno a uno. La 0015 añade conta_banco_cobro_tarjeta (en staging no hay QBO: no mete
+# filas). Su prueba, en ROLLBACK: tres pagos de un día, lo que la tabla no deja, dos pasadas y la vuelta atrás.
+supabase/migrations/20261127T0015_k14c_tpv_por_cliente.sql
+supabase/staging/sql/20261127_k14c_tpv_por_cliente_prueba.sql
