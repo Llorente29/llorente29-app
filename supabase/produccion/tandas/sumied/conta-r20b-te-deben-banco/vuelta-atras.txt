@@ -1,0 +1,3 @@
+# R20b · la vuelta atrás: sin la función de lo cobrado por el banco.
+cuenta: scripts/conta/produccion/cuentas/r20b-te-deben-banco.sql
+supabase/vuelta-atras/20261126T1139_r20b_cifras_del_banco.down.sql
