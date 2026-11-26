@@ -22,7 +22,7 @@ import { validarIban } from '@/modules/conta/lib/iban'
 export class CsvBancoNoValido extends Error {}
 
 export type BancoCsv = 'bbva' | 'santander' | 'caixabank' | 'sabadell' | 'bankinter' | 'unicaja' | 'kutxabank' | 'ibercaja'
-  | 'abanca' | 'ing' | 'cajamar' | 'tarjeta'
+  | 'abanca' | 'ing' | 'cajamar' | 'tarjeta' | 'diezbank'
 
 type Patrones = RegExp[]
 
@@ -49,6 +49,8 @@ export interface PerfilBanco {
   contraparte?: Patrones[]
   /** La tarjeta da los cargos en positivo: se les da la vuelta. */
   cargosEnPositivo?: boolean
+  /** K14 · Las fechas en texto vienen con el mes delante («11/25/26»: así las da el Excel de DiezBank al leerlo como texto). */
+  mesPrimero?: boolean
 }
 
 const r = (s: string) => new RegExp(`^${s}$`, 'i')
@@ -88,7 +90,19 @@ export const PERFILES: Record<BancoCsv, PerfilBanco> = {
     concepto: [[r('concepto')]], cargo: [r('cargo'), r('debe')], abono: [r('abono'), r('haber')], saldo: [r('saldo')] },
   tarjeta: { nombre: 'Tarjeta de crédito', entidad: null, fecha: [r('fecha( operaci[oó]n)?')],
     concepto: [[r('comercio'), r('establecimiento'), r('concepto'), r('descripci[oó]n')]], importe: [r('importe')], cargosEnPositivo: true },
+  // K14 (26/11) · «Extracto de movimientos de DiezBank» (el primer fichero de verdad, de una gestoría: cuenta 57200000):
+  // título en la fila 4, títulos en la 6 (Fecha · Concepto original · Concepto · Importe · Saldo · Subcuenta), lo más
+  // reciente arriba, fechas e importes como números de Excel. El concepto original trae la vía y quién paga
+  // («TRANSFER INMEDIATA, <ordenante>, <referencia>, …»); el concepto, lo mismo (en el fichero medido, igual 847 de 847).
+  // No trae IBAN en la cabecera: la cuenta se elige al subirlo. Se reconoce por su título, no por sus columnas (que
+  // también encajan con otros perfiles).
+  // Su Excel guarda la fecha como fecha; leída como texto (como lo lee la pantalla) sale con el mes delante: «11/25/26».
+  diezbank: { nombre: 'DiezBank', entidad: null, fecha: [r('fecha')], mesPrimero: true,
+    concepto: [[r('concepto original')], [r('concepto')]], importe: [r('importe')], saldo: [r('saldo')] },
 }
+
+/** K14 · El título de la exportación de DiezBank, en las primeras filas. */
+const TITULO_DIEZBANK = /^extracto de movimientos de diezbank$/i
 
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
 
@@ -135,11 +149,13 @@ export function leerImporte(bruto: string): number | null {
 }
 
 /** «13/10/2026», «13-10-26», «2026-10-13», o el número de serie de Excel → AAAA-MM-DD. Null si no es una fecha. */
-export function leerFecha(bruto: string): string | null {
+export function leerFecha(bruto: string, mesPrimero = false): string | null {
   const s = bruto.trim()
   let d: number, m: number, a: number
   let x = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})(?:\s.*)?$/)
-  if (x) { d = Number(x[1]); m = Number(x[2]); a = Number(x[3]); if (a < 100) a += a >= 70 ? 1900 : 2000 }
+  if (x) {
+    d = Number(x[mesPrimero ? 2 : 1]); m = Number(x[mesPrimero ? 1 : 2]); a = Number(x[3]); if (a < 100) a += a >= 70 ? 1900 : 2000
+  }
   else if ((x = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/))) { a = Number(x[1]); m = Number(x[2]); d = Number(x[3]) }
   else if (/^\d{5}(\.\d+)?$/.test(s)) {
     // Número de serie de Excel (días desde el 30/12/1899).
@@ -170,13 +186,15 @@ function ibanEnCabecera(filas: string[][]): string | null {
 
 /** Qué perfil encaja con unas filas: el de la entidad del IBAN de la cabecera si lo hay; si no, el primero cuyas columnas estén todas. */
 export function reconocerBanco(filas: string[][]): BancoCsv | null {
+  // K14 · DiezBank, por su título (sus columnas también encajan con las de otros bancos).
+  if (filas.slice(0, 15).some((f) => f.some((c) => TITULO_DIEZBANK.test(norm(c))))) return 'diezbank'
   const iban = ibanEnCabecera(filas.slice(0, 15))
   if (iban?.startsWith('ES')) {
     const ent = iban.slice(4, 8)
     const b = (Object.keys(PERFILES) as BancoCsv[]).find((k) => PERFILES[k].entidad === ent)
     if (b) return b
   }
-  for (const k of Object.keys(PERFILES) as BancoCsv[]) if (k !== 'tarjeta' && filaDeCabecera(filas, PERFILES[k]) >= 0) return k
+  for (const k of Object.keys(PERFILES) as BancoCsv[]) if (k !== 'tarjeta' && k !== 'diezbank' && filaDeCabecera(filas, PERFILES[k]) >= 0) return k
   return null
 }
 
@@ -231,7 +249,7 @@ export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido 
   const filasMov: { m: MovimientoLeido; saldo: number | null }[] = []
   for (let i = ic + 1; i < filas.length; i++) {
     const f = filas[i]
-    const fecha = leerFecha(f[col.fecha] ?? '')
+    const fecha = leerFecha(f[col.fecha] ?? '', p.mesPrimero)
     if (!fecha) {
       if (f.some((c) => c.trim() !== '')) avisos.push(`Fila ${i + 1}: sin fecha; no es un movimiento («${norm(f.join(' ')).slice(0, 40)}»).`)
       continue
@@ -250,7 +268,7 @@ export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido 
     const concepto = partes.join(' · ')
     filasMov.push({
       m: {
-        fecha, fechaValor: (col.valor >= 0 ? leerFecha(f[col.valor] ?? '') : null) ?? fecha, importeCent: imp,
+        fecha, fechaValor: (col.valor >= 0 ? leerFecha(f[col.valor] ?? '', p.mesPrimero) : null) ?? fecha, importeCent: imp,
         conceptoBanco: concepto, conceptoComun: null, conceptoPropio: col.propio >= 0 ? (norm(f[col.propio] ?? '') || null) : null, numeroDocumento: null,
         referencia1: col.ref >= 0 ? (norm(f[col.ref] ?? '') || null) : null, referencia2: null, equivalencia: null,
         tipoMovimiento: col.tipo >= 0 ? (norm(f[col.tipo] ?? '') || null) : null,

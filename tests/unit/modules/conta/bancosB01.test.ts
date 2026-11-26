@@ -271,11 +271,15 @@ const EJEMPLOS: Record<BancoCsv, string[][]> = {
     ['03/10/2026', 'MERCADO CENTRAL', '86,40'],
     ['04/10/2026', 'GASOLINERA', '50,00'],
     ['05/10/2026', 'DEVOLUCION MERCADO CENTRAL', '-10,00']],
+  // K14 · DiezBank: título, lo más reciente arriba, el mes delante (como lo lee la pantalla) y comas de miles.
+  diezbank: [['Extracto de movimientos de DiezBank'], ['Fecha', 'Concepto original', 'Concepto', 'Importe', 'Saldo', 'Subcuenta'],
+    ['10/02/26', 'TRANSFER INMEDIATA, CLIENTE DELTA, 000001020261002, gestoria', 'TRANSFER INMEDIATA, CLIENTE DELTA, 000001020261002, gestoria', '140.00', '1,100.00', ''],
+    ['10/01/26', 'RECIBO', 'RECIBO', '-40.00', '960.00', '']],
 }
 
 describe('Excel/CSV de los once bancos y la tarjeta', () => {
   it('hay un perfil y un ejemplo por cada banco del encargo, y la tarjeta', () => {
-    expect(Object.keys(PERFILES).sort()).toEqual(['abanca', 'bankinter', 'bbva', 'caixabank', 'cajamar', 'ibercaja', 'ing', 'kutxabank', 'sabadell', 'santander', 'tarjeta', 'unicaja'])
+    expect(Object.keys(PERFILES).sort()).toEqual(['abanca', 'bankinter', 'bbva', 'caixabank', 'cajamar', 'diezbank', 'ibercaja', 'ing', 'kutxabank', 'sabadell', 'santander', 'tarjeta', 'unicaja'])
     expect(Object.keys(EJEMPLOS).sort()).toEqual(Object.keys(PERFILES).sort())
   })
 

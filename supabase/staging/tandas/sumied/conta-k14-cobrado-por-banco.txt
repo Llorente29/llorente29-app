@@ -1,0 +1,5 @@
+# K14 · Lo cobrado por el banco, casado solo con su cliente. La 0915 solo añade (la tabla de lo casado, la de los recibos
+# pagados por el banco y sus funciones). Su prueba, con un extracto inventado leído dos veces, el motor, «Sí, es este»,
+# «No es de ningún cliente» y la vuelta atrás dentro.
+supabase/migrations/20261126T0915_k14_cobrado_por_banco.sql
+supabase/staging/sql/20261126_k14_cobrado_por_banco_prueba.sql

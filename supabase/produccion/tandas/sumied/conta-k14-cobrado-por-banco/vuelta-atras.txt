@@ -1,0 +1,4 @@
+# K14 · la vuelta atrás: quita las dos tablas y las cuatro funciones (lo casado se pierde; los movimientos del banco y
+# los recibos de GoCardless no se tocan). Antes, avisar a Q y a R.
+cuenta: scripts/conta/produccion/cuentas/k14-cobrado-por-banco.sql
+supabase/vuelta-atras/20261126T0915_k14_cobrado_por_banco.down.sql

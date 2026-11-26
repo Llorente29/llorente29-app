@@ -1,0 +1,11 @@
+# K14 · Lo cobrado por el banco, casado solo con su cliente (26/11). Rama conta/k14-cobrado-por-banco.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0915  Añade la tabla de lo casado (conta_banco_cobro, una fila por entrada del banco que no es de GoCardless) y la
+#         de los recibos de GoCardless pagados por el banco (conta_banco_cobro_recibo, un recibo una sola vez), con
+#         las tres funciones del motor: conta_banco_cobros_datos, conta_banco_cobros_guardar y
+#         conta_banco_cobro_decidir. Solo añade; no escribe en ninguna fila de lo que ya existe.
+#
+# Nada en el camino del pedido. Lo cuenta k14-cobrado-por-banco.sql (regla 31). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k14-cobrado-por-banco.sql
+supabase/migrations/20261126T0915_k14_cobrado_por_banco.sql
