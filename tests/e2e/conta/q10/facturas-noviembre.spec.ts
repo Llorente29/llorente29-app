@@ -285,7 +285,9 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     const fila5 = cegid.getByRole('table', { name: 'Fichas sin código de Cegid' }).locator('tr[data-party="p5"]')
     await expect(fila5).toContainText('Cliente Cegid 105 · por su correo')
     await fila5.getByRole('button', { name: 'Atar al 105' }).click()
-    await expect(fila5).toContainText('Atada al cliente 105 de Cegid.', { timeout: 30_000 })
+    await expect(cegid.locator('[data-prueba="atado"]')).toHaveText('Atada al cliente 105 de Cegid.', { timeout: 30_000 })
+    // Atada, sale de la lista de fichas sin código.
+    await expect(fila5).toHaveCount(0)
     await expect(mandar.locator('[data-prueba="vuelta-1-frase"]')).toHaveText('Primero: 5 clientes, 379,70 € → factura con la serie 1', { timeout: 30_000 })
     mkdirSync(DIR, { recursive: true })
     await page.evaluate(() => document.fonts.ready)

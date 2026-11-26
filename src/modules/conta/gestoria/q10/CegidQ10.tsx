@@ -64,6 +64,8 @@ export function CegidQ10(p: PropsCegidQ10) {
         <details className="q10-sin-codigo" data-prueba="sin-codigo">
           <summary>Las {p.sinCodigo.length} fichas sin código de Cegid, con su NIF y lo que se propone</summary>
           <p className="q10-linea">Lo propuesto sale de su correo de GoCardless o de su nombre en Cegid. Mira que es el cliente bueno antes de atarlo: queda apuntado quién lo ató.</p>
+          {/* La frase va fuera de la fila: atada, la ficha sale de esta lista (regla 8: lo hecho se dice igual). */}
+          {atando && <p className="q10-linea" data-prueba="atado" data-tono={atando.estado === 'bien' ? 'bien' : atando.estado === 'mal' ? 'mal' : undefined} role={atando.estado === 'mal' ? 'alert' : 'status'}>{atando.frase}</p>}
           <div className="q10-tabla-caja">
             <table className="q10-tabla" aria-label="Fichas sin código de Cegid">
               <thead><tr><th>Ficha</th><th>NIF</th><th>Su 430 en Sumied</th><th>Por qué</th><th>En Cegid parece</th></tr></thead>
@@ -73,7 +75,7 @@ export function CegidQ10(p: PropsCegidQ10) {
                     <td>{x.propuestas.length === 0 ? <span className="g4-pequeno">Ninguno por correo ni por nombre</span> : x.propuestas.map((k) => (
                       <div key={k.codigo}><button type="button" className="g4-boton" disabled={!p.alAtar || atando?.estado === 'trabajando'} onClick={() => void atar(x.partyId, k.codigo, k.por)}>
                         Atar al {k.codigo}</button> <span className="g4-pequeno">{k.nombre ?? ''} · por su {k.por}</span></div>))}
-                      {atando?.party === x.partyId && <div className="q10-linea" data-tono={atando.estado === 'bien' ? 'bien' : atando.estado === 'mal' ? 'mal' : undefined} role={atando.estado === 'mal' ? 'alert' : 'status'}>{atando.frase}</div>}</td></tr>
+</td></tr>
                 ))}
               </tbody>
             </table>
