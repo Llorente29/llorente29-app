@@ -1,0 +1,2 @@
+# X14 · 2 · Sin vuelta atrás: no cambia nada (ver aplicar.txt).
+cuenta: scripts/conta/produccion/cuentas/x14k-medir-2025.sql

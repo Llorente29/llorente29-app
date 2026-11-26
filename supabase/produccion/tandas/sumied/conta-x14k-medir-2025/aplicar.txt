@@ -1,0 +1,37 @@
+# X14 · 2 · SOLO MEDIR (Julio, 26/11): el 2025 de QBO no entra en prueba (supplier_invoice_tax_supplier_invoice_id_vat_pct_key)
+# y el diario dice que 12 meses no dan lo mismo que ERP10. La 1750 no hace nada: la tanda existe para que el ENSAYO cuente la
+# carga a medias, solo números (cuentas/x14k-medir-2025.sql). Rama conta/x14k-medir-2025. Se ensaya desde main; el real NO se
+# lanza nunca.
+cuenta: scripts/conta/produccion/cuentas/x14k-medir-2025.sql
+supabase/migrations/20261126T1750_x14k_medir_2025.sql
+sin-vuelta-atras: supabase/migrations/20261126T1750_x14k_medir_2025.sql · motivo: no cambia nada; solo mide, y el real no se lanza.
+esperado: x14k-medir-2025 · cargas a medias de QBO = como antes
+esperado: x14k-medir-2025 · cola · asientos (hechos · total) = como antes
+esperado: x14k-medir-2025 · cola · facturas recibidas (hechas · total) = como antes
+esperado: x14k-medir-2025 · cola · facturas emitidas (hechas · total) = como antes
+esperado: x14k-medir-2025 · cola · primer trozo sin hacer (tipo · libro · ¿tiene dos tramos al mismo tipo?) = como antes
+esperado: x14k-medir-2025 · recibidas con dos tramos o más al mismo tipo de IVA = como antes
+esperado: x14k-medir-2025 · tramos repetidos: grupos (factura y tipo) = como antes
+esperado: x14k-medir-2025 · tramos repetidos: por tipo de IVA (tipo: grupos) = como antes
+esperado: x14k-medir-2025 · tramos repetidos: tramos por grupo (2 · 3 · más) = como antes
+esperado: x14k-medir-2025 · tramos repetidos: grupos con los tramos idénticos (misma base y cuota) = como antes
+esperado: x14k-medir-2025 · tramos repetidos: grupos con un tramo en negativo y otro en positivo = como antes
+esperado: x14k-medir-2025 · tramos repetidos: grupos con algún tramo de cuota 0 = como antes
+esperado: x14k-medir-2025 · tramos repetidos: facturas casadas con su asiento = como antes
+esperado: x14k-medir-2025 · tramos repetidos: facturas ya hechas (no debería haber ninguna) = como antes
+esperado: x14k-medir-2025 · tramos repetidos: tramos de la factura en total (mínimo · máximo) = como antes
+esperado: x14k-medir-2025 · diario · 2025-01 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · 2025-02 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · 2025-03 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · 2025-04 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · 2025-05 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · 2025-06 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · 2025-07 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · 2025-08 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · 2025-09 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · 2025-10 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · 2025-11 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · 2025-12 · asientos · líneas leídas = como antes
+esperado: x14k-medir-2025 · diario · asientos fuera de 2025 = como antes
+esperado: x14k-medir-2025 · frases guardadas · de «no da lo mismo que el resumen de ERP10» = como antes
+esperado: x14k-medir-2025 · frases guardadas · la de enero (solo tipos de asiento y recuentos) = como antes

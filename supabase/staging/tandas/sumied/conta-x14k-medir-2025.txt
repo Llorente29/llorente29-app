@@ -1,0 +1,2 @@
+# X14 · 2 · Solo medir el 2025 de QBO: no hace nada.
+supabase/migrations/20261126T1750_x14k_medir_2025.sql

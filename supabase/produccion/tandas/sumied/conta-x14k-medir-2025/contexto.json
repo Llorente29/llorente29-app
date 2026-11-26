@@ -1,0 +1,19 @@
+{
+ "_que": "X14 · 2 · Solo medir la carga a medias del 2025 de QBO: el fichero no toca ningún objeto. Contexto vacío, medido en la BASE LOCAL. El contexto de verdad lo mide el workflow en el ensayo.",
+ "medido": "2026-11-26T16:55Z",
+ "tanda": {
+  "supabase/migrations/20261126T1750_x14k_medir_2025.sql": "5a7b9d6a7680eb387138c7cab3dc0701"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
