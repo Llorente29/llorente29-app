@@ -41,15 +41,24 @@ async function leer(q: PromiseLike<{ data: unknown; error: { message: string; co
 const COLS = 'id, status, doc_type, origin, series_code, number_text, issue_date, due_date, party_id, customer, location_id, base, tax, total, entry_id, sent_at, corrects_id'
 
 /** Las facturas de Sumied de la empresa (todas: son pocas), sus cobros y su estado de cobro (PC01: de la base, conta_factura_cobro). */
-async function deSumied(accountId: string, companyId: string): Promise<{ filas: Fila[]; cobros: { factura: string; fecha: string; importe: number }[]; estados: Map<string, EstadoCobroBase> }> {
+async function deSumied(accountId: string, companyId: string): Promise<{ filas: Fila[]; repetidas: Set<string>; cobros: { factura: string; fecha: string; importe: number }[]; estados: Map<string, EstadoCobroBase> }> {
   const filas = await leer(tabla('customer_invoice').select(COLS).eq('account_id', accountId).eq('company_id', companyId)
     .order('issue_date', { ascending: false }), 'las facturas de venta')
   const [cobros, estados] = filas.length === 0 ? [[], []] : await Promise.all([
     leer(tabla('customer_invoice_payment').select('invoice_id, paid_on, amount').eq('account_id', accountId).eq('company_id', companyId), 'los cobros de las facturas'),
     leer(tabla('conta_factura_cobro').select('invoice_id, estado').eq('account_id', accountId).eq('company_id', companyId), 'el estado de cobro de las facturas'),
   ])
+  // X14i · Las repetidas en ERP10 (customer_invoice.import_repeated, de la 20261126T0710). Mientras la base no la tenga, ninguna
+  // lo está; otro error se dice, no se esconde.
+  const repetidas = new Set<string>()
+  if (filas.length) {
+    const { data, error } = await tabla('customer_invoice').select('id').eq('account_id', accountId).eq('company_id', companyId).eq('import_repeated', true)
+    if (error && !/import_repeated|42703|PGRST204/i.test(`${error.code ?? ''} ${error.message ?? ''}`)) throw new Error(`No he podido leer las facturas repetidas en ERP10: ${error.message}`)
+    for (const f of (data ?? []) as Fila[]) repetidas.add(String(f.id))
+  }
   return {
     filas,
+    repetidas,
     cobros: cobros.map((c) => ({ factura: String(c.invoice_id), fecha: String(c.paid_on), importe: n(c.amount) })),
     estados: new Map(estados.map((e) => [String(e.invoice_id), String(e.estado) as EstadoCobroBase])),
   }
@@ -119,6 +128,7 @@ export async function leerFacturasVenta(accountId: string, companyId: string, de
       base: n(f.base), iva: n(f.tax), total: n(f.total), cobrado: cobradoDe.get(String(f.id)) ?? 0,
       guardado: String(f.status) as FacturaVenta['guardado'], enviada: !!f.sent_at, rectificativa: f.doc_type === 'rectificativa', localId: s(f.location_id),
       estadoCobro: sumied.estados.get(String(f.id)) ?? null,
+      ...(sumied.repetidas.has(String(f.id)) ? { repetidaEnErp10: true as const } : {}),
     }
   })
   // Lo de Sumied ya está por su factura: su anotación del libro no se repite.

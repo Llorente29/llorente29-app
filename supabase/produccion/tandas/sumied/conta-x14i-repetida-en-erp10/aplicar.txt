@@ -1,0 +1,12 @@
+# X14 · 2 · «Repetida en ERP10» (Julio, 26/11): el libro de expedidas del 2024 de QBO trae 9 facturas dos veces, iguales, y
+# Sumied no admitía dos emitidas con el mismo número. Lo traído de ERP10 anterior al día de inicio de la empresa es historia de
+# ERP10 y Sumied es copia exacta: entran todas, marcadas «repetida en ERP10». Desde el día de inicio manda Sumied y una repetida
+# para, como hoy; las nuevas siguen sin poder repetir número. Rama conta/x14i-repetida-en-erp10. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar. Va ANTES que la tanda de conta/x14h-dar-por-bueno-2024 (que da por bueno el 2024).
+#
+#   0710  customer_invoice.import_repeated (nueva) y su guarda; el índice único de las no marcadas y, después, quita la
+#         restricción de un solo número (autorizo); conta_traer_dar_por_bueno entera, con respaldo. Declarado, con su prueba.
+#
+# Nada en el camino del pedido. No cambia ninguna fila al aplicarse. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x14i-repetida.sql
+supabase/migrations/20261126T0710_x14i_repetida_en_erp10.sql

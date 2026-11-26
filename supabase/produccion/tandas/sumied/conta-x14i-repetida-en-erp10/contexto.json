@@ -1,0 +1,25 @@
+{
+ "_que": "X14 · 2 · «Repetida en ERP10» · contexto medido en la BASE LOCAL con la estructura de staging (como en producción), en SOLO LECTURA: no en producción. Una columna nueva y su guarda, el índice que sustituye a la restricción de un solo número y conta_traer_dar_por_bueno reemplazada (misma firma, con respaldo y prueba de staging). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-26T07:05Z",
+ "tanda": {
+  "supabase/migrations/20261126T0710_x14i_repetida_en_erp10.sql": "f1962f4ca3331e18bbf43ba1755d120d"
+ },
+ "contexto": {
+  "tablas": [
+   "public.customer_invoice"
+  ],
+  "funciones": [
+   "public.conta_traer_dar_por_bueno(uuid,text)"
+  ],
+  "filas": {
+   "public.customer_invoice": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
