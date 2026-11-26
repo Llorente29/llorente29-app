@@ -1,0 +1,23 @@
+# K14b · QBO Integrity: un solo banco, «CaixaBank», con la subcuenta 57200000 y sus 847 movimientos (Julio, 26/11).
+# Rama conta/k14b-qbo-un-banco. Va DESPUÉS de la tanda de conta/k14b-un-solo-banco (la 1240: _bank_juntar y
+# _bank_antes_del_inicio_recalcular), ya aplicada. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1241  Deshace los 37 casados de GoCardless (contraasiento de hoy; ni el anulado ni el contraasiento salen a ERP10),
+#         junta los dos bancos en el de los movimientos, lo llama «CaixaBank» con la 57200000, deja los 708 de antes del
+#         01/11 «de antes del inicio» y vuelve a casar los 4 ingresos de noviembre con su pago de GoCardless, ya en la
+#         57200000. Destruye y mueve: AUTORIZO. Sin vuelta atrás (lo esperado, abajo).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k14b-qbo-un-banco.sql
+supabase/migrations/20261126T1241_k14b_qbo_un_banco.sql
+sin-vuelta-atras: supabase/migrations/20261126T1241_k14b_qbo_un_banco.sql · motivo: un asiento validado se anula con un contraasiento, y el banco repetido se borra (no tenía nada).
+esperado: k14b-qbo-un-banco · QBO · bancos activos = 1
+esperado: k14b-qbo-un-banco · QBO · el banco de los movimientos: nombre · subcuenta = CaixaBank · 57200000
+esperado: k14b-qbo-un-banco · QBO · movimientos: filas · huella = como antes
+esperado: k14b-qbo-un-banco · QBO · movimientos de antes del inicio = 708
+esperado: k14b-qbo-un-banco · QBO · casados vivos: total · de antes del 01/11 · con su asiento en la 57200000 = 4 · 0 · 4
+esperado: k14b-qbo-un-banco · QBO · asientos de banco anulados = 37
+esperado: k14b-qbo-un-banco · QBO · cobros casados del K14: filas · huella = como antes
+esperado: k14b-qbo-un-banco · cuenta 51ad1792-6629-4ef7-833a-b57b09a86710 · movimientos del banco: filas · huella = como antes
+esperado: k14b-qbo-un-banco · cuenta 623d946a-a0ce-4f34-8c00-9761dfed8331 · movimientos del banco: filas · huella = como antes
+esperado: k14b-qbo-un-banco · cuenta de000000-0000-4000-8000-0000000000a0 · movimientos del banco: filas · huella = como antes
