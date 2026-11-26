@@ -196,7 +196,7 @@ export default function FacturasPage() {
   const columnas: ColumnaLista<FacturaVenta>[] = [
     {
       id: 'numero', titulo: 'Número', ordenable: true, prioridad: 1, minimo: 120,
-      celda: (x) => <span className="s-lista-texto-doble"><span className="s-cifra">{x.numero ?? 'Borrador'}</span>{x.rectificativa && !x.tpv && <span className="s-tarjeta-apoyo">Rectificativa</span>}{x.tpv && apoyoTpv(x.tpv)}</span>,
+      celda: (x) => <span className="s-lista-texto-doble"><span className="s-cifra">{x.numero ?? 'Borrador'}</span>{x.rectificativa && !x.tpv && <span className="s-tarjeta-apoyo">Rectificativa</span>}{x.repetidaEnErp10 && <span className="s-tarjeta-apoyo" title="El libro de facturas expedidas de ERP10 la trae más de una vez con este número. Es historia de ERP10: Sumied la guarda igual.">Repetida en ERP10</span>}{x.tpv && apoyoTpv(x.tpv)}</span>,
     },
     { id: 'fecha', titulo: 'Fecha', ordenable: true, ancho: '80px', prioridad: 2, minimo: 80, celda: (x) => <span className="s-cifra">{diaMes(x.fecha)}</span> },
     {

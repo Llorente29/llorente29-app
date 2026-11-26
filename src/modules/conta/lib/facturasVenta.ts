@@ -96,6 +96,8 @@ export interface FacturaVenta {
   guardado: 'borrador' | 'emitida' | 'anulada'
   enviada: boolean
   rectificativa: boolean
+  /** X14h · Traída de ERP10, cuyo libro de expedidas la trae más de una vez con el mismo número (customer_invoice.import_repeated). */
+  repetidaEnErp10?: true
   localId: string | null
   diez: DiezFactura
   /** PC01 · El estado de cobro de la base (conta_factura_cobro); null en las del libro. */

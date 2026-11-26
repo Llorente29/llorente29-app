@@ -80,8 +80,18 @@ select clave, valor from (
                                  having count(*) > 1 and bool_or((x->>'total')::numeric < 0)) d)::text   -- quieta: el detalle de una carga en prueba no cambia
     from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
   union all
-  select 16, 'carga del 2024 de QBO · emitidas fuera por venir dos veces',
-         (select count(*) from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x
-           where x->>'marca' = 'fuera' and x->>'porque' = 'ERP10 la trae dos veces, igual')::text   -- quieta: el detalle de una carga en prueba no cambia
+  -- X14h · Las repetidas entran todas, marcadas «repetida en ERP10» (to_jsonb: antes de la tanda la columna no existe).
+  select 16, 'carga del 2024 de QBO · emitidas marcadas repetida en ERP10',
+         (select count(*) from public.customer_invoice c where c.import_run_id = r.id   -- quieta: solo las crea darla por buena
+           and coalesce((to_jsonb(c)->>'import_repeated')::boolean, false))::text
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 17, 'carga del 2024 de QBO · día de inicio de la empresa',
+         coalesce(to_char(public.conta_dia_de_inicio(r.company_id), 'YYYY-MM-DD'), 'sin fijar')   -- quieta: lo fija Julio, a mano
+    from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
+  union all
+  select 18, 'carga del 2024 de QBO · emitidas repetidas: grupos del día de inicio o después',
+         (select count(*) from (select 1 from jsonb_array_elements(coalesce(r.detail->'emitidas', '[]')) x where x->>'marca' is distinct from 'fuera' group by x->>'serie', x->>'ejercicio', x->>'numero'
+                                 having count(*) > 1 and max((x->>'fecha')::date) >= public.conta_dia_de_inicio(r.company_id)) d)::text   -- quieta: el detalle de una carga en prueba no cambia
     from public.import_run r where r.id = 'e694df2e-56ff-41b0-a7f7-94be3efaa6c9' and r.started_at < timestamptz '2026-11-25 22:00:00+01'
 ) t order by o, clave;
