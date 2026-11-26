@@ -40166,6 +40166,37 @@ end $$;
 
 
 --
+-- Name: conta_cifras_del_banco(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_cifras_del_banco(p_cuenta uuid) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with permiso as (
+    select p_cuenta as cuenta where coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(p_cuenta)
+  )
+  select jsonb_build_object(
+    'cruzadas', coalesce((select jsonb_agg(distinct b.company_id) from public.conta_banco_cobro b where b.account_id = (select cuenta from permiso)), '[]'::jsonb),
+    'recibos', coalesce((select jsonb_agg(jsonb_build_object('empresa_id', r.company_id, 'gc_id', r.gc_id, 'movement_id', r.movement_id, 'importe', r.importe,
+          'fecha', b.fecha, 'via', b.via) order by r.company_id, r.gc_id)
+        from public.conta_banco_cobro_recibo r join public.conta_banco_cobro b on b.movement_id = r.movement_id
+       where r.account_id = (select cuenta from permiso)), '[]'::jsonb),
+    'tarjeta', coalesce((select jsonb_agg(jsonb_build_object('empresa_id', b.company_id, 'movement_id', b.movement_id, 'fecha', b.fecha, 'importe', b.importe)
+          order by b.company_id, b.fecha, b.movement_id)
+        from public.conta_banco_cobro b
+       where b.account_id = (select cuenta from permiso) and b.via = 'tarjeta' and b.estado = 'tarjeta' and b.party_id is null), '[]'::jsonb))
+$$;
+
+
+--
+-- Name: FUNCTION conta_cifras_del_banco(p_cuenta uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_cifras_del_banco(p_cuenta uuid) IS 'R20b · Por empresa: si está cruzada con el banco (K14), los recibos de GoCardless que pagó el banco y el TPV sin asignar (via y estado «tarjeta», sin cliente). Lo lee «Clientes y cuotas» para «Te deben». De quien es de la cuenta o del servidor.';
+
+
+--
 -- Name: conta_cifras_del_cobro(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -121070,6 +121101,128 @@ COMMENT ON TABLE public.conta_banco_cobro_recibo IS 'K14 · Los recibos de GoCar
 
 
 --
+-- Name: treasury_account; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.treasury_account (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    kind text NOT NULL,
+    name text NOT NULL,
+    iban text,
+    bic text,
+    pgc_hint text,
+    is_default boolean DEFAULT false NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    location_id uuid,
+    iban_review jsonb,
+    short_name text,
+    sepa_suffix text,
+    CONSTRAINT treasury_account_iban_check CHECK (((iban IS NULL) OR (iban ~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$'::text))),
+    CONSTRAINT treasury_account_iban_si_banco CHECK (((kind <> 'bank'::text) OR (iban IS NOT NULL))),
+    CONSTRAINT treasury_account_kind_check CHECK ((kind = ANY (ARRAY['bank'::text, 'card'::text, 'cash'::text, 'pasarela'::text]))),
+    CONSTRAINT treasury_account_name_check CHECK ((length(TRIM(BOTH FROM name)) > 0)),
+    CONSTRAINT treasury_account_sepa_suffix_check CHECK (((sepa_suffix IS NULL) OR (sepa_suffix ~ '^[0-9]{3}$'::text)))
+);
+
+
+--
+-- Name: TABLE treasury_account; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.treasury_account IS 'C00. Cuentas bancarias, tarjetas y cajas de la empresa. El IBAN se valida con el núcleo del C01.';
+
+
+--
+-- Name: COLUMN treasury_account.location_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.treasury_account.location_id IS 'C04. El local de esta cuenta (cada local cobra y paga por la suya). Vacío: de la empresa.';
+
+
+--
+-- Name: COLUMN treasury_account.iban_review; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.treasury_account.iban_review IS 'B01 (P1). {iban_propuesto, motivo, extracto_id, fecha} cuando un extracto de esta cuenta trae otro IBAN: la pantalla dice «Revisa esta cuenta: el IBAN no es de tu empresa» con la corrección propuesta. Nunca se corrige solo.';
+
+
+--
+-- Name: COLUMN treasury_account.short_name; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.treasury_account.short_name IS 'B01 (respuesta 4). El nombre corto del banco en la barra de Bancos («Norte»); si no hay, el nombre entero.';
+
+
+--
+-- Name: COLUMN treasury_account.sepa_suffix; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.treasury_account.sepa_suffix IS 'PC01 · E2 · El sufijo del banco (tres cifras) detrás del NIF en los ficheros SEPA. Sin rellenar = 000.';
+
+
+--
+-- Name: conta_banco_lectura_completa; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.conta_banco_lectura_completa WITH (security_invoker='true') AS
+ SELECT t.company_id,
+    t.account_id,
+    t.id AS treasury_account_id,
+    t.name AS banco,
+    s.id AS statement_id,
+    s.source AS fuente,
+    s.period_from AS desde,
+    s.period_to AS hasta,
+    s.closing_balance AS saldo_final,
+    s.imported_at AS leida_en,
+    c.casados_en,
+    ((s.id IS NOT NULL) AND (c.casados_en IS NOT NULL) AND (c.casados_en >= s.imported_at)) AS cruzada
+   FROM ((public.treasury_account t
+     LEFT JOIN LATERAL ( SELECT x.id,
+            x.account_id,
+            x.company_id,
+            x.treasury_account_id,
+            x.source,
+            x.format,
+            x.file_name,
+            x.file_sha256,
+            x.period_from,
+            x.period_to,
+            x.opening_balance,
+            x.closing_balance,
+            x.movements_count,
+            x.new_count,
+            x.repeated_count,
+            x.possible_repeated_count,
+            x.balanced,
+            x.unchecked_reason,
+            x.continuity,
+            x.continuity_gap,
+            x.imported_at,
+            x.imported_by,
+            x.imported_by_name
+           FROM public.bank_statement x
+          WHERE ((x.treasury_account_id = t.id) AND (x.balanced IS TRUE) AND (x.unchecked_reason IS NULL) AND (x.continuity = ANY (ARRAY['primero'::text, 'sigue'::text])))
+          ORDER BY x.period_to DESC, x.imported_at DESC
+         LIMIT 1) s ON (true))
+     LEFT JOIN LATERAL ( SELECT max(b.calculado_en) AS casados_en
+           FROM public.conta_banco_cobro b
+          WHERE (b.company_id = t.company_id)) c ON (true))
+  WHERE ((t.kind = 'bank'::text) AND t.is_active);
+
+
+--
+-- Name: VIEW conta_banco_lectura_completa; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.conta_banco_lectura_completa IS 'K14b · Por banco activo, su última lectura completa del extracto (cuadra y sigue a la anterior sin hueco): desde, hasta, saldo final y cuándo se leyó; y si los cobros de clientes del K14 se casaron después (cruzada). «Te deben» (R) se da por cruzado con el banco hasta «hasta» solo si «cruzada».';
+
+
+--
 -- Name: conta_bitrix_pestana_aviso; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -138595,70 +138748,6 @@ CREATE TABLE public.training_path_progress (
 --
 
 COMMENT ON TABLE public.training_path_progress IS 'Progreso de un empleado en un itinerario, por fase. state=liberada es lo único que autoriza a sync_phase_assignments a crear course_assignment de esa fase. due_at aquí es un resumen (MAX de due_at de las asignaciones de la fase) -- el due_at que manda es el de cada course_assignment.';
-
-
---
--- Name: treasury_account; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.treasury_account (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    account_id uuid NOT NULL,
-    company_id uuid NOT NULL,
-    kind text NOT NULL,
-    name text NOT NULL,
-    iban text,
-    bic text,
-    pgc_hint text,
-    is_default boolean DEFAULT false NOT NULL,
-    is_active boolean DEFAULT true NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    created_by uuid,
-    location_id uuid,
-    iban_review jsonb,
-    short_name text,
-    sepa_suffix text,
-    CONSTRAINT treasury_account_iban_check CHECK (((iban IS NULL) OR (iban ~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$'::text))),
-    CONSTRAINT treasury_account_iban_si_banco CHECK (((kind <> 'bank'::text) OR (iban IS NOT NULL))),
-    CONSTRAINT treasury_account_kind_check CHECK ((kind = ANY (ARRAY['bank'::text, 'card'::text, 'cash'::text, 'pasarela'::text]))),
-    CONSTRAINT treasury_account_name_check CHECK ((length(TRIM(BOTH FROM name)) > 0)),
-    CONSTRAINT treasury_account_sepa_suffix_check CHECK (((sepa_suffix IS NULL) OR (sepa_suffix ~ '^[0-9]{3}$'::text)))
-);
-
-
---
--- Name: TABLE treasury_account; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.treasury_account IS 'C00. Cuentas bancarias, tarjetas y cajas de la empresa. El IBAN se valida con el núcleo del C01.';
-
-
---
--- Name: COLUMN treasury_account.location_id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.treasury_account.location_id IS 'C04. El local de esta cuenta (cada local cobra y paga por la suya). Vacío: de la empresa.';
-
-
---
--- Name: COLUMN treasury_account.iban_review; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.treasury_account.iban_review IS 'B01 (P1). {iban_propuesto, motivo, extracto_id, fecha} cuando un extracto de esta cuenta trae otro IBAN: la pantalla dice «Revisa esta cuenta: el IBAN no es de tu empresa» con la corrección propuesta. Nunca se corrige solo.';
-
-
---
--- Name: COLUMN treasury_account.short_name; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.treasury_account.short_name IS 'B01 (respuesta 4). El nombre corto del banco en la barra de Bancos («Norte»); si no hay, el nombre entero.';
-
-
---
--- Name: COLUMN treasury_account.sepa_suffix; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.treasury_account.sepa_suffix IS 'PC01 · E2 · El sufijo del banco (tres cifras) detrás del NIF en los ficheros SEPA. Sin rellenar = 000.';
 
 
 --
@@ -188080,6 +188169,15 @@ GRANT ALL ON FUNCTION public.conta_cierres(p_company uuid, p_desde date, p_hasta
 
 
 --
+-- Name: FUNCTION conta_cifras_del_banco(p_cuenta uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_cifras_del_banco(p_cuenta uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_cifras_del_banco(p_cuenta uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_cifras_del_banco(p_cuenta uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_cifras_del_cobro(p_cuenta uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -202302,6 +202400,22 @@ GRANT ALL ON TABLE public.conta_banco_cobro_recibo TO service_role;
 
 
 --
+-- Name: TABLE treasury_account; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.treasury_account TO authenticated;
+GRANT ALL ON TABLE public.treasury_account TO service_role;
+
+
+--
+-- Name: TABLE conta_banco_lectura_completa; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_banco_lectura_completa TO authenticated;
+GRANT ALL ON TABLE public.conta_banco_lectura_completa TO service_role;
+
+
+--
 -- Name: TABLE conta_bitrix_pestana_aviso; Type: ACL; Schema: public; Owner: -
 --
 
@@ -207335,14 +207449,6 @@ GRANT ALL ON TABLE public.training_path_item TO service_role;
 GRANT ALL ON TABLE public.training_path_progress TO anon;
 GRANT ALL ON TABLE public.training_path_progress TO authenticated;
 GRANT ALL ON TABLE public.training_path_progress TO service_role;
-
-
---
--- Name: TABLE treasury_account; Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON TABLE public.treasury_account TO authenticated;
-GRANT ALL ON TABLE public.treasury_account TO service_role;
 
 
 --
