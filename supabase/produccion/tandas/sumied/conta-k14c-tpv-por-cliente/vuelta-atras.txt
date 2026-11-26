@@ -1,0 +1,3 @@
+# K14c · la vuelta atrás: quita conta_banco_cobro_tarjeta con sus filas. No toca conta_banco_cobro.
+cuenta: scripts/conta/produccion/cuentas/k14c-tpv-por-cliente.sql
+supabase/vuelta-atras/20261127T0015_k14c_tpv_por_cliente.down.sql
