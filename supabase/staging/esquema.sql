@@ -12790,6 +12790,39 @@ COMMENT ON FUNCTION public._cuenta_activa() IS 'DM1 (30/10/2026). La cuenta abie
 
 
 --
+-- Name: _customer_invoice_repetida_guarda(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._customer_invoice_repetida_guarda() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_dia date;
+begin
+  if new.number is null or new.fiscal_year is null then return new; end if;
+  if new.import_repeated then
+    if not exists (select 1 from public.import_run r where r.id = new.import_run_id and r.program = 'erp10') then
+      raise exception 'Solo una factura traída de ERP10 puede ir marcada «repetida en ERP10».' using errcode = '23514';
+    end if;
+    v_dia := public.conta_dia_de_inicio(new.company_id);
+    if v_dia is not null and new.issue_date >= v_dia then
+      raise exception 'La factura %-% es del % o después del día de inicio (%): desde ahí manda Sumied y no puede repetir número.',
+        new.series_code, new.number, to_char(new.issue_date, 'DD/MM/YYYY'), to_char(v_dia, 'DD/MM/YYYY') using errcode = '23514';
+    end if;
+    -- Solo repite con otras repetidas de lo traído de ERP10, nunca con una de Sumied.
+    if exists (select 1 from public.customer_invoice c where c.company_id = new.company_id and c.series_code = new.series_code
+                 and c.fiscal_year = new.fiscal_year and c.number = new.number and c.id <> new.id and not c.import_repeated) then
+      raise exception 'Ya hay en Sumied una factura emitida %-% del %.', new.series_code, new.number, new.fiscal_year using errcode = '23505';
+    end if;
+  elsif exists (select 1 from public.customer_invoice c where c.company_id = new.company_id and c.series_code = new.series_code
+                  and c.fiscal_year = new.fiscal_year and c.number = new.number and c.id <> new.id and c.import_repeated) then
+    raise exception 'Ya hay en Sumied una factura emitida %-% del % (repetida en ERP10).', new.series_code, new.number, new.fiscal_year using errcode = '23505';
+  end if;
+  return new;
+end $$;
+
+
+--
 -- Name: _delivery_zone_account_of_location(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -68334,6 +68367,7 @@ declare
   v_r public.import_run; v_quien text; v_c jsonb; e record; v_msg text; v_prog text; v_inicio date;
   n_a int := 0; n_emi int := 0; n_pagos int; n_cobros int; n_sin int := 0; v_num_desde int; v_num_hasta int;
   x jsonb; v_s record; v_i record; v_texto text; v_vale boolean;
+  v_rep boolean; v_dia date;
 begin
   select * into v_r from public.import_run where id = p_carga;
   if v_r.id is null or v_r.kind <> 'carga' then raise exception 'Esa carga no existe.' using errcode = 'P0002'; end if;
@@ -68377,20 +68411,32 @@ begin
   end loop;
 
   -- Las emitidas, guardadas con la carga: ahora sí existen (las dejadas fuera, no).
+  v_dia := public.conta_dia_de_inicio(v_r.company_id);
   for x in select * from jsonb_array_elements(coalesce(v_r.detail->'emitidas', '[]')) loop
     continue when x->>'marca' is not distinct from 'fuera';
     if exists (select 1 from public.customer_invoice c where c.company_id = v_r.company_id and c.series_code = x->>'serie'
-                 and c.fiscal_year = (x->>'ejercicio')::int and c.number = (x->>'numero')::int) then
+                 and c.fiscal_year = (x->>'ejercicio')::int and c.number = (x->>'numero')::int
+                 and c.import_run_id is distinct from p_carga) then
       raise exception 'No se ha dado por bueno nada: ya hay en Sumied una factura emitida %-% del %.', x->>'serie', x->>'numero', x->>'ejercicio'
+        using errcode = '23514', hint = 'emitida';
+    end if;
+    -- X14i (Julio, 26/11) · Lo traído de ERP10 anterior al día de inicio es su historia, y Sumied es copia exacta, errores
+    -- incluidos: si su libro de expedidas trae dos veces el mismo número, entran las dos, marcadas «repetida en ERP10». Desde
+    -- el día de inicio manda Sumied, y una repetida para, como antes.
+    v_rep := (select count(*) from jsonb_array_elements(coalesce(v_r.detail->'emitidas', '[]')) y
+               where y->>'marca' is distinct from 'fuera' and y->>'serie' = x->>'serie' and y->>'ejercicio' = x->>'ejercicio'
+                 and y->>'numero' = x->>'numero') > 1;
+    if v_rep and (v_r.program <> 'erp10' or (v_dia is not null and (x->>'fecha')::date >= v_dia)) then
+      raise exception 'No se ha dado por bueno nada: lo traído trae dos veces la factura emitida %-% del %.', x->>'serie', x->>'numero', x->>'ejercicio'
         using errcode = '23514', hint = 'emitida';
     end if;
     insert into public.customer_invoice (id, account_id, company_id, status, doc_type, origin, series_code, fiscal_year, number, number_text, issue_date,
                                          party_id, customer, base, tax, withholding_amount, total, entry_id, created_by, created_by_name,
-                                         issued_at, issued_by_name, import_run_id, import_mark, import_pending)
+                                         issued_at, issued_by_name, import_run_id, import_mark, import_pending, import_repeated)
     values ((x->>'id')::uuid, v_r.account_id, v_r.company_id, 'emitida', 'factura', 'traida', x->>'serie', (x->>'ejercicio')::int, (x->>'numero')::int,
             x->>'numero_texto', (x->>'fecha')::date, nullif(x->>'party_id', '')::uuid, x->'cliente', (x->>'base')::numeric, (x->>'cuota')::numeric,
             (x->>'retencion')::numeric, (x->>'total')::numeric, nullif(x->>'asiento', '')::uuid, auth.uid(), v_prog || ' (traída)', now(),
-            v_prog || ' (traída)', p_carga, x->>'marca', (x->>'pendiente')::numeric);
+            v_prog || ' (traída)', p_carga, x->>'marca', (x->>'pendiente')::numeric, v_rep);
     n_emi := n_emi + 1;
   end loop;
 
@@ -124224,6 +124270,7 @@ CREATE TABLE public.customer_invoice (
     import_run_id uuid,
     import_mark text,
     import_pending numeric,
+    import_repeated boolean DEFAULT false NOT NULL,
     CONSTRAINT customer_invoice_correction_kind_check CHECK ((correction_kind = ANY (ARRAY['importes'::text, 'anular'::text, 'datos'::text]))),
     CONSTRAINT customer_invoice_doc_type_check CHECK ((doc_type = ANY (ARRAY['factura'::text, 'rectificativa'::text]))),
     CONSTRAINT customer_invoice_import_mark_check CHECK (((import_mark IS NULL) OR (import_mark = ANY (ARRAY['sin_casar'::text, 'fuera'::text])))),
@@ -124231,6 +124278,7 @@ CREATE TABLE public.customer_invoice (
     CONSTRAINT customer_invoice_origin_check CHECK ((origin = ANY (ARRAY['a_mano'::text, 'recurrente'::text, 'presupuesto'::text, 'cierre_dia'::text, 'tienda'::text, 'automatica'::text, 'traida'::text]))),
     CONSTRAINT customer_invoice_pdf_sha256_check CHECK (((pdf_sha256 IS NULL) OR (pdf_sha256 ~ '^[0-9a-f]{64}$'::text))),
     CONSTRAINT customer_invoice_rectificativa CHECK (((doc_type = 'rectificativa'::text) = ((corrects_id IS NOT NULL) AND (correction_kind IS NOT NULL)))),
+    CONSTRAINT customer_invoice_repetida_solo_traida CHECK (((NOT import_repeated) OR ((origin = 'traida'::text) AND (import_run_id IS NOT NULL)))),
     CONSTRAINT customer_invoice_series_code_check CHECK ((series_code ~ '^[A-Z0-9][A-Z0-9-]{0,9}$'::text)),
     CONSTRAINT customer_invoice_status_check CHECK ((status = ANY (ARRAY['borrador'::text, 'emitida'::text, 'anulada'::text])))
 );
@@ -124262,6 +124310,13 @@ COMMENT ON COLUMN public.customer_invoice.import_mark IS 'N06a: en una factura t
 --
 
 COMMENT ON COLUMN public.customer_invoice.import_pending IS 'N06a: en una factura traída, lo que queda por cobrar según el saldo del cliente en el otro programa (0: cobrada).';
+
+
+--
+-- Name: COLUMN customer_invoice.import_repeated; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.customer_invoice.import_repeated IS 'X14i · «Repetida en ERP10»: el libro de expedidas de ERP10 la trae más de una vez con el mismo número. Solo en lo traído de ERP10 anterior al día de inicio.';
 
 
 --
@@ -143431,14 +143486,6 @@ ALTER TABLE ONLY public.customer_fiscal
 
 
 --
--- Name: customer_invoice customer_invoice_company_id_series_code_fiscal_year_number_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.customer_invoice
-    ADD CONSTRAINT customer_invoice_company_id_series_code_fiscal_year_number_key UNIQUE (company_id, series_code, fiscal_year, number);
-
-
---
 -- Name: customer_invoice_counter customer_invoice_counter_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -149230,6 +149277,13 @@ CREATE INDEX customer_invoice_event_factura_idx ON public.customer_invoice_event
 
 
 --
+-- Name: customer_invoice_numero_unico; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX customer_invoice_numero_unico ON public.customer_invoice USING btree (company_id, series_code, fiscal_year, number) WHERE (NOT import_repeated);
+
+
+--
 -- Name: customer_invoice_payment_casado_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -154204,6 +154258,13 @@ CREATE TRIGGER tax_return_estado_antes BEFORE UPDATE OF status ON public.tax_ret
 --
 
 CREATE TRIGGER tax_return_misma_cuenta BEFORE INSERT OR UPDATE ON public.tax_return FOR EACH ROW EXECUTE FUNCTION public.conta_misma_cuenta();
+
+
+--
+-- Name: customer_invoice tg_customer_invoice_repetida; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tg_customer_invoice_repetida BEFORE INSERT OR UPDATE OF import_repeated, company_id, series_code, fiscal_year, number, issue_date ON public.customer_invoice FOR EACH ROW EXECUTE FUNCTION public._customer_invoice_repetida_guarda();
 
 
 --
@@ -182850,6 +182911,14 @@ GRANT ALL ON FUNCTION public._ctb_receipt_differences_core(p_receipt_id uuid) TO
 REVOKE ALL ON FUNCTION public._cuenta_activa() FROM PUBLIC;
 GRANT ALL ON FUNCTION public._cuenta_activa() TO authenticated;
 GRANT ALL ON FUNCTION public._cuenta_activa() TO service_role;
+
+
+--
+-- Name: FUNCTION _customer_invoice_repetida_guarda(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._customer_invoice_repetida_guarda() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._customer_invoice_repetida_guarda() TO service_role;
 
 
 --
