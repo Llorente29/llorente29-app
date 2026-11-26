@@ -20,7 +20,7 @@ import { leerLibroRegistro } from '@/modules/conta/services/librosService'
 import { leerEnviosDiez, leerEnvioEmpresa } from '@/modules/conta/services/envioDiezService'
 import { MAX_FILAS, facturasDeAnotaciones, mesesDeLaVentana } from '@/modules/conta/facturacion/emitidas'
 import type { AnotacionLibro } from '@/modules/conta/lib/libroRegistro'
-import { cifrasGuardadas, conDiasTpv, conLibroTpv, diezDeFactura, diferenciaDe, type EstadoCobroBase, type FacturaVenta, type FilaEmitidaTpv, type FilaLibroTpv, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
+import { cifrasGuardadas, conDiasTpv, conLibroTpv, diezDeFactura, diferenciaDe, repetidasDeLaBase, type EstadoCobroBase, type FacturaVenta, type FilaEmitidaTpv, type FilaLibroTpv, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
 import { jsPDF } from 'jspdf'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
 import { facturaSumiedPdf, type DatosFacturaSumied } from '../../../../supabase/functions/_shared/facturaSumiedPdf.ts'
@@ -53,8 +53,7 @@ async function deSumied(accountId: string, companyId: string): Promise<{ filas: 
   const repetidas = new Set<string>()
   if (filas.length) {
     const { data, error } = await tabla('customer_invoice').select('id').eq('account_id', accountId).eq('company_id', companyId).eq('import_repeated', true)
-    if (error && !/import_repeated|42703|PGRST204/i.test(`${error.code ?? ''} ${error.message ?? ''}`)) throw new Error(`No he podido leer las facturas repetidas en ERP10: ${error.message}`)
-    for (const f of (data ?? []) as Fila[]) repetidas.add(String(f.id))
+    for (const id of repetidasDeLaBase(data as Fila[] | null, error)) repetidas.add(id)
   }
   return {
     filas,

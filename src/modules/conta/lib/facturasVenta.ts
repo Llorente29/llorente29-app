@@ -547,3 +547,15 @@ export function conLibroTpv(libro: readonly Omit<FacturaVenta, 'diez'>[], filas:
   }))
   return [...fuera, ...tpv]
 }
+
+/**
+ * X14i · Los ids de las emitidas «repetida en ERP10», de lo que contesta la base a `customer_invoice.import_repeated = true`.
+ * Mientras la base no tenga la columna (antes de la 20261126T0710), ninguna lo está; cualquier otro error se dice, no se esconde.
+ */
+export function repetidasDeLaBase(filas: readonly { id?: unknown }[] | null, error: { code?: string | null; message?: string | null } | null): string[] {
+  if (error) {
+    if (/import_repeated|42703|PGRST204/i.test(`${error.code ?? ''} ${error.message ?? ''}`)) return []
+    throw new Error(`No he podido leer las facturas repetidas en ERP10: ${error.message ?? error.code ?? 'sin mensaje'}`)
+  }
+  return (filas ?? []).map((f) => String(f.id))
+}
