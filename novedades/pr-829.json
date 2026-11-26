@@ -1,0 +1,20 @@
+[
+ {
+  "id": "829-1",
+  "pr": 829,
+  "fecha": "2026-11-26T16:31:46Z",
+  "producto": "sumied",
+  "apartado": "Facturas emitidas",
+  "frase": "lo traído de ERP10 antes del día de inicio entra tal cual, también dos facturas con el mismo número, y en la lista sale «Repetida en ERP10».",
+  "ruta": null
+ },
+ {
+  "id": "829-2",
+  "pr": 829,
+  "fecha": "2026-11-26T16:31:46Z",
+  "producto": "sumied",
+  "apartado": "Facturas emitidas",
+  "frase": "las facturas nuevas siguen sin poder repetir número, tampoco el de una «Repetida en ERP10».",
+  "ruta": null
+ }
+]
