@@ -1,7 +1,7 @@
 // tests/unit/modules/conta/q10/cegidMandar.test.ts
 //
 // Q10 · respuestas 3 y 4 · Mandar a Cegid lo cobrado:
-//   · solo lo confirmado; una línea por cobro; nada dos veces; los conceptos fijos de Cegid no paran a nadie;
+//   · solo lo confirmado; una línea por cobro; nada dos veces (las cuotas fijas: cegidCorregir.test.ts);
 //   · dos vueltas (la incidencia no lleva serie): la 1, todo menos Contasimple; la 3, Contasimple, y solo con lo de la
 //     vuelta 1 ya facturado en la serie 1;
 //   · el cuadre cobro por cobro con las incidencias del mes que hay en Cegid (las de Sumied y las de cualquiera);
@@ -76,10 +76,10 @@ describe('Q10 · mandar · dos vueltas, una por serie', () => {
     expect(baseDelCobro(6050)).toBe(5000)
     expect(baseDelCobro(3)).toBeNull() // 2 × 1,21 = 2,42 y 3 × 1,21 = 3,63: ninguna base da 0,03 €
   })
-  it('el cuerpo de la incidencia: número 0 (lo pone Cegid), base sin IVA, sin retención, mes y año', () => {
+  it('el cuerpo de la incidencia: número 0 (lo pone Cegid), base sin IVA y total igual a la base, tipo de IVA 1, sin retención, mes y año', () => {
     const p = planMandar('2026-11', [cobro({ gcId: 'A', concepto: 'GESTION LABORAL TRABAJADOR UNO', importe: 30.25 })], new Set())
     expect(cuerpoIncidencia(101, p.vueltas['1'].listos[0].lineas[0], '2026-11')).toMatchObject({
-      cliente: 101, incidencia: 0, concepto: '0008', titulo: 'GESTION LABORAL TRABAJADOR UNO', importe: 25, porcentajeIva: 21, total: 30.25, llevaRetencion: false, estaFacturado: false, mes: 11, ano: 2026,
+      cliente: 101, incidencia: 0, concepto: '0008', titulo: 'GESTION LABORAL TRABAJADOR UNO', importe: 25, ivaConcepto: '1', porcentajeIva: 21, total: 25, llevaRetencion: false, estaFacturado: false, mes: 11, ano: 2026,
     })
   })
 })
@@ -126,7 +126,7 @@ describe('Q10 · el cuadre con Cegid, cobro por cobro', () => {
   })
   it('lo que falta en Cegid, lo que sobra y lo que no casa: diferencias, con su porqué', () => {
     const c = cuadreCegid('2026-11', [cobro({ gcId: 'A' }), cobro({ gcId: 'B', importe: 121 }), cobro({ gcId: 'C', concepto: null }), cobro({ gcId: 'D', estado: 'failed' })],
-      [inc({ cliente: 101, incidencia: 1, total: 121, concepto: '0008' }), inc({ cliente: 102, incidencia: 1 })], [], nombres)
+      [inc({ cliente: 101, incidencia: 1, importe: 100, total: 100, concepto: '0008' }), inc({ cliente: 102, incidencia: 1 })], [], nombres)
     expect(c.cuadra).toBe(false)
     expect(c.filas.map((f) => [f.gcId, f.cuadra, f.porque])).toEqual([
       ['A', false, 'Cobrado y no está en Cegid: falta mandarlo.'],

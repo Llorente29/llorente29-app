@@ -6,8 +6,11 @@
 //
 // LA REGLA (Julio, de siempre): no se factura nada sin el cobro confirmado. Solo salen cobros de GoCardless en estado
 // confirmed o paid_out, con su cliente atado, con código de Cegid y con un concepto de la tabla aprobada. Lo demás no
-// sale y se dice por qué. Los conceptos fijos de la ficha de Cegid NO paran a nadie (añadido a la respuesta 3): Julio
-// quita «Noviembre» del periodo MENSUAL en Cegid, y la API los sigue devolviendo en la ficha.
+// sale y se dice por qué.
+// LAS CUOTAS FIJAS (respuesta 6, 26/11): Julio las corta en Cegid con «Facturar hasta 10/2026», y la API no devuelve esa
+// fecha (GetCustomer no la trae). Los 190 clientes de QBO con cuotas fijas revisados el 26/11 están en
+// conta_cegid_cuota_revisada; a un cliente con cuotas fijas que no está ahí no se le manda nada: «Cliente nuevo con
+// cuota fija en Cegid: ponle el Facturar hasta». Sumied no da de alta clientes en Cegid (diezRec.ts no lo deja).
 //
 // LA TABLA DE EQUIVALENCIAS, aprobada por Julio el 25/11 (respuesta 3):
 //   Gestoría mensual → 00001 (serie 1) · Gestión laboral → 0008 (1) · Contasimple → 0016 (3) ·
@@ -122,7 +125,7 @@ export interface LineaIncidencia {
   totalCent: number
 }
 export interface ClienteParaMandar { codigo: number; nombre: string; lineas: LineaIncidencia[]; totalCent: number }
-export type PorQueNoSale = 'no_cobrado' | 'sin_cliente' | 'sin_codigo' | 'sin_concepto' | 'sin_texto' | 'no_cuadra' | 'ya_mandado'
+export type PorQueNoSale = 'no_cobrado' | 'sin_cliente' | 'sin_codigo' | 'cuota_sin_hasta' | 'sin_concepto' | 'sin_texto' | 'no_cuadra' | 'ya_mandado'
 export interface NoSale {
   gcId: string
   nombre: string | null
@@ -151,6 +154,7 @@ const FRASE_NO_SALE: Record<PorQueNoSale, string> = {
   no_cobrado: 'GoCardless no lo ha cobrado: no se factura (se sigue como deuda).',
   sin_cliente: 'El cobro no tiene su cliente atado a una ficha.',
   sin_codigo: 'La ficha no tiene código de cliente en Cegid.',
+  cuota_sin_hasta: 'Cliente nuevo con cuota fija en Cegid: ponle el Facturar hasta.',
   sin_concepto: 'Su concepto no está en la tabla aprobada: confirma el que se propone o elige otro.',
   sin_texto: 'Falta el texto del cobro en GoCardless: vuelve a leer GoCardless.',
   no_cuadra: 'Ninguna base con el IVA del 21 % da el cobro al céntimo.',
@@ -158,11 +162,22 @@ const FRASE_NO_SALE: Record<PorQueNoSale, string> = {
 }
 const eur = (c: number) => `${new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as Intl.NumberFormatOptions).format(c / 100)} €`
 
+/** Respuesta 6 · La frase de la guarda de las cuotas fijas, la misma en la pantalla y en el servidor. */
+export const FRASE_CUOTA_SIN_HASTA = FRASE_NO_SALE.cuota_sin_hasta
+/**
+ * Respuesta 6 · Los clientes de Cegid con cuotas fijas en su ficha que no están entre los revisados (los que ya
+ * llevan «Facturar hasta»): a ellos no se les manda nada.
+ */
+export function cuotasSinHasta(clientes: readonly { codigo: number; conceptos: readonly unknown[] | null }[], revisados: Iterable<number>): Set<number> {
+  const r = new Set(revisados)
+  return new Set(clientes.filter((c) => (c.conceptos?.length ?? 0) > 0 && !r.has(c.codigo)).map((c) => c.codigo))
+}
+
 /**
  * El plan de un mes: por vuelta (serie) y por cliente de Cegid, sus incidencias (una por cobro, con su concepto). Los
  * cobros ya mandados no vuelven a salir.
  */
-export function planMandar(mes: string, cobros: readonly CobroParaMandar[], yaMandados: ReadonlySet<string>): PlanMandar {
+export function planMandar(mes: string, cobros: readonly CobroParaMandar[], yaMandados: ReadonlySet<string>, cuotaSinHasta: ReadonlySet<number> = new Set()): PlanMandar {
   const por: Record<SerieVuelta, Map<number, ClienteParaMandar>> = { '1': new Map(), '3': new Map() }
   const noSalen: NoSale[] = []
   let ya = 0
@@ -174,6 +189,7 @@ export function planMandar(mes: string, cobros: readonly CobroParaMandar[], yaMa
     if (yaMandados.has(c.gcId)) { ya++; continue }
     if (!c.partyId) { no('sin_cliente'); continue }
     if (c.codigoCegid === null) { no('sin_codigo'); continue }
+    if (cuotaSinHasta.has(c.codigoCegid)) { no('cuota_sin_hasta'); continue }
     const suelto = !c.concepto
     const concepto = c.elegido ? conceptoDeCodigo(c.elegido) : conceptoAprobado(c.concepto)
     if (!concepto) {
@@ -246,8 +262,15 @@ export interface Cuadre {
   frase: string
 }
 
-/** El total de una incidencia, en céntimos: su total, o su importe con el 21 %. */
-export const totalIncidenciaCent = (x: IncidenciaCegid): number => x.total != null ? Math.round(x.total * 100) : x.importe != null ? Math.round(x.importe * 121) : 0
+/**
+ * Lo que va a cobrar una incidencia, con su IVA, en céntimos: su importe (la base) con el 21 %, redondeado como
+ * baseDelCobro. Respuesta 6: el «total» de la API es la base (lo corrigió Julio el 26/11), así que no vale para
+ * compararlo con lo cobrado; solo cuando no hay importe.
+ */
+export const totalIncidenciaCent = (x: IncidenciaCegid): number => {
+  if (x.importe != null) { const b = Math.round(x.importe * 100); return b + Math.round((b * 21) / 100) }
+  return x.total != null ? Math.round(x.total * 100) : 0
+}
 /** La serie de una incidencia: la de su factura si ya está facturada; si no, la de su concepto (0016 en la 3). */
 export const serieDeIncidencia = (x: IncidenciaCegid): SerieVuelta => (x.facturada && x.serieFactura ? (x.serieFactura.trim() === '3' ? '3' : '1') : (x.concepto ?? '').trim() === '0016' ? '3' : '1')
 
@@ -380,15 +403,92 @@ export function proponerAtado(nombre: string | null, correos: readonly (string |
   return r.sort((a, b) => b.comunes - a.comunes || a.codigo - b.codigo).slice(0, 3)
 }
 
-// ── La incidencia, como la pide la API (POST /api/Incidences/incidence) ───────────────
+// ── La incidencia, como la pide la API (POST y PUT /api/Incidences/incidence) ───────────────
+//
+// Respuesta 6 (26/11) · Cómo la quiere Cegid para facturar, sacado de la 9/2 que corrigió Julio a mano (run 45901138694):
+//   · textoIncidencia: la descripción de la línea de la factura, en RTF, con el mismo formato que la 9/2;
+//   · ivaConcepto: el código del TIPO de IVA en Cegid (no el del concepto): el «1» es «I.V.A. GENERAL», el 21 %. La
+//     API no da la tabla de tipos de IVA: con otro porcentaje, se para y se dice;
+//   · total: el importe sin IVA (la base). Cegid toma el total como base: con 84,70 facturaba 84,70 + IVA.
+// fecha y serieFactura no se tocan.
 
-/** El cuerpo de una incidencia nueva (incidencia 0: la numera Cegid). Importe sin IVA, con el 21 % aparte; sin retención (QBO). */
+/** El código del tipo de IVA de Cegid de cada porcentaje que se conoce (Julio, 26/11). Ninguno más: no se inventa. */
+export const TIPO_IVA_CEGID: Readonly<Record<number, string>> = { 21: '1' }
+export const tipoIvaCegid = (porcentaje: unknown): string | null => {
+  const n = Number(porcentaje)
+  return porcentaje == null || porcentaje === '' || !Number.isFinite(n) ? null : TIPO_IVA_CEGID[n] ?? null
+}
+
+/** Un carácter del texto, como lo escribe RTF con la página de códigos 1252 (la de la 9/2). */
+const CP1252: Readonly<Record<string, number>> = { '€': 0x80, '‚': 0x82, 'ƒ': 0x83, '„': 0x84, '…': 0x85, '†': 0x86, '‡': 0x87, 'ˆ': 0x88, '‰': 0x89, 'Š': 0x8a, '‹': 0x8b,
+  'Œ': 0x8c, 'Ž': 0x8e, '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '–': 0x96, '—': 0x97, '˜': 0x98, '™': 0x99, 'š': 0x9a, '›': 0x9b, 'œ': 0x9c, 'ž': 0x9e, 'Ÿ': 0x9f }
+function caracterRtf(ch: string): string {
+  if (ch === '\\' || ch === '{' || ch === '}') return `\\${ch}`
+  const c = ch.codePointAt(0)!
+  if (c < 0x20) return ' '
+  if (c < 0x80) return ch
+  const b = c >= 0xa0 && c <= 0xff ? c : CP1252[ch]
+  if (b !== undefined) return `\\'${b.toString(16).padStart(2, '0')}`
+  // Fuera de la 1252: \uN con «?» de reserva (\uc1).
+  return c > 0xffff ? '?' : `\\u${c > 0x7fff ? c - 0x10000 : c}?`
+}
+/**
+ * La descripción de la línea, en RTF, copiada tal cual de la 9/2 (Julio, 26/11) y cambiando solo el texto. El RTF de
+ * Cegid acaba en un carácter nulo: va también.
+ */
+export function textoRtf(texto: string): string {
+  const t = [...texto.replace(/\s+/g, ' ').trim()].map(caracterRtf).join('')
+  return '{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fnil\\fcharset0 Verdana;}}\r\n{\\colortbl ;\\red0\\green0\\blue0;}\r\n'
+    + `\\viewkind4\\uc1\\pard\\cf1\\lang3082\\f0\\fs18 ${t}\\par\r\n\\par\r\n}\r\n\u0000`
+}
+
+/** El cuerpo de una incidencia nueva (incidencia 0: la numera Cegid). Importe y total sin IVA, con el 21 % y su tipo aparte; sin retención (QBO). */
 export function cuerpoIncidencia(cliente: number, l: LineaIncidencia, mes: string): Record<string, unknown> {
   return {
     cliente, incidencia: 0, concepto: l.concepto.codigo,
-    titulo: l.texto.slice(0, 45), textoConcepto: l.texto.slice(0, 250),
-    importe: l.baseCent / 100, porcentajeIva: 21, unidades: 1, total: l.totalCent / 100,
+    titulo: l.texto.slice(0, 45), textoConcepto: l.texto.slice(0, 250), textoIncidencia: textoRtf(l.texto),
+    importe: l.baseCent / 100, ivaConcepto: TIPO_IVA_CEGID[21], porcentajeIva: 21, unidades: 1, total: l.baseCent / 100,
     llevaRetencion: false, esSuplido: false, estaFacturado: false, incluyeIva: false,
     mes: Number(mes.slice(5, 7)), ano: Number(mes.slice(0, 4)),
   }
+}
+
+// ── Respuesta 6 · Corregir una incidencia ya mandada (PUT) ──────────────────────────────
+
+export type Corregir =
+  | { que: 'corregir'; cuerpo: Record<string, unknown>; texto: string; tipoIva: string; baseCent: number }
+  | { que: 'ya_bien' }
+  | { que: 'parar'; porque: string }
+
+const r2 = (n: number) => Math.round(n * 100) / 100
+/**
+ * Lo que hay que mandar por PUT para corregir una incidencia leída de Cegid (GET): la misma, con la descripción en
+ * RTF, el tipo de IVA de su porcentaje y el total igual a la base. `base` es la que apuntó Sumied al mandarla: si Cegid
+ * dice otra, se para. Si ya está así, no se toca (la 9/2). Con algo que no se sabe arreglar, se para y se dice por qué.
+ */
+export function corregirIncidencia(x: Record<string, unknown>, base: number): Corregir {
+  const id = `${x.cliente}/${x.incidencia}`
+  if (x.estaFacturado === true) return { que: 'parar', porque: `La ${id} ya está facturada en Cegid: no se toca.` }
+  if (x.incluyeIva === true) return { que: 'parar', porque: `La ${id} dice que su importe incluye el IVA: no se sabe corregir.` }
+  const tipoIva = tipoIvaCegid(x.porcentajeIva)
+  if (!tipoIva) return { que: 'parar', porque: `La ${id} lleva el ${x.porcentajeIva ?? '(ninguno)'} % de IVA y no se sabe su tipo de IVA en Cegid: la API no da la tabla. Dime su código.` }
+  const importe = x.importe == null || x.importe === '' ? NaN : Number(x.importe), unidades = x.unidades == null || x.unidades === '' ? 1 : Number(x.unidades)
+  if (!Number.isFinite(importe) || !Number.isFinite(unidades)) return { que: 'parar', porque: `La ${id} no tiene importe en Cegid.` }
+  const baseCent = Math.round(importe * unidades * 100)
+  if (baseCent !== Math.round(base * 100)) return { que: 'parar', porque: `La ${id} tiene en Cegid una base de ${eur(baseCent)} y Sumied mandó ${eur(Math.round(base * 100))}: míralo antes.` }
+  const texto = String(x.textoConcepto ?? x.titulo ?? '').replace(/\s+/g, ' ').trim()
+  if (!texto) return { que: 'parar', porque: `La ${id} no tiene texto en Cegid para la descripción.` }
+  const totalBien = x.total != null && x.total !== '' && Math.round(Number(x.total) * 100) === baseCent
+  const textoBien = typeof x.textoIncidencia === 'string' && x.textoIncidencia.trim() !== ''
+  if (String(x.ivaConcepto ?? '').trim() === tipoIva && totalBien && textoBien) return { que: 'ya_bien' }
+  return { que: 'corregir', texto, tipoIva, baseCent, cuerpo: { ...x, ivaConcepto: tipoIva, total: r2(baseCent / 100), textoIncidencia: textoRtf(texto) } }
+}
+
+/** Después del PUT, si lo leído otra vez de Cegid tiene ya los tres campos; si no, qué falta. */
+export function faltaTrasCorregir(x: Record<string, unknown>, c: { tipoIva: string; baseCent: number }): string | null {
+  const falta: string[] = []
+  if (!(typeof x.textoIncidencia === 'string' && x.textoIncidencia.trim() !== '')) falta.push('la descripción')
+  if (String(x.ivaConcepto ?? '').trim() !== c.tipoIva) falta.push('el tipo de IVA')
+  if (x.total == null || Math.round(Number(x.total) * 100) !== c.baseCent) falta.push('el total igual a la base')
+  return falta.length ? `Cegid no ha guardado ${falta.join(', ')}` : null
 }

@@ -1,0 +1,100 @@
+name: Corregir incidencias en Cegid
+
+# Q10 · respuesta 6 (26/11) · Corrige por la API (PUT, sin borrarlas) las incidencias que Sumied ya mandó a la
+# facturación de Cegid, como la 9/2 que corrigió Julio: la descripción en RTF, el tipo de IVA de Cegid (21 % → «1») y
+# el total igual a la base. fecha y serieFactura no se tocan; la que ya está bien, tampoco.
+#   · «pares» (como mucho 5: «33/2»): solo esas. Primero una, y Julio la mira en el precálculo.
+#   · «todas»: las mandadas del mes aún sin corregir, de 40 en 40, una a una, PARANDO en el primer fallo.
+# Llama a conta-cegid-corregir con la clave de servicio (entorno «despliegue»: solo se lanza desde main). ESCRIBE EN
+# CEGID (solo incidencias). El resumen es público: dice cliente/incidencia, nunca nombres ni NIF.
+
+on:
+  workflow_dispatch:
+    inputs:
+      empresa:
+        description: 'Sociedad (company_id). Por defecto, la de QBO.'
+        required: true
+        default: '58e574ec-012a-4483-9f5b-3501cc023ba4'
+      mes:
+        description: 'Mes de las incidencias (AAAA-MM)'
+        required: true
+        default: '2026-11'
+      pares:
+        description: 'Cliente/incidencia, como mucho 5: «33/2». Vacío con «todas».'
+        required: false
+        default: ''
+      todas:
+        description: 'Todas las mandadas del mes aún sin corregir (para en el primer fallo)'
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: corregir-incidencias-cegid
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  corregir:
+    environment: despliegue
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Proyecto y clave (enmascarada)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          REF=$(grep -E '^\s*project_id\s*=' supabase/config.toml | head -1 | sed -E 's/.*=\s*"?([a-z0-9]+)"?.*/\1/')
+          [ -n "$REF" ] || { echo "::error::No se pudo leer project_id de supabase/config.toml."; exit 1; }
+          curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true" > /tmp/claves.json
+          KEY=$(jq -r '[.[] | select(.type == "secret" and (.api_key // "" | startswith("sb_secret_")))] | (map(select(.name == "default")) + .) | .[0].api_key // empty' /tmp/claves.json)
+          [ -n "$KEY" ] || KEY=$(jq -r '[.[] | select(.name == "service_role")] | .[0].api_key // empty' /tmp/claves.json)
+          rm -f /tmp/claves.json
+          [ -n "$KEY" ] && [ "$KEY" != "null" ] || { echo "::error::No se pudo obtener la clave de servicio."; exit 1; }
+          echo "::add-mask::$KEY"
+          case "$KEY" in sb_secret_*) echo "FORMATO=nueva" >> "$GITHUB_ENV" ;;
+                         eyJ*) echo "FORMATO=antigua" >> "$GITHUB_ENV" ;;
+                         *) echo "::error::La clave de servicio no tiene un formato conocido."; exit 1 ;; esac
+          echo "REF=$REF" >> "$GITHUB_ENV"
+          echo "KEY=$KEY" >> "$GITHUB_ENV"
+
+      - name: Corregir (escribe en Cegid, una a una, parando en el primer fallo)
+        env:
+          EMPRESA: ${{ inputs.empresa }}
+          MES: ${{ inputs.mes }}
+          PARES: ${{ inputs.pares }}
+          TODAS: ${{ inputs.todas }}
+        run: |
+          set -euo pipefail
+          [[ "$EMPRESA" =~ ^[0-9a-f-]{36}$ ]] || { echo "::error::La sociedad no es un uuid."; exit 1; }
+          [[ "$MES" =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]] || { echo "::error::El mes va como AAAA-MM."; exit 1; }
+          if [ "$TODAS" = "true" ]; then
+            [ -z "$PARES" ] || { echo "::error::O los pares, o «todas»: una de las dos."; exit 1; }
+            CUERPO=$(jq -n --arg c "$EMPRESA" --arg m "$MES" '{company_id: $c, mes: $m, todas: true, max: 40}')
+          else
+            [[ "$PARES" =~ ^[0-9]+/[0-9]+(\ +[0-9]+/[0-9]+)*$ ]] || { echo "::error::Los pares van como «33/2 21/2» (o marca «todas»)."; exit 1; }
+            CUERPO=$(jq -n --arg c "$EMPRESA" --arg m "$MES" --arg p "$PARES" '{company_id: $c, mes: $m, pares: $p}')
+          fi
+          if [ "$FORMATO" = "nueva" ]; then CABECERA="apikey: $KEY"; else CABECERA="Authorization: Bearer $KEY"; fi
+          echo "## Corregir incidencias en Cegid · $MES" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          corregidas=0; ronda=0
+          while :; do
+            ronda=$((ronda + 1))
+            code=$(curl -s -o /tmp/r.json -w '%{http_code}' -X POST "https://$REF.supabase.co/functions/v1/conta-cegid-corregir" \
+                   -H "$CABECERA" -H "x-internal-key: $KEY" -H 'Content-Type: application/json' --data "$CUERPO")
+            frase=$(jq -r '.frase // .error // "sin mensaje"' /tmp/r.json 2>/dev/null || echo 'sin mensaje')
+            echo "- Ronda $ronda (HTTP $code): $frase" | tee -a "$GITHUB_STEP_SUMMARY"
+            if [ "$code" != "200" ]; then echo "::error::$frase"; exit 1; fi
+            n=$(jq -r '(.corregidas | length) + (.ya_bien | length)' /tmp/r.json)
+            corregidas=$((corregidas + $(jq -r '.corregidas | length' /tmp/r.json)))
+            quedan=$(jq -r '.quedan' /tmp/r.json)
+            if [ "$TODAS" != "true" ] || [ "$quedan" = "0" ] || [ "$n" = "0" ] || [ "$ronda" -ge 20 ]; then break; fi
+          done
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "**Corregidas en total: $corregidas. Quedan: $quedan.**" | tee -a "$GITHUB_STEP_SUMMARY"

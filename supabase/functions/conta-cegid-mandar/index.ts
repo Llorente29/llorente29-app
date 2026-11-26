@@ -20,9 +20,10 @@
 //     y Cegid ya facturó. No escribe en Cegid.
 //   · { company_id, accion: 'deshacer', mes, cliente? }: borra en Cegid las incidencias que mandó Sumied y que aún no
 //     están facturadas; las ya facturadas no se tocan (quedan «facturada», con su factura).
-// Los conceptos fijos de la ficha NO paran a nadie (añadido a la respuesta 3, 25/11): Julio no los corta ficha a ficha,
-// quita «Noviembre» de los meses del periodo 1 (MENSUAL) en Cegid, y la API sigue devolviéndolos en la ficha. Lo avisa
-// la pantalla antes de mandar.
+// Las cuotas fijas (respuesta 6, 26/11): Julio las corta en Cegid con «Facturar hasta 10/2026», y la API no devuelve
+// esa fecha. A un cliente con cuotas fijas en su ficha de Cegid (leída ahora) que no está en conta_cegid_cuota_revisada
+// (los 190 revisados el 26/11), no se le manda nada: «Cliente nuevo con cuota fija en Cegid: ponle el Facturar hasta».
+// La incidencia sale con la descripción en RTF, el tipo de IVA de Cegid y el total igual a la base (cuerpoIncidencia).
 // La autónoma (una empresa que factura con retención): no se le manda nada todavía (respuesta 3, punto 6).
 // Solo un administrador de la cuenta. En una cuenta de demostración, no se escribe (puerta.ts).
 // verify_jwt = true (config.toml).
@@ -31,7 +32,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { ClienteDiezRec, FalloDiezRec, rutaCliente } from "../_shared/diezRec.ts";
-import { baseDelCobro, COBRADO_GC, conceptoAprobado, conceptoDeCodigo, cuerpoIncidencia, type LineaIncidencia } from "../_shared/cegidMandar.ts";
+import { baseDelCobro, COBRADO_GC, conceptoAprobado, conceptoDeCodigo, cuerpoIncidencia, FRASE_CUOTA_SIN_HASTA, type LineaIncidencia } from "../_shared/cegidMandar.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -64,13 +65,13 @@ async function conexion(srv: Srv, accountId: string, companyId: string): Promise
     fetch: (url, init) => fetch(url, init), escribe: "incidencias" }) };
 }
 
-/** La ficha de Cegid de un cliente, leída ahora: si existe y su NIF. */
-async function fichaAhora(api: ClienteDiezRec, codigo: number): Promise<{ existe: boolean; nif: string | null }> {
+/** La ficha de Cegid de un cliente, leída ahora: si existe, su NIF y cuántas cuotas fijas tiene. */
+async function fichaAhora(api: ClienteDiezRec, codigo: number): Promise<{ existe: boolean; nif: string | null; cuotas: number }> {
   const r = await api.get(rutaCliente(codigo));
-  if (r.status === 204) return { existe: false, nif: null };
+  if (r.status === 204) return { existe: false, nif: null, cuotas: 0 };
   if (r.status !== 200) throw new FalloDiezRec(`Cegid contesta ${r.status} al leer el cliente ${codigo}`, r.status);
   const j = (r.json ?? {}) as Fila;
-  return { existe: true, nif: (j.nif as string | null) ?? null };
+  return { existe: true, nif: (j.nif as string | null) ?? null, cuotas: Array.isArray(j.detalleConceptos) ? j.detalleConceptos.length : 0 };
 }
 
 Deno.serve(async (req) => {
@@ -185,6 +186,12 @@ Deno.serve(async (req) => {
       // La ficha de Cegid, ahora: existe y tiene el mismo NIF que la ficha atada.
       const f = await fichaAhora(api, cliente);
       if (!f.existe) return json({ error: `El cliente ${cliente} no existe en la facturación de Cegid.` }, 409);
+      // Respuesta 6 · Con cuotas fijas y sin estar entre los revisados (ya con «Facturar hasta»), nada.
+      if (f.cuotas > 0) {
+        const { data: rv, error: e5 } = await srv.from("conta_cegid_cuota_revisada").select("cliente").eq("company_id", companyId).eq("cliente", cliente).maybeSingle();
+        if (e5) return json({ error: `no se ha podido leer qué clientes de Cegid tienen ya el Facturar hasta: ${e5.message}` }, 500);
+        if (!rv) return json({ error: `No se manda nada al cliente ${cliente}. ${FRASE_CUOTA_SIN_HASTA}`, cuota_sin_hasta: true }, 409);
+      }
       const { data: cc } = await srv.from("conta_cobro_cliente").select("party_id, codigo_cliente").eq("company_id", companyId).in("gc_cliente_id", [...gcClientes]);
       const atadaAMano = ((cc ?? []) as Fila[]).some((x) => Number(x.codigo_cliente) === cliente);
       const { data: en } = await srv.from("conta_gc_enlace").select("party_id").eq("company_id", companyId).eq("estado", "atado").in("gc_cliente_id", [...gcClientes]);

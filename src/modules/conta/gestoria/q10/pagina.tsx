@@ -16,7 +16,7 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { atarFichaCegid, deshacerCegid, elegirConceptoCegid, leerConexionCegid, leerGuardadoCegid, leerIncidenciasMesCegid, leerMandadoCegid, leerTodoCegid, mandarClienteCegid } from '@/modules/conta/services/cegidService'
-import { cuadreCegid, planMandar, proponerAtado, type CobroParaMandar, type IncidenciaCegid, type SerieVuelta } from '../../../../../supabase/functions/_shared/cegidMandar'
+import { cuadreCegid, cuotasSinHasta, planMandar, proponerAtado, type CobroParaMandar, type IncidenciaCegid, type SerieVuelta } from '../../../../../supabase/functions/_shared/cegidMandar'
 import { exportarTabla } from '@/modules/conta/ui/tabla/exportar'
 import { MandarCegidQ10 } from './MandarCegidQ10'
 import { COBRADO, eurQ10, facturasDelMes, nombreDelMesQ10 } from './facturasDelMes'
@@ -106,8 +106,9 @@ export function FacturasQ10Page() {
   const plan = useMemo(() => {
     if (!cobrosMes) return null
     const vivos = new Set((md.datos ?? []).filter((x) => ['mandando', 'mandada', 'facturada'].includes(x.estado)).map((x) => x.gcCobroId))
-    return planMandar(mes, cobrosMes, vivos)
-  }, [cobrosMes, md.datos, mes])
+    // Respuesta 6 · A un cliente con cuotas fijas en Cegid sin «Facturar hasta» (no revisado), nada.
+    return planMandar(mes, cobrosMes, vivos, cuotasSinHasta(cg.datos?.clientes ?? [], cg.datos?.revisados ?? []))
+  }, [cobrosMes, md.datos, mes, cg.datos])
   // Respuesta 4 · El cuadre con lo que hay en Cegid: se lee con «Leer de Cegid lo que hay para facturar».
   const [enCegid, setEnCegid] = useState<{ clave: string; incidencias: IncidenciaCegid[] } | null>(null)
   const cuadre = useMemo(() => {
