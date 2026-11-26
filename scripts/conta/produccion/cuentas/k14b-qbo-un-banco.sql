@@ -47,6 +47,16 @@ select clave, valor from (
     from public.journal_entry e
    where e.company_id = '58e574ec-012a-4483-9f5b-3501cc023ba4' and e.source_type = 'bank' and e.status = 'validado' and e.entry_date < date '2026-11-01'
   union all
+  select 0, 'QBO · eslabones rotos de la cadena del diario',
+         public._conta_cadena_rota('58e574ec-012a-4483-9f5b-3501cc023ba4')::text
+    -- quieta: la cadena de QBO solo crece al validar, y nadie valida en QBO durante el ensayo
+  union all
+  select 0, 'QBO · asientos de banco de antes del 01/11 (de cualquier estado)',
+         count(*)::text
+    -- quieta: la base ya no deja apuntar asientos de banco de antes del 01/11 en QBO (el día de inicio)
+    from public.journal_entry e
+   where e.company_id = '58e574ec-012a-4483-9f5b-3501cc023ba4' and e.source_type = 'bank' and e.entry_date < date '2026-11-01'
+  union all
   select 0, 'QBO · cobros casados del K14: filas · huella',
          count(*) || ' · ' || coalesce(left(md5(string_agg(concat_ws('|', c.movement_id, c.estado, c.party_id, c.importe), ';' order by c.movement_id)), 12), 'ninguno')
     -- quieta: el motor del K14 solo escribe al leer un extracto, y nadie lee extractos de QBO durante el ensayo

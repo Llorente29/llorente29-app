@@ -9,19 +9,28 @@
 -- validó los 37 ingresos de GoCardless (57200004 / 57200002, 132.876,37 €): 33 de junio a octubre, que ERP10 ya tiene
 -- (en Sumied, dos veces), y 4 de noviembre en la subcuenta que no es.
 --
--- En este orden, y todo o nada:
---   1. Se deshacen los 37 casados (bank_deshacer, como «Deshacer» en Bancos): cada asiento se anula con su
---      contraasiento (de hoy; ni el anulado ni el contraasiento salen a ERP10) y su movimiento vuelve a «pendiente».
---      No se borra ningún movimiento. (Julio, 26/11: «Deshacerlos».)
+-- Regla de Julio (26/11): hasta el 31/10 la única verdad es ERP10, y en Sumied no se toca; lo que entró por un error de
+-- programación o por una prueba se BORRA, sin anular y sin contraasientos. En este orden, y todo o nada:
+--   1. Los 37 asientos de banco que creó el agente se borran, por el mismo camino que _bank_asiento_quitar (cada uno,
+--      con su asiento y sus líneas, a conta_asiento_borrado), sin sus dos pegas de hoy («de antes del corte» y «hueco
+--      en la numeración»). Antes se comprueba que ninguno ha salido a ERP10, ni a Diez, ni tiene IVA, documentos o
+--      anulaciones. Su casado queda deshecho y su movimiento vuelve a «pendiente». No se borra ningún movimiento.
+--      La numeración: son los números 1 a 37 de su serie (la 3, de 2026), y en ella no hay ninguno más: no queda hueco.
 --   2. Se juntan los dos bancos en el de los movimientos (_bank_juntar): lo que apuntaba al «CaixaBank» del 06/11 pasa a
 --      él (hoy, solo su enlace a la 57200001, la tarjeta, que se quita) y ese banco se borra.
 --   3. El que queda se llama «CaixaBank» y su subcuenta es la 57200000 (la del banco en el libro mayor de QBO).
 --   4. Lo de antes del 01/11 (el día de inicio de QBO) queda «de antes del inicio» (_bank_antes_del_inicio_recalcular):
---      708 movimientos. Ya no piden revisión, y el agente no propone ni valida nada de ellos.
+--      708 movimientos. Ya no piden revisión, y el agente no propone ni valida nada de ellos (ni la base lo deja).
 --   5. Los 4 ingresos de GoCardless de noviembre se vuelven a casar con su pago de GoCardless
---      (conta_abono_gocardless_casar), quitando antes la marca de «descartado» que les dejó la anulación (los 33 de
---      antes del 01/11 la conservan: el agente no los vuelve a proponer): el ingreso, 57200000 / 57200002, que es el que el X33 da por hecho («una
+--      (conta_abono_gocardless_casar): el ingreso, 57200000 / 57200002, que es el que el X33 da por hecho («una
 --      liquidación ya casada en Bancos ya tiene su asiento»).
+--   0. Además de las guardas de lo medido: el ejercicio 2026 tiene que dejar validar (Julio ya decidió «empezar a
+--      trabajar ya»; antes, los ensayos paraban en 23514 por eso).
+--   6. La cadena de huellas del diario de QBO, sin hueco: los 37 eran sus eslabones 1 a 37 y detrás van los 4.425
+--      asientos traídos de ERP10 (ninguno ha salido a ningún sitio). Se vuelven a numerar desde 1 y se rehace cada huella
+--      con la anterior, en orden (journal_huella y journal_entry_canonico, como al validar). Solo cambian chain_seq,
+--      prev_hash y hash; para eso se aparta journal_entry_inalterable dentro de esta transacción y se vuelve a poner.
+--      Al acabar, _conta_cadena_rota tiene que dar 0.
 --
 -- Cobros casados del K14 (conta_banco_cobro): 383, todos del banco que queda; no se tocan.
 -- Como un administrador de la cuenta (las funciones de Bancos lo piden): el primero, como en la 20261124T2311.
@@ -34,6 +43,7 @@ declare
   queda constant uuid := '0094f430-89a8-45b4-b115-bbae8f4cbda1';
   se_va constant uuid := 'ad66f6b8-d878-4e3c-87f8-09d3dcc76d28';
   v_admin uuid; v_572 uuid; v_corte date; r record; v_deshechos int := 0; v_recasados int := 0; v_j jsonb; v_a jsonb;
+  v_prev text; v_h text; v_seq bigint := 0; v_rehechas int := 0;
 begin
   -- Solo en producción: en una base sin QBO Integrity (staging, la local) no hay nada que juntar.
   if not exists (select 1 from public.company where id = emp) then
@@ -48,6 +58,13 @@ begin
   end if;
   if exists (select 1 from public.bank_movement where treasury_account_id = se_va) or exists (select 1 from public.bank_statement where treasury_account_id = se_va) then
     raise exception 'K14b · 0: el «CaixaBank» del 06/11 ya tiene movimientos: hay que mirarlo antes de juntar.';
+  end if;
+  -- El ejercicio 2026 tiene que dejar validar (los 4 de noviembre se vuelven a casar y validar): lo anterior traído, o
+  -- «empezar a trabajar ya» decidido en Ajustes › Ejercicio (_conta_falta_historico_motivo).
+  if exists (select 1 from public.fiscal_year y where y.company_id = emp and y.starts_on = date '2026-01-01'
+              and y.origin in ('mixed', 'migrated') and y.origin_program is not null
+              and y.history_imported_at is null and y.works_without_history_at is null) then
+    raise exception 'K14b · 0: el ejercicio 2026 de QBO no deja validar: falta traer lo anterior al 01/11 o decidir «empezar a trabajar ya» en Ajustes › Ejercicio.';
   end if;
   v_corte := public._conta_corte(emp);
   if v_corte is distinct from date '2026-11-01' then raise exception 'K14b · 0: el día de inicio de QBO no es el 01/11/2026 (es %).', v_corte; end if;
@@ -70,17 +87,53 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
   perform set_config('folvy.cuenta_activa', v_admin::text || ':' || cta::text, true);
 
-  -- 1 · Deshacer los 37, recordando su pago de GoCardless.
+-- sin hueco: los 37 asientos que se borran son los números 1 a 37 de la serie 3 de 2026 de QBO y no hay ningún otro en
+-- esa serie (lo comprueba el paso 1); la cadena se rehace entera en el paso 6. No son asientos ni resúmenes del día.
+  -- 1 · Borrar los 37, recordando su pago de GoCardless (el mismo camino que _bank_asiento_quitar, sin sus dos pegas).
+  perform pg_advisory_xact_lock(hashtextextended('journal_entry_numero:' || emp, 0));
   create temp table _k14b_payout (movement_id uuid primary key, payout text not null, fecha date not null) on commit drop;
   insert into _k14b_payout
   select b.movement_id, p.gc_id, m.op_date
     from public.bank_match b join public.bank_movement m on m.id = b.movement_id join public.conta_gc_payout p on p.match_id = b.id
    where m.treasury_account_id = queda and b.status = 'vivo';
-  for r in select b.id from public.bank_match b join public.bank_movement m on m.id = b.movement_id
-            where m.treasury_account_id = queda and b.status = 'vivo' order by m.op_date, b.id loop
-    perform public.bank_deshacer(r.id, 'K14b: casado cuando QBO aún no tenía día de inicio, y en la subcuenta del banco repetido');
+  for r in select b.id as match_id, b.movement_id, e.id, e.series, e.number, e.status, e.source_type, e.company_id
+             from public.bank_match b join public.bank_movement m on m.id = b.movement_id join public.journal_entry e on e.id = b.journal_entry_id
+            where m.treasury_account_id = queda and b.status = 'vivo' order by e.chain_seq loop
+    if r.status <> 'validado' or r.source_type <> 'bank' or r.company_id <> emp
+       or exists (select 1 from public.conta_erp10_salida_partida x where x.entry_id = r.id) or exists (select 1 from public.conta_erp10_envio x where x.entry_id = r.id)
+       or exists (select 1 from public.conta_erp10_a_mano x where x.entry_id = r.id) or exists (select 1 from public.external_send x where x.entry_id = r.id)
+       or exists (select 1 from public.vat_book_entry x where x.entry_id = r.id) or exists (select 1 from public.journal_entry_document x where x.entry_id = r.id)
+       or exists (select 1 from public.tax_return_line t join public.journal_line l on l.id = t.journal_line_id where l.entry_id = r.id)
+       or exists (select 1 from public.journal_entry o where o.reverses_entry_id = r.id or o.voided_by_entry_id = r.id) then
+      raise exception 'K14b · 1: el asiento %/% no se puede borrar: ha salido, tiene IVA, documentos o anulaciones.', r.series, r.number;
+    end if;
+    update public.bank_match set status = 'deshecho', undone_at = now(), undone_by = v_admin, undone_by_name = public.conta_nombre_actor(),
+           undo_reason = 'K14b: casado por el agente cuando QBO aún no tenía día de inicio; su asiento se borra (regla de Julio, 26/11)'
+     where id = r.match_id;
+    update public.bank_movement set status = 'pendiente', confidence = null, reason = null, proposal = null, updated_at = now() where id = r.movement_id;
+    insert into public.conta_asiento_borrado (lote, account_id, company_id, que, entry_id, asiento, lineas, iva, documentos, enlaces, numero_antes, cadena_antes, motivo, quien)
+    select gen_random_uuid(), e.account_id, e.company_id, 'asiento', e.id, to_jsonb(e),
+           (select coalesce(jsonb_agg(to_jsonb(l) order by l.position), '[]') from public.journal_line l where l.entry_id = e.id),
+           '[]'::jsonb, '[]'::jsonb,
+           jsonb_build_object('factura_pago', (select coalesce(jsonb_agg(s.id), '[]') from public.supplier_invoice s where s.payment_entry_id = e.id),
+                              'actividad', (select coalesce(jsonb_agg(a.id), '[]') from public.document_activity a where a.journal_entry_id = e.id),
+                              'casado', r.match_id),
+           e.number, jsonb_build_object('chain_seq', e.chain_seq, 'prev_hash', e.prev_hash, 'hash', e.hash),
+           'K14b: asiento de banco creado por el agente cuando QBO no tenía día de inicio (hasta el 31/10 manda ERP10; regla de Julio, 26/11)',
+           public.conta_nombre_actor()
+      from public.journal_entry e where e.id = r.id;
+    update public.supplier_invoice set payment_entry_id = null, updated_at = now() where payment_entry_id = r.id;
+    update public.document_activity set journal_entry_id = null where journal_entry_id = r.id;
+    perform set_config('folvy.asiento_quitar', r.id::text, true);
+    delete from public.journal_entry where id = r.id;   -- sus líneas, en cascada
+    perform set_config('folvy.asiento_quitar', '', true);
+    perform public._bank_log(cta, emp, r.movement_id, r.match_id, null, 'deshecho', 'persona',
+      format('Deshecho: su asiento %s/%s se borra (K14b: casado cuando QBO no tenía día de inicio)', r.series, r.number), jsonb_build_object('asiento', r.id));
     v_deshechos := v_deshechos + 1;
   end loop;
+  if exists (select 1 from public.journal_entry o where o.company_id = emp and o.series = 3 and o.fiscal_year_id = '0660590d-5b9b-4df6-b248-b70f8655342b') then
+    raise exception 'K14b · 1: en la serie 3 de 2026 quedan otros asientos: borrar estos dejaría un hueco en la numeración.';
+  end if;
 
   -- 2 y 3 · Un solo banco, «CaixaBank», con la 57200000.
   v_j := public._bank_juntar(queda, se_va);
@@ -97,14 +150,27 @@ begin
 
   -- 5 · Los 4 de noviembre, otra vez con su pago de GoCardless (ahora, en la 57200000).
   for r in select x.movement_id, x.payout from _k14b_payout x where x.fecha >= v_corte order by x.fecha loop
-    -- Al anularlo, su asiento dejó el movimiento «descartado» (journal_dismissal) para que nadie lo vuelva a proponer
-    -- solo. Este sí se vuelve a casar, a propósito: se quita esa marca (solo la de estos 4; los 33 de antes la guardan).
-    delete from public.journal_dismissal d
-     where d.company_id = emp and d.source_type = 'bank' and d.source_key = r.movement_id::text;
     perform public.conta_abono_gocardless_casar(r.movement_id, r.payout, 'seguro',
       'K14b: el ingreso de su pago de GoCardless (el mismo importe y día), en la subcuenta del banco', 'folvy');
     v_recasados := v_recasados + 1;
   end loop;
 
-  raise notice 'K14b · % deshechos · juntados: % · antes del inicio: % · % de noviembre casados otra vez.', v_deshechos, v_j, v_a, v_recasados;
+  -- 6 · La cadena de huellas, sin hueco: desde 1, cada huella con la anterior, como al validar.
+  execute 'alter table public.journal_entry disable trigger trg_journal_entry_inalterable';
+  v_prev := null; v_seq := 0;
+  for r in select e.id, e.chain_seq, e.prev_hash, e.hash from public.journal_entry e
+            where e.company_id = emp and e.chain_seq is not null order by e.chain_seq loop
+    v_seq := v_seq + 1;
+    v_h := public.journal_huella(v_prev, public.journal_entry_canonico(r.id));
+    if r.chain_seq <> v_seq or r.prev_hash is distinct from v_prev or r.hash is distinct from v_h then
+      update public.journal_entry set chain_seq = v_seq, prev_hash = v_prev, hash = v_h where id = r.id;
+      v_rehechas := v_rehechas + 1;
+    end if;
+    v_prev := v_h;
+  end loop;
+  execute 'alter table public.journal_entry enable trigger trg_journal_entry_inalterable';
+  if public._conta_cadena_rota(emp) <> 0 then raise exception 'K14b · 6: la cadena de QBO no ha quedado entera.'; end if;
+
+  raise notice 'K14b · % asientos borrados · juntados: % · antes del inicio: % · % de noviembre casados otra vez · cadena: % eslabones, % rehechos.',
+    v_deshechos, v_j, v_a, v_recasados, v_seq, v_rehechas;
 end $$;
