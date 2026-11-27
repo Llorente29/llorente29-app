@@ -277,6 +277,8 @@ export const CONTA = {
     cobroGestoria: 'ventas/clientes-y-cuotas/cobro',
     /** Q10 · Las facturas de las cuotas ya cobradas por GoCardless en un mes, en borrador hasta emitirlas. */
     facturasCuotas: 'ventas/clientes-y-cuotas/facturas',
+    /** R21 · «Facturar el mes»: el asistente de cinco pasos, de lo cobrado a las facturas emitidas en Cegid. */
+    facturarMes: 'ventas/clientes-y-cuotas/facturar',
     liquidacionPlataforma: 'ventas/liquidaciones/plataforma/:clave',
     /** S01j·2 · La ficha de UNA liquidación de plataforma: sus cifras, su factura de comisión y el correo del que salió. */
     liquidacionFicha: 'ventas/liquidaciones/liquidacion/:id',
@@ -510,6 +512,13 @@ export const rutaFacturasCuotas = (empresa?: string | null, mes?: string | null)
   if (mes) q.set('mes', mes)
   const t = q.toString()
   return `${rutaConta(CONTA.rutas.facturasCuotas)}${t ? `?${t}` : ''}`
+}
+export const rutaFacturarMes = (empresa?: string | null, mes?: string | null): string => {
+  const q = new URLSearchParams()
+  if (empresa) q.set('empresa', empresa)
+  if (mes) q.set('mes', mes)
+  const t = q.toString()
+  return `${rutaConta(CONTA.rutas.facturarMes)}${t ? `?${t}` : ''}`
 }
 export const rutaClienteGestoria = (cliente: string, empresa: string | null): string =>
   `${rutaConta(CONTA.rutas.clienteGestoria)}/${cliente}${empresa ? `?${new URLSearchParams({ empresa })}` : ''}`
