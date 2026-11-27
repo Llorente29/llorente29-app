@@ -100,7 +100,8 @@ export function planCobro(mes: string, c: CobroBanco, facturado: (cliente: numbe
   const d = c.decision
   if (d) {
     const quien = d.quien ? ` (${d.quien}${d.at ? `, ${d.at.slice(8, 10)}/${d.at.slice(5, 7)}` : ''})` : ''
-    if (d.decision === 'paga_factura') return { ...base, estado: 'paga_factura', porque: `${d.factura ? `Paga la factura ${d.factura}, que ya existe` : 'Paga una factura que ya existe'}${quien}.`, pagaFacturaCent: total }
+    // Respuesta 9 · El cliente que dice la decisión (QBO: «es el 718, no el 1014») manda sobre el de la ficha.
+    if (d.decision === 'paga_factura') return { ...base, cliente: d.cliente ?? c.codigo, estado: 'paga_factura', porque: `${d.factura ? `Paga la factura ${d.factura}, que ya existe` : 'Paga una factura que ya existe'}${quien}.`, pagaFacturaCent: total }
     if (d.decision === 'no_es_cobro') return { ...base, estado: 'no_es_cobro', porque: `No es un cobro${quien}.`, noCobroCent: total }
     if (!d.cliente || !d.concepto) return parar('La decisión de facturar no tiene cliente o concepto.')
     const l = linea(c.clave, 'decision', null, d.concepto, d.texto || conceptoDeCodigo(d.concepto)?.nombre || d.concepto, total)

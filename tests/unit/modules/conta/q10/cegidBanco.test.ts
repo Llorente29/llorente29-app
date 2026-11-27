@@ -152,3 +152,17 @@ describe('Q10 · respuesta 8 · la lista de Julio: solo facturación', () => {
       ['listo', [['0022', 'Consulta y alta de autónomo', 4000, 4840]]], ['listo', [['0039', 'Otros trámites y gestiones', 82645, 100000]]], ['listo', [['0039', 'Otros trámites y gestiones', 10000, 12100]]]])
   })
 })
+
+describe('Q10 · respuesta 9 · las respuestas de QBO', () => {
+  it('«paga la 4/12» con el cliente que dice QBO, no el de la ficha; el cuadre lo cuenta en ese cliente', () => {
+    const p = planCobro('2026-11', cobro({ clave: 'mov:Q', estado: 'por_confirmar', importe: 244.38, codigo: 900030,
+      decision: { decision: 'paga_factura', concepto: null, cliente: 900031, texto: null, quien: 'QBO vía Julio (27/11)', at: '2026-11-27T10:00:00Z', factura: '4/12' } }), nada, new Set())
+    expect([p.estado, p.cliente, p.porque]).toEqual(['paga_factura', 900031, 'Paga la factura 4/12, que ya existe (QBO vía Julio (27/11), 27/11).'])
+    expect(cuadreVias('2026-11', [], [p], []).cuadra).toBe(true)
+  })
+  it('0035 a 60,00 € (base 49,59) y 0017 a 18,22 € (base 15,06)', () => {
+    const f = (importe: number, concepto: string) => planCobro('2026-11', cobro({ clave: 'mov:R', estado: 'sin_cliente', importe, codigo: null,
+      decision: { decision: 'facturar', concepto, cliente: 900032, texto: null, quien: null, at: null } }), nada, new Set()).lineas.map((l) => [l.concepto.codigo, l.baseCent, l.totalCent])
+    expect([f(60, '0035'), f(18.22, '0017')]).toEqual([[['0035', 4959, 6000]], [['0017', 1506, 1822]]])
+  })
+})
