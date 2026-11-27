@@ -13,10 +13,11 @@
 //     cobro, cliente a cliente. Hasta que dé 0,00 €, no se genera nada en Cegid.
 
 import { useMemo, useState } from 'react'
-import { cuadreVias, esCobroDeCliente, nombreMes, planCobro, proponerFactura, type CobroBanco, type FacturaParaCruce, type PlanCobro, type QueDecide } from '../../../../../supabase/functions/_shared/cegidBanco'
+import { cuadreVias, nombreMes, proponerFactura, type CobroBanco, type FacturaParaCruce, type PlanCobro, type QueDecide } from '../../../../../supabase/functions/_shared/cegidBanco'
 import { CONCEPTOS_CEGID, type CobroParaMandar } from '../../../../../supabase/functions/_shared/cegidMandar'
 import { decidirBancoCegid, leerBancoCegid, mandarBancoCegid, type IncidenciaMandada } from '@/modules/conta/services/cegidService'
 import { eurQ10 } from './facturasDelMes'
+import { planesDelBanco } from './calculos'
 
 const VIVAS = ['mandando', 'mandada', 'facturada']
 const VIA: Record<string, string> = { transferencia: 'Transferencia', traspaso: 'Traspaso', otra: 'Otra', bizum: 'Bizum', cajero: 'Cajero', tarjeta: 'Tarjeta' }
@@ -47,8 +48,8 @@ export function BancoCegidQ10(p: Props) {
 
   const planes = useMemo<PlanCobro[] | null>(() => {
     if (!datos) return null
-    const vivas = new Set(p.mandadas.filter((m) => VIVAS.includes(m.estado)).map((m) => m.gcCobroId))
-    return datos.cobros.filter((c) => esCobroDeCliente(c.via)).map((c) => planCobro(p.mes, c, (cli, m) => (datos.facturados[String(cli)] ?? []).includes(m), vivas))
+    // X35 · El mismo cálculo que el Inicio (calculos.ts).
+    return planesDelBanco(p.mes, datos.cobros, datos.facturados, p.mandadas)
   }, [datos, p.mandadas, p.mes])
   const cuadre = useMemo(() => planes && p.cobrosGc
     ? cuadreVias(p.mes, p.cobrosGc, planes, p.mandadas.filter((m) => VIVAS.includes(m.estado)).map((m) => ({ clave: m.gcCobroId, cliente: m.cliente, totalCent: Math.round(m.total * 100) })))

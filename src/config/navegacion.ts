@@ -270,6 +270,8 @@ export const CONTA = {
     remesaCobros: 'ventas/cobros/remesas/:remesaId',
     /** G01 · Ventas › Clientes y cuotas (solo asesoría): los clientes de la gestoría, sus tarifas y lo que cobra GoCardless. */
     clientesCuotas: 'ventas/clientes-y-cuotas',
+    /** X35 · El Inicio de «Clientes y cuotas»: el mes de un vistazo (la entrada del gestor). */
+    inicioGestoria: 'ventas/clientes-y-cuotas/inicio',
     tarifasGestoria: 'ventas/clientes-y-cuotas/tarifas',
     /** G04 · La ficha completa de un cliente de la gestoría (con la empresa que le factura). */
     clienteGestoria: 'ventas/clientes-y-cuotas/cliente',
@@ -496,6 +498,8 @@ export const rutaRemesaPagos = (remesaId: string): string => rutaConta(CONTA.rut
 export const rutaCobros = (pestana?: string): string => `${rutaConta(CONTA.rutas.cobros)}${pestana ? `?pestana=${pestana}` : ''}`
 export const rutaRemesaCobros = (remesaId: string): string => rutaConta(CONTA.rutas.remesaCobros, { remesaId })
 export const rutaClientesCuotas = (): string => rutaConta(CONTA.rutas.clientesCuotas)
+/** X35 · El Inicio de «Clientes y cuotas»: el mes de un vistazo. */
+export const rutaInicioGestoria = (): string => rutaConta(CONTA.rutas.inicioGestoria)
 export const rutaTarifasGestoria = (): string => rutaConta(CONTA.rutas.tarifasGestoria)
 export const rutaCobroGestoria = (empresa?: string | null, mes?: string | null): string => {
   const q = new URLSearchParams()

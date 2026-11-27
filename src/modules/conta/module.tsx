@@ -63,6 +63,7 @@ import RemesaCobrosPage from '@/modules/conta/ventas/RemesaCobrosPage'
 import { ClientesG04Page, FichaClienteG04Page, TarifaG04Page } from '@/modules/conta/gestoria/g04/paginas'
 import { CobroG05Page } from '@/modules/conta/gestoria/g05/pagina'
 import { FacturasQ10Page } from '@/modules/conta/gestoria/q10/pagina'
+import { ElMesDeUnVistazo } from '@/modules/conta/gestoria/x35/ElMesDeUnVistazo'
 import { SoloGestoria } from '@/modules/conta/sectores/SoloConSector'
 import LiquidacionPlataformaPage from '@/modules/conta/ventas/LiquidacionPlataformaPage'
 import LiquidacionFichaPage from '@/modules/conta/ventas/LiquidacionFichaPage'
@@ -193,6 +194,7 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.cobros, element: enMarco(<CobrosPage />, '¿Quién me debe y cuándo lo cobro?', true) },
     { path: CONTA.rutas.remesaCobros, element: enMarco(<RemesaCobrosPage />, '¿Qué pasa con esta remesa de recibos?', true) },
     // G04 · Clientes (la maqueta del 08/11), la ficha y Tarifa. G03 · Solo en una empresa del sector Gestoría, también entrando por la dirección.
+    { path: CONTA.rutas.inicioGestoria, element: enMarco(<SoloGestoria><ElMesDeUnVistazo /></SoloGestoria>, '¿Cómo va el mes y dónde ataco primero?', true) },
     { path: CONTA.rutas.clientesCuotas, element: enMarco(<SoloGestoria><ClientesG04Page /></SoloGestoria>, '¿Quién me paga, cuánto, qué me deben y qué tengo que hacer?', true) },
     { path: `${CONTA.rutas.clienteGestoria}/:cliente`, element: enMarco(<SoloGestoria><FichaClienteG04Page /></SoloGestoria>, '¿Qué le cobro a este cliente y cómo va?', true) },
     { path: CONTA.rutas.tarifasGestoria, element: enMarco(<SoloGestoria><TarifaG04Page /></SoloGestoria>, '¿Cuánto cobro por cada servicio?', true) },
