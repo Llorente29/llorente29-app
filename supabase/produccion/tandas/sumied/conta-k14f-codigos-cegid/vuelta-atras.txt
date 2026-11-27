@@ -1,0 +1,3 @@
+# K14f · la vuelta atrás: las 6 fichas sin código de Cegid y lo apuntado por la K14f, fuera.
+cuenta: scripts/conta/produccion/cuentas/k14f-codigos-cegid.sql
+supabase/vuelta-atras/20261127T0823_k14f_codigos_cegid.down.sql
