@@ -1,0 +1,20 @@
+[
+ {
+  "id": "855-1",
+  "pr": 855,
+  "fecha": "2026-11-27T22:55:53Z",
+  "producto": "sumied",
+  "apartado": "Facturar el mes",
+  "frase": "lo que quedó fuera de lo mandado se guarda en «Pendientes» con su mes. Así sale el primero el mes siguiente.",
+  "ruta": null
+ },
+ {
+  "id": "855-2",
+  "pr": 855,
+  "fecha": "2026-11-27T22:55:53Z",
+  "producto": "sumied",
+  "apartado": "Facturar el mes",
+  "frase": "un mes aún sin cobros dice lo que GoCardless tiene previsto cobrar y abre en el paso 1, sin pasos en verde.",
+  "ruta": null
+ }
+]
