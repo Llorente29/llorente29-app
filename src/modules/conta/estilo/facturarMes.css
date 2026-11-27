@@ -10,12 +10,12 @@
 .r21-pendientes { background: var(--s-duda-fondo); color: var(--s-duda); border: 1px solid var(--s-duda); border-radius: 99px; padding: 3px 12px; font-weight: 600;
   font-size: 14px; font-family: inherit; cursor: pointer; }
 .r21-titulo-fila { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-top: 6px; }
-.r21-titulo { margin: 0; font-size: 32px; line-height: 1.2; flex: 1 1 360px; }
+.r21-titulo { margin: 0; font-size: 32px; line-height: 1.2; font-weight: 700; flex: 1 1 360px; }
 .r21-mes { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--s-apoyo); }
 .r21-mes select { font: inherit; font-size: 15px; color: var(--s-tinta); padding: 8px 10px; border: 1px solid var(--s-borde-control); border-radius: 8px; background: var(--s-superficie); }
 .r21-intro { margin: 12px 0 0; font-size: 16px; line-height: 1.5; color: var(--s-tinta); }
 .r21-lista-pendientes { margin-top: 12px; background: var(--s-superficie); border: 1px solid var(--s-duda); border-radius: 12px; padding: 12px 16px; }
-.r21-lista-pendientes h2 { margin: 0 0 8px; font-size: 16px; }
+.r21-lista-pendientes h2 { margin: 0 0 8px; font-size: 16px; font-weight: 700; }
 .r21-lista-pendientes table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .r21-lista-pendientes th { text-align: left; font-size: 12px; color: var(--s-apoyo); font-weight: 600; padding: 6px; border-bottom: 1px solid var(--s-borde-decorativo); }
 .r21-lista-pendientes td { padding: 8px 6px; border-bottom: 1px solid var(--s-linea); vertical-align: top; }
@@ -33,7 +33,7 @@
 .r21-paso[data-activo='si'] .r21-circulo { background: var(--s-accion); color: var(--s-sobre-accion); }
 .r21-paso[data-hecho='si'] .r21-circulo { background: var(--s-ok); color: var(--s-sobre-accion); }
 .r21-paso-cuerpo { flex: 1; min-width: 0; }
-.r21-paso h2 { margin: 4px 0 0; font-size: 19px; }
+.r21-paso h2 { margin: 4px 0 0; font-size: 19px; font-weight: 700; }
 .r21-explica { margin: 6px 0 0; font-size: 15px; line-height: 1.5; color: var(--s-apoyo); }
 .r21-resultado { margin-top: 12px; padding: 10px 12px; background: var(--s-ok-fondo); border-radius: 8px; font-size: 15px; color: var(--s-ok); }
 .r21-frase { margin: 10px 0 0; font-size: 15px; color: var(--s-tinta); }
@@ -65,7 +65,7 @@
 .r21-cuadre > div:first-child { border-top: 0; color: var(--s-tinta); }
 .r21-cuadre > div.r21-diferencia { padding: 12px 14px; border-top: 1px solid var(--s-borde-decorativo); background: var(--s-ok-fondo); color: var(--s-ok); font-weight: 700; }
 .r21-cuadre > div.r21-diferencia[data-cuadra='no'] { background: var(--s-falta-fondo); color: var(--s-falta); }
-.r21-instrucciones { margin: 14px 0 0; padding-left: 22px; font-size: 15px; line-height: 1.7; color: var(--s-tinta); }
+.r21-instrucciones { margin: 14px 0 0; padding-left: 22px; list-style: decimal; font-size: 15px; line-height: 1.7; color: var(--s-tinta); }
 .r21-nunca { color: var(--s-falta); font-weight: 600; }
 .r21-cifra-caja { margin-top: 12px; padding: 14px; border: 1px solid var(--s-borde-decorativo); border-radius: 10px; background: var(--s-suave); }
 .r21-cifra-caja > div:first-child, .r21-cifra-nota { font-size: 14px; color: var(--s-apoyo); }
