@@ -1,0 +1,5 @@
+# Q10 · respuesta 7 · lo cobrado por el banco, a Cegid (0730). Su prueba (ROLLBACK), con datos inventados: dos veces; A
+# decide y cambia, lo que no vale no, y ya mandado no se vuelve a decidir; B ni decide ni ve; y la vuelta atrás.
+supabase/migrations/20261127T0730_q10i_banco_a_cegid.sql
+supabase/migrations/20261127T0731_q10i_decisiones_julio.sql
+supabase/staging/sql/20261127_q10i_banco_a_cegid_prueba.sql
