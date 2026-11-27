@@ -1,0 +1,11 @@
+# K14e · Los 5 clientes de tarjeta de QBO, dados de alta en Cegid (1266–1270), atados a su ficha y a sus pagos (27/11).
+# Rama conta/k14e-tpv-codigos-cegid. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0119  Ata 5 fichas a su código de Cegid por _conta_cegid_atar (conta_cobro_cliente, con su apunte en
+#         conta_cegid_atado) y pone el código en sus 5 pagos de conta_banco_cobro_tarjeta. Comprobado antes en Cegid,
+#         solo leyendo, por NIF. Para si una ficha ya tiene código, un código ya es de otra o los pagos no son los de
+#         esas fichas. Lleva AUTORIZO (cambia filas que existen). No manda nada a Cegid.
+#
+# Nada en el camino del pedido. Lo cuenta k14e-tpv-codigos-cegid.sql (regla 31). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k14e-tpv-codigos-cegid.sql
+supabase/migrations/20261127T0119_k14e_tpv_codigos_cegid.sql

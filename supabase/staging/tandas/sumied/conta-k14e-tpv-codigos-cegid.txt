@@ -1,0 +1,4 @@
+# K14e · Los códigos de Cegid de los 5 clientes de tarjeta. La 0119 solo actúa sobre QBO (en staging no hace nada). Su
+# prueba, en ROLLBACK: el mismo camino en el núcleo (atar, el código en el pago, un código ajeno no) y la vuelta atrás.
+supabase/migrations/20261127T0119_k14e_tpv_codigos_cegid.sql
+supabase/staging/sql/20261127_k14e_tpv_codigos_cegid_prueba.sql
