@@ -63,6 +63,7 @@ import RemesaCobrosPage from '@/modules/conta/ventas/RemesaCobrosPage'
 import { ClientesG04Page, FichaClienteG04Page, TarifaG04Page } from '@/modules/conta/gestoria/g04/paginas'
 import { CobroG05Page } from '@/modules/conta/gestoria/g05/pagina'
 import { FacturasQ10Page } from '@/modules/conta/gestoria/q10/pagina'
+import { FacturarMesPage } from '@/modules/conta/gestoria/r21/pagina'
 import { SoloGestoria } from '@/modules/conta/sectores/SoloConSector'
 import LiquidacionPlataformaPage from '@/modules/conta/ventas/LiquidacionPlataformaPage'
 import LiquidacionFichaPage from '@/modules/conta/ventas/LiquidacionFichaPage'
@@ -197,6 +198,7 @@ export const contaModule: ModuleDefinition = {
     { path: `${CONTA.rutas.clienteGestoria}/:cliente`, element: enMarco(<SoloGestoria><FichaClienteG04Page /></SoloGestoria>, '¿Qué le cobro a este cliente y cómo va?', true) },
     { path: CONTA.rutas.tarifasGestoria, element: enMarco(<SoloGestoria><TarifaG04Page /></SoloGestoria>, '¿Cuánto cobro por cada servicio?', true) },
     { path: CONTA.rutas.cobroGestoria, element: enMarco(<SoloGestoria><CobroG05Page /></SoloGestoria>, '¿Qué se cobra este mes y por qué cambia?', true) },
+    { path: CONTA.rutas.facturarMes, element: enMarco(<SoloGestoria><FacturarMesPage /></SoloGestoria>, '¿Qué falta para facturar el mes?', true) },
     { path: CONTA.rutas.facturasCuotas, element: enMarco(<SoloGestoria><FacturasQ10Page /></SoloGestoria>, '¿Qué facturas lleva lo que ya cobró GoCardless?', true) },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },

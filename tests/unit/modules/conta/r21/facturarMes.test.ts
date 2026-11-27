@@ -40,6 +40,12 @@ describe('R21 · los pasos: cada uno se abre solo con el anterior hecho', () => 
     expect([p.actual, p.pasos.map((x) => x.hecho)]).toEqual([4, [true, true, true, false, false]])
     expect(p.pasos[0].resultado).toBe('Cobrado a clientes: 1.000,00 €. Listo para mandar: 10 cobros. Pendiente de decidir: 0 casos.')
   })
+  it('ya mandado, un cuadre que no da 0,00 € no esconde nada: el resultado del paso 3 dice cuánto falta por explicar', () => {
+    const uno = cuadreDelMes(NOV, { cobradoCent: 100001, noEsCobroCent: 0, mandadoCent: 90000, pagaFacturasCent: 10000 }, [])
+    const p = pasosDelMes(estado({ cuadre: uno }))
+    expect([p.actual, p.pasos[2].resultado]).toEqual([4, 'Mandados 10 cobros (900,00 €). El cuadre no da 0,00 €: faltan por explicar 0,01 €.'])
+    expect(pasosDelMes(estado()).pasos[2].resultado).toBe('Mandados 10 cobros (900,00 €). El cuadre da 0,00 €.')
+  })
   it('el visto bueno vale solo si es de lo mandado (mismo total y mismo número de facturas)', () => {
     const p4 = pasoCuatro(mandado)
     expect(pasosDelMes(estado({ vistoBueno: { serie: '1', totalCent: p4.serie1.totalCent, facturas: p4.serie1.facturas, quien: 'Persona de prueba', at: '2026-11-28T10:00:00Z' } })).actual).toBe(5)

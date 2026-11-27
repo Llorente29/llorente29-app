@@ -205,7 +205,9 @@ export function pasosDelMes(e: EstadoDelMes): Pasos {
   const pendientes = e.casos.filter((c) => c.estado === 'pendiente').length
   const h1 = e.preparado !== null
   const h2 = h1 && porResolver === 0
-  const h3 = h2 && e.mandados > 0 && e.porMandar === 0 && e.cuadre.cuadra
+  // Lo mandado ya está en Cegid: el paso 3 está hecho. El cuadre a 0,00 € es la llave de «Mandar» (puedeMandar), y si
+  // después de mandar no da 0,00 €, el resultado del paso lo dice con la cifra: no se esconde (regla 7).
+  const h3 = h2 && e.mandados > 0 && e.porMandar === 0
   const vbOk = !!(e.paso4 && e.vistoBueno && e.vistoBueno.totalCent === e.paso4.serie1.totalCent && e.vistoBueno.facturas === e.paso4.serie1.facturas)
   const h4 = h3 && vbOk
   const h5 = h4 && !!e.paso5 && e.paso5.faltan.length === 0
@@ -213,7 +215,7 @@ export function pasosDelMes(e: EstadoDelMes): Pasos {
   const resultados = [
     e.preparado ? `Cobrado a clientes: ${eur(e.preparado.cobradoCent)}. Listo para mandar: ${n(e.preparado.listos, 'cobro', 'cobros')}. Pendiente de decidir: ${n(e.preparado.casos, 'caso', 'casos')}.` : null,
     pendientes ? `Revisado. ${n(pendientes, 'caso', 'casos')} en Pendientes, fuera de esta factura.` : 'Todo resuelto.',
-    'Mandados. Cegid aún no ha hecho ninguna factura.',
+    `Mandados ${n(e.mandados, 'cobro', 'cobros')} (${eur(e.cuadre.mandadoCent)}).${e.cuadre.cuadra ? ' El cuadre da 0,00 €.' : ` El cuadre no da 0,00 €: faltan por explicar ${eur(e.cuadre.diferenciaCent)}.`}`,
     e.paso4 ? `${n(e.paso4.serie1.facturas, 'factura', 'facturas')}, ${eur(e.paso4.serie1.totalCent)}. Listado mandado a QBO.` : null,
     e.paso5 ? `${n(e.paso5.estan, 'factura emitida', 'facturas emitidas')} y comprobadas.` : null,
   ]
