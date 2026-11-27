@@ -187,6 +187,8 @@ export function FacturarMesPage() {
 
   const error = d.error ?? cg.error ?? bk.error ?? pd.error ?? rs.error ?? vbL.error
   if (error) return <ErrorConReintento mensaje={`No se ha podido leer lo del mes: ${error}`} reintentar={() => { d.recargar(); cg.recargar(); md.recargar(); bk.recargar(); pd.recargar(); rs.recargar(); vbL.recargar() }} />
+  // R21e · Una empresa sin nada leído de Cegid (por ejemplo, la que aún no está conectada) no se queda cargando: lo dice.
+  if (empresa && cg.datos && !cg.datos.clientes.length) return <ErrorConReintento mensaje={`${empresa.nombre} aún no tiene nada leído de Cegid. Léelo en «Facturas del mes» (Volver a leer de Cegid) y vuelve aquí; si no está conectada a Cegid, conéctala primero en Integraciones.`} reintentar={() => cg.recargar()} />
   if (!empresa || !todo || !plan || !pd.datos || !rs.datos) return <TarjetaCargando />
 
   const recargar = () => { d.recargar(); cg.recargar(); md.recargar(); bk.recargar(); pd.recargar(); rs.recargar() }
