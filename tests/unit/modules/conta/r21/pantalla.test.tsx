@@ -34,6 +34,8 @@ describe('R21 · la pantalla', () => {
     expect(h).toContain('Coincide: mandar el listado a QBO')
     expect(h).toMatch(/data-prueba="paso-5"[^>]*data-falta="si"/)
     expect(h).toContain('Pendientes: 0')
+    // R21d · Se puede volver a recorrer desde el paso 1, sin deshacer nada.
+    expect(h).toContain('Empezar desde el paso 1')
     // Un solo botón principal en el paso activo (más «No coincide», que no es principal).
     expect((h.match(/class="r21-boton"(?![^>]*data-tipo)/g) ?? []).length).toBe(1)
   })
