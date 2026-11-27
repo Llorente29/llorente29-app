@@ -57,6 +57,11 @@ export interface MovimientoLeido {
 export interface CuentaLeida {
   /** El IBAN si la fuente permite saberlo (en Norma 43 se reconstruye). */
   iban: string | null
+  /**
+   * K14b · La subcuenta 572 que dice el fichero de sí mismo, si la dice («Cuenta: 57200000 …», el extracto de
+   * DiezBank, que no trae IBAN). Con ella se busca el banco que ya la tiene: nunca se crea otro.
+   */
+  subcuenta?: string | null
   /** Lo que identifica la cuenta en el fichero cuando no hay IBAN («0182 0937 ···· 4525»). */
   identificacion: string
   titular: string | null

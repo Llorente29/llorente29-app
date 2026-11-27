@@ -49,8 +49,12 @@ export function textoNuevoConIban(iban: string | null): string {
   return n ? `Nuevo banco con este IBAN (${formatearIban(n)})` : 'Nuevo banco para esta cuenta'
 }
 
-/** Las cuentas de un fichero cuyo IBAN no es de ningún banco de Folvy (ni recordado). */
-export function ibanSinBanco(iban: string | null, bancos: { iban: string | null; ibanes: string[] }[]): boolean {
+/**
+ * Las cuentas de un fichero cuyo IBAN no es de ningún banco de Folvy (ni recordado), ni su subcuenta (K14b: el extracto
+ * de DiezBank no trae IBAN y dice «Cuenta: 57200000»). Solo a esas se les ofrece «Nuevo banco».
+ */
+export function ibanSinBanco(iban: string | null, bancos: { iban: string | null; ibanes: string[]; cuenta?: string | null }[], subcuenta?: string | null): boolean {
+  if (subcuenta && bancos.some((b) => b.cuenta === subcuenta)) return false
   const n = normalizarIban(iban ?? '')
   if (!n) return true
   return !bancos.some((b) => normalizarIban(b.iban ?? '') === n || b.ibanes.some((x) => normalizarIban(x) === n))

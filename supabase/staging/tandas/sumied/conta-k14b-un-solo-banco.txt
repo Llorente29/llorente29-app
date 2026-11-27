@@ -1,0 +1,7 @@
+# K14b · Un IBAN, un banco; y lo de antes del día de inicio, recalculado cuando cambia. La 1240 cambia bank_cuenta_alta
+# (desde la rama, en ROLLBACK; de verdad desde main al fusionar). Su prueba: el mismo extracto dos veces, el mismo IBAN,
+# el día de inicio puesto y quitado (y por los ejercicios), juntar dos bancos y la vuelta atrás.
+supabase/migrations/20261126T1240_k14b_un_banco_y_el_inicio.sql
+supabase/migrations/20261126T1605_k14b_lectura_completa.sql
+supabase/migrations/20261126T1606_k14b_fechas_al_reves.sql
+supabase/staging/sql/20261126_k14b_un_banco_y_el_inicio_prueba.sql

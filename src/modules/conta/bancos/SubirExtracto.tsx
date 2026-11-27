@@ -128,7 +128,7 @@ export function SubirExtracto() {
                   <span className="cx-ayuda">{c.movimientos.length} movimientos{c.desde && c.hasta ? ` del ${fechaLarga(c.desde)} al ${fechaLarga(c.hasta)}` : ''}{c.saldoFinalCent !== null ? ` · saldo final ${eurosExactos(c.saldoFinalCent / 100)}` : ''}</span>
                   {!asignacion[i] && <span className="cxb-ambar">Esta cuenta no la conozco: dime a qué banco va y lo recuerdo.</span>}
                   {nuevoIban && <span className="cx-ayuda">Recordaré que este IBAN va a {elegido!.nombre}.</span>}
-                  {(!asignacion[i] || asignacion[i] === NO_SUBIR) && ibanSinBanco(c.iban, datos.bancos) && (
+                  {(!asignacion[i] || asignacion[i] === NO_SUBIR) && ibanSinBanco(c.iban, datos.bancos, c.subcuenta) && (
                     <button type="button" className="cx-boton-sec" onClick={() => setNuevoPara(i)}>{textoNuevoConIban(c.iban)}</button>
                   )}
                 </span>

@@ -1,0 +1,18 @@
+# K14b · Un IBAN, un banco; y lo de antes del día de inicio, recalculado cuando cambia (26/11). Rama conta/k14b-un-solo-banco.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1240  Cambia bank_cuenta_alta (misma firma, con su respaldo): no da de alta un segundo banco con el IBAN de otro
+#         activo de la empresa. Añade _bank_antes_del_inicio_recalcular y dos disparadores que la llaman cuando cambia el
+#         día de inicio (bank_settings.cutover_date y los ejercicios), y _bank_juntar (juntar dos bancos en uno). No
+#         escribe en ninguna fila: lo de QBO Integrity lo arregla la tanda que va detrás, sola (conta/k14b-qbo-un-banco).
+#   1605  Añade la vista conta_banco_lectura_completa (pregunta de R): por banco activo, su última lectura completa del
+#         extracto (cuadra y sigue a la anterior sin hueco) y si los cobros de clientes del K14 se casaron después.
+#   1606  la empresa dc43e21d: sus 40 movimientos leídos con el mes delante, a su fecha de noviembre (y su huella); su extracto,
+#         «sin comprobar» (le faltan 23 filas) y con la huella del fichero apartada para volver a subirlo; sus cobros del
+#         K14 con la misma fecha; y lo de antes del inicio, recalculado. Cambia filas: AUTORIZO. Con vuelta atrás.
+#
+# Nada en el camino del pedido. Lo cuenta k14b-un-solo-banco.sql (regla 31). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k14b-un-solo-banco.sql
+supabase/migrations/20261126T1240_k14b_un_banco_y_el_inicio.sql
+supabase/migrations/20261126T1605_k14b_lectura_completa.sql
+supabase/migrations/20261126T1606_k14b_fechas_al_reves.sql

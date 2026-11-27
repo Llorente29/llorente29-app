@@ -1,0 +1,29 @@
+{
+ "_que": "K14b · Un IBAN, un banco · contexto medido en producción en SOLO LECTURA el 26/11 (bank_cuenta_alta en su versión de la 0110; sin _bank_juntar, _bank_antes_del_inicio_recalcular ni los dos disparadores; fiscal_year y bank_settings sin disparadores de K14b; ningún movimiento desajustado salvo los 708 de QBO Integrity, que arregla la tanda de detrás) y en la base local con la estructura de staging. 1240 cambia bank_cuenta_alta con la misma firma y añade dos funciones y dos disparadores; no escribe en ninguna fila. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido. 1605 añade la vista conta_banco_lectura_completa (no existe el 26/11). 1606 corrige las fechas de los 40 movimientos de la empresa dc43e21d (medidos el 26/11: 40, todos el día 11, sin casar, en su único extracto; 6 cobros del K14).",
+ "medido": "2026-11-26T15:40Z",
+ "tanda": {
+  "supabase/migrations/20261126T1240_k14b_un_banco_y_el_inicio.sql": "bc5f7c80902e239dfce706314a4e7be8",
+  "supabase/migrations/20261126T1605_k14b_lectura_completa.sql": "90a0f5d786810d8167ae48957339001a",
+  "supabase/migrations/20261126T1606_k14b_fechas_al_reves.sql": "944f5e53cc8d0ae45b0a4d192bdda02e"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_movement",
+   "public.bank_settings",
+   "public.bank_statement",
+   "public.conta_banco_cobro",
+   "public.fiscal_year"
+  ],
+  "funciones": [
+   "public.bank_cuenta_alta(uuid,text,text,text,text,uuid,boolean)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
