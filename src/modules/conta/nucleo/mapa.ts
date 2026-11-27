@@ -177,6 +177,9 @@ const TARIFAS = b('tarifas', 'Tarifa y paquetes', 'liquidaciones', R.tarifasGest
 // Q10 (25/11) · «Facturas del mes»: lo cobrado por GoCardless frente a la facturación de Cegid (antes, sin enlace aquí).
 const FACTURAS_MES = b('facturasMes', 'Facturas del mes', 'facturacion', R.facturasCuotas, [R.facturasCuotas], { solo: 'gestoria', pestana: 'Facturas del mes' })
 
+// R21 (27/11) · «Facturar el mes»: el asistente de cinco pasos.
+const FACTURAR_MES = b('facturarMes', 'Facturar el mes', 'facturacion', R.facturarMes, [R.facturarMes], { solo: 'gestoria', pestana: 'Facturar el mes' })
+
 const atajo = (x: Boton): Boton => ({ ...x, atajo: true })
 
 /**
@@ -277,7 +280,7 @@ export const MODULOS: Modulo[] = [
   },
   {
     id: 'despacho', etiqueta: 'Despacho', icono: 'despacho', soloAlguna: ['asesoria', 'gestoria'],
-    pestanas: [{ id: 'clientes', etiqueta: 'Clientes', grupos: [{ titulo: 'Asesoría', botones: [DESPACHO] }, { titulo: 'Gestoría', botones: [INICIO_GESTORIA, CUOTAS, FACTURAS_MES, TARIFAS] }] }],
+    pestanas: [{ id: 'clientes', etiqueta: 'Clientes', grupos: [{ titulo: 'Asesoría', botones: [DESPACHO] }, { titulo: 'Gestoría', botones: [INICIO_GESTORIA, CUOTAS, FACTURAR_MES, FACTURAS_MES, TARIFAS] }] }],
   },
 ]
 
