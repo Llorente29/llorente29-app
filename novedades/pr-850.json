@@ -1,0 +1,29 @@
+[
+ {
+  "id": "850-1",
+  "pr": 850,
+  "fecha": "2026-11-27T21:46:35Z",
+  "producto": "sumied",
+  "apartado": "Facturar el mes, el cuadre",
+  "frase": "dice qué es cada euro. La serie 3 tiene su fila y lo que quede sale cobro a cobro, con su nombre.",
+  "ruta": null
+ },
+ {
+  "id": "850-2",
+  "pr": 850,
+  "fecha": "2026-11-27T21:46:35Z",
+  "producto": "sumied",
+  "apartado": "Facturar el mes, las tarjetas",
+  "frase": "el nombre del cliente y su código de Cegid, no «El cliente 122» ni «Un cliente».",
+  "ruta": null
+ },
+ {
+  "id": "850-3",
+  "pr": 850,
+  "fecha": "2026-11-27T21:46:35Z",
+  "producto": "sumied",
+  "apartado": "Facturar el mes, el texto del banco",
+  "frase": "solo lo que escribió el que paga, con sus tildes, no el texto en bruto.",
+  "ruta": null
+ }
+]

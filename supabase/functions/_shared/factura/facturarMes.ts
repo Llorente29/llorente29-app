@@ -134,7 +134,16 @@ export interface EntradaCuadre {
   pagaFacturasCent: number
   /** Los pendientes de meses de antes resueltos este mes: se facturan ahora, así que cuentan como cobrado del mes. */
   deAntesResueltosCent?: number
+  /** R21c · Lo listo para la serie 3 (Contasimple), que se manda después de generar la serie 1. */
+  despuesCent?: number
+  /** R21c · Lo de los pendientes que está dentro de lo cobrado (explicarDiferencia). Sin él, la suma de los pendientes del mes. */
+  pendientesCent?: number
+  /** R21c · Lo cobrado que no está en ninguna fila, cobro a cobro: suma la diferencia. */
+  sinExplicar?: readonly PiezaDiferencia[]
 }
+
+/** R21c · Un cobro (o parte) que no está ni mandado, ni pagando una factura, ni en Pendientes. */
+export interface PiezaDiferencia { clave: string; texto: string; cent: number }
 
 export interface Cuadre {
   /** Cobrado de clientes en el mes (sin lo que no es un cobro, con lo de antes resuelto este mes). */
@@ -142,16 +151,22 @@ export interface Cuadre {
   mandadoCent: number
   pagaFacturasCent: number
   pendientesCent: number
+  /** R21c · Serie 3 (Contasimple): se manda después de la serie 1. */
+  despuesCent: number
   diferenciaCent: number
   cuadra: boolean
+  /** R21c · Qué es cada euro de la diferencia (vacío si cuadra). */
+  sinExplicar: readonly PiezaDiferencia[]
 }
 
 /** Las cuatro filas: cobrado de clientes − mandado − paga facturas de antes − pendientes = diferencia. */
 export function cuadreDelMes(mes: string, e: EntradaCuadre, pendientes: readonly PendienteGuardado[]): Cuadre {
-  const pendientesCent = pendientes.filter((p) => p.mes === mes).reduce((s, p) => s + p.importeCent, 0)
+  const pendientesCent = e.pendientesCent ?? pendientes.filter((p) => p.mes === mes).reduce((s, p) => s + p.importeCent, 0)
+  const despuesCent = e.despuesCent ?? 0
   const cobradoCent = e.cobradoCent - e.noEsCobroCent + (e.deAntesResueltosCent ?? 0)
-  const diferenciaCent = cobradoCent - e.mandadoCent - e.pagaFacturasCent - pendientesCent
-  return { cobradoCent, mandadoCent: e.mandadoCent, pagaFacturasCent: e.pagaFacturasCent, pendientesCent, diferenciaCent, cuadra: diferenciaCent === 0 }
+  const diferenciaCent = cobradoCent - e.mandadoCent - e.pagaFacturasCent - despuesCent - pendientesCent
+  return { cobradoCent, mandadoCent: e.mandadoCent, pagaFacturasCent: e.pagaFacturasCent, pendientesCent, despuesCent, diferenciaCent, cuadra: diferenciaCent === 0,
+    sinExplicar: diferenciaCent === 0 ? [] : [...(e.sinExplicar ?? [])] }
 }
 
 // ── Los cinco pasos ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -215,7 +230,7 @@ export function pasosDelMes(e: EstadoDelMes): Pasos {
   const resultados = [
     e.preparado ? `Cobrado a clientes: ${eur(e.preparado.cobradoCent)}. Listo para mandar: ${n(e.preparado.listos, 'cobro', 'cobros')}. Pendiente de decidir: ${n(e.preparado.casos, 'caso', 'casos')}.` : null,
     pendientes ? `Revisado. ${n(pendientes, 'caso', 'casos')} en Pendientes, fuera de esta factura.` : 'Todo resuelto.',
-    `Mandados ${n(e.mandados, 'cobro', 'cobros')} (${eur(e.cuadre.mandadoCent)}).${e.cuadre.cuadra ? ' El cuadre da 0,00 €.' : ` El cuadre no da 0,00 €: faltan por explicar ${eur(e.cuadre.diferenciaCent)}.`}`,
+    `Mandados ${n(e.mandados, 'cobro', 'cobros')} (${eur(e.cuadre.mandadoCent)}).${e.cuadre.cuadra ? ' El cuadre da 0,00 €.' : ` El cuadre no da 0,00 €: ${eur(e.cuadre.diferenciaCent)} de diferencia${e.cuadre.sinExplicar.length ? ` (${e.cuadre.sinExplicar.map((x) => `${x.texto}: ${eur(x.cent)}`).join('; ')})` : ''}.`}`,
     e.paso4 ? `${n(e.paso4.serie1.facturas, 'factura', 'facturas')}, ${eur(e.paso4.serie1.totalCent)}. Listado mandado a QBO.` : null,
     e.paso5 ? `${n(e.paso5.estan, 'factura emitida', 'facturas emitidas')} y comprobadas.` : null,
   ]

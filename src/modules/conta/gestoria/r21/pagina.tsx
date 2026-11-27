@@ -25,7 +25,7 @@ import { casosDelMes, cuadreDelMes, pasoCinco, pasoCuatro, pasosDelMes, type Man
 import { facturasDelMes } from '../q10/facturasDelMes'
 import { leerFacturasDelMes } from '../q10/datos'
 import { codigosCegid } from '../q10/equivalencias'
-import { armarCasos, CONCEPTOS, mesesDelSelector, type Accion } from './armar'
+import { armarCasos, CONCEPTOS, explicarDiferencia, mesesDelSelector, type Accion } from './armar'
 import { darVistoBueno, dejarParaDespues, deshacerPendiente, leerPendientes, leerResueltosEnElMes, leerVistoBueno, resolverPendiente } from './datos'
 import { FacturarMes, type CasoVista, type Frase } from './FacturarMes'
 
@@ -109,13 +109,19 @@ export function FacturarMesPage() {
 
   const todo = useMemo(() => {
     if (!d.datos || !base || !cg.datos || !md.datos || !planesBanco || !plan || !cobrosMes) return null
+    // R21c · El nombre de GoCardless de cada cobro (por su mandato), para el cobro que no tiene ficha.
+    const clienteDelMandato = new Map(d.datos.mandatos.map((m) => [m.gcId, m.gcClienteId]))
+    const nombresGc = new Map(d.datos.cobros.flatMap((c) => {
+      const n = c.mandatoId ? d.datos!.nombresGc.get(clienteDelMandato.get(c.mandatoId) ?? '') : undefined
+      return n ? [[c.gcId, n] as const] : []
+    }))
     const enCegid = new Set([...vivas.map((x) => x.gcCobroId), ...plan.vueltas['1'].listos.flatMap((k) => k.lineas.map((l) => l.gcId)), ...plan.vueltas['3'].listos.flatMap((k) => k.lineas.map((l) => l.gcId))])
     const entradas = armarCasos({ mes, plan, cobrosGc: d.datos.cobros.filter((c) => !enCegid.has(c.gcId)).map((c) => ({ gcId: c.gcId, partyId: base.facturas.find((f) => f.cobro.gcId === c.gcId)?.ficha.partyId
         ?? base.pendientes.find((p) => p.cobro.gcId === c.gcId)?.ficha?.partyId ?? null, nombre: null, importe: c.importe, fecha: c.fecha, estado: c.estado })),
       // Una ficha sin NIF no se puede facturar aunque se una a Cegid: sale una vez, como «Cliente sin datos».
       sinCodigo: (cegid?.sinCodigo ?? []).filter((f) => !base.pendientes.some((p) => p.motivo === 'sin_nif' && p.ficha?.partyId === f.partyId)),
       sinNif: base.pendientes.filter((p) => p.motivo === 'sin_nif' && p.ficha && !enCegid.has(p.cobro.gcId)).map((p) => ({ gcId: p.cobro.gcId, partyId: p.ficha!.partyId, nombre: p.ficha!.nombre, importe: p.cobro.importe, fecha: p.cobro.fecha })),
-      clientesCegid: cg.datos.clientes.map((c) => ({ codigo: c.codigo, nombre: c.nombre, nif: c.nif })), planesBanco, facturasCegid: facturasCruce })
+      clientesCegid: cg.datos.clientes.map((c) => ({ codigo: c.codigo, nombre: c.nombre, nif: c.nif })), planesBanco, facturasCegid: facturasCruce, nombresGc })
       .map((c) => ({ ...c, decidido: misResueltos.has(c.clave) }))
     // A un cliente cuya ficha de Cegid no tiene un NIF válido no se le manda nada: Verifactu no dejaría emitir su factura.
     // Queda en su caso (y en Pendientes, si se deja), no en lo que se manda.
@@ -134,7 +140,15 @@ export function FacturarMesPage() {
     // Antes de mandar, «Mandado a Cegid» es lo que quedará mandado: lo vivo más lo listo (así, «Mandar» se abre solo si,
     // mandándolo, la diferencia es 0,00 €).
     const porMandarCent = listos1.reduce((t, k) => t + k.totalCent, 0) + planesBanco.filter((x) => x.estado === 'listo').reduce((t, x) => t + x.lineas.reduce((u, l) => u + l.totalCent, 0), 0)
+    // R21c · Cada cobro en una sola fila: la serie 3 (Contasimple) va aparte, los pendientes cuentan lo que está dentro de
+    // lo cobrado (un pago con tarjeta sin abono en el banco aún no es cobrado), y lo que no está en ninguna fila se dice.
+    const serie3 = new Map(plan.vueltas['3'].listos.flatMap((k) => k.lineas.map((l) => [l.gcId, l.totalCent] as const)))
+    const ex = explicarDiferencia({ mes, gc: cobrosMes, planes: planesBanco,
+      mandadas: new Map(vivas.map((m) => [m.gcCobroId, Math.round(m.total * 100)])),
+      porMandarGc: new Set(listos1.flatMap((k) => k.lineas.map((l) => l.gcId))), serie3, pendientes, nombresGc,
+      nombresCegid: new Map(cg.datos.clientes.map((c) => [c.codigo, c.nombre])) })
     const cuadre = cuadreDelMes(mes, { cobradoCent: cv.total.cobradoCent, noEsCobroCent: cv.total.noCobroCent, mandadoCent: cv.total.mandadoCent + porMandarCent, pagaFacturasCent: cv.total.pagaFacturaCent,
+      despuesCent: ex.despuesCent, pendientesCent: ex.pendientesCent, sinExplicar: ex.sinExplicar,
       // Lo de meses de antes resuelto este mes se factura ahora: cuenta como cobrado del mes.
       deAntesResueltosCent: (rs.datos ?? []).reduce((t, x) => t + x.importeCent, 0) }, pendientes)
     const nombres = new Map(cg.datos.clientes.map((c) => [c.codigo, c.nombre]))

@@ -192,8 +192,10 @@ export const PRODUCTOS: Producto[] = [
     // G04 (maqueta del 08/11) · «Clientes y cuotas», apartado propio de la gestoría, con sus dos
     // entradas: Clientes (la lista, el panel y la ficha) y Tarifa y paquetes. Sale con el sector
     // Gestoría de la empresa activa (G03); antes era una pestaña de Ventas.
-    id: 'clientesCuotas', etiqueta: 'Clientes y cuotas', icono: 'contactos', ruta: R.clientesCuotas, prefijos: [], solo: 'gestoria', grupo: 'finanzas',
+    // X35 · Entra por su Inicio («El mes de un vistazo»), la entrada del gestor.
+    id: 'clientesCuotas', etiqueta: 'Clientes y cuotas', icono: 'contactos', ruta: R.inicioGestoria, prefijos: [], solo: 'gestoria', grupo: 'finanzas',
     pestanas: [
+      { id: 'inicioGestoria', etiqueta: 'Inicio', icono: 'contactos', ruta: R.inicioGestoria, prefijos: [R.inicioGestoria] },
       { id: 'clientesGestoria', etiqueta: 'Clientes', icono: 'contactos', ruta: R.clientesCuotas, prefijos: [R.clientesCuotas, R.clienteGestoria] },
       // R21 (27/11) · «Facturar el mes»: el asistente de cinco pasos.
       { id: 'facturarMes', etiqueta: 'Facturar el mes', icono: 'facturas', ruta: R.facturarMes, prefijos: [R.facturarMes] },
