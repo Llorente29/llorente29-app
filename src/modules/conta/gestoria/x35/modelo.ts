@@ -186,13 +186,12 @@ export function mesDeUnVistazo(e: EntradaMes): MesDeUnVistazo {
     else if (!e.noCobrado.cruzado) faltan.push(`Te deben: falta cruzar con el banco ${e.noCobrado.faltanPorCruzar.join(', ') || 'alguna empresa'}; hasta entonces, lo que GoCardless no cobró no es aún deuda.`)
     else {
       teDeben = e.noCobrado.lista
-      const tarjeta = e.noCobrado.tarjetaSinAsignar
       cifras.push({ id: 'teDeben', titulo: 'Te deben', valor: euros(teDeben.totalCent), tono: teDeben.totalCent ? 'aviso' : 'bien', lista: teDeben,
         fuente: `${plural(e.noCobrado.recibos, 'recibo', 'recibos')} de ${plural(e.noCobrado.clientes, 'cliente', 'clientes')} · GoCardless no lo cobró y el banco tampoco` })
       if (teDeben.filas.length) asuntos.push(asunto('reclamar', 'Cobrar', 'Reclamar a quien no ha pagado', `${plural(e.noCobrado.clientes, 'cliente', 'clientes')} · ${plural(e.noCobrado.recibos, 'recibo', 'recibos')}`, teDeben, 'clientes'))
       const viejos = e.noCobrado.tramos.find((t) => t.texto === 'Más de 90 días')?.lista
       if (viejos?.filas.length) asuntos.push({ ...asunto('viejos', 'Urgente', 'Recibos sin cobrar desde hace más de 90 días', `${plural(new Set(viejos.filas.map((f) => f.fichaId ?? f.id)).size, 'cliente', 'clientes')} · está dentro de «Te deben»`, viejos, 'clientes') })
-      if (tarjeta?.filas.length) asuntos.push(asunto('tarjeta', 'Revisar', 'Asignar los cobros con tarjeta a su cliente', `${plural(tarjeta.filas.length, 'cobro', 'cobros')} con tarjeta sin cliente`, tarjeta, 'facturasDelMes'))
+      // X35c · Los abonos del TPV sin detalle son de desde mayo, no de este mes: van en «Dónde se te escapa el dinero», no aquí.
     }
   }
 
