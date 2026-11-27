@@ -1,0 +1,12 @@
+# X14 · 2 · Tramos de IVA por casilla de ERP10 (Julio, 27/11: «sí»): el 2025 de QBO no entra en prueba porque 10 de las 380
+# recibidas traen dos casillas de IVA al mismo tipo (en 9, una en positivo y otra en negativo), y Sumied solo admitía un tramo
+# por factura y tipo. La copia de ERP10 es exacta: cada casilla entra como su propio tramo, sin sumar ni tirar ninguna. Las
+# facturas de Sumied siguen con un tramo por tipo. Rama conta/x14l-tramos-por-casilla. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar. Después, Julio pulsa «Volver a intentarlo» en «Traer de ERP10» (QBO, 2025).
+#
+#   2205  supplier_invoice_tax.import_position (nueva) y su disparador; el índice único por factura, tipo y casilla y,
+#         después, quita la regla de un tramo por factura y tipo (autorizo). Declarado, con su prueba.
+#
+# Nada en el camino del pedido. No cambia ninguna fila al aplicarse. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x14l-tramos.sql
+supabase/migrations/20261127T2205_x14l_tramos_por_casilla.sql

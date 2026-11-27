@@ -1,0 +1,23 @@
+{
+ "_que": "X14 · 2 · Tramos de IVA por casilla de ERP10 · contexto medido en la BASE LOCAL con la estructura de staging (como en producción), en SOLO LECTURA: no en producción. Una columna nueva, su disparador, el índice que sustituye a la regla de un tramo por factura y tipo, y la restricción de antes quitada. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-27T22:05Z",
+ "tanda": {
+  "supabase/migrations/20261127T2205_x14l_tramos_por_casilla.sql": "b2961a0886c6ac949ad7aa359659470b"
+ },
+ "contexto": {
+  "tablas": [
+   "public.supplier_invoice_tax"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.supplier_invoice_tax": 78
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
