@@ -74,9 +74,11 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await expect(porFacturar).toBeVisible()
     const filasPorFacturar = Number((await porFacturar.locator('span').nth(1).innerText()).trim())
     expect(await abrirYSumar(page, porFacturar, null)).toBe(filasPorFacturar)
+    // X35d · «Te deben» es lo del mes elegido: el único recibo sin cobrar es de hace 100 días, así que este mes da 0,00 €
+    // y el recibo sale en «Recibos sin cobrar desde hace más de 90 días».
     const teDeben = page.getByTestId('x35-cifra-teDeben')
-    await expect(teDeben.locator('span').nth(1)).toHaveText('60,50 €')
-    expect(await abrirYSumar(page, teDeben, '60,50 €')).toBe(1)
+    await expect(teDeben.locator('span').nth(1)).toHaveText('0,00 €')
+    await expect(page.getByTestId('x35-asunto-viejos')).toContainText('60,50 €')
 
     // 4. «Lo que hay que resolver», por dinero, y cada asunto con su lista.
     const asuntos = page.locator('[data-testid^="x35-asunto-"]')
