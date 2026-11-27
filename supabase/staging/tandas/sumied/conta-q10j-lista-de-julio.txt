@@ -1,0 +1,4 @@
+# Q10 · respuesta 8 · las 5 decisiones de tarjeta (0905). Su prueba (ROLLBACK): dos veces sin la empresa de QBO no hace
+# nada, y su vuelta atrás no toca otras decisiones.
+supabase/migrations/20261127T0905_q10j_tarjeta_decidida.sql
+supabase/staging/sql/20261127_q10j_tarjeta_decidida_prueba.sql
