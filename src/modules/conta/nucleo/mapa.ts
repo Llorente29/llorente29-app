@@ -170,10 +170,15 @@ const PAGOS = b('pagos', 'Pagos', 'pagos', R.pagos, [R.pagos], { pestana: 'Pagos
 const REPARTIDORES = b('repartidores', 'Repartidores', 'liquidaciones', R.repartidores, [R.repartidores, `${R.documentos}/catcher`], { solo: 'hosteleria', pestana: 'Repartidores' })
 
 const DESPACHO = b('despacho', 'Clientes del despacho', 'despacho', `${R.impuestos}/clientes`, [`${R.impuestos}/clientes`], { solo: 'asesoria', pestana: 'Clientes del despacho' })
+// X35 · El Inicio de «Clientes y cuotas»: el mes de un vistazo.
+const INICIO_GESTORIA = b('inicioGestoria', 'El mes de un vistazo', 'clientes', R.inicioGestoria, [R.inicioGestoria], { solo: 'gestoria', pestana: 'Inicio' })
 const CUOTAS = b('cuotas', 'Clientes y cuotas', 'clientes', R.clientesCuotas, [R.clientesCuotas], { solo: 'gestoria', pestana: 'Clientes y cuotas' })
 const TARIFAS = b('tarifas', 'Tarifa y paquetes', 'liquidaciones', R.tarifasGestoria, [R.tarifasGestoria], { solo: 'gestoria', pestana: 'Tarifa y paquetes' })
 // Q10 (25/11) · «Facturas del mes»: lo cobrado por GoCardless frente a la facturación de Cegid (antes, sin enlace aquí).
 const FACTURAS_MES = b('facturasMes', 'Facturas del mes', 'facturacion', R.facturasCuotas, [R.facturasCuotas], { solo: 'gestoria', pestana: 'Facturas del mes' })
+
+// R21 (27/11) · «Facturar el mes»: el asistente de cinco pasos.
+const FACTURAR_MES = b('facturarMes', 'Facturar el mes', 'facturacion', R.facturarMes, [R.facturarMes], { solo: 'gestoria', pestana: 'Facturar el mes' })
 
 const atajo = (x: Boton): Boton => ({ ...x, atajo: true })
 
@@ -275,7 +280,7 @@ export const MODULOS: Modulo[] = [
   },
   {
     id: 'despacho', etiqueta: 'Despacho', icono: 'despacho', soloAlguna: ['asesoria', 'gestoria'],
-    pestanas: [{ id: 'clientes', etiqueta: 'Clientes', grupos: [{ titulo: 'Asesoría', botones: [DESPACHO] }, { titulo: 'Gestoría', botones: [CUOTAS, FACTURAS_MES, TARIFAS] }] }],
+    pestanas: [{ id: 'clientes', etiqueta: 'Clientes', grupos: [{ titulo: 'Asesoría', botones: [DESPACHO] }, { titulo: 'Gestoría', botones: [INICIO_GESTORIA, CUOTAS, FACTURAR_MES, FACTURAS_MES, TARIFAS] }] }],
   },
 ]
 

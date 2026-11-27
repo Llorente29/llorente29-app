@@ -1,0 +1,4 @@
+# K14d · Lo que decide Julio sobre los pagos con tarjeta. La 0055 añade la columna «falta» (en staging no hay QBO: no
+# cambia filas). Su prueba, en ROLLBACK: lo que lee Q con «falta», dos pasadas y la vuelta atrás.
+supabase/migrations/20261127T0055_k14d_tpv_decididos.sql
+supabase/staging/sql/20261127_k14d_tpv_decididos_prueba.sql

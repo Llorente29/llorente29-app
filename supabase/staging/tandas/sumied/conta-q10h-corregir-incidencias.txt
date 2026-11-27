@@ -1,0 +1,4 @@
+# Q10 · respuesta 6 · la guarda de las cuotas fijas (2200). Su prueba (ROLLBACK), con datos inventados: dos veces (no
+# mete nada sin la empresa de QBO); la pantalla lee lo suyo y no escribe; B no ve lo de A; y la vuelta atrás.
+supabase/migrations/20261126T2200_q10h_cuota_revisada.sql
+supabase/staging/sql/20261126_q10h_cuota_revisada_prueba.sql

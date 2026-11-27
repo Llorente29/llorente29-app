@@ -1,0 +1,11 @@
+# K14c · Los pagos con tarjeta (TPV) de noviembre de QBO Integrity, uno a uno y atados a su negociación del CRM (27/11).
+# Rama conta/k14c-tpv-por-cliente. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0015  Añade conta_banco_cobro_tarjeta (una fila por pago del TPV, con su abono, su negociación, su etapa, su
+#         ficha y su código de Cegid) y mete los 19 pagos de noviembre de QBO: 12 casados, 5 por confirmar y 2 sin
+#         negociación. Para si los 12 abonos no están como se midieron. Solo añade; no escribe en ninguna fila de lo
+#         que ya existe. No manda nada a Cegid.
+#
+# Nada en el camino del pedido. Lo cuenta k14c-tpv-por-cliente.sql (regla 31). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k14c-tpv-por-cliente.sql
+supabase/migrations/20261127T0015_k14c_tpv_por_cliente.sql

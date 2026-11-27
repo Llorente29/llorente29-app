@@ -1,0 +1,16 @@
+{
+ "_que": "K14c · Los pagos con tarjeta, uno a uno · contexto medido en producción en SOLO LECTURA (conta_banco_cobro_tarjeta no existe el 27/11; los 12 abonos del TPV de QBO están como «tarjeta» y cada uno es la suma de sus pagos; las 7 fichas y los 4 códigos de Cegid existen) y en la base local con la estructura de staging. 0015 solo añade una tabla y sus filas; no escribe en ninguna fila de lo que existe. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-26T23:23Z",
+ "tanda": {
+  "supabase/migrations/20261127T0015_k14c_tpv_por_cliente.sql": "cb72b7681d8cd9bbf806744389194ff4"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": { "tablas": [], "funciones": [] },
+  "usos": {},
+  "registro": []
+ }
+}

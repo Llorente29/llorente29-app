@@ -1,0 +1,3 @@
+# K14d · la vuelta atrás: las cuatro filas como las dejó la K14c, y sin la columna «falta».
+cuenta: scripts/conta/produccion/cuentas/k14d-tpv-decididos.sql
+supabase/vuelta-atras/20261127T0055_k14d_tpv_decididos.down.sql

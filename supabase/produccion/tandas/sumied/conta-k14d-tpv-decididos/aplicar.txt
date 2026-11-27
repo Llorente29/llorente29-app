@@ -1,0 +1,11 @@
+# K14d · Lo que decide Julio (27/11) sobre los pagos con tarjeta de noviembre de QBO. Rama conta/k14d-tpv-decididos.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0055  Añade la columna «falta» a conta_banco_cobro_tarjeta (lo que falta para facturar un casado) y cambia 4 de
+#         sus 19 filas, que solo escribió la K14c: 25347 (1.000 €) y 26804 (121 €) pasan a casados, «decidido por
+#         Julio, 27/11»; 26804 y 26805 ganan su ficha; a 26792 le falta su NIE. Para si las cuatro no están como las
+#         dejó la K14c. Lleva AUTORIZO (update sobre filas que existen). No manda nada a Cegid.
+#
+# Nada en el camino del pedido. Lo cuenta k14d-tpv-decididos.sql (regla 31). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k14d-tpv-decididos.sql
+supabase/migrations/20261127T0055_k14d_tpv_decididos.sql

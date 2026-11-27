@@ -1,0 +1,3 @@
+# Q10 · respuesta 8 · vuelta atrás: las 5 decisiones de tarjeta de la 0905 (solo las suyas, y si ninguna está mandada).
+cuenta: scripts/conta/produccion/cuentas/q10j-lista-de-julio.sql
+supabase/vuelta-atras/20261127T0905_q10j_tarjeta_decidida.down.sql

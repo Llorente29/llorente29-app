@@ -1,0 +1,16 @@
+{
+ "_que": "K14e · Los códigos de Cegid de los 5 clientes de tarjeta · contexto medido en producción en SOLO LECTURA (las 5 fichas sin código, 4 con su fila en conta_cobro_cliente; los códigos 1266–1270 de nadie; sus 5 pagos casados y sin código; en Cegid, GetCustomer de los 5 con el NIF de su ficha, run 45916016296) y en la base local con la estructura de staging. 0119 cambia filas que existen (y crea una de conta_cobro_cliente). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-27T00:21Z",
+ "tanda": {
+  "supabase/migrations/20261127T0119_k14e_tpv_codigos_cegid.sql": "38b61e391d1c00f4d760d57a74f9f06b"
+ },
+ "contexto": {
+  "tablas": ["public.conta_banco_cobro_tarjeta", "public.conta_cobro_cliente", "public.conta_cegid_atado"],
+  "funciones": ["public._conta_cegid_atar(uuid,uuid,integer,text,text)"],
+  "filas": {"public.conta_banco_cobro_tarjeta": 19, "public.conta_cobro_cliente": 1004, "public.conta_cegid_atado": 19},
+  "otras": {},
+  "camino": { "tablas": [], "funciones": [] },
+  "usos": {},
+  "registro": []
+ }
+}

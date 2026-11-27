@@ -1,0 +1,16 @@
+{
+ "_que": "K14d · Lo que decide Julio sobre los pagos con tarjeta · contexto medido en producción en SOLO LECTURA (conta_banco_cobro_tarjeta con 19 filas, la K14c aplicada y en el historial; las 4 filas como las dejó; las 2 fichas existen) y en la base local con la estructura de staging. 0055 añade una columna y cambia 4 filas que solo escribió la K14c. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-26T23:57Z",
+ "tanda": {
+  "supabase/migrations/20261127T0055_k14d_tpv_decididos.sql": "a426d355a106894d2102f3092763b6c4"
+ },
+ "contexto": {
+  "tablas": ["public.conta_banco_cobro_tarjeta"],
+  "funciones": [],
+  "filas": {"public.conta_banco_cobro_tarjeta": 19},
+  "otras": {},
+  "camino": { "tablas": [], "funciones": [] },
+  "usos": {},
+  "registro": []
+ }
+}

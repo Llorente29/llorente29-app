@@ -1,0 +1,9 @@
+# Q10 · respuesta 6 · La guarda de las cuotas fijas y lo corregido de cada incidencia (26/11). Rama
+# conta/q10h-corregir-incidencias. Se ensaya y se aplica desde main nombrando la rama, antes de fusionar (lo lanza Julio, T10).
+#
+#   2200  Añade conta_cegid_cuota_revisada, con los 190 clientes de QBO con cuotas fijas que Julio revisó el 26/11
+#         (por su código), y conta_cegid_incidencia.corregida_at y corregida_por.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/q10h-corregir-incidencias.sql
+supabase/migrations/20261126T2200_q10h_cuota_revisada.sql

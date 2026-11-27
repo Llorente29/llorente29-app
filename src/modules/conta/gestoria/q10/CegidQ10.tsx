@@ -11,6 +11,7 @@
 import { Link } from 'react-router-dom'
 import { eurQ10 } from './facturasDelMes'
 import type { FilaEquivalencia } from './equivalencias'
+import type { PropuestaAtado } from '../../../../../supabase/functions/_shared/cegidMandar'
 
 export interface PropsCegidQ10 {
   conectada: boolean
@@ -22,7 +23,10 @@ export interface PropsCegidQ10 {
   alLeer: () => void
   codigos: string | null
   /** Las fichas con cobros este mes que no tienen código de Cegid, con su NIF, para que Julio las mire. */
-  sinCodigo: { nombre: string; nif: string | null; cuenta430: string | null; porque: string }[] | null
+  sinCodigo: { partyId: string; nombre: string; nif: string | null; cuenta430: string | null; porque: string; propuestas: PropuestaAtado[] }[] | null
+  /** Respuesta 4 · «Atar al N» y su frase: la guarda la página (atada, la ficha sale de esta lista). */
+  alAtar?: (partyId: string, codigo: number, como: 'correo' | 'nombre') => void
+  atado?: { estado: 'trabajando' | 'bien' | 'mal'; frase: string } | null
   tabla: FilaEquivalencia[] | null
 }
 
@@ -36,6 +40,7 @@ function textoRetencion(r: FilaEquivalencia['retencion']): string {
 
 export function CegidQ10(p: PropsCegidQ10) {
   const leyendo = p.lectura?.estado === 'leyendo'
+  const atando = p.atado ?? null
   return (
     <section className="g4-bloque q10-cegid" aria-labelledby="q10-cegid" data-prueba="cegid">
       <h2 id="q10-cegid" className="g4-bloque-titulo">La facturación de Cegid</h2>
@@ -50,15 +55,22 @@ export function CegidQ10(p: PropsCegidQ10) {
       {p.lectura && <p className="q10-linea" data-prueba="lectura" data-tono={p.lectura.estado === 'fallo' ? 'mal' : p.lectura.estado === 'leido' ? 'bien' : undefined}
         role={p.lectura.estado === 'fallo' ? 'alert' : 'status'}>{p.lectura.frase}</p>}
       {p.codigos && <p className="q10-linea" data-prueba="codigos">{p.codigos}</p>}
+      {/* La frase va fuera de la lista y la guarda la página: atada, la ficha sale de la lista, y la última se lleva la lista entera (regla 8). */}
+      {atando && <p className="q10-linea" data-prueba="atado" data-tono={atando.estado === 'bien' ? 'bien' : atando.estado === 'mal' ? 'mal' : undefined} role={atando.estado === 'mal' ? 'alert' : 'status'}>{atando.frase}</p>}
       {p.sinCodigo && p.sinCodigo.length > 0 && (
         <details className="q10-sin-codigo" data-prueba="sin-codigo">
-          <summary>Las {p.sinCodigo.length} fichas sin código de Cegid, con su NIF</summary>
+          <summary>Las {p.sinCodigo.length} fichas sin código de Cegid, con su NIF y lo que se propone</summary>
+          <p className="q10-linea">Lo propuesto sale de su correo de GoCardless o de su nombre en Cegid. Mira que es el cliente bueno antes de atarlo: queda apuntado quién lo ató.</p>
           <div className="q10-tabla-caja">
             <table className="q10-tabla" aria-label="Fichas sin código de Cegid">
-              <thead><tr><th>Ficha</th><th>NIF</th><th>Su 430 en Sumied</th><th>Por qué</th></tr></thead>
+              <thead><tr><th>Ficha</th><th>NIF</th><th>Su 430 en Sumied</th><th>Por qué</th><th>En Cegid parece</th></tr></thead>
               <tbody>
                 {p.sinCodigo.map((x) => (
-                  <tr key={`${x.nombre}|${x.nif}`}><td className="q10-cliente">{x.nombre}</td><td>{x.nif ?? 'Sin NIF'}</td><td>{x.cuenta430 ?? '—'}</td><td>{x.porque}</td></tr>
+                  <tr key={x.partyId} data-party={x.partyId}><td className="q10-cliente">{x.nombre}</td><td>{x.nif ?? 'Sin NIF'}</td><td>{x.cuenta430 ?? '—'}</td><td>{x.porque}</td>
+                    <td>{x.propuestas.length === 0 ? <span className="g4-pequeno">Ninguno por correo ni por nombre</span> : x.propuestas.map((k) => (
+                      <div key={k.codigo}><button type="button" className="g4-boton" disabled={!p.alAtar || atando?.estado === 'trabajando'} onClick={() => p.alAtar?.(x.partyId, k.codigo, k.por)}>
+                        Atar al {k.codigo}</button> <span className="g4-pequeno">{k.nombre ?? ''} · por su {k.por}</span></div>))}
+</td></tr>
                 ))}
               </tbody>
             </table>

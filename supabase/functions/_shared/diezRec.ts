@@ -71,17 +71,22 @@ export function facturaCegid(x: Fila): FacturaCegid | null {
 // ── Las rutas ───────────────────────────────────────────────────────────────────
 
 const q = (o: Record<string, string | number>) => Object.entries(o).map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
-export type QueLeer = 'clientes' | 'conceptos' | 'facturas' | 'series'
-export function rutaListado(que: QueLeer, pagina: number, ejercicio?: number): string {
+export type QueLeer = 'clientes' | 'conceptos' | 'facturas' | 'series' | 'incidencias'
+export function rutaListado(que: QueLeer, pagina: number, ejercicio?: number, mes?: number): string {
   const pag = { $top: POR_PAGINA, $skip: pagina }
   switch (que) {
     case 'clientes': return `/api/Customers?${q({ $orderby: 'codigo', ...pag })}`
     case 'conceptos': return `/api/Concepts?${q({ $orderby: 'codigo', ...pag })}`
     case 'series': return `/api/Sets?${q({ $orderby: 'codigo', ...pag })}`
     case 'facturas': return `/api/Invoices?${q({ $filter: `ejercicio eq ${Number(ejercicio)}`, $orderby: 'codigo', ...pag })}`
+    // Q10 · respuesta 4 · Las incidencias de un mes (las de Sumied y las de cualquiera), para el cuadre con lo cobrado.
+    case 'incidencias': return `/api/Incidences?${q({ $filter: `ano eq ${Number(ejercicio)} and mes eq ${Number(mes)}`, $orderby: 'cliente', ...pag })}`
   }
 }
 export const rutaCliente = (codigo: number) => `/api/Customers/GetCustomer/${Math.trunc(codigo)}`
+/** Q10 · respuesta 7 · Las facturas de un cliente en un ejercicio (para la regla 1: ¿ese mes ya está facturado?). */
+export const rutaFacturasCliente = (ejercicio: number, cliente: number, pagina = 0) =>
+  `/api/Invoices?${q({ $filter: `ejercicio eq ${Math.trunc(ejercicio)} and cliente eq ${Math.trunc(cliente)}`, $orderby: 'codigo', $top: POR_PAGINA, $skip: pagina })}`
 export const rutaConcepto = (codigo: string) => `/api/Concepts/GetConcept/${encodeURIComponent(codigo)}`
 
 /** Si esta página es la última: con menos de 200, o con lo leído llegando al total. */
@@ -102,8 +107,10 @@ export class ClienteDiezRec {
   idCliente: string | null = null
   /**
    * `escribe: 'incidencias'` (Q10 · respuesta 3): además de leer, puede añadir una incidencia (POST
-   * /api/Incidences/incidence) y borrar una (DELETE /api/Incidences/delete/{cliente}/{incidencia}). Nada más: ni
-   * conceptos, ni clientes. Sin él, solo lee. Lo pide conta-cegid-mandar; conta-cegid-leer no.
+   * /api/Incidences/incidence), cambiarla (PUT, la misma ruta: respuesta 6) y borrar una (DELETE
+   * /api/Incidences/delete/{cliente}/{incidencia}). Nada más: ni conceptos, ni clientes (Sumied no da de alta clientes
+   * en Cegid, así que ninguno sale con cuotas fijas). Sin él, solo lee. Lo piden conta-cegid-mandar y
+   * conta-cegid-corregir; conta-cegid-leer y conta-cegid-ver no.
    */
   constructor(private readonly o: { claves: ClavesDiezRec; empresa: string; base?: string; fetch: Fetch; escribe?: 'incidencias' }) {}
 
@@ -111,10 +118,10 @@ export class ClienteDiezRec {
     if (metodo === 'GET') return true
     if (metodo === 'POST' && ruta === '/api/Auth/login') return true
     if (this.o.escribe !== 'incidencias') return false
-    return (metodo === 'POST' && ruta === '/api/Incidences/incidence') || (metodo === 'DELETE' && /^\/api\/Incidences\/delete\/\d+\/\d+$/.test(ruta))
+    return ((metodo === 'POST' || metodo === 'PUT') && ruta === '/api/Incidences/incidence') || (metodo === 'DELETE' && /^\/api\/Incidences\/delete\/\d+\/\d+$/.test(ruta))
   }
 
-  private async llamar(metodo: 'GET' | 'POST' | 'DELETE', ruta: string, cuerpo?: Fila): Promise<Respuesta> {
+  private async llamar(metodo: 'GET' | 'POST' | 'PUT' | 'DELETE', ruta: string, cuerpo?: Fila): Promise<Respuesta> {
     // Solo lee: el único POST que sale es el del login.
     if (!this.puede(metodo, ruta)) throw new FalloDiezRec(this.o.escribe ? `Sumied solo escribe incidencias en la facturación de Cegid: ${metodo} ${ruta} no sale.` : `Sumied solo lee de la facturación de Cegid: ${metodo} ${ruta} no sale.`)
     const headers: Record<string, string> = { Accept: 'application/json' }
@@ -150,7 +157,7 @@ export class ClienteDiezRec {
   }
 
   /** Con un 401 (token caducado), vuelve a entrar una vez y repite. */
-  private async conToken(metodo: 'POST' | 'DELETE', ruta: string, cuerpo?: Fila): Promise<Respuesta> {
+  private async conToken(metodo: 'POST' | 'PUT' | 'DELETE', ruta: string, cuerpo?: Fila): Promise<Respuesta> {
     if (!this.token) await this.entrar()
     let r = await this.llamar(metodo, ruta, cuerpo)
     if (r.status === 401) { this.token = null; await this.entrar(); r = await this.llamar(metodo, ruta, cuerpo) }
@@ -164,6 +171,17 @@ export class ClienteDiezRec {
     const n = ent(j.incidencia)
     if (r.status !== 200 || !n) throw new FalloDiezRec(`Cegid no ha guardado la incidencia (${r.status}): ${motivoDeError(r.json)}`, r.status)
     return { incidencia: n, datos: j }
+  }
+
+  /**
+   * Respuesta 6 · Cambia una incidencia que ya existe (PUT): el cuerpo lleva su cliente y su número. Devuelve lo que
+   * dice Cegid que ha guardado; si no, lanza con el porqué.
+   */
+  async modificarIncidencia(cuerpo: Fila): Promise<Fila> {
+    if (!ent(cuerpo.cliente) || !ent(cuerpo.incidencia)) throw new FalloDiezRec('Para cambiar una incidencia hacen falta su cliente y su número.')
+    const r = await this.conToken('PUT', '/api/Incidences/incidence', cuerpo)
+    if (r.status !== 200) throw new FalloDiezRec(`Cegid no ha cambiado la incidencia ${cuerpo.incidencia} del cliente ${cuerpo.cliente} (${r.status}): ${motivoDeError(r.json)}`, r.status)
+    return (r.json ?? {}) as Fila
   }
 
   /** Lee una incidencia: null si no existe (204). */
@@ -182,8 +200,8 @@ export class ClienteDiezRec {
   }
 
   /** Una página de un listado, con su total. */
-  async pagina(que: QueLeer, pagina: number, ejercicio?: number): Promise<{ filas: Fila[]; total: number | null; ultima: boolean }> {
-    const r = await this.get(rutaListado(que, pagina, ejercicio))
+  async pagina(que: QueLeer, pagina: number, ejercicio?: number, mes?: number): Promise<{ filas: Fila[]; total: number | null; ultima: boolean }> {
+    const r = await this.get(rutaListado(que, pagina, ejercicio, mes))
     if (r.status !== 200) throw new FalloDiezRec(`Cegid contesta ${r.status} al leer ${que}: ${motivoDeError(r.json)}`, r.status)
     const j = (r.json ?? {}) as Fila
     const filas = Array.isArray(j.datos) ? (j.datos as Fila[]) : []

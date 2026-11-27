@@ -225,6 +225,8 @@ export interface CobroGc {
   /** G05 · nº 77 · Su código (details.cause) y el motivo en palabras de oficina. */
   causa?: string | null
   motivoEs?: string | null
+  /** Q10 · respuesta 4 · El texto del cobro (description): en un cobro suelto, sin suscripción, dice qué se cobra. */
+  descripcion?: string | null
 }
 
 export const COBRO_FALLIDO: readonly string[] = ['failed', 'charged_back', 'cancelled']
@@ -238,6 +240,7 @@ export function leerCobro(x: Record<string, unknown>): CobroGc {
     moneda: String(x.currency ?? ''),
     mandatoId: enlace(x, 'mandate'),
     suscripcionId: enlace(x, 'subscription'),
+    descripcion: texto(x.description),
     payoutId: enlace(x, 'payout'),
     motivo: null,
   }
