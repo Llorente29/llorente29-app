@@ -5,7 +5,7 @@
 // conta_cobro_cliente.codigo_cliente, como siempre) y la decisión de Julio. Y, de Cegid, solo leyendo, en qué meses
 // tiene factura cada cliente (para la regla 1). Lo usan «banco_leer» y «mandar_banco».
 
-import { claveTarjeta, type CobroBanco, type DecisionBanco } from "../_shared/cegidBanco.ts";
+import { claveTarjeta, type CobroBanco, type DecisionBanco, VIAS_QUE_NO_SON_COBRO } from "../_shared/cegidBanco.ts";
 import { type ClienteDiezRec, FalloDiezRec, rutaFacturasCliente } from "../_shared/diezRec.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -29,7 +29,9 @@ async function todas(q: () => Srv): Promise<Fila[]> {
 export async function cargarBanco(srv: Srv, companyId: string, accountId: string, mes: string): Promise<CobroBanco[]> {
   const inicio = `${mes}-01`;
   const bc = await todas(() => srv.from("conta_banco_cobro").select("movement_id, fecha, importe, via, estado, party_id")
-    .eq("company_id", companyId).eq("account_id", accountId).eq("mes", inicio).neq("estado", "tarjeta").neq("estado", "no_es_cobro"));
+    .eq("company_id", companyId).eq("account_id", accountId).eq("mes", inicio).neq("estado", "tarjeta").neq("estado", "no_es_cobro")
+    // Respuesta 8 · Lo que no es cobro de un cliente (vía «otra»: devoluciones y abonos de tarjeta) no se lee.
+    .not("via", "in", `(${VIAS_QUE_NO_SON_COBRO.join(",")})`));
   const movs = bc.map((x) => String(x.movement_id));
   const textos = new Map<string, string | null>();
   for (let i = 0; i < movs.length; i += 200) {

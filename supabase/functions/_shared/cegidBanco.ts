@@ -19,6 +19,13 @@
 
 import { baseDelCobro, COBRADO_GC, conceptoAprobado, conceptoDeCodigo, CONCEPTOS_CEGID, palabrasNombre, type CobroParaMandar, type LineaIncidencia } from './cegidMandar.ts'
 
+/**
+ * Respuesta 8 (Julio, 27/11) · Las vías del banco que no son cobros de un cliente: «otra» (Uber, Decathlon, descuentos,
+ * la DEH…: devoluciones y abonos de tarjeta). No salen en la lista de Julio ni cuentan en el cuadre de facturación.
+ */
+export const VIAS_QUE_NO_SON_COBRO: readonly string[] = ['otra']
+export const esCobroDeCliente = (via: string) => !VIAS_QUE_NO_SON_COBRO.includes(via)
+
 export interface ReciboBanco { gcId: string; importe: number; fecha: string; texto: string | null; elegido: string | null }
 export type QueDecide = 'paga_factura' | 'facturar' | 'no_es_cobro'
 export interface DecisionBanco { decision: QueDecide; concepto: string | null; cliente: number | null; texto: string | null; quien: string | null; at: string | null
@@ -206,7 +213,7 @@ export function cuadreVias(mes: string, gc: readonly CobroParaMandar[], planes: 
   }
   for (const p of planes) {
     const c = p.cobro
-    if (c.fecha.slice(0, 7) !== mes || (c.tipo === 'tarjeta' && !c.movementId)) continue
+    if (c.fecha.slice(0, 7) !== mes || (c.tipo === 'tarjeta' && !c.movementId) || !esCobroDeCliente(c.via)) continue
     const t = cent(c.importe)
     const claves = new Set([c.clave, `${c.clave}:recargo`, ...c.recibos.map((r) => r.gcId)])
     const mandado = [...claves].reduce((s, k) => s + (viva.get(k)?.totalCent ?? 0), 0)

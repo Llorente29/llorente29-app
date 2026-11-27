@@ -5,7 +5,7 @@
 // 5,20 € y 6,00 €, transferencias sin recibo, la tarjeta), con clientes y recibos inventados (T11).
 
 import { describe, expect, it } from 'vitest'
-import { claveTarjeta, cuadreVias, nombreMes, planCobro, proponerFactura, type CobroBanco } from '../../../../../supabase/functions/_shared/cegidBanco'
+import { claveTarjeta, cuadreVias, esCobroDeCliente, nombreMes, planCobro, proponerFactura, type CobroBanco } from '../../../../../supabase/functions/_shared/cegidBanco'
 
 const cobro = (o: Partial<CobroBanco> & { clave: string }): CobroBanco => ({
   tipo: 'banco', movementId: o.clave.replace('mov:', ''), fecha: '2026-11-12', importe: 84.7, via: 'transferencia', estado: 'casado', texto: 'TRANSFER INMEDIATA', codigo: 900001,
@@ -136,5 +136,19 @@ describe('Q10 · respuesta 7 · ¿paga una factura que ya existe? (el cruce con 
   it('lo decidido con su factura lo dice', () => {
     const p = planCobro('2026-11', sin({ importe: 1089, decision: { decision: 'paga_factura', concepto: null, cliente: null, texto: null, quien: 'Julio', at: '2026-11-27T09:00:00Z', factura: '1/2745' } }), nada, new Set())
     expect(p.porque).toBe('Paga la factura 1/2745, que ya existe (Julio, 27/11).')
+  })
+})
+
+describe('Q10 · respuesta 8 · la lista de Julio: solo facturación', () => {
+  it('la vía «otra» (devoluciones y abonos de tarjeta) no es cobro de un cliente y no cuenta en el cuadre', () => {
+    expect(['otra', 'transferencia', 'traspaso', 'tarjeta'].map(esCobroDeCliente)).toEqual([false, true, true, true])
+    const p = planCobro('2026-11', cobro({ clave: 'mov:O', via: 'otra', estado: 'sin_cliente', importe: 28.99, codigo: null }), nada, new Set())
+    expect(cuadreVias('2026-11', [], [p], []).vias).toEqual([])
+  })
+  it('las decisiones de tarjeta de Julio: 0022 a 48,40 € (base 40,00) y 0039 a 1.000,00 € (base 826,45) y a 121,00 € (base 100,00)', () => {
+    const t = (importe: number, concepto: string, cliente: number) => planCobro('2026-11', cobro({ clave: claveTarjeta('2026-11-19T12:41:55Z', importe), tipo: 'tarjeta', via: 'tarjeta',
+      importe, etapa: 'enlace_pago', falta: null, codigo: cliente, decision: { decision: 'facturar', concepto, cliente, texto: null, quien: 'Julio (27/11)', at: null } }), nada, new Set())
+    expect([t(48.4, '0022', 900020), t(1000, '0039', 900021), t(121, '0039', 900022)].map((p) => [p.estado, p.lineas.map((l) => [l.concepto.codigo, l.texto, l.baseCent, l.totalCent])])).toEqual([
+      ['listo', [['0022', 'Consulta y alta de autónomo', 4000, 4840]]], ['listo', [['0039', 'Otros trámites y gestiones', 82645, 100000]]], ['listo', [['0039', 'Otros trámites y gestiones', 10000, 12100]]]])
   })
 })
