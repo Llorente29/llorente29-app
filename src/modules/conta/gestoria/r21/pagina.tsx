@@ -204,9 +204,11 @@ export function FacturarMesPage() {
       : acciones.some((a) => a.efecto.que === 'facturar_a_mano' || a.efecto.que === 'concepto_a_mano') ? 'concepto' as const
       : acciones.some((a) => a.efecto.que === 'atar_a_mano') ? 'cliente' as const : null
     const g = guardadoDe(c.clave)
-    return { ...c, acciones, resuelto: false, aMano, deshacer: !!g,
-      hecho: c.estado === 'pendiente' ? (g ? `Dejado para después (${g.dejadoPor ?? 'sin nombre'}, ${fechaHora(g.dejadoAt)}). Queda en «Pendientes», fuera de esta factura. Cuando se resuelva, se factura en el mes en que se resuelva.`
-        : 'Quedó fuera de lo mandado a Cegid: está en «Pendientes». Cuando se resuelva, se factura en el mes en que se resuelva.') : null }
+    // R21f · Lo que quedó fuera de lo mandado lo guarda Sumied, no una persona: no se dice «dejado por» ni se deshace.
+    const fueraDeLoMandado = !!g && g.motivo.includes('Quedó fuera de lo mandado a Cegid')
+    return { ...c, acciones, resuelto: false, aMano, deshacer: !!g && !fueraDeLoMandado,
+      hecho: c.estado === 'pendiente' ? (g && !fueraDeLoMandado ? `Dejado para después (${g.dejadoPor ?? 'sin nombre'}, ${fechaHora(g.dejadoAt)}). Queda en «Pendientes», fuera de esta factura. Cuando se resuelva, se factura en el mes en que se resuelva.`
+        : 'Quedó fuera de lo mandado a Cegid: está en «Pendientes» hasta que se resuelva.') : null }
   }
   const armarAcciones = (k: string) => todo.acciones.get(k) ?? []
 
