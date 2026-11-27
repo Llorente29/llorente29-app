@@ -157,8 +157,10 @@ export function FacturarMes(p: PropsFacturarMes) {
           <div><span>Cobrado de clientes en el mes (GoCardless, banco y tarjeta)</span><strong>{euros(p.cuadre.cobradoCent)}</strong></div>
           <div><span>{p.mandar.cobros > 0 ? '− Se manda a Cegid' : '− Mandado a Cegid'}</span><span>{euros(p.cuadre.mandadoCent)}</span></div>
           <div><span>− Paga facturas que ya existían</span><span>{euros(p.cuadre.pagaFacturasCent)}</span></div>
+          {p.cuadre.despuesCent !== 0 && <div data-prueba="despues"><span>− Contasimple (serie 3): se manda después de generar la serie 1</span><span>{euros(p.cuadre.despuesCent)}</span></div>}
           <div><span>− Pendientes: fuera de esta factura hasta resolverlos</span><span>{euros(p.cuadre.pendientesCent)}</span></div>
           <div className="r21-diferencia" data-cuadra={p.cuadre.cuadra ? 'si' : 'no'} data-prueba="diferencia"><span>Diferencia</span><span>{euros(p.cuadre.diferenciaCent)}</span></div>
+          {p.cuadre.sinExplicar.map((x) => <div key={x.clave} data-prueba="sin-explicar"><span>{x.texto}</span><span>{euros(x.cent)}</span></div>)}
         </div>
         {!p.cuadre.cuadra && <p className="r21-frase" data-tono="mal">Hasta que la diferencia sea 0,00 €, no se manda nada: resuelve o deja para después lo que falta en el paso 2.</p>}
         {linea(p.mandar.frase, 'mandar-frase')}

@@ -46,6 +46,8 @@ export interface DatosQ10 {
   codigoCliente: Map<string, number>
   /** Respuesta 4 · Los correos de GoCardless de cada ficha (para proponer su cliente de Cegid por correo). */
   correos: Map<string, string[]>
+  /** R21c · El nombre de cada cliente de GoCardless (gc_id → nombre), para el cobro que no tiene ficha. */
+  nombresGc: Map<string, string>
 }
 
 const finDeMes = (mes: string) => {
@@ -67,6 +69,10 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
     // Respuesta 4 · El correo de cada cliente de GoCardless, para proponer su cliente de Cegid (columnas comprobadas el 26/11).
     todas('los correos de GoCardless', (a, b) => tabla('conta_gc_cliente').select('gc_id, correo').eq('company_id', empresa).not('correo', 'is', null).order('gc_id').range(a, b)),
   ])
+  // R21c · El nombre de cada cliente de GoCardless (conta_gc_cliente.nombre, columnas comprobadas el 27/11, regla 40).
+  // Sin él, la página sigue: el cobro sin ficha sale sin nombre.
+  const ng = await tabla('conta_gc_cliente').select('gc_id, nombre').eq('company_id', empresa).not('nombre', 'is', null).limit(5000)
+  const nombresGc = new Map(ng.error ? [] : ((ng.data ?? []) as Fila[]).map((x) => [String(x.gc_id), String(x.nombre)]))
   // Respuesta 4 · Lo elegido (la 0653): sin la tabla, nada elegido, y la página sigue.
   const el = await tabla('conta_cegid_concepto_elegido').select('que, gc_id, concepto').eq('company_id', empresa)
   const elegidos = new Map(el.error ? [] : ((el.data ?? []) as Fila[]).map((x) => [`${x.que}:${x.gc_id}`, String(x.concepto)]))
@@ -102,6 +108,7 @@ export async function leerFacturasDelMes(cuenta: string, empresa: string, mes: s
   return {
     cuentas,
     elegidos,
+    nombresGc,
     correos: (() => {
       const de = new Map(gcClientes.map((g) => [String(g.gc_id), String(g.correo)]))
       const r = new Map<string, string[]>()

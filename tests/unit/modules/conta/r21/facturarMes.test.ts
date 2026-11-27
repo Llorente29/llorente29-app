@@ -43,7 +43,7 @@ describe('R21 · los pasos: cada uno se abre solo con el anterior hecho', () => 
   it('ya mandado, un cuadre que no da 0,00 € no esconde nada: el resultado del paso 3 dice cuánto falta por explicar', () => {
     const uno = cuadreDelMes(NOV, { cobradoCent: 100001, noEsCobroCent: 0, mandadoCent: 90000, pagaFacturasCent: 10000 }, [])
     const p = pasosDelMes(estado({ cuadre: uno }))
-    expect([p.actual, p.pasos[2].resultado]).toEqual([4, 'Mandados 10 cobros (900,00 €). El cuadre no da 0,00 €: faltan por explicar 0,01 €.'])
+    expect([p.actual, p.pasos[2].resultado]).toEqual([4, 'Mandados 10 cobros (900,00 €). El cuadre no da 0,00 €: 0,01 € de diferencia.'])
     expect(pasosDelMes(estado()).pasos[2].resultado).toBe('Mandados 10 cobros (900,00 €). El cuadre da 0,00 €.')
   })
   it('el visto bueno vale solo si es de lo mandado (mismo total y mismo número de facturas)', () => {
