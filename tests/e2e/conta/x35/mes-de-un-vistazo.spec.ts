@@ -81,14 +81,18 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await expect(page.getByTestId('x35-asunto-viejos')).toContainText('60,50 €')
 
     // 4. «Lo que hay que resolver», por dinero, y cada asunto con su lista.
-    const asuntos = page.locator('[data-testid^="x35-asunto-"]')
-    expect(await asuntos.count()).toBeGreaterThan(0)
-    const importes: number[] = []
-    for (const a of await asuntos.all()) {
-      const importe = (await a.locator('span').nth(3).innerText()).trim()
-      if (importe.endsWith('€')) { importes.push(cent(importe)); await abrirYSumar(page, a, importe) }
+    // X35e · Dos bloques: lo del mes y lo de meses anteriores; cada uno, ordenado por dinero.
+    expect(await page.locator('[data-testid^="x35-asunto-"]').count()).toBeGreaterThan(0)
+    for (const bloque of ['mes', 'antes']) {
+      const asuntos = page.getByTestId(`x35-asuntos-${bloque}`).locator('[data-testid^="x35-asunto-"]')
+      const importes: number[] = []
+      for (const a of await asuntos.all()) {
+        const importe = (await a.locator('span').nth(3).innerText()).trim()
+        if (importe.endsWith('€')) { importes.push(cent(importe)); await abrirYSumar(page, a, importe) }
+      }
+      expect([...importes].sort((x, y) => y - x)).toEqual(importes)
     }
-    expect([...importes].sort((x, y) => y - x)).toEqual(importes)
+    await expect(page.getByTestId('x35-asuntos-antes')).toContainText('De meses anteriores')
     await page.getByTestId('x35-asunto-mandar').click()
     await expect(page.getByRole('dialog').getByRole('link', { name: 'Ir a Facturar el mes ›' })).toBeVisible()
     await page.keyboard.press('Escape')

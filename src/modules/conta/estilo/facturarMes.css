@@ -41,7 +41,7 @@
 .r21-frase[data-tono='bien'] { color: var(--s-ok); font-weight: 600; }
 .r21-casos { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
 .r21-caso { border: 1px solid var(--s-borde-decorativo); background: var(--s-superficie); border-radius: 10px; padding: 14px; }
-.r21-caso[data-estado='pendiente'] { border-color: var(--s-duda); background: var(--s-duda-fondo); }
+.r21-caso[data-estado='pendiente'] { border-left: 4px solid var(--s-duda); }
 .r21-caso[data-estado='resuelto'] { border-color: var(--s-ok); background: var(--s-ok-fondo); }
 .r21-tipo { display: inline-block; font-size: 12px; font-weight: 600; color: var(--s-tinta); background: var(--s-neutro-fondo); border-radius: 99px; padding: 3px 10px; }
 .r21-tipo[data-antes='si'] { background: var(--s-duda-fondo); color: var(--s-duda); }
@@ -92,3 +92,16 @@
   .r21-paso { padding: 16px; }
   .r21-cifra { font-size: 22px; }
 }
+
+/* R21g · El paso 2, por grupos: cada tipo con su total, plegable. */
+.r21-grupo { border: 1px solid var(--s-borde-decorativo); border-radius: 12px; background: var(--s-superficie); }
+.r21-grupo + .r21-grupo { margin-top: 10px; }
+.r21-grupo > summary { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px; cursor: pointer; list-style: none; }
+.r21-grupo > summary::-webkit-details-marker { display: none; }
+.r21-grupo > summary::before { content: '›'; font-weight: 700; transition: transform .15s; }
+.r21-grupo[open] > summary::before { transform: rotate(90deg); }
+.r21-grupo-titulo { font-weight: 700; font-size: 15px; }
+.r21-grupo-cuenta { color: var(--s-texto-suave, #5b6475); font-size: 13px; flex: 1; }
+.r21-grupo-total { font-weight: 700; font-size: 15px; white-space: nowrap; }
+.r21-grupo-casos { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
+.r21-lista-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

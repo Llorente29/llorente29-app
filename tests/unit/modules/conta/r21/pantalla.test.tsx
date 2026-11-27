@@ -31,7 +31,7 @@ describe('R21 · la pantalla', () => {
     expect((h.match(/data-hecho="si"/g) ?? []).length).toBe(3)
     expect(h).toContain('181,50 € · 2 facturas')
     expect(h).toContain('Nunca «Generar».')
-    expect(h).toContain('Coincide: mandar el listado a QBO')
+    expect(h).toContain('Coincide con Cegid')
     expect(h).toMatch(/data-prueba="paso-5"[^>]*data-falta="si"/)
     expect(h).toContain('Pendientes: 0')
     // R21d · Se puede volver a recorrer desde el paso 1, sin deshacer nada.

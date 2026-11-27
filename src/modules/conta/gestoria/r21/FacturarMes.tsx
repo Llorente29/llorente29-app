@@ -9,6 +9,7 @@
 import { useState, type ReactNode } from 'react'
 import { euros, mesLargo, type Caso, type Cuadre, type Pasos, type SerieCegid } from '../../../../../supabase/functions/_shared/factura/facturarMes'
 import type { Accion } from './armar'
+import { exportarTabla } from '@/modules/conta/ui/tabla/exportar'
 
 export type Tono = 'trabajando' | 'bien' | 'mal'
 export interface Frase { estado: Tono; frase: string }
@@ -143,6 +144,21 @@ export function FacturarMes(p: PropsFacturarMes) {
     )
   }
 
+  const grupos = [...p.casos.reduce((m, c) => {
+    const g = m.get(c.tipoTexto) ?? { tipo: c.tipo, texto: c.tipoTexto, casos: [] as CasoVista[], totalCent: 0, porResolver: 0 }
+    g.casos.push(c); g.totalCent += c.importeCent; if (!c.resuelto && c.estado === 'por_resolver') g.porResolver += 1
+    return m.set(c.tipoTexto, g)
+  }, new Map<string, { tipo: string; texto: string; casos: CasoVista[]; totalCent: number; porResolver: number }>()).values()]
+    .map((g) => ({ ...g, casos: [...g.casos].sort((a, b) => b.importeCent - a.importeCent) }))
+    .sort((a, b) => (b.porResolver > 0 ? 1 : 0) - (a.porResolver > 0 ? 1 : 0) || b.totalCent - a.totalCent)
+  const totalPendientes = p.pendientes.reduce((t, x) => t + x.importeCent, 0)
+  const bajarPendientes = () => exportarTabla('xlsx', {
+    nombre: `Pendientes ${p.empresa} ${p.mes}`, titulo: `Pendientes de facturar · ${p.empresa}`,
+    subtitulo: `${n(p.pendientes.length, 'caso', 'casos')} · ${euros(totalPendientes)} · fuera de la factura hasta resolverlos`,
+    columnas: [{ titulo: 'Mes' }, { titulo: 'Cliente' }, { titulo: 'Importe', cifra: true }, { titulo: 'Qué pasa' }],
+    filas: p.pendientes.map((x) => [mesCorto(x.mes), x.cliente ?? '', x.importeCent / 100, x.motivo]),
+  })
+
   const cuerpo: Record<number, ReactNode> = {
     1: (
       <>
@@ -153,7 +169,18 @@ export function FacturarMes(p: PropsFacturarMes) {
     2: (
       <>
         <div className="r21-casos" data-prueba="casos">
-          {p.casos.map(tarjeta)}
+          {/* R21g · Por tipo, con su total y ordenadas por importe. Un grupo se abre solo si tiene algo por resolver
+              (o si hay pocos casos): así se ve primero lo que hay que hacer, no un muro de tarjetas. */}
+          {grupos.map((g) => (
+            <details key={g.tipo} className="r21-grupo" data-prueba="grupo" data-tipo={g.tipo} open={g.porResolver > 0 || p.casos.length <= 6}>
+              <summary>
+                <span className="r21-grupo-titulo">{g.texto}</span>
+                <span className="r21-grupo-cuenta">{n(g.casos.length, 'caso', 'casos')}{g.porResolver ? ` · ${g.porResolver} por resolver` : ' · en Pendientes'}</span>
+                <span className="r21-grupo-total">{euros(g.totalCent)}</span>
+              </summary>
+              <div className="r21-grupo-casos">{g.casos.map(tarjeta)}</div>
+            </details>
+          ))}
           <div className="r21-quedan" data-prueba="quedan">{quedan ? `Quedan ${n(quedan, 'caso', 'casos')} por resolver.` : 'No queda nada por resolver.'}</div>
         </div>
         {quedan > 0 && (
@@ -207,7 +234,7 @@ export function FacturarMes(p: PropsFacturarMes) {
         )}
         {linea(p.vistoBueno, 'visto-bueno')}
         <div className="r21-botones">
-          <button type="button" className="r21-boton" data-prueba="coincide" disabled={!p.serie1} onClick={p.alCoincide}>Coincide: mandar el listado a QBO</button>
+          <button type="button" className="r21-boton" data-prueba="coincide" disabled={!p.serie1} onClick={p.alCoincide}>Coincide con Cegid</button>
           <button type="button" className="r21-boton" data-tipo="otro" disabled={!p.serie1} onClick={() => setNoCoincide((x) => !x)}>No coincide</button>
         </div>
       </>
@@ -244,11 +271,14 @@ export function FacturarMes(p: PropsFacturarMes) {
     <div className="r21" data-pantalla="facturar-mes">
       <div className="r21-arriba">
         <span>Clientes › Facturar el mes · {p.empresa}</span>
-        <button type="button" className="r21-pendientes" data-prueba="pendientes" aria-expanded={verPendientes} onClick={() => setVerPendientes((x) => !x)}>Pendientes: {p.pendientes.length}</button>
+        <button type="button" className="r21-pendientes" data-prueba="pendientes" aria-expanded={verPendientes} onClick={() => setVerPendientes((x) => !x)}>Pendientes: {p.pendientes.length}{p.pendientes.length ? ` · ${euros(totalPendientes)}` : ''}</button>
       </div>
       {verPendientes && (
         <div className="r21-lista-pendientes" data-prueba="lista-pendientes">
-          <h2>Pendientes</h2>
+          <div className="r21-lista-cabeza">
+            <h2>Pendientes</h2>
+            {p.pendientes.length > 0 && <button type="button" className="r21-boton" data-tipo="otro" data-prueba="bajar-pendientes" onClick={bajarPendientes}>Descargar en Excel para QBO</button>}
+          </div>
           {p.pendientes.length === 0 ? <p className="r21-nota">No hay nada pendiente.</p> : (
             <table>
               <thead><tr><th>Mes</th><th>Cliente</th><th className="r21-num">Importe</th><th>Motivo</th><th /></tr></thead>

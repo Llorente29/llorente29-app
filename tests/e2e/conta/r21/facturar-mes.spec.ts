@@ -168,7 +168,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await expect(page.locator('[data-prueba="paso-visible"]')).toHaveText('Paso 4 de 5')
     await expect(page.locator('[data-prueba="cifra-cegid"]')).toHaveText('181,50 € · 2 facturas')
     // Lo que quedó fuera de lo mandado, arriba en «Pendientes», con su lista.
-    await expect(page.locator('[data-prueba="pendientes"]')).toHaveText('Pendientes: 3')
+    await expect(page.locator('[data-prueba="pendientes"]')).toContainText('Pendientes: 3 · ')
     await foto(page, `noviembre-paso4-${ancho}`)
     await page.locator('[data-prueba="pendientes"]').click()
     const lista = page.locator('[data-prueba="lista-pendientes"] tbody tr')
@@ -179,7 +179,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await page.getByRole('button', { name: 'No coincide' }).click()
     await expect(page.getByRole('table', { name: 'Lo mandado a Cegid, cliente a cliente' }).locator('tbody tr')).toHaveCount(2)
     // «Coincide»: lo apunta, con su cifra, y dice que aún no se guarda.
-    await page.getByRole('button', { name: 'Coincide: mandar el listado a QBO' }).click()
+    await page.getByRole('button', { name: 'Coincide con Cegid' }).click()
     await expect(page.locator('[data-prueba="paso-4"] [data-prueba="resultado"]')).toHaveText('✓ 2 facturas, 181,50 €. Listado mandado a QBO.')
     await expect(page.locator('[data-prueba="paso-visible"]')).toHaveText('Paso 5 de 5')
     await expect(page.getByText('Solo con el visto bueno de QBO.')).toBeVisible()
@@ -218,13 +218,13 @@ test('«Facturar el mes» sin mandar: las tarjetas del paso 2, dejar para despu�
   await expect(page.locator('[data-prueba="paso-3"]')).toHaveAttribute('data-falta', 'si')
   await foto(page, 'mes-paso2-1366')
   await page.getByRole('button', { name: 'Dejar los 3 para después y seguir' }).click()
-  await expect(page.locator('[data-prueba="pendientes"]')).toHaveText('Pendientes: 3')
+  await expect(page.locator('[data-prueba="pendientes"]')).toContainText('Pendientes: 3 · ')
   await expect(page.locator('[data-prueba="paso-visible"]')).toHaveText('Paso 3 de 5')
   // «Deshacer» devuelve uno: vuelve el paso 2.
   await page.getByRole('button', { name: /^Ver los 3 casos$/ }).click()
   await casos.filter({ hasText: 'No se sabe quién paga' }).getByRole('button', { name: 'Deshacer' }).click()
   await expect(page.locator('[data-prueba="paso-visible"]')).toHaveText('Paso 2 de 5')
-  await expect(page.locator('[data-prueba="pendientes"]')).toHaveText('Pendientes: 2')
+  await expect(page.locator('[data-prueba="pendientes"]')).toContainText('Pendientes: 2 · ')
   await page.getByRole('button', { name: 'Dejar el 1 para después y seguir' }).click()
   // El cuadre: 478,80 − 181,50 que se manda − 0 − 297,30 en Pendientes = 0,00 €: «Mandar 2 cobros» se abre.
   await expect(page.locator('[data-prueba="paso-visible"]')).toHaveText('Paso 3 de 5')
