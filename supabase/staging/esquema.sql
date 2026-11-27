@@ -121163,6 +121163,7 @@ CREATE TABLE public.conta_banco_cobro_tarjeta (
     estado text NOT NULL,
     porque text NOT NULL,
     creado_en timestamp with time zone DEFAULT now() NOT NULL,
+    falta text,
     CONSTRAINT conta_banco_cobro_tarjeta_check CHECK (((estado = 'sin_negociacion'::text) = (crm_id IS NULL))),
     CONSTRAINT conta_banco_cobro_tarjeta_check1 CHECK (((crm_id IS NULL) = (etapa IS NULL))),
     CONSTRAINT conta_banco_cobro_tarjeta_estado_check CHECK ((estado = ANY (ARRAY['casado'::text, 'por_confirmar'::text, 'sin_negociacion'::text]))),
@@ -121175,7 +121176,14 @@ CREATE TABLE public.conta_banco_cobro_tarjeta (
 -- Name: TABLE conta_banco_cobro_tarjeta; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.conta_banco_cobro_tarjeta IS 'K14c · Cada pago con tarjeta (TPV), con su abono del día (conta_banco_cobro, «tarjeta») y su negociación del CRM (crm_id, etapa). Q factura los casados en «enlace_pago» (estado = casado y etapa = enlace_pago): cliente party_id, código en Cegid cegid_codigo (null: no existe). Lo demás, para Julio, con su porqué.';
+COMMENT ON TABLE public.conta_banco_cobro_tarjeta IS 'K14c · Cada pago con tarjeta (TPV), con su abono del día (conta_banco_cobro, «tarjeta») y su negociación del CRM (crm_id, etapa). Q factura los casados en «enlace_pago» sin nada que falte (estado = casado, etapa = enlace_pago y falta is null): cliente party_id, código en Cegid cegid_codigo (null: no existe). Lo demás, para Julio, con su porqué.';
+
+
+--
+-- Name: COLUMN conta_banco_cobro_tarjeta.falta; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_banco_cobro_tarjeta.falta IS 'K14d · Lo que falta para facturar un pago ya casado (p. ej. «falta su NIE»). Null: nada; Q lo factura si está en enlace_pago.';
 
 
 --
