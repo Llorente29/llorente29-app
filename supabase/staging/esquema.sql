@@ -37563,6 +37563,68 @@ end $$;
 
 
 --
+-- Name: conta_banco_decidir(uuid, text, text, text, integer, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_banco_decidir(p_company uuid, p_clave text, p_decision text, p_concepto text, p_cliente integer, p_texto text, p_factura text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_cuenta uuid := public._conta_gestoria_puede(p_company);
+  v_c text := nullif(upper(trim(coalesce(p_concepto, ''))), '');
+  v_t text := nullif(trim(coalesce(p_texto, '')), '');
+  v_f text := nullif(upper(trim(coalesce(p_factura, ''))), '');
+  v_antes jsonb;
+  v_frase text;
+begin
+  if p_decision not in ('paga_factura', 'facturar', 'no_es_cobro') then raise exception 'Qué se decide: paga_factura, facturar o no_es_cobro.' using errcode = '22023'; end if;
+  if p_clave ~ '^mov:' then
+    if not exists (select 1 from public.conta_banco_cobro where company_id = p_company and movement_id::text = substr(p_clave, 5)) then
+      raise exception 'Ese movimiento no es un cobro del banco de esta empresa.' using errcode = 'P0002';
+    end if;
+  elsif p_clave ~ '^tpv:' then
+    if to_regclass('public.conta_banco_cobro_tarjeta') is null or not exists (
+      select 1 from public.conta_banco_cobro_tarjeta where company_id = p_company
+         and pagado_en = split_part(substr(p_clave, 5), '|', 1)::timestamptz and importe = split_part(p_clave, '|', 2)::numeric) then
+      raise exception 'Ese pago con tarjeta no es de esta empresa.' using errcode = 'P0002';
+    end if;
+  else
+    raise exception 'La clave de un cobro empieza por mov: o tpv:.' using errcode = '22023';
+  end if;
+  if p_decision = 'facturar' then
+    if v_c is null or v_c !~ '^[0-9A-Z]{1,5}$' then raise exception 'Para facturar hace falta el concepto de Cegid (hasta 5 letras o cifras).' using errcode = '22023'; end if;
+    if coalesce(p_cliente, 0) <= 0 then raise exception 'Para facturar hace falta el cliente de Cegid.' using errcode = '22023'; end if;
+  end if;
+  if v_f is not null and (p_decision <> 'paga_factura' or v_f !~ '^[0-9A-Z]{1,5}/\d{1,9}$') then
+    raise exception 'La factura que paga va como serie/número («1/2745»), y solo con «paga una factura que ya existe».' using errcode = '22023';
+  end if;
+  if exists (select 1 from public.conta_cegid_incidencia where company_id = p_company and origen_clave = p_clave and estado in ('mandando', 'mandada', 'facturada')) then
+    raise exception 'Este cobro ya está mandado a Cegid: no se vuelve a decidir.' using errcode = '55000';
+  end if;
+  select to_jsonb(d) - 'company_id' - 'account_id' - 'clave' into v_antes from public.conta_banco_decision d where company_id = p_company and clave = p_clave;
+  insert into public.conta_banco_decision (company_id, account_id, clave, decision, concepto, cliente, texto, factura, quien, antes)
+  values (p_company, v_cuenta, p_clave, p_decision, case when p_decision = 'facturar' then v_c end, case when p_decision = 'facturar' then p_cliente end,
+          case when p_decision = 'facturar' then v_t end, v_f, public.conta_nombre_actor(), v_antes)
+  on conflict (company_id, clave) do update set decision = excluded.decision, concepto = excluded.concepto, cliente = excluded.cliente,
+    texto = excluded.texto, factura = excluded.factura, quien = excluded.quien, at = now(), antes = excluded.antes;
+  v_frase := case p_decision
+    when 'paga_factura' then case when v_f is null then 'Apuntado: paga una factura que ya existe. No se manda a Cegid.'
+      else format('Apuntado: paga la factura %s, que ya existe. No se manda a Cegid.', v_f) end
+    when 'no_es_cobro' then 'Apuntado: no es un cobro. No se manda a Cegid.'
+    else format('Apuntado: se factura al cliente %s de Cegid con el concepto %s.', p_cliente, v_c) end;
+  return jsonb_build_object('decision', p_decision, 'frase', v_frase);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_banco_decidir(p_company uuid, p_clave text, p_decision text, p_concepto text, p_cliente integer, p_texto text, p_factura text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_banco_decidir(p_company uuid, p_clave text, p_decision text, p_concepto text, p_cliente integer, p_texto text, p_factura text) IS 'Q10 · Los tres botones de un cobro del banco o con tarjeta: paga una factura que ya existe, facturar con un concepto o no es un cobro. Solo quien puede en la gestoría.';
+
+
+--
 -- Name: conta_bitrix_pestana_anadir(text, text, text, text, uuid, uuid, uuid, uuid, date, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -121187,6 +121249,39 @@ COMMENT ON COLUMN public.conta_banco_cobro_tarjeta.falta IS 'K14d · Lo que falt
 
 
 --
+-- Name: conta_banco_decision; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_banco_decision (
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    clave text NOT NULL,
+    decision text NOT NULL,
+    concepto text,
+    cliente integer,
+    texto text,
+    factura text,
+    quien text,
+    at timestamp with time zone DEFAULT now() NOT NULL,
+    antes jsonb,
+    CONSTRAINT conta_banco_decision_check CHECK (((decision <> 'facturar'::text) OR ((concepto IS NOT NULL) AND (cliente IS NOT NULL)))),
+    CONSTRAINT conta_banco_decision_clave_check CHECK ((clave ~ '^(mov:[0-9a-f-]{36}|tpv:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\|\d+\.\d{2})$'::text)),
+    CONSTRAINT conta_banco_decision_cliente_check CHECK ((cliente > 0)),
+    CONSTRAINT conta_banco_decision_concepto_check CHECK ((concepto ~ '^[0-9A-Z]{1,5}$'::text)),
+    CONSTRAINT conta_banco_decision_decision_check CHECK ((decision = ANY (ARRAY['paga_factura'::text, 'facturar'::text, 'no_es_cobro'::text]))),
+    CONSTRAINT conta_banco_decision_factura_check CHECK ((factura ~ '^[0-9A-Z]{1,5}/\d{1,9}$'::text)),
+    CONSTRAINT conta_banco_decision_texto_check CHECK ((length(texto) <= 250))
+);
+
+
+--
+-- Name: TABLE conta_banco_decision; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_banco_decision IS 'Q10 · Lo que decide Julio de un cobro del banco o con tarjeta que no paga ningún recibo: paga una factura que ya existe, se factura (concepto y cliente de Cegid) o no es un cobro.';
+
+
+--
 -- Name: treasury_account; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -121666,8 +121761,12 @@ CREATE TABLE public.conta_cegid_incidencia (
     deshecha_por text,
     corregida_at timestamp with time zone,
     corregida_por text,
+    movement_id uuid,
+    origen_clave text,
+    parte text,
     CONSTRAINT conta_cegid_incidencia_estado_check CHECK ((estado = ANY (ARRAY['mandando'::text, 'mandada'::text, 'facturada'::text, 'deshecha'::text, 'fallo'::text]))),
-    CONSTRAINT conta_cegid_incidencia_mes_check CHECK ((mes ~ '^\d{4}-(0[1-9]|1[0-2])$'::text))
+    CONSTRAINT conta_cegid_incidencia_mes_check CHECK ((mes ~ '^\d{4}-(0[1-9]|1[0-2])$'::text)),
+    CONSTRAINT conta_cegid_incidencia_parte_check CHECK ((parte = ANY (ARRAY['recibo'::text, 'recargo'::text, 'decision'::text])))
 );
 
 
@@ -121683,6 +121782,13 @@ COMMENT ON TABLE public.conta_cegid_incidencia IS 'Q10 · Cada cobro de GoCardle
 --
 
 COMMENT ON COLUMN public.conta_cegid_incidencia.corregida_at IS 'Q10 · Cuándo se corrigió por PUT la incidencia ya mandada (descripción, tipo de IVA y total igual a la base).';
+
+
+--
+-- Name: COLUMN conta_cegid_incidencia.origen_clave; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_cegid_incidencia.origen_clave IS 'Q10 · El cobro del banco («mov:<movimiento>») o con tarjeta («tpv:<cuándo>|<importe>») del que sale la incidencia; null en las de GoCardless.';
 
 
 --
@@ -141762,6 +141868,14 @@ ALTER TABLE ONLY public.conta_banco_cobro_tarjeta
 
 
 --
+-- Name: conta_banco_decision conta_banco_decision_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_banco_decision
+    ADD CONSTRAINT conta_banco_decision_pkey PRIMARY KEY (company_id, clave);
+
+
+--
 -- Name: conta_bitrix_pestana_aviso conta_bitrix_pestana_aviso_account_id_tipo_ref_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -158583,6 +158697,22 @@ ALTER TABLE ONLY public.conta_banco_cobro_tarjeta
 
 
 --
+-- Name: conta_banco_decision conta_banco_decision_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_banco_decision
+    ADD CONSTRAINT conta_banco_decision_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_banco_decision conta_banco_decision_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_banco_decision
+    ADD CONSTRAINT conta_banco_decision_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_bitrix_pestana_aviso conta_bitrix_pestana_aviso_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -158788,6 +158918,14 @@ ALTER TABLE ONLY public.conta_cegid_incidencia
 
 ALTER TABLE ONLY public.conta_cegid_incidencia
     ADD CONSTRAINT conta_cegid_incidencia_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cegid_incidencia conta_cegid_incidencia_movement_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cegid_incidencia
+    ADD CONSTRAINT conta_cegid_incidencia_movement_id_fkey FOREIGN KEY (movement_id) REFERENCES public.bank_movement(id) ON DELETE SET NULL;
 
 
 --
@@ -171616,6 +171754,19 @@ ALTER TABLE public.conta_banco_cobro_tarjeta ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_banco_cobro_tarjeta_leer ON public.conta_banco_cobro_tarjeta FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_banco_decision; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_banco_decision ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_banco_decision conta_banco_decision_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_banco_decision_leer ON public.conta_banco_decision FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -187899,6 +188050,15 @@ GRANT ALL ON FUNCTION public.conta_banco_cobros_guardar(p_company uuid, p_filas 
 
 
 --
+-- Name: FUNCTION conta_banco_decidir(p_company uuid, p_clave text, p_decision text, p_concepto text, p_cliente integer, p_texto text, p_factura text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_banco_decidir(p_company uuid, p_clave text, p_decision text, p_concepto text, p_cliente integer, p_texto text, p_factura text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_banco_decidir(p_company uuid, p_clave text, p_decision text, p_concepto text, p_cliente integer, p_texto text, p_factura text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_banco_decidir(p_company uuid, p_clave text, p_decision text, p_concepto text, p_cliente integer, p_texto text, p_factura text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_bitrix_pestana_anadir(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_ensayo boolean); Type: ACL; Schema: public; Owner: -
 --
 
@@ -202647,6 +202807,14 @@ GRANT ALL ON TABLE public.conta_banco_cobro_recibo TO service_role;
 
 GRANT ALL ON TABLE public.conta_banco_cobro_tarjeta TO authenticated;
 GRANT ALL ON TABLE public.conta_banco_cobro_tarjeta TO service_role;
+
+
+--
+-- Name: TABLE conta_banco_decision; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_banco_decision TO authenticated;
+GRANT ALL ON TABLE public.conta_banco_decision TO service_role;
 
 
 --
