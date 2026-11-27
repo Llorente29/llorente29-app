@@ -9,7 +9,7 @@
 // «Dejar para después» y el visto bueno de QBO se ven en la pantalla, pero aún no se guardan: se guardarán con sus dos
 // tablas, en su PR con tanda (orden de Julio del 27/11). La pantalla lo dice cada vez (regla 8).
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaFacturarMes } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -21,12 +21,12 @@ import { atarFichaCegid, decidirBancoCegid, elegirConceptoCegid, leerBancoCegid,
 import { leerGocardless } from '@/modules/conta/services/gestoriaService'
 import { cuotasSinHasta, planMandar, proponerAtado, type CobroParaMandar } from '../../../../../supabase/functions/_shared/cegidMandar'
 import { cuadreVias, esCobroDeCliente, planCobro } from '../../../../../supabase/functions/_shared/cegidBanco'
-import { casosDelMes, cuadreDelMes, pasoCinco, pasoCuatro, pasosDelMes, type MandadoCegid, type PendienteGuardado } from '../../../../../supabase/functions/_shared/factura/facturarMes'
+import { casosDelMes, cuadreDelMes, euros, mesLargo, pasoCinco, pasoCuatro, pasosDelMes, type MandadoCegid, type PendienteGuardado } from '../../../../../supabase/functions/_shared/factura/facturarMes'
 import { facturasDelMes } from '../q10/facturasDelMes'
 import { leerFacturasDelMes } from '../q10/datos'
 import { codigosCegid } from '../q10/equivalencias'
 import { armarCasos, CONCEPTOS, explicarDiferencia, mesesDelSelector, type Accion } from './armar'
-import { darVistoBueno, dejarParaDespues, deshacerPendiente, leerPendientes, leerResueltosEnElMes, leerVistoBueno, resolverPendiente } from './datos'
+import { darVistoBueno, dejarParaDespues, deshacerPendiente, leerPendientes, leerPrevistoGc, leerResueltosEnElMes, leerVistoBueno, resolverPendiente } from './datos'
 import { FacturarMes, type CasoVista, type Frase } from './FacturarMes'
 
 const VIVAS = ['mandando', 'mandada', 'facturada']
@@ -53,6 +53,8 @@ export function FacturarMesPage() {
   const pd = useLeer(listo ? () => leerPendientes(empresa.id) : null, `${empresa?.id}:r21-pendientes`)
   const rs = useLeer(listo ? () => leerResueltosEnElMes(empresa.id, mes) : null, `${empresa?.id}:${mes}:r21-resueltos`)
   const vbL = useLeer(listo ? () => leerVistoBueno(empresa.id, mes) : null, `${empresa?.id}:${mes}:r21-visto-bueno`)
+  // R21e · Lo que GoCardless tiene previsto cobrar en el mes, para el mes que aún no tiene cobros.
+  const pv = useLeer(listo ? () => leerPrevistoGc(empresa.id, mes) : null, `${empresa?.id}:${mes}:r21-previsto`)
 
   // Lo de esta visita (aún no se guarda: ver arriba).
   const clave = `${empresa?.id}:${mes}`
@@ -165,8 +167,28 @@ export function FacturarMesPage() {
     return { casos, pendientes, cuadre, paso4, paso5, pasos: pasosDelMes(estado), cobrosPorMandar, listos1, acciones: new Map(entradas.map((c) => [c.clave, c.acciones])) }
   }, [d.datos, base, cg.datos, md.datos, planesBanco, plan, cobrosMes, cegid, vivas, mes, facturasCruce, misDejados, misResueltos, vbL.datos, rs.datos, comprobado, clave])
 
+  // R21e · Lo que quedó fuera de lo mandado se guarda en Pendientes (con su mes), una vez: así sale el primero en el mes
+  // siguiente y no depende de volver a abrir este. El guardado no repite: la base no deja dos pendientes vivos de un caso.
+  const guardados = useRef<Set<string>>(new Set())
+  const recargarPendientes = pd.recargar
+  useEffect(() => {
+    if (!todo || !empresa) return
+    const nuevos = todo.pendientes.filter((p) => p.id.startsWith('fuera:') && !guardados.current.has(`${empresa.id}|${p.clave}`))
+    if (!nuevos.length) return
+    for (const p of nuevos) guardados.current.add(`${empresa.id}|${p.clave}`)
+    void (async () => {
+      for (const p of nuevos) {
+        try { await dejarParaDespues({ empresa: empresa.id, clave: p.clave, tipo: p.tipo, mes: p.mes, cliente: p.cliente, importeCent: p.importeCent, motivo: p.motivo }) }
+        catch { /* ya estaba, o sin permiso: se queda como está y se vuelve a intentar al abrir otra vez */ }
+      }
+      recargarPendientes()
+    })()
+  }, [todo, empresa, recargarPendientes])
+
   const error = d.error ?? cg.error ?? bk.error ?? pd.error ?? rs.error ?? vbL.error
   if (error) return <ErrorConReintento mensaje={`No se ha podido leer lo del mes: ${error}`} reintentar={() => { d.recargar(); cg.recargar(); md.recargar(); bk.recargar(); pd.recargar(); rs.recargar(); vbL.recargar() }} />
+  // R21e · Una empresa sin nada leído de Cegid (por ejemplo, la que aún no está conectada) no se queda cargando: lo dice.
+  if (empresa && cg.datos && !cg.datos.clientes.length) return <ErrorConReintento mensaje={`${empresa.nombre} aún no tiene nada leído de Cegid. Léelo en «Facturas del mes» (Volver a leer de Cegid) y vuelve aquí; si no está conectada a Cegid, hay que conectarla primero.`} reintentar={() => cg.recargar()} />
   if (!empresa || !todo || !plan || !pd.datos || !rs.datos) return <TarjetaCargando />
 
   const recargar = () => { d.recargar(); cg.recargar(); md.recargar(); bk.recargar(); pd.recargar(); rs.recargar() }
@@ -288,12 +310,19 @@ export function FacturarMesPage() {
       frase('comprobar', null)
     } catch (er) { frase('comprobar', { estado: 'mal', frase: `No se ha podido leer de Cegid: ${msg(er)}` }) } finally { cg.recargar() }
   }
+  // R21e · El mes aún sin cobros (diciembre antes del 4): se dice lo que GoCardless tiene previsto y se abre en el paso 1.
+  const nombreDelMes = mesLargo(mes).split(' de ')[0]
+  const sinCobros = todo.cuadre.cobradoCent === 0 && !todo.paso4
+    ? `${nombreDelMes[0].toUpperCase()}${nombreDelMes.slice(1)} aún no tiene cobros.${pv.datos && pv.datos.cargos
+      ? ` GoCardless tiene previsto cobrar ${euros(pv.datos.cent)} en ${pv.datos.cargos} ${pv.datos.cargos === 1 ? 'cargo' : 'cargos'}${pv.datos.primero ? `, el primero el ${pv.datos.primero.slice(8, 10)}/${pv.datos.primero.slice(5, 7)}` : ''}.` : ''} Cuando cobre, empieza por el paso 1.`
+    : null
   const paso5Frase: Frase | null = fraseDe('comprobar') ?? (todo.paso5 ? (todo.paso5.faltan.length
     ? { estado: 'mal', frase: `Están ${todo.paso5.estan} facturas y faltan ${todo.paso5.faltan.length}: estas no están en Cegid con su cliente, su serie y su importe.` }
     : { estado: 'bien', frase: `Están las ${todo.paso5.estan} facturas en Cegid, cada una con su cliente, su serie y su importe.` }) : null)
 
   return (
     <FacturarMes empresa={empresa.nombre} mes={mes} meses={meses} alCambiarMes={(m) => ir(rutaFacturarMes(params.get('empresa'), m))}
+      sinCobros={sinCobros}
       pasos={todo.pasos} preparar={{ frase: fraseDe('preparar'), alPulsar: () => void preparar() }}
       casos={casosVista} ocupado={ocupado} frases={Object.fromEntries(Object.entries(frases).filter(([k]) => k.startsWith(`${clave}|`)).map(([k, v]) => [k.slice(clave.length + 1), v]))}
       conceptos={CONCEPTOS} alAccion={(k, a, x) => void alAccion(k, a, x)}

@@ -191,7 +191,9 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await expect(page.locator('[data-prueba="paso-5"] [data-prueba="resultado"]')).toHaveText('✓ 2 facturas emitidas y comprobadas.')
     await foto(page, `noviembre-fin-${ancho}`)
     // Nada se ha mandado a Cegid: solo se ha leído. El visto bueno se ha guardado, con su total y sus facturas.
-    expect(pedidas.filter((p) => !['banco_leer', 'visto_bueno_dar'].includes(String(p.accion)))).toEqual([])
+    expect(pedidas.filter((p) => !['banco_leer', 'visto_bueno_dar', 'dejar'].includes(String(p.accion)))).toEqual([])
+    // R21e · Lo que quedó fuera de lo mandado se guarda en Pendientes, una vez, para que salga el primero el mes siguiente.
+    expect(pedidas.filter((p) => p.accion === 'dejar').map((p) => p.p_mes)).toEqual([`${MES}-01`, `${MES}-01`, `${MES}-01`])
     expect(pedidas.find((p) => p.accion === 'visto_bueno_dar')).toMatchObject({ p_serie: '1', p_total: '181.50', p_facturas: 2, p_mes: `${MES}-01` })
     expect(errores).toEqual([])
   })

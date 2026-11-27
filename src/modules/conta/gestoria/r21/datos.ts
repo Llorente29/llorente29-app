@@ -59,3 +59,18 @@ export async function darVistoBueno(empresa: string, mes: string, serie: string,
   // eslint-disable-next-line no-restricted-syntax -- totalCent es un entero (céntimos): a euros con dos decimales
   return frase(await rpc<Fila>('conta_factura_visto_bueno_dar', { p_company: empresa, p_mes: `${mes}-01`, p_serie: serie, p_total: (totalCent / 100).toFixed(2), p_facturas: facturas }), 'Apuntado.')
 }
+
+/**
+ * R21e · Lo que GoCardless tiene previsto cobrar en el mes (las suscripciones activas con su próximo cobro en él), para el
+ * mes que aún no tiene cobros. Columnas de conta_gc_suscripcion comprobadas el 27/11 (regla 40).
+ */
+export async function leerPrevistoGc(empresa: string, mes: string): Promise<{ cent: number; cargos: number; primero: string | null }> {
+  const [a, m] = mes.split('-').map(Number)
+  const fin = new Date(Date.UTC(a, m, 1)).toISOString().slice(0, 10)
+  const r = await tabla('conta_gc_suscripcion').select('proximo_cobro_fecha, proximo_cobro_importe').eq('company_id', empresa).eq('estado', 'active')
+    .gte('proximo_cobro_fecha', `${mes}-01`).lt('proximo_cobro_fecha', fin).limit(5000)
+  if (r.error) throw new Error(mensaje('No se ha podido leer lo que GoCardless tiene previsto', r.error as never))
+  const filas = (r.data ?? []) as Fila[]
+  const fechas = filas.map((x) => String(x.proximo_cobro_fecha)).sort()
+  return { cent: filas.reduce((t, x) => t + cent(x.proximo_cobro_importe), 0), cargos: filas.length, primero: fechas[0] ?? null }
+}
