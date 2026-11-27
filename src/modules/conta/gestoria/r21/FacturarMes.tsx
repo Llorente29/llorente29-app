@@ -77,7 +77,16 @@ export function FacturarMes(p: PropsFacturarMes) {
   const [aMano, setAMano] = useState<Record<string, { concepto: string; cliente: string }>>({})
   // Las casillas para escribir a mano salen al pulsar «Es otro cliente», «Buscar el cliente» u «Otro concepto», como en la maqueta.
   const [escribiendo, setEscribiendo] = useState<Set<string>>(new Set())
-  const { pasos, actual } = p.pasos
+  // R21d · «Empezar desde el paso 1»: recorrer los pasos ya hechos, uno a uno, con sus cifras de verdad, hasta el paso en
+  // el que está el mes. No deshace nada: lo hecho sigue hecho, y el paso de no retorno (generar en Cegid) no se repasa.
+  const [repaso, setRepaso] = useState<number | null>(null)
+  const real = p.pasos
+  const hastaDonde = Math.min(real.actual, 5)
+  const enRepaso = repaso !== null && repaso < hastaDonde
+  const pasos = enRepaso
+    ? real.pasos.map((x) => ({ ...x, hecho: x.numero < repaso, activo: x.numero === repaso }))
+    : real.pasos
+  const actual = enRepaso ? (repaso as 1 | 2 | 3 | 4 | 5) : real.actual
   const hechos = pasos.filter((x) => x.hecho).length
   const nombreMes = mesLargo(p.mes).split(' de ')[0].toLowerCase()
   const mesNum = Number(p.mes.slice(5, 7))
@@ -164,10 +173,10 @@ export function FacturarMes(p: PropsFacturarMes) {
         </div>
         {!p.cuadre.cuadra && <p className="r21-frase" data-tono="mal">Hasta que la diferencia sea 0,00 €, no se manda nada: resuelve o deja para después lo que falta en el paso 2.</p>}
         {linea(p.mandar.frase, 'mandar-frase')}
-        <div className="r21-botones">
+        {!(enRepaso && p.mandar.cobros === 0) && <div className="r21-botones">
           <button type="button" className="r21-boton" data-prueba="mandar" disabled={!p.pasos.puedeMandar || p.mandar.frase?.estado === 'trabajando'} onClick={p.mandar.alPulsar}>
             Mandar {n(p.mandar.cobros, 'cobro', 'cobros')} a Cegid</button>
-        </div>
+        </div>}
       </>
     ),
     4: (
@@ -257,6 +266,15 @@ export function FacturarMes(p: PropsFacturarMes) {
       </div>
       <p className="r21-intro">Sigue los pasos en orden. Cada paso tiene un solo botón. Mientras un paso no esté hecho, el siguiente no se abre. <strong>Solo se factura lo cobrado.</strong></p>
 
+      {hastaDonde > 1 && (
+        <div className="r21-botones" data-prueba="empezar">
+          {enRepaso
+            ? <button type="button" className="r21-boton" data-tipo="otro" onClick={() => setRepaso(null)}>Volver al paso {hastaDonde}</button>
+            : <button type="button" className="r21-boton" data-tipo="otro" onClick={() => { setRepaso(1); setAbiertoPaso2(false) }}>Empezar desde el paso 1</button>}
+          <span className="r21-nota">Recorre los pasos ya hechos, uno a uno. No deshace nada: lo mandado a Cegid sigue mandado.</span>
+        </div>
+      )}
+
       <div className="r21-progreso">
         <div className="r21-progreso-textos"><span data-prueba="paso-visible">Paso {Math.min(actual, 5)} de 5</span><span>{hechos} {hechos === 1 ? 'hecho' : 'hechos'}</span></div>
         <div className="r21-barra"><div style={{ width: `${hechos * 20}%` }} /></div>
@@ -274,10 +292,18 @@ export function FacturarMes(p: PropsFacturarMes) {
                   <h2 id={`r21-paso-${x.numero}`}>{TITULOS[i]}</h2>
                   <p className="r21-explica">{EXPLICA[i]}</p>
                   {x.hecho && x.resultado && <div className="r21-resultado" data-prueba="resultado">✓ {x.resultado}</div>}
+                  {enRepaso && x.activo && real.pasos[i].resultado && <div className="r21-resultado" data-prueba="resultado-repaso">✓ {real.pasos[i].resultado}</div>}
                   {x.hecho && x.numero === 2 && !abiertoPaso2 && p.casos.length > 0 && (
                     <div className="r21-botones"><button type="button" className="r21-boton" data-tipo="otro" onClick={() => setAbiertoPaso2(true)}>Ver los {p.casos.length} casos</button></div>
                   )}
                   {abierto && cuerpo[x.numero]}
+                  {enRepaso && x.activo && (
+                    <div className="r21-botones" data-prueba="repaso">
+                      <span className="r21-nota">Ya está hecho: lo estás repasando.</span>
+                      <button type="button" className="r21-boton" data-prueba="siguiente" onClick={() => setRepaso(x.numero + 1 >= hastaDonde ? null : x.numero + 1)}>
+                        {x.numero + 1 >= hastaDonde ? `Seguir en el paso ${hastaDonde}` : `Siguiente: paso ${x.numero + 1}`}</button>
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
