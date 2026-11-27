@@ -1,0 +1,13 @@
+# Q10 · respuesta 7 · Lo cobrado por el banco y con tarjeta, a Cegid (27/11). Rama conta/q10i-banco-a-cegid. Se ensaya y
+# se aplica desde main nombrando la rama, antes de fusionar (lo lanza Julio, T10).
+#
+#   0730  Añade conta_cegid_incidencia.movement_id, origen_clave y parte (de qué cobro sale cada incidencia), la tabla
+#         conta_banco_decision (lo que decide Julio de cada cobro, con la factura que paga) y conta_banco_decidir (los
+#         tres botones).
+#   0731  Lo que ya decidió Julio de dos cobros, por su movimiento: el de 734,60 € no es un cobro y el de 1.089,00 €
+#         paga la 1/2745.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/q10i-banco-a-cegid.sql
+supabase/migrations/20261127T0730_q10i_banco_a_cegid.sql
+supabase/migrations/20261127T0731_q10i_decisiones_julio.sql

@@ -19,6 +19,7 @@ import { atarFichaCegid, deshacerCegid, elegirConceptoCegid, leerConexionCegid, 
 import { cuadreCegid, cuotasSinHasta, planMandar, proponerAtado, type CobroParaMandar, type IncidenciaCegid, type SerieVuelta } from '../../../../../supabase/functions/_shared/cegidMandar'
 import { exportarTabla } from '@/modules/conta/ui/tabla/exportar'
 import { MandarCegidQ10 } from './MandarCegidQ10'
+import { BancoCegidQ10 } from './BancoCegidQ10'
 import { COBRADO, eurQ10, facturasDelMes, nombreDelMesQ10 } from './facturasDelMes'
 import { leerFacturasDelMes } from './datos'
 import { FacturasDelMes } from './FacturasDelMes'
@@ -109,12 +110,19 @@ export function FacturasQ10Page() {
     // Respuesta 6 · A un cliente con cuotas fijas en Cegid sin «Facturar hasta» (no revisado), nada.
     return planMandar(mes, cobrosMes, vivos, cuotasSinHasta(cg.datos?.clientes ?? [], cg.datos?.revisados ?? []))
   }, [cobrosMes, md.datos, mes, cg.datos])
+  // Respuesta 7 · Las facturas de Cegid leídas, con el nombre de su cliente: para proponer qué factura paga un cobro del banco.
+  const facturasCruce = useMemo(() => {
+    const nombres = new Map((cg.datos?.clientes ?? []).map((c) => [c.codigo, c.nombre]))
+    return (cg.datos?.facturas ?? []).map((f) => ({ ejercicio: f.ejercicio, serie: f.serie, codigo: f.codigo, cliente: f.cliente, total: f.total, nombre: f.cliente != null ? nombres.get(f.cliente) ?? null : null }))
+  }, [cg.datos])
   // Respuesta 4 · El cuadre con lo que hay en Cegid: se lee con «Leer de Cegid lo que hay para facturar».
   const [enCegid, setEnCegid] = useState<{ clave: string; incidencias: IncidenciaCegid[] } | null>(null)
   const cuadre = useMemo(() => {
     if (!cobrosMes || !enCegid || enCegid.clave !== `${empresa?.id}:${mes}`) return null
     const nombres = new Map((cg.datos?.clientes ?? []).map((c) => [c.codigo, c.nombre ?? String(c.codigo)]))
-    return cuadreCegid(mes, cobrosMes, enCegid.incidencias, (md.datos ?? []).map((x) => ({ gcCobroId: x.gcCobroId, cliente: x.cliente, incidencia: x.incidencia, estado: x.estado })), nombres)
+    // Respuesta 7 · Lo mandado desde el banco o con tarjeta lo cuadra «Lo cobrado por el banco»: aquí no es «sobra».
+    const delBanco = new Set((md.datos ?? []).filter((x) => x.origen && x.incidencia != null).map((x) => `${x.cliente}/${x.incidencia}`))
+    return cuadreCegid(mes, cobrosMes, enCegid.incidencias.filter((x) => !delBanco.has(`${x.cliente}/${x.incidencia}`)), (md.datos ?? []).filter((x) => !x.origen).map((x) => ({ gcCobroId: x.gcCobroId, cliente: x.cliente, incidencia: x.incidencia, estado: x.estado })), nombres)
   }, [cobrosMes, enCegid, cg.datos, md.datos, mes, empresa?.id])
 
   if (d.error) return <ErrorConReintento mensaje={`No se han podido leer los cobros del mes: ${d.error}`} reintentar={d.recargar} />
@@ -198,7 +206,8 @@ export function FacturasQ10Page() {
   )
 
   return (
-    <FacturasDelMes empresa={empresa.nombre} mes={nombreDelMesQ10(mes)} modelo={modelo} cegid={<>{bloqueCegid}{bloqueMandar}</>}
+    <FacturasDelMes empresa={empresa.nombre} mes={nombreDelMesQ10(mes)} modelo={modelo} cegid={<>{bloqueCegid}{bloqueMandar}
+      <BancoCegidQ10 empresaId={empresa.id} mes={mes} cobrosGc={cobrosMes} mandadas={md.datos ?? []} facturasCegid={facturasCruce} alMandar={() => setVueltaMandado((v) => v + 1)} /></>}
       rutaVolver={rutaClientesCuotas()} rutaSinCliente={`${rutaClientesCuotas()}?ver=sin-cliente`} />
   )
 }

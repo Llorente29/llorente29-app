@@ -1,0 +1,24 @@
+{
+ "_que": "Q10 · respuesta 7 · contexto de producción de la tanda (0730 y 0731), medido en SOLO LECTURA el 27/11 a las 07:46Z con la consulta de analizar.mjs sql-contexto: de lo que toca, solo existe conta_cegid_incidencia (260 filas, sin movement_id, origen_clave ni parte); conta_banco_decision y conta_banco_decidir no existen; nada en el camino del pedido y nada en el historial. Aparte, el mismo día: los dos cobros de la 0731 están sin cliente, con su fecha y su importe.",
+ "medido": "2026-11-27T07:46Z",
+ "tanda": {
+  "supabase/migrations/20261127T0730_q10i_banco_a_cegid.sql": "e6784d148741c22a8b9a849e78c4546a",
+  "supabase/migrations/20261127T0731_q10i_decisiones_julio.sql": "83e9020b5cf71c6a30bd3b73101d0c8a"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_cegid_incidencia"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_cegid_incidencia": 260
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -84,6 +84,9 @@ export function rutaListado(que: QueLeer, pagina: number, ejercicio?: number, me
   }
 }
 export const rutaCliente = (codigo: number) => `/api/Customers/GetCustomer/${Math.trunc(codigo)}`
+/** Q10 · respuesta 7 · Las facturas de un cliente en un ejercicio (para la regla 1: ¿ese mes ya está facturado?). */
+export const rutaFacturasCliente = (ejercicio: number, cliente: number, pagina = 0) =>
+  `/api/Invoices?${q({ $filter: `ejercicio eq ${Math.trunc(ejercicio)} and cliente eq ${Math.trunc(cliente)}`, $orderby: 'codigo', $top: POR_PAGINA, $skip: pagina })}`
 export const rutaConcepto = (codigo: string) => `/api/Concepts/GetConcept/${encodeURIComponent(codigo)}`
 
 /** Si esta página es la última: con menos de 200, o con lo leído llegando al total. */

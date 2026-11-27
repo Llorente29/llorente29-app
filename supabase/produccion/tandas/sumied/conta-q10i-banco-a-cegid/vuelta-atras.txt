@@ -1,0 +1,5 @@
+# Q10 · respuesta 7 · vuelta atrás, en orden inverso: las dos decisiones de la 0731 (solo las suyas); la función y, si no hay decisiones, la tabla; si no hay incidencias del banco, las
+# tres columnas (antes de fusionar).
+cuenta: scripts/conta/produccion/cuentas/q10i-banco-a-cegid.sql
+supabase/vuelta-atras/20261127T0731_q10i_decisiones_julio.down.sql
+supabase/vuelta-atras/20261127T0730_q10i_banco_a_cegid.down.sql

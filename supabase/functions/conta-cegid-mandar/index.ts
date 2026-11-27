@@ -24,6 +24,13 @@
 // esa fecha. A un cliente con cuotas fijas en su ficha de Cegid (leída ahora) que no está en conta_cegid_cuota_revisada
 // (los 190 revisados el 26/11), no se le manda nada: «Cliente nuevo con cuota fija en Cegid: ponle el Facturar hasta».
 // La incidencia sale con la descripción en RTF, el tipo de IVA de Cegid y el total igual a la base (cuerpoIncidencia).
+//   · Respuesta 7 · { company_id, accion: 'banco_leer', mes }: lo cobrado por el banco y con tarjeta del mes (banco.ts),
+//     con sus recibos, el código de su ficha y la decisión de Julio, y de Cegid, solo leyendo, en qué meses tiene factura
+//     cada cliente (regla 1). No escribe en Cegid.
+//   · Respuesta 7 · { company_id, accion: 'mandar_banco', mes, clave }: manda UN cobro del banco o con tarjeta con las
+//     reglas de _shared/cegidBanco.ts, vuelto a calcular aquí con las facturas de Cegid leídas en este momento: un recibo
+//     de un mes ya facturado no sale nunca. Las mismas guardas que GoCardless (el cliente existe, la cuota fija), una
+//     incidencia por línea, apuntada antes, y para en el primer fallo.
 // La autónoma (una empresa que factura con retención): no se le manda nada todavía (respuesta 3, punto 6).
 // Solo un administrador de la cuenta. En una cuenta de demostración, no se escribe (puerta.ts).
 // verify_jwt = true (config.toml).
@@ -32,6 +39,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { ClienteDiezRec, FalloDiezRec, rutaCliente } from "../_shared/diezRec.ts";
+import { planCobro } from "../_shared/cegidBanco.ts";
+import { cargarBanco, mesesFacturados } from "./banco.ts";
 import { baseDelCobro, COBRADO_GC, conceptoAprobado, conceptoDeCodigo, cuerpoIncidencia, FRASE_CUOTA_SIN_HASTA, type LineaIncidencia } from "../_shared/cegidMandar.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -84,8 +93,8 @@ Deno.serve(async (req) => {
   let b: Fila = {};
   try { b = await req.json(); } catch { /* vacío */ }
   const companyId = typeof b.company_id === "string" && /^[0-9a-f-]{36}$/i.test(b.company_id) ? b.company_id : "";
-  const accion = b.accion === "mandar" || b.accion === "deshacer" || b.accion === "leer_mes" ? b.accion : "";
-  if (!companyId || !accion) return json({ error: "faltan company_id o accion (mandar, leer_mes o deshacer)" }, 400);
+  const accion = ["mandar", "deshacer", "leer_mes", "banco_leer", "mandar_banco"].includes(String(b.accion)) ? String(b.accion) : "";
+  if (!companyId || !accion) return json({ error: "faltan company_id o accion (mandar, leer_mes, deshacer, banco_leer o mandar_banco)" }, 400);
   const mes = typeof b.mes === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(b.mes) ? b.mes : "";
   if (!mes) return json({ error: "falta el mes (AAAA-MM)" }, 400);
 
@@ -96,7 +105,7 @@ Deno.serve(async (req) => {
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
   if (!(await cuentaPuedeSalir(srv, co.account_id))) return json({ error: "En la demo no se manda nada a Cegid.", demo: true }, 409);
   // La autónoma (persona física: factura con retención): nada hasta leer su Cegid y el sí de Julio (respuesta 3, punto 6).
-  if (accion === "mandar" && /^[0-9XYZKLM]/.test(nifLimpio(co.tax_id))) {
+  if ((accion === "mandar" || accion === "mandar_banco") && /^[0-9XYZKLM]/.test(nifLimpio(co.tax_id))) {
     return json({ error: "A esta empresa aún no se le manda nada a Cegid: falta leer su facturación y el sí de Julio (lleva retención)." }, 409);
   }
   const c = await conexion(srv, co.account_id, companyId);
@@ -128,6 +137,54 @@ Deno.serve(async (req) => {
         texto: (x.textoConcepto as string | null) ?? null, importe: x.importe == null ? null : Number(x.importe), total: x.total == null ? null : Number(x.total),
         facturada: x.estaFacturado === true, serieFactura: (x.serieFactura as string | null) ?? null, numeroFactura: x.numeroFactura == null ? null : Number(x.numeroFactura) }));
       return json({ ok: true, incidencias, facturadas, frase: `Leídas de Cegid ${incidencias.length} ${incidencias.length === 1 ? "incidencia" : "incidencias"} de ${mes}${facturadas ? `; ${facturadas} de las de Sumied ya están facturadas` : ""}. No se ha escrito nada en Cegid.` });
+    }
+
+    if (accion === "banco_leer" || accion === "mandar_banco") {
+      const cobros = await cargarBanco(srv, companyId, co.account_id, mes);
+      if (accion === "banco_leer") {
+        const facturados = await mesesFacturados(api, cobros);
+        return json({ ok: true, cobros, facturados, frase: `Leídos ${cobros.length} cobros del banco y con tarjeta de ${mes}, y las facturas en Cegid de ${Object.keys(facturados).length} clientes. No se ha escrito nada en Cegid.` });
+      }
+      const clave = typeof b.clave === "string" ? b.clave : "";
+      const c = cobros.find((x) => x.clave === clave);
+      if (!c) return json({ error: "Ese cobro no es de este mes ni de esta empresa." }, 404);
+      // Las facturas de Cegid, ahora: un recibo de un mes ya facturado no sale nunca (regla 1).
+      const facturados = await mesesFacturados(api, [c]);
+      const { data: vv } = await srv.from("conta_cegid_incidencia").select("gc_cobro_id").eq("company_id", companyId).in("estado", ["mandando", "mandada", "facturada"]);
+      const vivas = new Set(((vv ?? []) as Fila[]).map((x) => String(x.gc_cobro_id)));
+      const p = planCobro(mes, c, (cli, m) => (facturados[String(cli)] ?? []).includes(m), vivas);
+      if (p.estado !== "listo" || p.cliente == null) return json({ error: `No se manda: ${p.porque || p.estado}`, estado: p.estado }, 409);
+      const cliente = p.cliente;
+      const otra = p.lineas.find((l) => l.concepto.serie !== "1");
+      if (otra) return json({ error: `El concepto ${otra.concepto.codigo} es de la serie ${otra.concepto.serie}: lo del banco va en la serie 1. Míralo.` }, 409);
+      const f = await fichaAhora(api, cliente);
+      if (!f.existe) return json({ error: `El cliente ${cliente} no existe en la facturación de Cegid.` }, 409);
+      if (f.cuotas > 0) {
+        const { data: rv, error: e5 } = await srv.from("conta_cegid_cuota_revisada").select("cliente").eq("company_id", companyId).eq("cliente", cliente).maybeSingle();
+        if (e5) return json({ error: `no se ha podido leer qué clientes de Cegid tienen ya el Facturar hasta: ${e5.message}` }, 500);
+        if (!rv) return json({ error: `No se manda nada al cliente ${cliente}. ${FRASE_CUOTA_SIN_HASTA}`, cuota_sin_hasta: true }, 409);
+      }
+      let hechas = 0, totalCent = 0;
+      for (const l of p.lineas) {
+        const { data: fila, error: e3 } = await srv.from("conta_cegid_incidencia").insert({
+          company_id: companyId, account_id: co.account_id, gc_cobro_id: l.clave, mes, cliente, concepto: l.concepto.codigo, serie: l.concepto.serie, texto: l.texto,
+          base: l.baseCent / 100, total: l.totalCent / 100, estado: "mandando", mandada_por: quien, movement_id: c.movementId, origen_clave: c.clave, parte: l.parte,
+        }).select("id").single();
+        if (e3) {
+          if (String(e3.code) === "23505") continue; // ya mandado: nada sale dos veces.
+          return json({ error: `no se ha podido apuntar la incidencia: ${e3.message}` }, 500);
+        }
+        try {
+          const r = await api.crearIncidencia(cuerpoIncidencia(cliente, l, mes));
+          await srv.from("conta_cegid_incidencia").update({ incidencia: r.incidencia, estado: "mandada" }).eq("id", fila.id);
+          hechas++; totalCent += l.totalCent;
+        } catch (e) {
+          const m = e instanceof Error ? e.message : String(e);
+          await srv.from("conta_cegid_incidencia").update({ estado: "fallo", motivo: m.slice(0, 300) }).eq("id", fila.id);
+          return json({ error: `Mandadas ${hechas} de ${p.lineas.length} líneas de este cobro al cliente ${cliente}; paró: ${m}`, hechas }, 502);
+        }
+      }
+      return json({ ok: true, hechas, frase: `Mandado a Cegid el cliente ${cliente}: ${hechas} ${hechas === 1 ? "línea" : "líneas"}, ${eur(totalCent)}${p.porque ? `. ${p.porque.replace(/\.$/, "")}` : ""}.` });
     }
 
     if (accion === "mandar") {

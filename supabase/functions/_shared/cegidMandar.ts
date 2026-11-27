@@ -70,6 +70,8 @@ export const CONCEPTOS_CEGID: Readonly<Record<string, ConceptoCegidAprobado>> = 
   '0021': { codigo: '0021', serie: '1', nombre: 'Vigilancia de notificaciones' },
   '0034': { codigo: '0034', serie: '1', nombre: 'Oficina virtual' },
   '0039': { codigo: '0039', serie: '1', nombre: 'Otros trámites y gestiones' },
+  // Q10 · respuesta 7 · El recargo por cobro devuelto: lo que pagó de verdad, con el IVA (21 %) incluido.
+  '0018': { codigo: '0018', serie: '1', nombre: 'Recargo por cobro devuelto' },
 }
 export const conceptoDeCodigo = (codigo: string | null | undefined): ConceptoCegidAprobado | null => {
   const c = String(codigo ?? '').trim().toUpperCase()
