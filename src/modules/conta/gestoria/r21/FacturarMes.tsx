@@ -75,6 +75,8 @@ export function FacturarMes(p: PropsFacturarMes) {
   const [abiertoPaso2, setAbiertoPaso2] = useState(false)
   const [noCoincide, setNoCoincide] = useState(false)
   const [aMano, setAMano] = useState<Record<string, { concepto: string; cliente: string }>>({})
+  // Las casillas para escribir a mano salen al pulsar «Es otro cliente», «Buscar el cliente» u «Otro concepto», como en la maqueta.
+  const [escribiendo, setEscribiendo] = useState<Set<string>>(new Set())
   const { pasos, actual } = p.pasos
   const hechos = pasos.filter((x) => x.hecho).length
   const nombreMes = mesLargo(p.mes).split(' de ')[0].toLowerCase()
@@ -97,7 +99,7 @@ export function FacturarMes(p: PropsFacturarMes) {
           <div className="r21-hecho" data-prueba="caso-hecho">{c.resuelto ? '✓' : '⏸'} {c.hecho}
             {c.deshacer && <button type="button" className="r21-deshacer" disabled={ocupado} onClick={() => p.alDeshacer(c.clave)}>Deshacer</button>}</div>
         )}
-        {abierto && c.aMano && (
+        {abierto && c.aMano && escribiendo.has(c.clave) && (
           <div className="r21-elegir">
             {(c.aMano === 'concepto' || c.aMano === 'concepto_cliente') && (
               <select aria-label="Concepto de Cegid" value={escrito.concepto} disabled={ocupado} onChange={(e) => setAMano((m) => ({ ...m, [c.clave]: { ...escrito, concepto: e.target.value } }))}>
@@ -106,7 +108,7 @@ export function FacturarMes(p: PropsFacturarMes) {
               </select>
             )}
             {(c.aMano === 'cliente' || c.aMano === 'concepto_cliente') && (
-              <input aria-label="Cliente de Cegid" inputMode="numeric" size={8} placeholder="Cliente de Cegid" value={escrito.cliente} disabled={ocupado}
+              <input aria-label="Cliente de Cegid" inputMode="numeric" size={16} placeholder="Cliente de Cegid" value={escrito.cliente} disabled={ocupado}
                 onChange={(e) => setAMano((m) => ({ ...m, [c.clave]: { ...escrito, cliente: e.target.value.replace(/\D/g, '') } }))} />
             )}
           </div>
@@ -115,7 +117,11 @@ export function FacturarMes(p: PropsFacturarMes) {
           <div className="r21-acciones">
             {c.acciones.filter((a) => !(c.estado === 'pendiente' && a.efecto.que === 'dejar')).map((a) => (
               <button key={a.id} type="button" className="r21-accion" data-principal={a.principal ? 'si' : undefined} disabled={ocupado}
-                onClick={() => p.alAccion(c.clave, a, { concepto: escrito.concepto || undefined, cliente: escrito.cliente ? Number(escrito.cliente) : undefined })}>{a.texto}</button>
+                onClick={() => {
+                  const aManoEs = ['atar_a_mano', 'facturar_a_mano', 'concepto_a_mano'].includes(a.efecto.que)
+                  if (aManoEs && !escribiendo.has(c.clave)) { setEscribiendo((x) => new Set(x).add(c.clave)); return }
+                  p.alAccion(c.clave, a, { concepto: escrito.concepto || undefined, cliente: escrito.cliente ? Number(escrito.cliente) : undefined })
+                }}>{a.texto}</button>
             ))}
           </div>
         )}
@@ -250,7 +256,7 @@ export function FacturarMes(p: PropsFacturarMes) {
       <p className="r21-intro">Sigue los pasos en orden. Cada paso tiene un solo botón. Mientras un paso no esté hecho, el siguiente no se abre. <strong>Solo se factura lo cobrado.</strong></p>
 
       <div className="r21-progreso">
-        <div className="r21-progreso-textos"><span data-prueba="paso-visible">Paso {Math.min(actual, 5)} de 5</span><span>{hechos} hechos</span></div>
+        <div className="r21-progreso-textos"><span data-prueba="paso-visible">Paso {Math.min(actual, 5)} de 5</span><span>{hechos} {hechos === 1 ? 'hecho' : 'hechos'}</span></div>
         <div className="r21-barra"><div style={{ width: `${hechos * 20}%` }} /></div>
       </div>
 
