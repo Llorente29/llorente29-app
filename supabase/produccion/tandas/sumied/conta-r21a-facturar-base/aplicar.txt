@@ -1,0 +1,10 @@
+# R21 · PR 1 · «Facturar el mes»: lo que hace falta guardar (Julio, 27/11). Rama conta/r21a-facturar-base. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1826  Añade conta_factura_pendiente («Dejar para después») y conta_factura_visto_bueno (el visto bueno de QBO), con
+#         sus funciones (dejar, deshacer, resolver y dar el visto bueno). Lo que decide cada paso vive en
+#         supabase/functions/_shared/factura/facturarMes.ts.
+#
+# Nada en el camino del pedido, ni de cobros ni de facturas. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r21a-facturar-base.sql
+supabase/migrations/20261127T1826_r21a_facturar_el_mes.sql

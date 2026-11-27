@@ -99,6 +99,33 @@ async function simular(page: Page, Q: string, mandado: boolean) {
     }
     return objeto(r, { ok: false, error: 'La prueba no simula esto.' })
   })
+  // R21 · la 1826, simulada: lo dejado para después y el visto bueno, con sus funciones (cada una apunta quién y cuándo).
+  const pendientes: Fila[] = []
+  let vistoBueno: Fila | null = null
+  await page.route(/\/rest\/v1\/conta_factura_pendiente\?/, (r) => {
+    if (/resuelto_mes=/.test(r.request().url())) return json(r, [])
+    return json(r, pendientes.filter((x) => !x.deshecho_at && !x.resuelto_at))
+  })
+  await page.route(/\/rest\/v1\/conta_factura_visto_bueno\?/, (r) => {
+    const objeto1 = (r.request().headers()['accept'] ?? '').includes('vnd.pgrst.object')
+    return objeto1 ? (vistoBueno ? objeto(r, vistoBueno) : r.fulfill({ status: 406, contentType: 'application/json', body: JSON.stringify({ code: 'PGRST116', message: 'Sin filas' }) }))
+      : json(r, vistoBueno ? [vistoBueno] : [])
+  })
+  await page.route(/\/rest\/v1\/rpc\/conta_factura_(dejar|deshacer_pendiente|resolver_pendiente|visto_bueno_dar)/, (r) => {
+    const que = /conta_factura_([a-z_]+)/.exec(r.request().url())![1]
+    const b = (r.request().postDataJSON() ?? {}) as Fila
+    pedidas.push({ accion: que, ...b })
+    if (que === 'dejar') {
+      const id = `pend-${pendientes.length + 1}`
+      pendientes.push({ id, clave: b.p_clave, tipo: b.p_tipo, mes: b.p_mes, cliente: b.p_cliente, importe: Number(b.p_importe), motivo: b.p_motivo, dejado_por: 'Persona de prueba', dejado_at: '2026-11-27T20:00:00Z' })
+      return objeto(r, { id, frase: `Dejado para después: ${String(b.p_importe).replace('.', ',')} € quedan en Pendientes, fuera de esta factura.` })
+    }
+    const x = pendientes.find((p) => p.id === b.p_id)
+    if (que === 'deshacer_pendiente' && x) { x.deshecho_at = '2026-11-27T20:01:00Z'; return objeto(r, { id: x.id, frase: 'Deshecho: el caso vuelve a estar por resolver.' }) }
+    if (que === 'resolver_pendiente' && x) { x.resuelto_at = '2026-11-27T20:02:00Z'; return objeto(r, { id: x.id, frase: 'Resuelto: sale de Pendientes.' }) }
+    vistoBueno = { serie: b.p_serie, total: Number(b.p_total), facturas: b.p_facturas, quien: 'Persona de prueba', at: '2026-11-27T20:03:00Z' }
+    return objeto(r, { id: 'vb-1', frase: `Apuntado: Cegid da ${String(b.p_total).replace('.', ',')} € en ${b.p_facturas} facturas de la serie ${b.p_serie}.` })
+  })
   return { pedidas, generado }
 }
 
@@ -163,8 +190,9 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await expect(page.locator('[data-prueba="fin"]')).toContainText('Noviembre facturado', { timeout: 30_000 })
     await expect(page.locator('[data-prueba="paso-5"] [data-prueba="resultado"]')).toHaveText('✓ 2 facturas emitidas y comprobadas.')
     await foto(page, `noviembre-fin-${ancho}`)
-    // Nada se ha mandado a Cegid: solo se ha leído.
-    expect(pedidas.every((p) => p.accion === 'banco_leer')).toBe(true)
+    // Nada se ha mandado a Cegid: solo se ha leído. El visto bueno se ha guardado, con su total y sus facturas.
+    expect(pedidas.filter((p) => !['banco_leer', 'visto_bueno_dar'].includes(String(p.accion)))).toEqual([])
+    expect(pedidas.find((p) => p.accion === 'visto_bueno_dar')).toMatchObject({ p_serie: '1', p_total: '181.50', p_facturas: 2, p_mes: `${MES}-01` })
     expect(errores).toEqual([])
   })
 }
@@ -204,5 +232,8 @@ test('«Facturar el mes» sin mandar: las tarjetas del paso 2, dejar para despu�
   await expect(mandar).toBeEnabled()
   await foto(page, 'mes-paso3-1366')
   expect(pedidas.filter((p) => p.accion === 'mandar')).toEqual([])
+  // Lo dejado para después se ha guardado (4 veces: 3 y, tras «Deshacer», 1), y «Deshacer» lo ha apuntado.
+  expect(pedidas.filter((p) => p.accion === 'dejar').map((p) => p.p_clave)).toHaveLength(4)
+  expect(pedidas.filter((p) => p.accion === 'deshacer_pendiente')).toHaveLength(1)
   expect(errores).toEqual([])
 })

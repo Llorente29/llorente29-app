@@ -1,0 +1,6 @@
+{
+ "_que": "R21 · PR 1 · «Facturar el mes» · contexto medido en la BASE LOCAL con la estructura de staging, en SOLO LECTURA. 1826: añade dos tablas y cuatro funciones. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-27T18:29Z",
+ "tanda": { "supabase/migrations/20261127T1826_r21a_facturar_el_mes.sql": "b4afae59ac6fc66441957b3b73cd6c9b" },
+ "contexto": { "tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": { "tablas": [], "funciones": [] }, "usos": {}, "registro": [] }
+}

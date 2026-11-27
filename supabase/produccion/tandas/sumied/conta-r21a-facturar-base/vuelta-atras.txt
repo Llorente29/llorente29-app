@@ -1,0 +1,3 @@
+# R21 · PR 1 · la vuelta atrás: sin las dos tablas ni sus funciones.
+cuenta: scripts/conta/produccion/cuentas/r21a-facturar-base.sql
+supabase/vuelta-atras/20261127T1826_r21a_facturar_el_mes.down.sql

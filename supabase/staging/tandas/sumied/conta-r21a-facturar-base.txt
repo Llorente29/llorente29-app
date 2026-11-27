@@ -1,0 +1,4 @@
+# R21 · PR 1 · «Facturar el mes»: lo que hace falta guardar.
+# 1826 (añade: de verdad desde la rama, se puede pasar dos veces), con su prueba.
+supabase/migrations/20261127T1826_r21a_facturar_el_mes.sql
+supabase/staging/sql/20261127_r21a_facturar_el_mes_prueba.sql
