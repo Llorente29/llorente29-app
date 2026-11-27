@@ -1,8 +1,8 @@
 # Q10 · respuesta 9 · Las respuestas de QBO, como decisiones (27/11). Rama conta/q10k-respuestas-qbo. Se ensaya y se
 # aplica desde main nombrando la rama, antes de fusionar (lo lanza Julio, T10).
 #
-#   1126  244,38 € paga la 4/12 del cliente 718; 60,00 € se factura al 1008 con el 0035; 18,22 € se factura al 723 con
-#         el 0017. No manda nada a Cegid.
+#   1126  Las tres pagan facturas que ya existen: 244,38 € la 4/12 del cliente 718; 60,00 € la 1/2524 del 1008; 18,22 € la
+#         1/994 del 700. No manda nada a Cegid.
 #
 # Nada en el camino del pedido. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/q10k-respuestas-qbo.sql
