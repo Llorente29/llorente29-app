@@ -47,7 +47,7 @@ test('el alta (tablero 25): tres pasos, el candado dicho antes, otros programas 
   const alta = page.locator('[data-prueba="verifactu-alta"]')
   await expect(alta.getByRole('heading', { level: 1, name: 'Verifactu: tus facturas, directas a Hacienda' })).toBeVisible({ timeout: 30_000 })
   // Paso 1: la empresa de D, sociedad, y desde cuándo le obliga.
-  await expect(alta.getByRole('region', { name: 'Paso 1: Tus datos' })).toContainText('B12345682 · sociedad: te obliga desde el 1 de enero de 2027')
+  await expect(alta.getByRole('region', { name: 'Paso 1: Tus datos' })).toContainText('B12345682 · sociedad: te obliga desde el 6 de octubre de 2028')
   // Paso 2: la vía de colaborador, recomendada y dicha como cerrada; la del certificado, sin certificado en D.
   await expect(alta.getByText('Recomendado')).toBeVisible()
   await expect(alta.locator('[data-prueba="colaborador-cerrado"]')).toBeVisible()
@@ -55,6 +55,12 @@ test('el alta (tablero 25): tres pasos, el candado dicho antes, otros programas 
   // Paso 3: el candado, antes de pulsar.
   await expect(alta.locator('[data-prueba="candado-pruebas"]')).toContainText('Todavía no se ha probado la conexión con el entorno de pruebas de Hacienda')
   await expect(alta.getByRole('button', { name: 'Empezar las pruebas' })).toBeDisabled()
+  // V05: «Probar la conexión», a la vista; sin certificado autorizado, desactivado y dicho por qué.
+  const probar = alta.locator('[data-prueba="probar-conexion"]')
+  await expect(probar.getByRole('button', { name: 'Probar la conexión' })).toBeDisabled()
+  await expect(probar).toContainText('Para probar, autoriza antes tu certificado para Verifactu (paso 2).')
+  // Apagado: ni «Enviar a Hacienda» ni «Lanzar las facturas de prueba» (solo en pruebas).
+  await expect(probar.getByRole('button', { name: /Enviar a Hacienda|Lanzar las facturas de prueba/ })).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   await foto(page, 'tablero-25')
   await alta.getByRole('radio', { name: /Con tu certificado de empresa/ }).check()
@@ -63,7 +69,7 @@ test('el alta (tablero 25): tres pasos, el candado dicho antes, otros programas 
   const otros = alta.locator('[data-prueba="otros-programas"]')
   await otros.getByRole('radio', { name: /Sí, también con/ }).check()
   await otros.getByRole('checkbox', { name: 'Excel, Word o a mano' }).check()
-  await expect(otros.locator('[data-prueba="aviso-otros-programas"]')).toContainText('no cumple desde 2027')
+  await expect(otros.locator('[data-prueba="aviso-otros-programas"]')).toContainText('no cumple desde el 6 de octubre de 2028')
   if (CARRIL !== null && lado(page) === 'ordenador') {
     await otros.getByRole('button', { name: 'Guardar' }).click()
     const dicho = otros.getByRole('status').filter({ hasText: /Guardado:|verifactu_otros_programas|function/ })
@@ -134,6 +140,42 @@ test('sin IVA a Suiza, emitiendo de verdad: sin decir qué le has vendido no se 
   expect(errores).toEqual([])
 })
 
+test('V05 · en pruebas: la banda fija, «Enviar a Hacienda» con lo que contesta, y el QR de una aceptada', async ({ page }) => {
+  const errores = vigilar(page)
+  const s = await pedirSesion(CUENTA_D.email)
+  const empresas = await rest<{ id: string }[]>(s, 'GET', `company?select=id&account_id=eq.${CUENTA_D.id}`)
+  const empresa = empresas.datos[0]?.id ?? '00000000-0000-4000-8000-000000000000'
+  const ayer = new Date(Date.now() - 24 * 3600_000).toISOString()
+  // Simulado: staging no habla con Hacienda. Antes de enviar, 25 sin enviar; después, la respuesta.
+  let enviado = false
+  const resumen = () => (enviado
+    ? { total: 25, pendientes: 0, correctas: 23, con_errores: 1, rechazadas: 1,
+        ultimo_rechazo: { num_serie: 'PR2611260900-07', codigo: 1100, texto: 'Valor o tipo incorrecto del campo: ImporteTotal' }, ultimo_fallo: null,
+        para_qr: { nif: 'B12345682', num_serie: 'PR2611260900-01', fecha: '26-11-2026', importe: '121.00' } }
+    : { total: 25, pendientes: 25, correctas: 0, con_errores: 0, rechazadas: 0, ultimo_rechazo: null, ultimo_fallo: null, para_qr: null })
+  await page.route(/\/rest\/v1\/verifactu_empresa\b/, (r) => json(r, [{ company_id: empresa, account_id: CUENTA_D.id, modo: 'pruebas', via: 'certificado', certificate_id: null, pruebas_desde: ayer, real_desde: null, real_serie: null, real_obliga_hasta: null, otros_programas: [] }]))
+  await page.route(/\/rest\/v1\/verifactu_autorizacion\b/, (r) => json(r, [{ id: 'a-1', certificate_id: 'c-1', autorizada_por_nombre: 'Admin D', autorizada_at: ayer, retirada_at: null }]))
+  await page.route(/\/rest\/v1\/rpc\/verifactu_conexion_probada\b/, (r) => json(r, true))
+  await page.route(/\/rest\/v1\/rpc\/verifactu_pruebas_resumen\b/, (r) => json(r, resumen()))
+  await page.route(/\/rest\/v1\/rpc\/verifactu_despertar_empresa\b/, (r) => { enviado = true; return json(r, { pedido: true, accion: 'enviar' }) })
+  await entrarComo(page, CUENTA_D.email)
+  await page.goto('/conta/ajustes/verifactu')
+  const alta = page.locator('[data-prueba="verifactu-alta"]')
+  await expect(alta.locator('[data-prueba="banda-pruebas-ajustes"]')).toContainText('Estás en pruebas', { timeout: 30_000 })
+  const probar = alta.locator('[data-prueba="probar-conexion"]')
+  await expect(probar.getByRole('button', { name: 'Probar la conexión' })).toBeEnabled()
+  await expect(probar.locator('[data-prueba="resumen-pruebas"]')).toContainText('En pruebas: 0 aceptadas, 0 con errores, 0 rechazadas y 25 sin enviar.')
+  await probar.getByRole('button', { name: 'Enviar a Hacienda' }).click()
+  await expect(probar.locator('[data-prueba="resultado-conexion"]')).toContainText(
+    'Enviadas al entorno de pruebas de Hacienda: 23 aceptadas, 1 con errores y 1 rechazadas. La última rechazada, PR2611260900-07: 1100 · Valor o tipo incorrecto del campo: ImporteTotal.', { timeout: 30_000 })
+  await expect(probar.getByRole('img', { name: 'QR tributario de la factura de prueba' })).toBeVisible()
+  await expect(probar.getByRole('link', { name: 'ábrelo en el cotejo de pruebas de Hacienda' }))
+    .toHaveAttribute('href', 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?nif=B12345682&numserie=PR2611260900-01&fecha=26-11-2026&importe=121.00')
+  await page.evaluate(() => document.fonts.ready)
+  await foto(page, 'tablero-25-pruebas')
+  expect(errores).toEqual([])
+})
+
 test('la rechazada (tableros 26 y 27), con la respuesta de Hacienda simulada', async ({ page }) => {
   const errores = vigilar(page)
   const s = await pedirSesion(CUENTA_D.email)
@@ -172,7 +214,7 @@ test('la rechazada (tableros 26 y 27), con la respuesta de Hacienda simulada', a
   await expect(page.locator('.s-lista-cargando')).toHaveCount(0, { timeout: 30_000 })
   if (lado(page) === 'ordenador') await expect(page.getByRole('table').first().getByRole('columnheader').filter({ hasText: /^Hacienda/ })).toBeVisible()
   await expect(page.getByText(/^Rechazada/).first()).toBeVisible()
-  await expect(page.locator('[data-prueba="pie-hacienda"]')).toContainText('Verifactu empieza el 1 de enero de 2027')
+  await expect(page.locator('[data-prueba="pie-hacienda"]')).toContainText('Verifactu empieza con las de 2027 en adelante')
   await page.evaluate(() => document.fonts.ready)
   await foto(page, 'tablero-26')
 

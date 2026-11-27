@@ -9,8 +9,9 @@
 
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { urlQr } from '@/modules/conta/lib/verifactu/qr'
 import {
-  CODIGOS_NIF, CODIGOS_TIPO_VENTA, avisoOtrosProgramas, cifrasHacienda, etiquetaHacienda, lineaDeTiempo, obligaDesde, porQueEnviando, porQueRechazo,
+  CODIGOS_NIF, CODIGOS_TIPO_VENTA, OBLIGA_VERIFACTU, avisoOtrosProgramas, cifrasHacienda, textoConexion, textoEnvioPruebas, etiquetaHacienda, lineaDeTiempo, obligaDesde, porQueEnviando, porQueRechazo,
   type EstadoFactura,
 } from '@/modules/conta/lib/verifactu/estado'
 
@@ -82,13 +83,48 @@ describe('«Cómo va con Hacienda» (tablero 27)', () => {
 })
 
 describe('el alta (tablero 25)', () => {
-  it('una sociedad, desde el 1 de enero de 2027; un autónomo, desde el 1 de julio', () => {
-    expect(obligaDesde('B28000016')).toMatchObject({ quien: 'sociedad', texto: '1 de enero de 2027' })
-    expect(obligaDesde('12345678Z')).toMatchObject({ quien: 'persona', texto: '1 de julio de 2027' })
+  it('V05 · desde el 6 de octubre de 2028 para todos (Real Decreto-ley 43/2026)', () => {
+    // V05: el Real Decreto-ley 43/2026 lo aplaza; un solo dato para todas las pantallas.
+    expect(obligaDesde('B28000016')).toMatchObject({ quien: 'sociedad', desde: '2028-10-06', texto: '6 de octubre de 2028' })
+    expect(obligaDesde('12345678Z')).toMatchObject({ quien: 'persona', desde: '2028-10-06', texto: '6 de octubre de 2028' })
+    expect(OBLIGA_VERIFACTU).toMatchObject({ desde: '2028-10-06', norma: 'Real Decreto-ley 43/2026' })
   })
   it('Excel no cumple; otro programa, que lo compruebe; solo Sumied, nada que avisar', () => {
     expect(avisoOtrosProgramas(['tpv', 'excel'])).toMatchObject({ tono: 'falta' })
     expect(avisoOtrosProgramas(['tienda'])).toMatchObject({ tono: 'duda' })
     expect(avisoOtrosProgramas([])).toBeNull()
+  })
+})
+
+describe('V05 · la prueba de conexión dice de quién es la culpa', () => {
+  const c = (o: Partial<{ ok: boolean; codigo: number | null; mensaje: string | null }>) => ({ ok: false, codigo: null, mensaje: null, probada_at: '2026-11-26T09:00:00Z', ...o })
+  it('bien, del certificado, de Hacienda o de Sumied', () => {
+    expect(textoConexion(c({ ok: true, mensaje: 'respuesta_de_consulta · HTTP 200' }))).toMatchObject({ tono: 'ok', culpa: 'nadie' })
+    expect(textoConexion(c({ mensaje: 'http_403 · HTTP 403' }))).toMatchObject({ tono: 'falta', culpa: 'certificado' })
+    expect(textoConexion(c({ mensaje: 'fault · HTTP 500 · Codigo[4102] El XML no cumple el esquema', codigo: 4102 })).texto).toContain('4102: «Codigo[4102] El XML no cumple el esquema»')
+    expect(textoConexion(c({ mensaje: 'llamada_tiempo' }))).toMatchObject({ culpa: 'sumied' })
+    expect(textoConexion(c({ mensaje: 'llamada_destino' })).texto).toMatch(/^Tu certificado está bien; la conexión de Sumied con Hacienda/)
+    expect(textoConexion(null)).toMatchObject({ culpa: 'sumied' })
+    expect(textoConexion(null).texto).toContain('tu certificado no se ha usado')
+  })
+})
+
+describe('V05b · «Enviar a Hacienda» dice cuántas y, si alguna se rechaza, su código y su texto', () => {
+  const r = (o: Partial<{ total: number; pendientes: number; correctas: number; con_errores: number; rechazadas: number }>, rechazo: { num_serie: string; codigo: number | null; texto: string | null } | null = null, fallo: { error: string } | null = null) =>
+    ({ total: 25, pendientes: 0, correctas: 0, con_errores: 0, rechazadas: 0, ultimo_rechazo: rechazo, ultimo_fallo: fallo, ...o })
+  it('todas aceptadas, con alguna rechazada, sin respuesta y sin nada pendiente', () => {
+    expect(textoEnvioPruebas({ antes: { pendientes: 25 }, despues: r({ correctas: 25 }), termino: true }))
+      .toEqual({ tono: 'ok', texto: 'Enviadas al entorno de pruebas de Hacienda: 25 aceptadas, 0 con errores y 0 rechazadas.' })
+    expect(textoEnvioPruebas({ antes: { pendientes: 25 }, despues: r({ correctas: 23, con_errores: 1, rechazadas: 1 }, { num_serie: 'PR-07', codigo: 1100, texto: 'Valor incorrecto' }), termino: true }))
+      .toEqual({ tono: 'falta', texto: 'Enviadas al entorno de pruebas de Hacienda: 23 aceptadas, 1 con errores y 1 rechazadas. La última rechazada, PR-07: 1100 · Valor incorrecto.' })
+    const sin = textoEnvioPruebas({ antes: { pendientes: 25 }, despues: r({ pendientes: 25 }), termino: false })
+    expect(sin.tono).toBe('duda')
+    expect(sin.texto).toContain('no es cosa de tu certificado')
+    expect(textoEnvioPruebas({ antes: { pendientes: 25 }, despues: r({ pendientes: 25 }, null, { error: 'cerrada' }), termino: false }).texto).toContain('Último fallo: cerrada')
+    expect(textoEnvioPruebas({ antes: { pendientes: 0 }, despues: r({ correctas: 25 }), termino: true }).texto).toMatch(/^No había nada pendiente de enviar/)
+  })
+  it('el QR de la e2e es la dirección del cotejo de pruebas', () => {
+    expect(urlQr({ nif: 'B12345682', numSerie: 'PR2611260900-01', fecha: '26-11-2026', importe: '121.00' }, 'pruebas'))
+      .toBe('https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?nif=B12345682&numserie=PR2611260900-01&fecha=26-11-2026&importe=121.00')
   })
 })

@@ -192,6 +192,34 @@ test('Certificados y accesos (tablero 10), y el diálogo de «Invitar a mi aseso
   expect(errores).toEqual([])
 })
 
+test('V05 · Certificados: si la prueba falló por Sumied, la etiqueta no culpa al certificado', async ({ page }) => {
+  const errores = vigilar(page)
+  // La fila de producción del 25/11: «Probar con Hacienda» con la conexión cerrada. Staging
+  // no tiene ningún certificado con una prueba fallida (y A, ninguno), así que se pone uno
+  // inventado en lo que contesta la base; lo demás de la pantalla es lo de A.
+  const CERRADA = 'No funciona: Todavía no se presenta desde Sumied: la conexión con Hacienda no está abierta. No se ha enviado nada.'
+  await page.route(/\/rest\/v1\/rpc\/conta_impuesto_certificados_ver\b/, async (r) => {
+    const resp = await r.fetch()
+    const datos = await resp.json() as { certificados?: Record<string, unknown>[] }
+    // Inventado: A no tiene ninguno en staging.
+    datos.certificados = [{
+      id: '00000000-0000-4000-8000-0000000000c5', titular: 'EMPRESA DE PRUEBA SL', nif_cola: '00T', tipo: 'legal_representative',
+      emisor: 'AC DE PRUEBA', desde: '2025-03-14T00:00:00Z', caduca: '2031-01-21T00:00:00Z', estado: 'active', almacen: 'vault',
+      custodia: '—', subido: '2026-11-25T16:40:00Z', subido_por: 'Admin Norte', quitado: null, quitado_por: null,
+      probado: '2026-11-25T16:52:54Z', prueba: 'error', prueba_mensaje: CERRADA, presenta: true, permisos: [],
+    }]
+    await r.fulfill({ response: resp, json: datos })
+  })
+  await entrarComo(page, CUENTA_A.email)
+  await ir(page, 'impuestos/certificados')
+  await expect(page.getByText('Quién presenta').first()).toBeVisible()
+  await expect(page.getByText('No se pudo probar el 25/11: no es cosa del certificado').first()).toBeVisible()
+  await expect(page.getByText(/No funcionó al probarlo|Hacienda no lo aceptó/)).toHaveCount(0)
+  await sinDesbordar(page, 'Certificados (V05)')
+  await foto(page, 'certificados-v05')
+  expect(errores).toEqual([])
+})
+
 test('Aceptar una invitación sin enlace: lo dice, no se queda en blanco', async ({ page }) => {
   const errores = vigilar(page)
   await entrarComo(page, CUENTA_A.email)

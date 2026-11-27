@@ -1,0 +1,2 @@
+# V05 · vuelta atrás.
+supabase/vuelta-atras/20261125T1830_v05_verifactu_pruebas_empresas.down.sql

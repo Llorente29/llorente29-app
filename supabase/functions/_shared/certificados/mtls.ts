@@ -43,7 +43,7 @@ export interface Respuesta {
   ms: number
 }
 
-export type MotivoFallo = 'tiempo' | 'conexion' | 'certificado'
+export type MotivoFallo = 'tiempo' | 'conexion' | 'certificado' | 'destino'
 
 export class LlamadaFallida extends Error {
   readonly motivo: MotivoFallo
@@ -58,6 +58,24 @@ export class LlamadaFallida extends Error {
 
 export const LIMITE_MS = 30_000
 
+// V05 (25/11) · LA LISTA DE DESTINOS. Con certificado solo se llama a los
+// entornos de PRUEBAS de la AEAT. La dirección de producción de Hacienda
+// (www1/www2.agenciatributaria.gob.es) no está y no se abre con un secreto ni
+// con una variable: abrirla es cambiar esta línea en un PR.
+export const DESTINOS_CON_CERTIFICADO: readonly string[] = ['prewww1.aeat.es', 'prewww2.aeat.es']
+
+/** ¿Puede salir una llamada a esta URL? Solo https y solo a un destino de la lista. */
+export function destinoPermitido(url: string): boolean {
+  try {
+    const u = new URL(url)
+    return u.protocol === 'https:' && u.port === '' && DESTINOS_CON_CERTIFICADO.includes(u.hostname.toLowerCase())
+  } catch {
+    return false
+  }
+}
+
+export const DESTINO_CERRADO = 'Sumied solo habla con el entorno de pruebas de Hacienda: esta dirección está cerrada en el programa. No se ha enviado nada.'
+
 /**
  * Hace la llamada con el certificado y devuelve la respuesta, o lanza
  * LlamadaFallida con un mensaje para la pantalla. El material no sale de aquí.
@@ -67,6 +85,8 @@ export async function llamarConCertificado(material: MaterialCertificado, url: s
   const empieza = Date.now()
   const n = Math.max(1, Math.round(limite / 1000))
   const segundos = `${n} ${n === 1 ? 'segundo' : 'segundos'}`
+  // El cerrojo va antes de abrir el certificado: a otro destino no sale ni el saludo.
+  if (!destinoPermitido(url)) throw new LlamadaFallida('destino', DESTINO_CERRADO, 0)
   let cliente: ClienteHttp | null = null
   let reloj: ReturnType<typeof setTimeout> | undefined
   try {

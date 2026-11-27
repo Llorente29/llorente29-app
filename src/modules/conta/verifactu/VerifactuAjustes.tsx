@@ -24,9 +24,11 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { Boton, Campo, Chip, Dialogo, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
 import { leerCertificados } from '@/modules/conta/services/impuestosService'
 import {
-  autorizarCertificado, cambiarModo, guardarOtrosProgramas, leerVerifactu, retirarAutorizacion, type DatosVerifactu,
+  autorizarCertificado, cambiarModo, enviarPruebas, guardarOtrosProgramas, leerVerifactu, pedirPruebas, probarConexion, resumenPruebas, retirarAutorizacion,
+  type DatosVerifactu, type ResumenPruebas,
 } from '@/modules/conta/services/verifactuService'
-import { OTROS_PROGRAMAS, avisoOtrosProgramas, obligaDesde } from '@/modules/conta/lib/verifactu/estado'
+import { OBLIGA_VERIFACTU, OTROS_PROGRAMAS, avisoOtrosProgramas, obligaDesde, textoConexion, textoEnvioPruebas } from '@/modules/conta/lib/verifactu/estado'
+import { modulosQr, urlQr } from '@/modules/conta/lib/verifactu/qr'
 import { CadenaYExportar } from './CadenaYExportar'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -52,8 +54,16 @@ export function VerifactuAjustes() {
     <div className="cxvf-alta" data-prueba="verifactu-alta">
       <header className="cxvf-alta-cabeza">
         <h1 className="cxvf-alta-titulo">Verifactu: tus facturas, directas a Hacienda</h1>
-        <p className="s-apoyo">Desde el 1 de enero de 2027 cada factura que emitas tiene que llegar a Hacienda en el momento. Sumied lo hace solo. Lo dejas listo en tres pasos.</p>
+        <p className="s-apoyo">Desde el {OBLIGA_VERIFACTU.texto} cada factura que emitas tiene que llegar a Hacienda en el momento ({OBLIGA_VERIFACTU.norma}). Sumied lo hace solo. Lo dejas listo en tres pasos.</p>
       </header>
+      {d.empresa.modo === 'pruebas' && (
+        // V05 · Mientras está en pruebas, la banda fija (como en el tablero 26).
+        <div className="cxvf-banda" role="status" data-prueba="banda-pruebas-ajustes">
+          <span className="cxvf-banda-chip">Pruebas</span>
+          <span className="cxvf-banda-texto">Estás en pruebas: tus facturas llegan al entorno de pruebas de Hacienda, con la marca «PRUEBA». No cuentan.</span>
+        </div>
+      )}
+      <ProbarConexion d={d} companyId={activa.id} alCambiar={recargar} />
       {d.fabricantePuesto === false && (
         <p className="s-aviso-lista" data-tono="falta" role="status" data-prueba="aviso-fabricante">
           Falta quién fabrica Sumied (el nombre y el NIF de la declaración responsable): hasta que esté puesto, Verifactu no se puede pasar a real. En pruebas sí se puede trabajar.
@@ -70,6 +80,97 @@ export function VerifactuAjustes() {
         <LoQueHaceSumied />
       </div>
     </div>
+  )
+}
+
+/**
+ * V05 · «Probar la conexión», a la vista y sin buscarlo: pide a Hacienda de
+ * pruebas una consulta con el certificado autorizado y dice qué pasó y de quién
+ * es la culpa. En pruebas, además, «Lanzar las facturas de prueba» y «Enviar a
+ * Hacienda» (V05b: nadie tiene que llamar a nada a mano), con cuántas aceptó
+ * Hacienda y el QR de una aceptada para escanearlo en el cotejo de pruebas.
+ */
+function ProbarConexion({ d, companyId, alCambiar }: { d: DatosVerifactu; companyId: string; alCambiar: () => void }) {
+  const [ocupado, setOcupado] = useState<null | 'probar' | 'facturas' | 'enviar'>(null)
+  const [vueltaResumen, setVueltaResumen] = useState(0)
+  const enPruebas = d.empresa.modo === 'pruebas'
+  const resumen = useLeer(enPruebas ? () => resumenPruebas(companyId) : null, `${companyId}:verifactu-resumen-pruebas:${vueltaResumen}`)
+  const [aviso, setAviso] = useState<{ tono: 'ok' | 'falta' | 'duda'; texto: string } | null>(null)
+  if (d.empresa.modo === 'real') return null
+  const probar = () => {
+    setOcupado('probar'); setAviso(null)
+    void probarConexion(companyId)
+      .then((c) => { setAviso(textoConexion(c)); if (c?.ok) alCambiar() })
+      .catch((e) => setAviso({ tono: 'falta', texto: msg(e) }))
+      .finally(() => setOcupado(null))
+  }
+  const facturas = () => {
+    setOcupado('facturas'); setAviso(null)
+    void pedirPruebas(companyId, 'preparar_pruebas')
+      .then(() => setAviso({ tono: 'ok', texto: 'Pedidas las 25 facturas de prueba (con una rectificativa y una a un cliente de fuera de la UE). Cuando estén preparadas, pulsa «Enviar a Hacienda»: aquí sale cuántas aceptó.' }))
+      .catch((e) => setAviso({ tono: 'falta', texto: msg(e) }))
+      .finally(() => { setOcupado(null); setVueltaResumen((x) => x + 1) })
+  }
+  const enviar = () => {
+    setOcupado('enviar'); setAviso(null)
+    void enviarPruebas(companyId)
+      .then((r) => setAviso(textoEnvioPruebas(r)))
+      .catch((e) => setAviso({ tono: 'falta', texto: msg(e) }))
+      .finally(() => { setOcupado(null); setVueltaResumen((x) => x + 1) })
+  }
+  return (
+    <section className="cxvf-probar" aria-label="Probar la conexión con Hacienda" data-prueba="probar-conexion">
+      <p className="s-apoyo">{d.pruebasProbada ? 'La conexión con el entorno de pruebas de Hacienda ya salió bien una vez.' : 'Antes de las pruebas, comprueba que Sumied llega al entorno de pruebas de Hacienda con tu certificado. No se envía ninguna factura.'}</p>
+      <span className="cxvf-botones">
+        <Boton variante={d.pruebasProbada ? 'secundario' : 'principal'} disabled={ocupado !== null || !d.autorizacion}
+          title={d.autorizacion ? undefined : 'Primero autoriza tu certificado para Verifactu (paso 2)'} onClick={probar}>
+          {ocupado === 'probar' ? 'Probando… (hasta un minuto)' : 'Probar la conexión'}
+        </Boton>
+        {enPruebas && (
+          <Boton variante="secundario" disabled={ocupado !== null} onClick={facturas}>{ocupado === 'facturas' ? 'Pidiendo…' : 'Lanzar las facturas de prueba'}</Boton>
+        )}
+        {enPruebas && (
+          <Boton variante="secundario" disabled={ocupado !== null} onClick={enviar}>{ocupado === 'enviar' ? 'Enviando… (hasta minuto y medio)' : 'Enviar a Hacienda'}</Boton>
+        )}
+      </span>
+      {enPruebas && resumen.datos && <ResumenDePruebas r={resumen.datos} />}
+      {!d.autorizacion && <p className="s-tarjeta-apoyo">Para probar, autoriza antes tu certificado para Verifactu (paso 2).</p>}
+      {aviso && <p className="s-aviso-lista" data-tono={aviso.tono} role="status" data-prueba="resultado-conexion">{aviso.texto}</p>}
+    </section>
+  )
+}
+
+/** Cómo van las de pruebas, y el QR de una aceptada para escanearlo con el móvil. */
+function ResumenDePruebas({ r }: { r: ResumenPruebas }) {
+  if (r.total === 0) return <p className="s-tarjeta-apoyo" data-prueba="resumen-pruebas">Aún no hay ninguna factura de prueba.</p>
+  let url: string | null = null
+  if (r.para_qr) {
+    try { url = urlQr({ nif: r.para_qr.nif, numSerie: r.para_qr.num_serie, fecha: r.para_qr.fecha, importe: r.para_qr.importe }, 'pruebas') } catch { url = null }
+  }
+  return (
+    <div className="cxvf-resumen-pruebas" data-prueba="resumen-pruebas">
+      <p className="s-tarjeta-apoyo">
+        En pruebas: {r.correctas} aceptadas, {r.con_errores} con errores, {r.rechazadas} rechazadas y {r.pendientes} sin enviar.
+        {r.ultimo_rechazo && <> La última rechazada, {r.ultimo_rechazo.num_serie}: {r.ultimo_rechazo.codigo ?? 'sin código'} · {r.ultimo_rechazo.texto ?? 'sin texto'}.</>}
+      </p>
+      {url && r.para_qr && (
+        <div className="cxvf-qr-prueba">
+          <QrSvg url={url} />
+          <span className="s-tarjeta-apoyo">QR de {r.para_qr.num_serie}: escanéalo o <a href={url} target="_blank" rel="noreferrer">ábrelo en el cotejo de pruebas de Hacienda</a>.</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function QrSvg({ url }: { url: string }) {
+  const m = modulosQr(url)
+  const n = m.length + 8
+  return (
+    <svg viewBox={`0 0 ${n} ${n}`} width={128} height={128} role="img" aria-label="QR tributario de la factura de prueba" shapeRendering="crispEdges">
+      <rect width={n} height={n} fill="#fff" />
+      {m.flatMap((fila, i) => fila.map((negro, j) => (negro ? <rect key={`${i}-${j}`} x={j + 4} y={i + 4} width={1} height={1} fill="#000" /> : null)))}
+    </svg>
   )
 }
 
@@ -90,7 +191,7 @@ function PasoDatos({ razon, nif }: { razon: string; nif: string | null }) {
   return (
     <Paso n={1} estado={nif ? 'hecho' : 'ahora'} titulo="Tus datos">
       {nif
-        ? <p className="s-apoyo">{razon} · {nif} · {o.quien === 'sociedad' ? 'sociedad' : 'autónomo'}: te obliga desde el <strong>{o.texto}</strong></p>
+        ? <p className="s-apoyo">{razon} · {nif} · {o.quien === 'sociedad' ? 'sociedad' : 'autónomo'}: te obliga desde el <strong>{o.texto}</strong> ({OBLIGA_VERIFACTU.norma})</p>
         : <p className="s-aviso-lista" data-tono="falta">Tu empresa no tiene NIF: ponlo en Ajustes › Tu empresa. Sin él, Hacienda no recibe nada.</p>}
     </Paso>
   )
@@ -296,7 +397,7 @@ function OtrosProgramas({ d, companyId, quien, alCambiar }: { d: DatosVerifactu;
   return (
     <section className="cxvf-otros" aria-label="¿Facturas también con otro programa?" data-prueba="otros-programas">
       <h2 className="cxvf-paso-titulo">¿Facturas también con otro programa?</h2>
-      <p className="s-apoyo">Un TPV, una tienda online, Excel… Desde 2027 cada factura de tu empresa sale de un programa que cumpla, no solo las de Sumied.</p>
+      <p className="s-apoyo">Un TPV, una tienda online, Excel… Desde el {OBLIGA_VERIFACTU.texto} cada factura de tu empresa sale de un programa que cumpla, no solo las de Sumied.</p>
       <div role="radiogroup" aria-label="¿Facturas también con otro programa?" className="cxvf-otros-opciones">
         <label><input type="radio" name="otros-programas" checked={con === 'solo'} onChange={() => setCon('solo')} /> No, solo con Sumied</label>
         <label><input type="radio" name="otros-programas" checked={con === 'otros'} onChange={() => setCon('otros')} /> Sí, también con…</label>

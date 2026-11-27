@@ -5,7 +5,7 @@
 // base (conta_cert_custodia de la 0130).
 
 import { describe, expect, it } from 'vitest'
-import { avisoCaducidad, chipsCertificado, lineaAsesoria, lineaCertificado, resultadoUso, textoUso, type Certificado, type Uso } from '@/modules/conta/impuestos/certificados'
+import { avisoCaducidad, chipsCertificado, culpaDeLaPrueba, lineaAsesoria, lineaCertificado, resultadoUso, textoUso, type Certificado, type Uso } from '@/modules/conta/impuestos/certificados'
 
 const cert = (o: Partial<Certificado> = {}): Certificado => ({
   id: 'c', titular: 'EMPRESA DE PRUEBA SL', nif_cola: '00T', tipo: 'legal_representative', emisor: 'AC DE PRUEBA',
@@ -22,7 +22,16 @@ describe('la ficha del certificado', () => {
   })
   it('sin probar, o que falló al probarlo, lo dice; sin permisos dados, presentan los administradores', () => {
     expect(chipsCertificado(cert({ probado: null, prueba: null, permisos: [] })).map((c) => c.texto)).toEqual(['Aún sin probar con Hacienda', 'Pueden presentar: los administradores'])
-    expect(chipsCertificado(cert({ prueba: 'error' }))[0]).toEqual({ tono: 'falta', texto: 'No funcionó al probarlo el 09/10' })
+    expect(chipsCertificado(cert({ prueba: 'error', prueba_mensaje: 'No funciona: Hacienda no acepta este certificado para consultar las declaraciones de este NIF.' }))[0])
+      .toEqual({ tono: 'falta', texto: 'Hacienda no lo aceptó al probarlo el 09/10' })
+  })
+  it('V05 · si el fallo es de Sumied, el certificado no se queda con la culpa', () => {
+    // El mensaje que quedó en producción el 25/11 con la conexión cerrada.
+    const cerrada = 'No funciona: Todavía no se presenta desde Sumied: la conexión con Hacienda no está abierta. No se ha enviado nada.'
+    expect(chipsCertificado(cert({ prueba: 'error', prueba_mensaje: cerrada }))[0]).toEqual({ tono: 'duda', texto: 'No se pudo probar el 09/10: no es cosa del certificado' })
+    expect(culpaDeLaPrueba('No se ha podido probar, y no es cosa de tu certificado: Hacienda no ha contestado en 30 segundos.')).toBe('sumied')
+    expect(culpaDeLaPrueba('No funciona: Se ha cortado la conexión con Hacienda. Compruébalo antes de repetir.')).toBe('sumied')
+    expect(culpaDeLaPrueba('No funciona: No se ha podido preparar la conexión con este certificado. Vuelve a subirlo.')).toBe('certificado')
   })
   it('quitado: con quién y cuándo', () => {
     expect(lineaCertificado(cert({ estado: 'removed', quitado: '2026-10-18T10:00:00Z', quitado_por: 'Julio' }))).toBe('Certificado de representante de EMPRESA DE PRUEBA SL · quitado el 18/10/2026 por Julio')

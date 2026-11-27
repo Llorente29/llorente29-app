@@ -307,7 +307,7 @@ export default function FacturasPage() {
         />
       )}
       {conHacienda && (
-        <p className="s-apoyo" data-prueba="pie-hacienda">Las facturas de antes de 2027 (las traídas de Diez) no se envían: Verifactu empieza el 1 de enero de 2027. Pasa el ratón por «Hacienda» para ver por qué tarda una, por qué se rechazó o adónde lleva su QR.</p>
+        <p className="s-apoyo" data-prueba="pie-hacienda">Las facturas de antes de 2027 (las traídas de Diez) no se envían: Verifactu empieza con las de 2027 en adelante. Pasa el ratón por «Hacienda» para ver por qué tarda una, por qué se rechazó o adónde lleva su QR.</p>
       )}
 
       <BotonPulgar>{nueva}</BotonPulgar>

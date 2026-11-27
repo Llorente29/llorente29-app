@@ -147,6 +147,8 @@
 .s-impuestos-opcion-cabeza { display: flex; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; align-items: baseline; }
 .s-impuestos-certificado { display: flex; flex-direction: column; gap: var(--s-1); }
 .s-impuestos-chips { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+/* V05: una etiqueta larga («No se pudo probar el 25/11: no es cosa del certificado») parte línea en el móvil. */
+.s-impuestos-chips .s-chip { white-space: normal; max-width: 100%; }
 .s-impuestos-ok { color: var(--s-ok); }
 
 .s-tarjeta.s-impuestos-custodia { background: var(--s-oscuro); border-color: var(--s-oscuro); color: var(--s-superficie); gap: var(--s-3); }

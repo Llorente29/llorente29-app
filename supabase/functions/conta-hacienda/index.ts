@@ -137,7 +137,8 @@ Deno.serve(async (req) => {
     return json({
       ok: true, entorno: hacienda.entorno, abierta: hacienda.entorno !== "cerrada",
       mensaje: hacienda.entorno === "cerrada" ? CERRADA
-        : hacienda.entorno === "doble" ? "Estás en pruebas: Sumied habla con un Hacienda de mentira. No llega nada a Hacienda." : "",
+        : hacienda.entorno === "doble" ? "Estás en pruebas: Sumied habla con un Hacienda de mentira. No llega nada a Hacienda."
+        : hacienda.entorno === "pruebas" ? "Estás en el entorno de pruebas de Hacienda: lo que se envíe no cuenta." : "",
     });
   }
 
