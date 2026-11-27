@@ -46549,6 +46549,39 @@ $_$;
 
 
 --
+-- Name: conta_factura_dejar(uuid, text, text, date, text, numeric, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_factura_dejar(p_company uuid, p_clave text, p_tipo text, p_mes date, p_cliente text, p_importe numeric, p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_cuenta uuid := public._conta_gestoria_puede(p_company);
+  v_id uuid;
+begin
+  if p_mes is null or p_mes <> date_trunc('month', p_mes)::date then raise exception 'El mes va como el día 1 del mes.' using errcode = '22023'; end if;
+  if coalesce(p_importe, -1) < 0 then raise exception 'Falta el importe.' using errcode = '22023'; end if;
+  if nullif(trim(coalesce(p_motivo, '')), '') is null then raise exception 'Falta por qué se deja para después.' using errcode = '22023'; end if;
+  if exists (select 1 from public.conta_factura_pendiente where company_id = p_company and clave = p_clave and deshecho_at is null and resuelto_at is null) then
+    raise exception 'Este caso ya está en Pendientes.' using errcode = '55000';
+  end if;
+  insert into public.conta_factura_pendiente (account_id, company_id, clave, tipo, mes, cliente, importe, motivo, dejado_por, dejado_por_id)
+  values (v_cuenta, p_company, p_clave, p_tipo, p_mes, nullif(trim(coalesce(p_cliente, '')), ''), p_importe, trim(p_motivo), public.conta_nombre_actor(), auth.uid())
+  returning id into v_id;
+  return jsonb_build_object('id', v_id, 'frase', format('Dejado para después: %s € quedan en Pendientes, fuera de esta factura. Cuando se resuelva, se factura en el mes en que se resuelva, con su mes en la descripción.',
+    translate(to_char(p_importe, 'FM999G999G990D00'), ',.', '.,')));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_factura_dejar(p_company uuid, p_clave text, p_tipo text, p_mes date, p_cliente text, p_importe numeric, p_motivo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_factura_dejar(p_company uuid, p_clave text, p_tipo text, p_mes date, p_cliente text, p_importe numeric, p_motivo text) IS 'R21 · «Dejar para después»: el caso queda en Pendientes, fuera de esta factura, con quién, cuándo, el mes, el cliente, el importe y el motivo. Solo quien puede en la gestoría.';
+
+
+--
 -- Name: conta_factura_descartar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -46759,6 +46792,32 @@ begin
   return jsonb_build_object('estado', 'factura', 'factura_id', v_fac, 'confianza', v_conf, 'texto', v_texto, 'proveedor_nuevo', v_prov is null, 'posible_repetida', v_rep.nivel = 'posible',
                             'retencion_sin_tipo', v_ret_aviso is not null);
 end $_$;
+
+
+--
+-- Name: conta_factura_deshacer_pendiente(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_factura_deshacer_pendiente(p_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_p public.conta_factura_pendiente;
+begin
+  select * into v_p from public.conta_factura_pendiente where id = p_id;
+  if v_p.id is null then raise exception 'Ese pendiente no existe.' using errcode = 'P0002'; end if;
+  perform public._conta_gestoria_puede(v_p.company_id);
+  if v_p.deshecho_at is not null or v_p.resuelto_at is not null then raise exception 'Ese pendiente ya no está en Pendientes.' using errcode = '55000'; end if;
+  update public.conta_factura_pendiente set deshecho_por = public.conta_nombre_actor(), deshecho_por_id = auth.uid(), deshecho_at = now() where id = p_id;
+  return jsonb_build_object('id', p_id, 'frase', 'Deshecho: el caso vuelve a estar por resolver.');
+end $$;
+
+
+--
+-- Name: FUNCTION conta_factura_deshacer_pendiente(p_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_factura_deshacer_pendiente(p_id uuid) IS 'R21 · «Deshacer» de «Dejar para después»: apunta quién y cuándo; no borra. El caso vuelve a estar por resolver.';
 
 
 --
@@ -47007,6 +47066,34 @@ COMMENT ON FUNCTION public.conta_factura_recuperar(p_invoice uuid, p_quien_nombr
 
 
 --
+-- Name: conta_factura_resolver_pendiente(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_factura_resolver_pendiente(p_id uuid, p_mes date) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_p public.conta_factura_pendiente;
+begin
+  select * into v_p from public.conta_factura_pendiente where id = p_id;
+  if v_p.id is null then raise exception 'Ese pendiente no existe.' using errcode = 'P0002'; end if;
+  perform public._conta_gestoria_puede(v_p.company_id);
+  if v_p.deshecho_at is not null or v_p.resuelto_at is not null then raise exception 'Ese pendiente ya no está en Pendientes.' using errcode = '55000'; end if;
+  if p_mes is null or p_mes <> date_trunc('month', p_mes)::date or p_mes < v_p.mes then raise exception 'Se factura en el mes en que se resuelve, no antes del que se dejó.' using errcode = '22023'; end if;
+  update public.conta_factura_pendiente set resuelto_por = public.conta_nombre_actor(), resuelto_por_id = auth.uid(), resuelto_at = now(), resuelto_mes = p_mes where id = p_id;
+  return jsonb_build_object('id', p_id, 'frase', format('Resuelto: sale de Pendientes y se factura en %s%s.', public._conta_gestoria_mes(p_mes),
+    case when p_mes > v_p.mes then format(', con «%s» en la descripción', public._conta_gestoria_mes(v_p.mes)) else '' end));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_factura_resolver_pendiente(p_id uuid, p_mes date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_factura_resolver_pendiente(p_id uuid, p_mes date) IS 'R21 · Un pendiente resuelto: sale de Pendientes y se factura en el mes en que se resuelve (con su mes en la descripción si es otro). Apunta quién y cuándo; no borra.';
+
+
+--
 -- Name: conta_factura_tiene_liquidacion(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -47045,6 +47132,38 @@ $$;
 --
 
 COMMENT ON FUNCTION public.conta_factura_tiene_liquidacion(p_invoice uuid) IS 'PC01 · Si a una factura de plataforma le ha llegado su liquidación: cada marca con pedidos en su cierre tiene una de su canal, periodo y local. Si no, pasado su plazo, sale «Falta su liquidación» y no «Vencida» (Julio, 25/10).';
+
+
+--
+-- Name: conta_factura_visto_bueno_dar(uuid, date, text, numeric, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_factura_visto_bueno_dar(p_company uuid, p_mes date, p_serie text, p_total numeric, p_facturas integer) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_cuenta uuid := public._conta_gestoria_puede(p_company);
+  v_s text := nullif(upper(trim(coalesce(p_serie, ''))), '');
+  v_id uuid;
+begin
+  if p_mes is null or p_mes <> date_trunc('month', p_mes)::date then raise exception 'El mes va como el día 1 del mes.' using errcode = '22023'; end if;
+  if v_s is null or v_s !~ '^[0-9A-Z]{1,5}$' then raise exception 'Falta la serie de Cegid.' using errcode = '22023'; end if;
+  if p_total is null or coalesce(p_facturas, -1) < 0 then raise exception 'Faltan el total y el número de facturas que da Cegid.' using errcode = '22023'; end if;
+  update public.conta_factura_visto_bueno set sustituido_por = public.conta_nombre_actor(), sustituido_por_id = auth.uid(), sustituido_at = now()
+   where company_id = p_company and mes = p_mes and serie = v_s and sustituido_at is null;
+  insert into public.conta_factura_visto_bueno (account_id, company_id, mes, serie, total, facturas, quien, quien_id)
+  values (v_cuenta, p_company, p_mes, v_s, p_total, p_facturas, public.conta_nombre_actor(), auth.uid()) returning id into v_id;
+  return jsonb_build_object('id', v_id, 'frase', format('Apuntado: Cegid da %s € en %s facturas de la serie %s de %s. Listado para QBO.',
+    translate(to_char(p_total, 'FM999G999G990D00'), ',.', '.,'), p_facturas, v_s, public._conta_gestoria_mes(p_mes)));
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_factura_visto_bueno_dar(p_company uuid, p_mes date, p_serie text, p_total numeric, p_facturas integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_factura_visto_bueno_dar(p_company uuid, p_mes date, p_serie text, p_total numeric, p_facturas integer) IS 'R21 · «Coincide: mandar el listado a QBO»: apunta el total y el número de facturas que dio Cegid, quién y cuándo. Uno vivo por empresa, mes y serie; el anterior queda sustituido.';
 
 
 --
@@ -124609,6 +124728,79 @@ COMMENT ON VIEW public.conta_factura_cobro IS 'PC01 · El estado de cobro de cad
 
 
 --
+-- Name: conta_factura_pendiente; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_factura_pendiente (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    clave text NOT NULL,
+    tipo text NOT NULL,
+    mes date NOT NULL,
+    cliente text,
+    importe numeric(14,2) NOT NULL,
+    motivo text NOT NULL,
+    dejado_por text,
+    dejado_por_id uuid,
+    dejado_at timestamp with time zone DEFAULT now() NOT NULL,
+    deshecho_por text,
+    deshecho_por_id uuid,
+    deshecho_at timestamp with time zone,
+    resuelto_por text,
+    resuelto_por_id uuid,
+    resuelto_at timestamp with time zone,
+    resuelto_mes date,
+    CONSTRAINT conta_factura_pendiente_check CHECK (((deshecho_at IS NULL) OR (resuelto_at IS NULL))),
+    CONSTRAINT conta_factura_pendiente_check1 CHECK (((resuelto_at IS NULL) = (resuelto_mes IS NULL))),
+    CONSTRAINT conta_factura_pendiente_clave_check CHECK (((clave ~ '^(mov|tpv|gc|ficha|cegid):.+$'::text) AND (length(clave) <= 200))),
+    CONSTRAINT conta_factura_pendiente_importe_check CHECK ((importe >= (0)::numeric)),
+    CONSTRAINT conta_factura_pendiente_mes_check CHECK ((mes = (date_trunc('month'::text, (mes)::timestamp with time zone))::date)),
+    CONSTRAINT conta_factura_pendiente_motivo_check CHECK (((length(TRIM(BOTH FROM motivo)) > 0) AND (length(motivo) <= 500))),
+    CONSTRAINT conta_factura_pendiente_resuelto_mes_check CHECK (((resuelto_mes IS NULL) OR (resuelto_mes = (date_trunc('month'::text, (resuelto_mes)::timestamp with time zone))::date))),
+    CONSTRAINT conta_factura_pendiente_tipo_check CHECK ((tipo = ANY (ARRAY['paga_factura_antes'::text, 'paga_sin_recibo'::text, 'no_se_sabe_quien'::text, 'sin_unir_cegid'::text, 'falta_dato_cegid'::text, 'sin_datos'::text])))
+);
+
+
+--
+-- Name: TABLE conta_factura_pendiente; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_factura_pendiente IS 'R21 · Lo dejado para después en «Facturar el mes»: fuera de esta factura hasta resolverlo, con quién, cuándo, el mes, el cliente, el importe y el motivo. Nunca se borra: deshacer y resolver se apuntan. Uno vivo por caso.';
+
+
+--
+-- Name: conta_factura_visto_bueno; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_factura_visto_bueno (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    mes date NOT NULL,
+    serie text NOT NULL,
+    total numeric(14,2) NOT NULL,
+    facturas integer NOT NULL,
+    quien text,
+    quien_id uuid,
+    at timestamp with time zone DEFAULT now() NOT NULL,
+    sustituido_por text,
+    sustituido_por_id uuid,
+    sustituido_at timestamp with time zone,
+    CONSTRAINT conta_factura_visto_bueno_facturas_check CHECK ((facturas >= 0)),
+    CONSTRAINT conta_factura_visto_bueno_mes_check CHECK ((mes = (date_trunc('month'::text, (mes)::timestamp with time zone))::date)),
+    CONSTRAINT conta_factura_visto_bueno_serie_check CHECK ((serie ~ '^[0-9A-Z]{1,5}$'::text))
+);
+
+
+--
+-- Name: TABLE conta_factura_visto_bueno; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_factura_visto_bueno IS 'R21 · «Coincide: mandar el listado a QBO» de «Facturar el mes»: el total y el número de facturas que dio Cegid al precalcular, quién y cuándo. Uno vivo por empresa, mes y serie; uno nuevo sustituye al anterior, que queda guardado.';
+
+
+--
 -- Name: conta_gasto_por_venta; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -142420,6 +142612,22 @@ ALTER TABLE ONLY public.conta_erp10_subcuenta_salida
 
 
 --
+-- Name: conta_factura_pendiente conta_factura_pendiente_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_factura_pendiente
+    ADD CONSTRAINT conta_factura_pendiente_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_factura_visto_bueno conta_factura_visto_bueno_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_factura_visto_bueno
+    ADD CONSTRAINT conta_factura_visto_bueno_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_gasto_por_venta conta_gasto_por_venta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -148780,6 +148988,27 @@ CREATE INDEX conta_erp10_salida_partida_lote_idx ON public.conta_erp10_salida_pa
 --
 
 CREATE UNIQUE INDEX conta_erp10_salida_partida_viva_uq ON public.conta_erp10_salida_partida USING btree (entry_id) WHERE (estado = 'salida'::text);
+
+
+--
+-- Name: conta_factura_pendiente_empresa; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_factura_pendiente_empresa ON public.conta_factura_pendiente USING btree (company_id, mes);
+
+
+--
+-- Name: conta_factura_pendiente_vivo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX conta_factura_pendiente_vivo ON public.conta_factura_pendiente USING btree (company_id, clave) WHERE ((deshecho_at IS NULL) AND (resuelto_at IS NULL));
+
+
+--
+-- Name: conta_factura_visto_bueno_vivo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX conta_factura_visto_bueno_vivo ON public.conta_factura_visto_bueno USING btree (company_id, mes, serie) WHERE (sustituido_at IS NULL);
 
 
 --
@@ -159630,6 +159859,38 @@ ALTER TABLE ONLY public.conta_erp10_subcuenta_salida
 
 ALTER TABLE ONLY public.conta_erp10_subcuenta_salida
     ADD CONSTRAINT conta_erp10_subcuenta_salida_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.conta_erp10_salida_lote(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: conta_factura_pendiente conta_factura_pendiente_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_factura_pendiente
+    ADD CONSTRAINT conta_factura_pendiente_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_factura_pendiente conta_factura_pendiente_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_factura_pendiente
+    ADD CONSTRAINT conta_factura_pendiente_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_factura_visto_bueno conta_factura_visto_bueno_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_factura_visto_bueno
+    ADD CONSTRAINT conta_factura_visto_bueno_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_factura_visto_bueno conta_factura_visto_bueno_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_factura_visto_bueno
+    ADD CONSTRAINT conta_factura_visto_bueno_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
 
 
 --
@@ -172405,6 +172666,32 @@ ALTER TABLE public.conta_erp10_subcuenta_salida ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_erp10_subcuenta_salida_leer ON public.conta_erp10_subcuenta_salida FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_factura_pendiente; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_factura_pendiente ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_factura_pendiente conta_factura_pendiente_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_factura_pendiente_leer ON public.conta_factura_pendiente FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_factura_visto_bueno; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_factura_visto_bueno ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_factura_visto_bueno conta_factura_visto_bueno_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_factura_visto_bueno_leer ON public.conta_factura_visto_bueno FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -189805,6 +190092,15 @@ GRANT ALL ON FUNCTION public.conta_euros_exactos(p numeric) TO service_role;
 
 
 --
+-- Name: FUNCTION conta_factura_dejar(p_company uuid, p_clave text, p_tipo text, p_mes date, p_cliente text, p_importe numeric, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_factura_dejar(p_company uuid, p_clave text, p_tipo text, p_mes date, p_cliente text, p_importe numeric, p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_factura_dejar(p_company uuid, p_clave text, p_tipo text, p_mes date, p_cliente text, p_importe numeric, p_motivo text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_factura_dejar(p_company uuid, p_clave text, p_tipo text, p_mes date, p_cliente text, p_importe numeric, p_motivo text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_factura_descartar(p_invoice uuid, p_motivo text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -189820,6 +190116,15 @@ GRANT ALL ON FUNCTION public.conta_factura_descartar(p_invoice uuid, p_motivo te
 REVOKE ALL ON FUNCTION public.conta_factura_desde_lectura(p_inbox uuid, p_session uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_factura_desde_lectura(p_inbox uuid, p_session uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_factura_desde_lectura(p_inbox uuid, p_session uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_factura_deshacer_pendiente(p_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_factura_deshacer_pendiente(p_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_factura_deshacer_pendiente(p_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_factura_deshacer_pendiente(p_id uuid) TO service_role;
 
 
 --
@@ -189876,12 +190181,30 @@ GRANT ALL ON FUNCTION public.conta_factura_recuperar(p_invoice uuid, p_quien_nom
 
 
 --
+-- Name: FUNCTION conta_factura_resolver_pendiente(p_id uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_factura_resolver_pendiente(p_id uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_factura_resolver_pendiente(p_id uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_factura_resolver_pendiente(p_id uuid, p_mes date) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_factura_tiene_liquidacion(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public.conta_factura_tiene_liquidacion(p_invoice uuid) TO anon;
 GRANT ALL ON FUNCTION public.conta_factura_tiene_liquidacion(p_invoice uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_factura_tiene_liquidacion(p_invoice uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_factura_visto_bueno_dar(p_company uuid, p_mes date, p_serie text, p_total numeric, p_facturas integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_factura_visto_bueno_dar(p_company uuid, p_mes date, p_serie text, p_total numeric, p_facturas integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_factura_visto_bueno_dar(p_company uuid, p_mes date, p_serie text, p_total numeric, p_facturas integer) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_factura_visto_bueno_dar(p_company uuid, p_mes date, p_serie text, p_total numeric, p_facturas integer) TO service_role;
 
 
 --
@@ -203480,6 +203803,22 @@ GRANT SELECT ON TABLE public.customer_invoice_payment TO authenticated;
 GRANT ALL ON TABLE public.conta_factura_cobro TO anon;
 GRANT ALL ON TABLE public.conta_factura_cobro TO authenticated;
 GRANT ALL ON TABLE public.conta_factura_cobro TO service_role;
+
+
+--
+-- Name: TABLE conta_factura_pendiente; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_factura_pendiente TO authenticated;
+GRANT ALL ON TABLE public.conta_factura_pendiente TO service_role;
+
+
+--
+-- Name: TABLE conta_factura_visto_bueno; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_factura_visto_bueno TO authenticated;
+GRANT ALL ON TABLE public.conta_factura_visto_bueno TO service_role;
 
 
 --
