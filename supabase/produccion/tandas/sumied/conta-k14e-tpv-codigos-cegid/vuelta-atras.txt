@@ -1,0 +1,3 @@
+# K14e · la vuelta atrás: las 5 fichas sin código de Cegid, lo apuntado por la K14e fuera y los 5 pagos sin código.
+cuenta: scripts/conta/produccion/cuentas/k14e-tpv-codigos-cegid.sql
+supabase/vuelta-atras/20261127T0119_k14e_tpv_codigos_cegid.down.sql
