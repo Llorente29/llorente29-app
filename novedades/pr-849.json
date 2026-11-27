@@ -1,0 +1,20 @@
+[
+ {
+  "id": "849-1",
+  "pr": 849,
+  "fecha": "2026-11-27T22:34:14Z",
+  "producto": "sumied",
+  "apartado": "«Facturar el mes», lo dejado para después",
+  "frase": "se guarda con quién, cuándo, el mes, el cliente y el importe, y sigue en «Pendientes» al volver a abrir la pantalla y, el primero, en los meses siguientes. «Deshacer» apunta quién y cuándo, sin borrar nada.",
+  "ruta": null
+ },
+ {
+  "id": "849-2",
+  "pr": 849,
+  "fecha": "2026-11-27T22:34:14Z",
+  "producto": "sumied",
+  "apartado": "«Facturar el mes», el visto bueno de QBO",
+  "frase": "«Coincide» guarda el total y el número de facturas que dio Cegid. Hay uno por mes y serie; uno nuevo sustituye al anterior, que queda guardado.",
+  "ruta": null
+ }
+]
