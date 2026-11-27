@@ -197,6 +197,8 @@ export const PRODUCTOS: Producto[] = [
     pestanas: [
       { id: 'inicioGestoria', etiqueta: 'Inicio', icono: 'contactos', ruta: R.inicioGestoria, prefijos: [R.inicioGestoria] },
       { id: 'clientesGestoria', etiqueta: 'Clientes', icono: 'contactos', ruta: R.clientesCuotas, prefijos: [R.clientesCuotas, R.clienteGestoria] },
+      // R21 (27/11) · «Facturar el mes»: el asistente de cinco pasos.
+      { id: 'facturarMes', etiqueta: 'Facturar el mes', icono: 'facturas', ruta: R.facturarMes, prefijos: [R.facturarMes] },
       // Q10 (25/11) · «Facturas del mes»: lo cobrado por GoCardless frente a la facturación de Cegid.
       { id: 'facturasCuotas', etiqueta: 'Facturas del mes', icono: 'facturas', ruta: R.facturasCuotas, prefijos: [R.facturasCuotas] },
       { id: 'tarifasGestoria', etiqueta: 'Tarifa y paquetes', icono: 'facturas', ruta: R.tarifasGestoria, prefijos: [R.tarifasGestoria] },

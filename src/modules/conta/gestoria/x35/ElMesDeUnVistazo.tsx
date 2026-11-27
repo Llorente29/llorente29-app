@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { rutaClientesCuotas, rutaCobroGestoria, rutaFacturasCuotas } from '@/config/navegacion'
+import { rutaClientesCuotas, rutaFacturarMes, rutaFacturasCuotas } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
@@ -53,8 +53,8 @@ export function ElMesDeUnVistazo() {
     : mesDeUnVistazo(entradaDelMes(mes, hoy, { id: activa.id, nombre: activa.nombre }, delMes.datos ?? null, cuenta.datos ?? null).entrada)
 
   const rutaDe = (ir: Asunto['ir']): { texto: string; ruta: string } => ir === 'clientes' ? { texto: 'Ir a Clientes', ruta: rutaClientesCuotas() }
-    // «Facturar el mes» (R21) aún no está en main: «Mandar a Cegid» abre «Revisar el cobro».
-    : ir === 'facturar' ? { texto: 'Ir a Revisar el cobro', ruta: rutaCobroGestoria(activa?.id, mes) }
+    // «Mandar a Cegid las facturas del mes» abre «Facturar el mes» (R21).
+    : ir === 'facturar' ? { texto: 'Ir a Facturar el mes', ruta: rutaFacturarMes(activa?.id, mes) }
     : { texto: 'Ir a Facturas del mes', ruta: rutaFacturasCuotas(activa?.id, mes) }
   const fallos = [...(delMes.datos?.fallos ?? []).map((f) => `No se ha podido leer ${f}.`), ...(delMes.error ? [`No se han podido leer los cobros del mes: ${delMes.error}`] : []),
     ...(cuenta.error ? [`No se ha podido leer «Te deben» ni el próximo cobro: ${cuenta.error}`] : [])]

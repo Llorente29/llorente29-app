@@ -88,7 +88,7 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     }
     expect([...importes].sort((x, y) => y - x)).toEqual(importes)
     await page.getByTestId('x35-asunto-mandar').click()
-    await expect(page.getByRole('dialog').getByRole('link', { name: 'Ir a Revisar el cobro ›' })).toBeVisible()
+    await expect(page.getByRole('dialog').getByRole('link', { name: 'Ir a Facturar el mes ›' })).toBeVisible()
     await page.keyboard.press('Escape')
 
     // PR 2 · «Cobrado y sin cobrar» (seis meses) y «Dónde se te escapa el dinero», cada uno con su lista.

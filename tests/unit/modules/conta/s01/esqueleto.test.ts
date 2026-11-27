@@ -90,6 +90,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     // PC01 · Entrega 3: Ventas › Cobros (la lista, con sus remesas, y la ficha de una remesa de recibos).
     cobros: 'facturacion.cobros', remesaCobros: 'facturacion.cobros', // G04 · «Clientes y cuotas», apartado propio: Clientes (con la ficha) y Tarifa y paquetes.
     clientesCuotas: 'clientesCuotas.clientesGestoria', inicioGestoria: 'clientesCuotas.inicioGestoria', tarifasGestoria: 'clientesCuotas.tarifasGestoria', clienteGestoria: 'clientesCuotas.clientesGestoria', cobroGestoria: 'clientesCuotas.clientesGestoria', facturasCuotas: 'clientesCuotas.facturasCuotas',
+    // R21 · «Facturar el mes», en Clientes y cuotas.
+    facturarMes: 'clientesCuotas.facturarMes',
   }
   it('las de CONTA.rutas, todas, con lo suyo', () => {
     const rutas = Object.entries(CONTA.rutas) as [keyof typeof CONTA.rutas, string][]
@@ -142,7 +144,7 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     // G01 · Clientes y cuotas. G03 (Julio, 07/11): solo con el sector Gestoría de la empresa, no con «la cuenta es asesoría».
     // G04 (maqueta del 08/11): un apartado propio, con Clientes y Tarifa y paquetes.
     expect(PRODUCTOS.find((p) => p.id === 'clientesCuotas')).toMatchObject({ solo: 'gestoria' })
-    expect(PRODUCTOS.find((p) => p.id === 'clientesCuotas')!.pestanas.map((t) => t.etiqueta)).toEqual(['Inicio', 'Clientes', 'Facturas del mes', 'Tarifa y paquetes'])
+    expect(PRODUCTOS.find((p) => p.id === 'clientesCuotas')!.pestanas.map((t) => t.etiqueta)).toEqual(['Inicio', 'Clientes', 'Facturar el mes', 'Facturas del mes', 'Tarifa y paquetes'])
     expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'cierres')).toMatchObject({ solo: 'hosteleria', bloque: 'Hostelería' })
     const liq = PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'liquidacionesVentas')!
     expect([liq.solo, liq.bloque]).toEqual([undefined, undefined])
