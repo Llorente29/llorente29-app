@@ -24,10 +24,12 @@
 --   5. Los 4 ingresos de GoCardless de noviembre se vuelven a casar con su pago de GoCardless
 --      (conta_abono_gocardless_casar): el ingreso, 57200000 / 57200002, que es el que el X33 da por hecho («una
 --      liquidación ya casada en Bancos ya tiene su asiento»).
---   0. Además de las guardas de lo medido: el ejercicio 2026 tiene que dejar validar (Julio ya decidió «empezar a
---      trabajar ya»; antes, los ensayos paraban en 23514 por eso).
+--   0. Además de las guardas de lo medido: el ejercicio 2026 tiene que dejar validar (el paso 5 valida los 4 de
+--      noviembre). Hoy no deja: es «mixed» de ERP10, sin lo de enero a octubre traído (0 asientos de 2026 traídos) y sin
+--      «Empezar a trabajar ya». Sin esta guarda, el paso 5 paraba en 23514 («falta_historico»); con ella, para antes y
+--      dice por qué. Lo decide Julio en Ajustes › Ejercicio; la tanda no lo toca.
 --   6. La cadena de huellas del diario de QBO, sin hueco: los 37 eran sus eslabones 1 a 37 y detrás van los 4.425
---      asientos traídos de ERP10 (ninguno ha salido a ningún sitio). Se vuelven a numerar desde 1 y se rehace cada huella
+--      asientos de 2024 traídos de ERP10 (ninguno ha salido a ningún sitio; su contenido no cambia). Se vuelven a numerar desde 1 y se rehace cada huella
 --      con la anterior, en orden (journal_huella y journal_entry_canonico, como al validar). Solo cambian chain_seq,
 --      prev_hash y hash; para eso se aparta journal_entry_inalterable dentro de esta transacción y se vuelve a poner.
 --      Al acabar, _conta_cadena_rota tiene que dar 0.

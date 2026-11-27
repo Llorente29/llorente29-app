@@ -2,7 +2,7 @@
  "_que": "K14b · QBO Integrity, un solo banco · contexto medido en producción en SOLO LECTURA el 26/11: los dos bancos con IBAN ···7181 (CaixaBank del 06/11, sin movimientos ni extracto, enlazado a la 57200001; «57200000» con los 847 movimientos, 1 extracto y la 57200004), 37 casados vivos con su asiento creado y su pago de GoCardless, 0 movimientos de antes del inicio, día de inicio 01/11/2026 (por los ejercicios), la 57200000 sin banco. 1241 deshace, junta, enlaza y recalcula; sin vuelta atrás, con lo esperado en aplicar.txt. El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
  "medido": "2026-11-26T17:45Z",
  "tanda": {
-  "supabase/migrations/20261126T1241_k14b_qbo_un_banco.sql": "fa4be615ed64d600b0f0144f54f0a137"
+  "supabase/migrations/20261126T1241_k14b_qbo_un_banco.sql": "38e093fc5dc5b6b3730dce360378a8d1"
  },
  "contexto": {
   "tablas": [
