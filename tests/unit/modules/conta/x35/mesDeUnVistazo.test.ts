@@ -80,11 +80,13 @@ describe('lo que no se puede calcular no sale', () => {
   })
   it('un mes anterior facturado fuera de Sumied no tiene «Por facturar»', () => {
     const m = mesDeUnVistazo(entrada({ mes: '2026-10', mandadas: 0 }))
-    expect(m.cifras.map((c) => c.id)).toEqual(['cobrado'])
+    expect(m.cifras.map((c) => c.id)).toEqual(['cobrado', 'teDeben'])
     expect(m.frase).toBe('Se hizo en Cegid, antes de Sumied')
   })
-  it('«Te deben» es a hoy: solo en el mes actual', () => {
-    expect(mesDeUnVistazo(entrada({ mes: '2026-10' })).cifras.some((c) => c.id === 'teDeben')).toBe(false)
+  it('X35d · «Te deben» es lo del mes elegido: solo sus recibos sin cobrar', () => {
+    const oct = mesDeUnVistazo(entrada({ mes: '2026-10' })).cifras.find((c) => c.id === 'teDeben')!
+    const nov = mesDeUnVistazo(entrada()).cifras.find((c) => c.id === 'teDeben')!
+    expect([oct.titulo, oct.lista.totalCent, nov.titulo, nov.lista.totalCent]).toEqual(['Te deben de octubre', 0, 'Te deben de noviembre', 12100])
   })
 })
 
@@ -98,7 +100,7 @@ describe('«Lo que hay que resolver»', () => {
     // 60,50 (101) + 121,00 (102) de GoCardless + 200,00 del banco (104): el 103 falló y el PM3 no tiene cliente.
     expect(mandar.lista.totalCent).toBe(38150)
     expect(m.asuntos.find((a) => a.id === 'decidir')!.lista.totalCent).toBe(4550)
-    expect(m.asuntos.find((a) => a.id === 'reclamar')!.lista.totalCent).toBe(18150)
+    expect(m.asuntos.find((a) => a.id === 'reclamar')!.lista.totalCent).toBe(12100)
   })
 })
 

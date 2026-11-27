@@ -179,20 +179,23 @@ export function mesDeUnVistazo(e: EntradaMes): MesDeUnVistazo {
     if (decidir.filas.length) asuntos.push(asunto('decidir', 'Revisar', 'Cobros del banco por decidir', `Paga una factura, se factura o no es un cobro · ${plural(decidir.filas.length, 'cobro', 'cobros')}`, decidir, 'facturasDelMes'))
   } else faltan.push(`Por facturar en ${nombreDelMes(e.mes)}: falta lo leído de Cegid o lo cobrado por el banco.`)
 
-  // «Te deben» es a hoy: sale en el mes actual.
+  // X35d · «Te deben» es lo del mes elegido: los recibos de ese mes que GoCardless no cobró y el banco tampoco (a hoy).
+  // Lo de todos los meses junto sale aparte, en «Recibos sin cobrar desde hace más de 90 días» (solo en el mes actual).
   let teDeben: Lista | null = null
-  if (cual === 'actual') {
-    if (!e.noCobrado) faltan.push('Te deben: no se ha podido leer lo que GoCardless no cobró.')
-    else if (!e.noCobrado.cruzado) faltan.push(`Te deben: falta cruzar con el banco ${e.noCobrado.faltanPorCruzar.join(', ') || 'alguna empresa'}; hasta entonces, lo que GoCardless no cobró no es aún deuda.`)
-    else {
-      teDeben = e.noCobrado.lista
-      cifras.push({ id: 'teDeben', titulo: 'Te deben', valor: euros(teDeben.totalCent), tono: teDeben.totalCent ? 'aviso' : 'bien', lista: teDeben,
-        fuente: `${plural(e.noCobrado.recibos, 'recibo', 'recibos')} de ${plural(e.noCobrado.clientes, 'cliente', 'clientes')} · GoCardless no lo cobró y el banco tampoco` })
-      if (teDeben.filas.length) asuntos.push(asunto('reclamar', 'Cobrar', 'Reclamar a quien no ha pagado', `${plural(e.noCobrado.clientes, 'cliente', 'clientes')} · ${plural(e.noCobrado.recibos, 'recibo', 'recibos')}`, teDeben, 'clientes'))
+  if (!e.noCobrado) faltan.push('Te deben: no se ha podido leer lo que GoCardless no cobró.')
+  else if (!e.noCobrado.cruzado) faltan.push(`Te deben: falta cruzar con el banco ${e.noCobrado.faltanPorCruzar.join(', ') || 'alguna empresa'}; hasta entonces, lo que GoCardless no cobró no es aún deuda.`)
+  else {
+    const mesTexto = nombreDelMes(e.mes)
+    teDeben = lista(`Te deben de ${mesTexto}`, e.noCobrado.lista.filas.filter((f) => (f.fecha ?? '').slice(0, 7) === e.mes))
+    const clientesMes = new Set(teDeben.filas.map((f) => f.fichaId ?? f.texto)).size
+    cifras.push({ id: 'teDeben', titulo: `Te deben de ${mesTexto}`, valor: euros(teDeben.totalCent), tono: teDeben.totalCent ? 'aviso' : 'bien', lista: teDeben,
+      fuente: `${plural(teDeben.filas.length, 'recibo', 'recibos')} de ${plural(clientesMes, 'cliente', 'clientes')} de ${mesTexto} · GoCardless no lo cobró y el banco tampoco` })
+    if (teDeben.filas.length) asuntos.push(asunto('reclamar', 'Cobrar', `Reclamar a quien no ha pagado ${mesTexto}`, `${plural(clientesMes, 'cliente', 'clientes')} · ${plural(teDeben.filas.length, 'recibo', 'recibos')}`, teDeben, 'clientes'))
+    if (cual === 'actual') {
       const viejos = e.noCobrado.tramos.find((t) => t.texto === 'Más de 90 días')?.lista
-      if (viejos?.filas.length) asuntos.push({ ...asunto('viejos', 'Urgente', 'Recibos sin cobrar desde hace más de 90 días', `${plural(new Set(viejos.filas.map((f) => f.fichaId ?? f.id)).size, 'cliente', 'clientes')} · está dentro de «Te deben»`, viejos, 'clientes') })
-      // X35c · Los abonos del TPV sin detalle son de desde mayo, no de este mes: van en «Dónde se te escapa el dinero», no aquí.
+      if (viejos?.filas.length) asuntos.push({ ...asunto('viejos', 'Urgente', 'Recibos sin cobrar desde hace más de 90 días', `${plural(new Set(viejos.filas.map((f) => f.fichaId ?? f.id)).size, 'cliente', 'clientes')} · de todos los meses`, viejos, 'clientes') })
     }
+    // X35c · Los abonos del TPV sin detalle son de desde mayo, no de este mes: van en «Dónde se te escapa el dinero», no aquí.
   }
 
   const comprobado = e.cuadre ? e.cuadre.cuadra : false
@@ -201,7 +204,7 @@ export function mesDeUnVistazo(e: EntradaMes): MesDeUnVistazo {
     : [
       { nombre: 'Cobrar', estado: cobrado && cobrado.totalCent > 0 ? 'hecho' : cual === 'actual' ? 'falta' : 'luego' },
       { nombre: 'Facturar', estado: !porFacturar ? 'luego' : porFacturar.filas.length || asuntos.some((a) => a.id === 'sinFacturar' || a.id === 'decidir') ? 'falta' : 'hecho' },
-      { nombre: 'Reclamar', estado: cual !== 'actual' ? 'luego' : teDeben === null ? 'luego' : teDeben.filas.length ? 'falta' : 'hecho' },
+      { nombre: 'Reclamar', estado: teDeben === null ? 'luego' : teDeben.filas.length ? 'falta' : 'hecho' },
       { nombre: 'Comprobar', estado: comprobado ? 'hecho' : 'luego' },
       { nombre: 'Contabilizar', estado: 'luego' },
     ]
