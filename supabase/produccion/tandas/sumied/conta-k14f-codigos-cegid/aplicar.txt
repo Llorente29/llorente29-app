@@ -1,0 +1,11 @@
+# K14f · 6 fichas de QBO atadas a su cliente de Cegid (725, 1006, 1259, 818, 1271, 1272), Julio, 27/11.
+# Rama conta/k14f-codigos-cegid. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0823  Ata 6 fichas a su código de Cegid por _conta_cegid_atar (conta_cobro_cliente, con su apunte en
+#         conta_cegid_atado), como la K14e. Comprobado antes en Cegid, solo leyendo, por NIF. Consorcio K (1266) no se
+#         toca. Para si una ficha ya tiene código o un código ya es de otra. Lleva AUTORIZO (cambia filas que existen).
+#         No manda nada a Cegid.
+#
+# Nada en el camino del pedido. Lo cuenta k14f-codigos-cegid.sql (regla 31). El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k14f-codigos-cegid.sql
+supabase/migrations/20261127T0823_k14f_codigos_cegid.sql

@@ -1,0 +1,16 @@
+{
+ "_que": "K14f · Los códigos de Cegid de 6 fichas de QBO · contexto medido en producción en SOLO LECTURA (las 6 fichas sin código, 3 con su fila en conta_cobro_cliente; los 6 códigos de nadie; Consorcio K con el 1266; en Cegid, GetCustomer de los 7 con el NIF de su ficha) y en la base local con la estructura de staging. 0823 cambia filas que existen (y crea 3 de conta_cobro_cliente). El contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-27T07:24Z",
+ "tanda": {
+  "supabase/migrations/20261127T0823_k14f_codigos_cegid.sql": "adc4bf30c5529d9de623ea2da4b2d75b"
+ },
+ "contexto": {
+  "tablas": ["public.conta_cobro_cliente", "public.conta_cegid_atado"],
+  "funciones": ["public._conta_cegid_atar(uuid,uuid,integer,text,text)"],
+  "filas": {"public.conta_cobro_cliente": 1005, "public.conta_cegid_atado": 24},
+  "otras": {},
+  "camino": { "tablas": [], "funciones": [] },
+  "usos": {},
+  "registro": []
+ }
+}
