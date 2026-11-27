@@ -1,0 +1,4 @@
+# Q10 · respuesta 9 · las 3 decisiones de QBO (1126). Su prueba (ROLLBACK): dos veces sin la empresa de QBO no hace nada,
+# y su vuelta atrás no toca otras decisiones.
+supabase/migrations/20261127T1126_q10k_decisiones_qbo.sql
+supabase/staging/sql/20261127_q10k_decisiones_qbo_prueba.sql

@@ -1,0 +1,23 @@
+{
+ "_que": "Q10 · respuesta 9 · contexto de producción de la tanda (1126), medido en SOLO LECTURA el 27/11 a las 11:28Z: existe conta_banco_decision (7 filas: las de la 0731 y la 0905; ninguna de los 3 cobros); _q10k es una tabla temporal (on commit drop) y no existe; nada en el camino del pedido y nada en el historial. Aparte, el mismo día: los 3 cobros, con su fecha, su importe y su estado.",
+ "medido": "2026-11-27T11:28Z",
+ "tanda": {
+  "supabase/migrations/20261127T1126_q10k_decisiones_qbo.sql": "cbed6206da20519453dcf882418735bb"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_banco_decision"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_banco_decision": 7
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

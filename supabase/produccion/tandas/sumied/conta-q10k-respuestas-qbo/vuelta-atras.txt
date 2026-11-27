@@ -1,0 +1,3 @@
+# Q10 · respuesta 9 · vuelta atrás: las 3 decisiones de la 1126 (solo las suyas, y si ninguna está mandada).
+cuenta: scripts/conta/produccion/cuentas/q10k-respuestas-qbo.sql
+supabase/vuelta-atras/20261127T1126_q10k_decisiones_qbo.down.sql
