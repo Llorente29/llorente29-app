@@ -56,6 +56,8 @@ export interface PropsFacturarMes {
   comprobar: { frase: Frase | null; faltan: readonly { cliente: number; nombre: string | null; serie: string; totalCent: number }[] | null; alPulsar: () => void }
   pendientes: readonly PendienteVista[]
   alResolverPendiente: (clave: string) => void
+  /** R21e · El mes aún no tiene cobros: lo que GoCardless tiene previsto, en una frase. Con él, abre en el paso 1. */
+  sinCobros?: string | null
 }
 
 const TITULOS = ['Preparar el mes', 'Resolver lo pendiente', 'Mandar a Cegid', 'Precalcular en Cegid y pedir el visto bueno', 'Generar las facturas']
@@ -80,7 +82,9 @@ export function FacturarMes(p: PropsFacturarMes) {
   // R21d · «Empezar desde el paso 1»: recorrer los pasos ya hechos, uno a uno, con sus cifras de verdad, hasta el paso en
   // el que está el mes. No deshace nada: lo hecho sigue hecho, y el paso de no retorno (generar en Cegid) no se repasa.
   const [repaso, setRepaso] = useState<number | null>(null)
-  const real = p.pasos
+  const real: typeof p.pasos = p.sinCobros
+    ? { ...p.pasos, actual: 1, pasos: p.pasos.pasos.map((x) => ({ ...x, hecho: false, activo: x.numero === 1, resultado: null })) }
+    : p.pasos
   const hastaDonde = Math.min(real.actual, 5)
   const enRepaso = repaso !== null && repaso < hastaDonde
   const pasos = enRepaso
@@ -91,7 +95,7 @@ export function FacturarMes(p: PropsFacturarMes) {
   const nombreMes = mesLargo(p.mes).split(' de ')[0].toLowerCase()
   const mesNum = Number(p.mes.slice(5, 7))
   const anio = p.mes.slice(0, 4)
-  const quedan = p.pasos.porResolver
+  const quedan = real.porResolver
   const ocupado = p.ocupado !== null
 
   const tarjeta = (c: CasoVista) => {
@@ -265,6 +269,8 @@ export function FacturarMes(p: PropsFacturarMes) {
         </label>
       </div>
       <p className="r21-intro">Sigue los pasos en orden. Cada paso tiene un solo botón. Mientras un paso no esté hecho, el siguiente no se abre. <strong>Solo se factura lo cobrado.</strong></p>
+
+      {p.sinCobros && <div className="r21-frase" data-tono="bien" data-prueba="sin-cobros">{p.sinCobros}</div>}
 
       {hastaDonde > 1 && (
         <div className="r21-botones" data-prueba="empezar">

@@ -55,4 +55,14 @@ describe('R21 · la pantalla', () => {
     expect(h).toContain('Dejar el 1 para después y seguir')
     for (const jerga of ['incidencia', 'decisión', 'conta_', 'Julio']) expect(h).not.toContain(jerga)
   })
+  it('R21e · un mes aún sin cobros: dice lo que GoCardless tiene previsto y abre en el paso 1, sin pasos hechos', () => {
+    const vacio = cuadreDelMes('2026-12', { cobradoCent: 0, noEsCobroCent: 0, mandadoCent: 0, pagaFacturasCent: 0 }, [])
+    const pasos = pasosDelMes({ preparado: { cobradoCent: 0, listos: 0, casos: 0 }, casos: [], cuadre: vacio, porMandar: 0, mandados: 0, paso4: null, vistoBueno: null, paso5: null })
+    const h = renderToStaticMarkup(<FacturarMes {...props({ mes: '2026-12', pasos, cuadre: vacio, serie1: null, serie3: null,
+      sinCobros: 'Diciembre aún no tiene cobros. GoCardless tiene previsto cobrar 250,00 € en 3 cargos, el primero el 01/12. Cuando cobre, empieza por el paso 1.' })} />)
+    expect(h).toContain('GoCardless tiene previsto cobrar 250,00 € en 3 cargos')
+    expect(h).toContain('Paso 1 de 5')
+    expect(h).not.toContain('data-hecho="si"')
+    expect(h).not.toContain('Empezar desde el paso 1')
+  })
 })
