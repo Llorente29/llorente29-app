@@ -194,7 +194,7 @@ export function fraseDeLasSeries(c: Clasificadas): string {
 // ── La comprobación de ERP10: lo leído contra su resumen ─────────────────────────────
 
 export interface ContraElResumen {
-  /** Todo da lo mismo, mes a mes y tipo a tipo. */
+  /** El total de líneas de cada mes da lo mismo (X14l: el reparto por tipo no cuenta). */
   cuadra: boolean
   /** Lo que no da lo mismo, una frase por mes, con las dos cifras. */
   frases: string[]
@@ -206,8 +206,11 @@ export interface ContraElResumen {
 }
 
 /**
- * Lo leído, contado por mes y por tipo (el TipoAsiento de cada asiento), contra el resumen de ERP10
- * (sus líneas por mes y tipo de introducción). Solo los meses leídos enteros.
+ * Lo leído, contado por mes, contra el resumen de ERP10 (sus líneas por mes). Solo los meses leídos enteros.
+ * X14l (Julio, 27/11): se compara el TOTAL de líneas de cada mes. El tipo de asiento que se lee de cada asiento
+ * (TipoAsiento) no usa los mismos códigos que el «tipo de introducción» del resumen (medido en el 2025 de QBO: enero,
+ * 1.743 líneas en los dos, repartidas de otra forma), así que el reparto por tipo no es una diferencia: va solo como
+ * detalle en la frase de un mes cuyo total no cuadra. La prueba de verdad sigue siendo el sumas y saldos, cuenta a cuenta.
  */
 export function contraElResumen(apuntes: readonly ApunteT[], resumen: readonly ResumenT[], meses: readonly string[]): ContraElResumen {
   const clave = (mes: string, tipo: number | null) => `${mes}|${tipo ?? '—'}`
@@ -228,15 +231,15 @@ export function contraElResumen(apuntes: readonly ApunteT[], resumen: readonly R
   let lineasErp10 = 0, lineasTraidas = 0
   for (const m of [...meses].sort()) {
     const tipos = new Set([...leido.keys(), ...deErp.keys()].filter((k) => k.startsWith(`${m}|`)).map((k) => k.split('|')[1]))
-    const distintos: string[] = []
+    const detalle: string[] = []
     let e = 0, t = 0
     for (const tipo of [...tipos].sort()) {
       const x = deErp.get(`${m}|${tipo}`) ?? 0, y = leido.get(`${m}|${tipo}`) ?? 0
       e += x; t += y
-      if (x !== y) distintos.push(`${nombres.has(tipo) ? `«${nombres.get(tipo)}»` : `el tipo ${tipo}`}: ERP10 cuenta ${cuantos(x, 'línea', 'líneas')} y se han traído ${n(y)}`)
+      if (x !== y) detalle.push(`${nombres.has(tipo) ? `«${nombres.get(tipo)}»` : `el tipo ${tipo}`}: ERP10 cuenta ${cuantos(x, 'línea', 'líneas')} y se han traído ${n(y)}`)
     }
     lineasErp10 += e; lineasTraidas += t
-    if (distintos.length) frases.push(`En ${mesDeGente(m)} lo traído no da lo mismo que el resumen de ERP10 (${e === t ? `en total, ${cuantos(e, 'línea', 'líneas')} en los dos` : `en total, ERP10 cuenta ${cuantos(e, 'línea', 'líneas')} y se han traído ${n(t)}`}). Por tipo, ${distintos.join('; ')}.`)
+    if (e !== t) frases.push(`En ${mesDeGente(m)} lo traído no da lo mismo que el resumen de ERP10: ERP10 cuenta ${cuantos(e, 'línea', 'líneas')} y se han traído ${n(t)}.${detalle.length ? ` Por tipo (solo de detalle: los tipos de ERP10 no son los mismos códigos), ${detalle.join('; ')}.` : ''}`)
   }
   const cuadra = frases.length === 0
   return {

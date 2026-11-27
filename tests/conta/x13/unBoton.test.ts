@@ -134,7 +134,7 @@ describe('al acabar', () => {
     expect(pastillaUnBoton(e)).toEqual({ texto: 'No cuadra con ERP10', tono: 'ambar' })
     const diario = filasUnBoton(e).find((f) => f.tipo === 'diario')!
     expect(diario).toMatchObject({ icono: 'mira', linea: '1 mes no da lo mismo que ERP10' })
-    expect(diario.verlos?.lista[0]).toMatch(/^En (enero|febrero|marzo) de 2026 lo traído no da lo mismo que el resumen de ERP10 \(en total, ERP10 cuenta \d+ líneas y se han traído \d+\)\./)
+    expect(diario.verlos?.lista[0]).toMatch(/^En (enero|febrero|marzo) de 2026 lo traído no da lo mismo que el resumen de ERP10: ERP10 cuenta \d+ líneas y se han traído \d+\./)
     const d = confirmarDarlo(e)
     expect(d).toMatchObject({ boton: 'Darlo por bueno igual', puede: true })
     expect(d.texto).toContain('Lo leído no da lo mismo que el resumen de ERP10: En ')

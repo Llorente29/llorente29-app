@@ -131,8 +131,9 @@ for (const tam of TAMANOS) {
       await expect(traerlo).toBeVisible({ timeout: 30_000 })
       const elegir = page.getByRole('button', { name: 'Elegir ficheros' })
       expect((await traerlo.getAttribute('class')), 'el mismo peso que «Elegir ficheros»').toBe(await elegir.getAttribute('class'))
-      // El de la pantalla de Traer: la cabecera de Sumied lleva otro «Ejercicio» (e2e 44706072179).
-      await expect(page.getByRole('region', { name: 'Traer de ERP10' }).getByRole('combobox', { name: 'Ejercicio' })).toHaveValue('2026')
+      // X14j · Un solo selector de año, el de la cabecera de Sumied: la pantalla de Traer solo dice cuál es.
+      await expect(page.getByTestId('traer-ejercicio')).toHaveText('Ejercicio 2026')
+      await expect(page.getByRole('region', { name: 'Traer de ERP10' }).getByRole('combobox', { name: 'Ejercicio' })).toHaveCount(0)
       await traerlo.click()
 
       // 2 · Mientras lee, cada fila dice por dónde va.
