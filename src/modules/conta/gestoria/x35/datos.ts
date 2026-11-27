@@ -18,6 +18,8 @@ import { codigosDelMes, cobrosParaMandar, planesDelBanco, VIVAS, type DatosQ10, 
 import { leerClientes } from '../g04/datos'
 import { modeloClientes, type Empresa } from '../g04/modelo'
 import type { EntradaMes } from './modelo'
+import { tabla } from '@/modules/conta/services/bd'
+import type { CobroGc } from './escapa'
 
 export interface LoDelMes {
   d: DatosQ10
@@ -80,4 +82,20 @@ export function entradaDelMes(mes: string, hoy: string, empresa: { id: string; n
       noCobrado: cuenta?.noCobrado ?? null, cuotas: cuenta?.cuotas ?? null, nombreCegid: pc.nombreCegid,
     },
   }
+}
+
+/** PR 2 · Los recibos de GoCardless de los seis meses de la gráfica (las mismas columnas que lee «Facturas del mes»). */
+export async function leerCobrosGc(empresa: string, desde: string, hasta: string): Promise<CobroGc[]> {
+  const filas: Record<string, unknown>[] = []
+  for (let a = 0; ; a += 1000) {
+    const { data, error } = await tabla('conta_gc_cobro').select('gc_id, estado, fecha, importe, suscripcion_gc_id').eq('company_id', empresa)
+      .gte('fecha', desde).lte('fecha', hasta).order('gc_id').range(a, a + 999)
+    if (error) throw new Error(`No se han podido leer los cobros de GoCardless: ${error.message}`)
+    filas.push(...((data ?? []) as Record<string, unknown>[]))
+    if ((data ?? []).length < 1000) break
+  }
+  const { data: sus } = await tabla('conta_gc_suscripcion').select('gc_id, nombre').eq('company_id', empresa)
+  const nombre = new Map(((sus ?? []) as Record<string, unknown>[]).map((x) => [String(x.gc_id), x.nombre == null ? null : String(x.nombre)]))
+  return filas.map((x) => ({ gcId: String(x.gc_id), estado: String(x.estado), fecha: String(x.fecha), importe: Number(x.importe ?? 0),
+    nombre: x.suscripcion_gc_id ? nombre.get(String(x.suscripcion_gc_id)) ?? null : null }))
 }

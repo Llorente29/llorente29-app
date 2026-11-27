@@ -17,7 +17,8 @@ import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { horaEnMadrid, primerNombre, saludo } from '@/modules/conta/lib/inicio'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { euros } from '../../../../../supabase/functions/_shared/tarifa/cifras'
-import { entradaDelMes, leerLoDeLaCuenta, leerLoDelMes } from './datos'
+import { entradaDelMes, leerCobrosGc, leerLoDeLaCuenta, leerLoDelMes } from './datos'
+import { dondeSeEscapa, grafica, seisMeses } from './escapa'
 import { mesDe, mesDeUnVistazo, tituloDelMes, type Asunto, type Cifra, type EstadoPaso, type MesDeUnVistazo } from './modelo'
 
 const C = { tinta: '#14202e', suave: '#5b6878', fondo: '#f4f6f9', banda: '#0f1b2d', bandaCaja: '#17263b', bandaSuave: '#9fb0c5', bandaTexto: '#c6d0dc',
@@ -44,6 +45,8 @@ export function ElMesDeUnVistazo() {
   const listo = !cargando && accountId && activa
   const lasEmpresas = empresas.map((e) => ({ id: e.id, nombre: e.nombre }))
   const cuenta = useLeer(listo ? () => leerLoDeLaCuenta(accountId, lasEmpresas, activa.id, hoy) : null, `${accountId}:${activa?.id}:x35-cuenta`)
+  const seis = seisMeses(hoy)
+  const cobros6 = useLeer(listo ? () => leerCobrosGc(activa.id, `${seis[0]}-01`, hoy) : null, `${activa?.id}:${seis[0]}:x35-seis`)
   const delMes = useLeer(listo && mes <= actual ? () => leerLoDelMes(accountId, activa.id, mes) : null, `${accountId}:${activa?.id}:${mes}:x35-mes`)
 
   const m: MesDeUnVistazo | null = !activa || (mes <= actual && !delMes.datos && !delMes.error) ? null
@@ -56,6 +59,8 @@ export function ElMesDeUnVistazo() {
   const fallos = [...(delMes.datos?.fallos ?? []).map((f) => `No se ha podido leer ${f}.`), ...(delMes.error ? [`No se han podido leer los cobros del mes: ${delMes.error}`] : []),
     ...(cuenta.error ? [`No se ha podido leer «Te deben» ni el próximo cobro: ${cuenta.error}`] : [])]
   const leido = cuenta.datos?.leidoAt ?? null
+  // PR 2 · La gráfica y «Dónde se te escapa el dinero» salen de «Te deben»: solo si es fiable (cruzado con el banco).
+  const nc = cuenta.datos?.noCobrado?.cruzado ? cuenta.datos.noCobrado : null
   const nombre = primerNombre(userName)
 
   return (
@@ -116,8 +121,9 @@ export function ElMesDeUnVistazo() {
             </div>
           </section>
 
-          <section aria-labelledby="x35-resolver" style={{ background: '#fff', border: `1px solid ${C.borde}`, borderRadius: 16, padding: '20px 22px' }}>
-            <h2 id="x35-resolver" style={{ margin: '0 0 6px', fontSize: 18 }}>Lo que hay que resolver</h2>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'stretch' }}>
+          <section aria-labelledby="x35-resolver" style={{ flex: '1 1 440px', minWidth: 0, background: '#fff', border: `1px solid ${C.borde}`, borderRadius: 16, padding: '20px 22px' }}>
+            <h2 id="x35-resolver" style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 700 }}>Lo que hay que resolver</h2>
             <p style={{ margin: '0 0 8px', fontSize: 13, color: C.suave }}>{m.asuntos.length ? 'Primero lo que más dinero mueve' : 'Nada que resolver en este mes.'}</p>
             <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
               {m.asuntos.map((i) => (
@@ -136,6 +142,61 @@ export function ElMesDeUnVistazo() {
               ))}
             </ul>
           </section>
+          {nc && cobros6.datos && (() => {
+            const g = grafica(hoy, cobros6.datos, nc)
+            const tope = Math.max(1, ...g.map((x) => x.cobrado.totalCent + x.sinCobrar.totalCent))
+            return (
+              <section aria-labelledby="x35-grafica" style={{ flex: '1 1 440px', minWidth: 0, background: '#fff', border: `1px solid ${C.borde}`, borderRadius: 16, padding: '20px 22px' }} data-testid="x35-grafica">
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, alignItems: 'baseline' }}>
+                  <h2 id="x35-grafica" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Cobrado y sin cobrar</h2>
+                  <span style={{ fontSize: 12, color: C.suave }}><span aria-hidden="true" style={{ display: 'inline-block', width: 10, height: 10, background: C.azul, borderRadius: 2 }} /> cobrado <span aria-hidden="true" style={{ display: 'inline-block', width: 10, height: 10, background: '#e8833a', borderRadius: 2, marginLeft: 10 }} /> sin cobrar</span>
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: C.suave }}>Recibos de GoCardless de cada mes · encima, el % que sigue sin cobrar</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 14, alignItems: 'end', height: 190, marginTop: 14, borderBottom: `1px solid ${C.borde}` }}>
+                  {g.map((x) => (
+                    <button key={x.mes} type="button" data-testid={`x35-mes-${x.mes}`} aria-label={`${x.nombre}: cobrado ${euros(x.cobrado.totalCent)}, sin cobrar ${euros(x.sinCobrar.totalCent)} (${x.pct})`}
+                      onClick={() => setAbierta({ titulo: `Sin cobrar de ${x.nombre}`, fuente: `Cobrado por GoCardless: ${euros(x.cobrado.totalCent)} · sin cobrar: ${x.pct}`, cifra: euros(x.sinCobrar.totalCent), lista: x.sinCobrar, ir: { texto: 'Ir a Clientes', ruta: rutaClientesCuotas() } })}
+                      style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%', gap: 2, border: 0, background: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <span style={{ fontSize: 12, color: '#b45309', fontWeight: 700, textAlign: 'center' }}>{x.pct}</span>
+                      <span style={{ display: 'block', background: '#e8833a', borderRadius: '4px 4px 0 0', height: Math.round((x.sinCobrar.totalCent / tope) * 150) }} />
+                      <span style={{ display: 'block', background: C.azul, borderRadius: '0 0 4px 4px', height: Math.round((x.cobrado.totalCent / tope) * 150) }} />
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 14, marginTop: 6 }}>
+                  {g.map((x) => <span key={x.mes} style={{ textAlign: 'center', fontSize: 12, ...(x.mes === actual ? { fontWeight: 700, color: C.tinta } : { color: C.suave }) }}>{x.nombre}</span>)}
+                </div>
+                <p style={{ margin: '12px 0 0', fontSize: 12, color: C.suave, lineHeight: 1.45 }}>Sin cobrar: lo que GoCardless no cobró y el banco tampoco (cruzado con sus transferencias), por el mes de cada recibo. Pulsa un mes para ver quién.</p>
+              </section>
+            )
+          })()}
+          </div>
+
+          {nc && (() => {
+            const d = dondeSeEscapa(nc)
+            const FONDO = { bien: ['#e9f6ef', '#1f7a4d', '#24543b'], mal: ['#fdecec', '#a12a2a', '#5b3030'], neutro: ['#eef1f5', C.tinta, '#3d4a5a'] } as const
+            return (
+              <section aria-labelledby="x35-escapa" style={{ background: '#fff', border: `1px solid ${C.borde}`, borderRadius: 16, padding: '20px 22px' }} data-testid="x35-escapa">
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, alignItems: 'baseline' }}>
+                  <h2 id="x35-escapa" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Dónde se te escapa el dinero</h2>
+                  <Link to={rutaClientesCuotas()} style={{ fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>Ver los impagados ›</Link>
+                </div>
+                <p style={{ margin: '4px 0 14px', fontSize: 13, color: C.suave }}>{d.frase}</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 12 }}>
+                  {d.tarjetas.map((t) => (
+                    <button key={t.id} type="button" data-testid={`x35-escapa-${t.id}`} onClick={() => setAbierta({ titulo: t.titulo, fuente: t.texto, cifra: t.cifra, lista: t.lista, ir: null })}
+                      style={{ background: FONDO[t.tono][0], borderRadius: 14, padding: '16px 18px', border: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', color: C.tinta }}>
+                      <span style={{ display: 'block', fontSize: 30, fontWeight: 800, color: FONDO[t.tono][1], letterSpacing: '-.5px' }}>{t.cifra}</span>
+                      <span style={{ display: 'block', margin: '2px 0 0', fontSize: 14, fontWeight: 700 }}>{t.titulo}</span>
+                      <span style={{ display: 'block', margin: '6px 0 0', fontSize: 13, color: FONDO[t.tono][2], lineHeight: 1.4 }}>{t.texto}</span>
+                    </button>
+                  ))}
+                </div>
+                {d.nota && <p style={{ margin: '12px 0 0', fontSize: 12, color: C.suave }}>{d.nota}</p>}
+              </section>
+            )
+          })()}
+
 
           {(m.faltan.length > 0 || fallos.length > 0) && (
             <section aria-label="Lo que no sale" style={{ fontSize: 13, color: C.suave, lineHeight: 1.5 }} data-testid="x35-faltan">

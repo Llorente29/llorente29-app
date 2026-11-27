@@ -91,6 +91,20 @@ for (const [ancho, alto] of [[1366, 768], [1920, 1080]] as const) {
     await expect(page.getByRole('dialog').getByRole('link', { name: 'Ir a Revisar el cobro ›' })).toBeVisible()
     await page.keyboard.press('Escape')
 
+    // PR 2 · «Cobrado y sin cobrar» (seis meses) y «Dónde se te escapa el dinero», cada uno con su lista.
+    const grafica = page.getByTestId('x35-grafica')
+    await expect(grafica.locator('[data-testid^="x35-mes-"]')).toHaveCount(6)
+    await grafica.getByTestId(`x35-mes-${MES}`).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.keyboard.press('Escape')
+    const escapa = page.getByTestId('x35-escapa')
+    await expect(escapa.getByTestId('x35-escapa-pagadoDespues').locator('span').first()).toHaveText('108,90 €')
+    expect(await abrirYSumar(page, escapa.getByTestId('x35-escapa-pagadoDespues'), '108,90 €')).toBe(1)
+    await expect(escapa.getByTestId('x35-escapa-tarjeta').locator('span').first()).toHaveText('320,28 €')
+    expect(await abrirYSumar(page, escapa.getByTestId('x35-escapa-tarjeta'), '320,28 €')).toBe(2)
+    await escapa.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: `${DIR}/escapa-${ancho}.png`, fullPage: true })
+
     // 3. Cobrado, igual que el cuadre de «Facturas del mes», al céntimo.
     await page.goto(`/conta/ventas/clientes-y-cuotas/facturas?empresa=${Q}&mes=${MES}`, { timeout: 30_000 })
     const bancoQ10 = page.locator('[data-prueba="banco"]')

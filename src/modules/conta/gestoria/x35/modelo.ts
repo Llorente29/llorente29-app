@@ -160,7 +160,8 @@ export function mesDeUnVistazo(e: EntradaMes): MesDeUnVistazo {
   let cobrado: Lista | null = null
   if (e.cuadre) {
     cobrado = listaCobrado(e.cuadre, e.mes)
-    const vias = e.cuadre.vias.map((v) => v.via.toLowerCase()).join(', ').replace(/, ([^,]*)$/, ' y $1')
+    const VIA: Record<string, string> = { GoCardless: 'GoCardless', Banco: 'el banco', Tarjeta: 'la tarjeta' }
+    const vias = e.cuadre.vias.map((v) => VIA[v.via] ?? v.via).join(', ').replace(/, ([^,]*)$/, ' y $1')
     cifras.push({ id: 'cobrado', titulo: 'Cobrado', valor: euros(cobrado.totalCent), tono: 'bien', lista: cobrado,
       fuente: `Por ${vias || 'GoCardless'} · el mismo de «Facturas del mes»` })
   } else faltan.push(`Cobrado en ${nombreDelMes(e.mes)}: no se ha podido leer lo cobrado por el banco y con tarjeta (o lo leído de Cegid). Se calcula en «Facturas del mes».`)
