@@ -1,0 +1,20 @@
+[
+ {
+  "id": "848-1",
+  "pr": 848,
+  "fecha": "2026-11-27T21:31:26Z",
+  "producto": "sumied",
+  "apartado": "Clientes y cuotas › Inicio",
+  "frase": "«Cobrado y sin cobrar», los últimos seis meses: lo que cobró GoCardless y lo que sigue sin cobrar, con su %; cada mes se abre en su lista.",
+  "ruta": null
+ },
+ {
+  "id": "848-2",
+  "pr": 848,
+  "fecha": "2026-11-27T21:31:26Z",
+  "producto": "sumied",
+  "apartado": "Clientes y cuotas › Inicio",
+  "frase": "«Dónde se te escapa el dinero»: lo pagado después por transferencia, lo que lleva más de 90 días sin pagar y lo cobrado con tarjeta sin saber de quién, cada uno con su lista.",
+  "ruta": null
+ }
+]
