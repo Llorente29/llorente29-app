@@ -21,15 +21,15 @@ import { atarFichaCegid, decidirBancoCegid, elegirConceptoCegid, leerBancoCegid,
 import { leerGocardless } from '@/modules/conta/services/gestoriaService'
 import { cuotasSinHasta, planMandar, proponerAtado, type CobroParaMandar } from '../../../../../supabase/functions/_shared/cegidMandar'
 import { cuadreVias, esCobroDeCliente, planCobro } from '../../../../../supabase/functions/_shared/cegidBanco'
-import { casosDelMes, cuadreDelMes, euros, pasoCinco, pasoCuatro, pasosDelMes, type MandadoCegid, type PendienteGuardado, type VistoBueno } from '../../../../../supabase/functions/_shared/factura/facturarMes'
+import { casosDelMes, cuadreDelMes, pasoCinco, pasoCuatro, pasosDelMes, type MandadoCegid, type PendienteGuardado } from '../../../../../supabase/functions/_shared/factura/facturarMes'
 import { facturasDelMes } from '../q10/facturasDelMes'
 import { leerFacturasDelMes } from '../q10/datos'
 import { codigosCegid } from '../q10/equivalencias'
 import { armarCasos, CONCEPTOS, mesesDelSelector, type Accion } from './armar'
+import { darVistoBueno, dejarParaDespues, deshacerPendiente, leerPendientes, leerResueltosEnElMes, leerVistoBueno, resolverPendiente } from './datos'
 import { FacturarMes, type CasoVista, type Frase } from './FacturarMes'
 
 const VIVAS = ['mandando', 'mandada', 'facturada']
-const NO_SE_GUARDA = 'Aún no se guarda: si vuelves a abrir la pantalla, vuelve a salir.'
 const hora = () => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' }).format(new Date())
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -49,16 +49,18 @@ export function FacturarMesPage() {
   const cg = useLeer(listo ? () => leerGuardadoCegid(empresa.id, anio) : null, `${empresa?.id}:${anio}:r21-cegid`)
   const md = useLeer(listo ? () => leerMandadoCegid(empresa.id, mes) : null, `${empresa?.id}:${mes}:r21-mandado`)
   const bk = useLeer(listo ? () => leerBancoCegid(empresa.id, mes) : null, `${empresa?.id}:${mes}:r21-banco`)
+  // R21 · la 1826: lo dejado para después (de todos los meses), lo de antes resuelto este mes y el visto bueno de QBO.
+  const pd = useLeer(listo ? () => leerPendientes(empresa.id) : null, `${empresa?.id}:r21-pendientes`)
+  const rs = useLeer(listo ? () => leerResueltosEnElMes(empresa.id, mes) : null, `${empresa?.id}:${mes}:r21-resueltos`)
+  const vbL = useLeer(listo ? () => leerVistoBueno(empresa.id, mes) : null, `${empresa?.id}:${mes}:r21-visto-bueno`)
 
   // Lo de esta visita (aún no se guarda: ver arriba).
   const clave = `${empresa?.id}:${mes}`
-  const [dejados, setDejados] = useState<{ clave: string; lista: PendienteGuardado[] }>({ clave: '', lista: [] })
   const [resueltos, setResueltos] = useState<{ clave: string; casos: Map<string, { caso: CasoVista; frase: string }> }>({ clave: '', casos: new Map() })
-  const [vistoBueno, setVistoBueno] = useState<{ clave: string; vb: VistoBueno } | null>(null)
   const [comprobado, setComprobado] = useState<string | null>(null)
   const [frases, setFrases] = useState<Record<string, Frase>>({})
   const [ocupado, setOcupado] = useState<string | null>(null)
-  const misDejados = useMemo(() => (dejados.clave === clave ? dejados.lista : []), [dejados, clave])
+  const misDejados = useMemo(() => (pd.datos ?? []).filter((p) => p.mes <= mes), [pd.datos, mes])
   const misResueltos = useMemo(() => (resueltos.clave === clave ? resueltos.casos : new Map<string, { caso: CasoVista; frase: string }>()), [resueltos, clave])
   const frase = (k: string, f: Frase | null) => setFrases((x) => { const y = { ...x }; if (f) y[`${clave}|${k}`] = f; else delete y[`${clave}|${k}`]; return y })
   const fraseDe = (k: string) => frases[`${clave}|${k}`] ?? null
@@ -132,7 +134,9 @@ export function FacturarMesPage() {
     // Antes de mandar, «Mandado a Cegid» es lo que quedará mandado: lo vivo más lo listo (así, «Mandar» se abre solo si,
     // mandándolo, la diferencia es 0,00 €).
     const porMandarCent = listos1.reduce((t, k) => t + k.totalCent, 0) + planesBanco.filter((x) => x.estado === 'listo').reduce((t, x) => t + x.lineas.reduce((u, l) => u + l.totalCent, 0), 0)
-    const cuadre = cuadreDelMes(mes, { cobradoCent: cv.total.cobradoCent, noEsCobroCent: cv.total.noCobroCent, mandadoCent: cv.total.mandadoCent + porMandarCent, pagaFacturasCent: cv.total.pagaFacturaCent }, pendientes)
+    const cuadre = cuadreDelMes(mes, { cobradoCent: cv.total.cobradoCent, noEsCobroCent: cv.total.noCobroCent, mandadoCent: cv.total.mandadoCent + porMandarCent, pagaFacturasCent: cv.total.pagaFacturaCent,
+      // Lo de meses de antes resuelto este mes se factura ahora: cuenta como cobrado del mes.
+      deAntesResueltosCent: (rs.datos ?? []).reduce((t, x) => t + x.importeCent, 0) }, pendientes)
     const nombres = new Map(cg.datos.clientes.map((c) => [c.codigo, c.nombre]))
     const mandado: MandadoCegid[] = (md.datos ?? []).map((x) => ({ cliente: x.cliente, nombre: nombres.get(x.cliente) ?? null, serie: x.serie, totalCent: Math.round(x.total * 100), estado: x.estado }))
     const paso4 = vivas.length ? pasoCuatro(mandado) : null
@@ -141,29 +145,31 @@ export function FacturarMesPage() {
       // Cegid puede fechar la factura de un mes en el mes siguiente: cuenta para este mes lo fechado en él o después.
       return { serie: f.serie, codigo: f.codigo, cliente: f.cliente, totalCent: Math.round(Number(f.total ?? 0) * 100), mes: m >= mes ? mes : m }
     })) : null
-    const vb = vistoBueno?.clave === clave ? vistoBueno.vb : null
+    const vb = vbL.datos ?? null
     const preparado = { cobradoCent: cuadre.cobradoCent, listos: cobrosPorMandar + vivas.length, casos: casos.length }
     const estado = { preparado, casos, cuadre, porMandar: cobrosPorMandar, mandados: vivas.length, paso4, vistoBueno: vb, paso5 }
     return { casos, pendientes, cuadre, paso4, paso5, pasos: pasosDelMes(estado), cobrosPorMandar, listos1, acciones: new Map(entradas.map((c) => [c.clave, c.acciones])) }
-  }, [d.datos, base, cg.datos, md.datos, planesBanco, plan, cobrosMes, cegid, vivas, mes, facturasCruce, misDejados, misResueltos, vistoBueno, comprobado, clave])
+  }, [d.datos, base, cg.datos, md.datos, planesBanco, plan, cobrosMes, cegid, vivas, mes, facturasCruce, misDejados, misResueltos, vbL.datos, rs.datos, comprobado, clave])
 
-  const error = d.error ?? cg.error ?? bk.error
-  if (error) return <ErrorConReintento mensaje={`No se ha podido leer lo del mes: ${error}`} reintentar={() => { d.recargar(); cg.recargar(); md.recargar(); bk.recargar() }} />
-  if (!empresa || !todo || !plan) return <TarjetaCargando />
+  const error = d.error ?? cg.error ?? bk.error ?? pd.error ?? rs.error ?? vbL.error
+  if (error) return <ErrorConReintento mensaje={`No se ha podido leer lo del mes: ${error}`} reintentar={() => { d.recargar(); cg.recargar(); md.recargar(); bk.recargar(); pd.recargar(); rs.recargar(); vbL.recargar() }} />
+  if (!empresa || !todo || !plan || !pd.datos || !rs.datos) return <TarjetaCargando />
 
-  const recargar = () => { d.recargar(); cg.recargar(); md.recargar(); bk.recargar() }
+  const recargar = () => { d.recargar(); cg.recargar(); md.recargar(); bk.recargar(); pd.recargar(); rs.recargar() }
   const resolver = (c: CasoVista, f: string) => setResueltos((r) => ({ clave, casos: new Map(r.clave === clave ? r.casos : []).set(c.clave, { caso: { ...c, resuelto: true, hecho: f, acciones: [] }, frase: f }) }))
+  // «Dejar para después» se guarda (conta_factura_dejar, la 1826) con el mes que se está facturando.
   const dejar = (c: { clave: string; tipo: CasoVista['tipo']; cliente: string | null; importeCent: number }, motivo: string) =>
-    setDejados((x) => ({ clave, lista: [...(x.clave === clave ? x.lista : []).filter((p) => p.clave !== c.clave),
-      { id: `aqui:${c.clave}`, clave: c.clave, tipo: c.tipo, mes, cliente: c.cliente, importeCent: c.importeCent, motivo, dejadoPor: 'tú', dejadoAt: new Date().toISOString() }] }))
+    dejarParaDespues({ empresa: empresa.id, clave: c.clave, tipo: c.tipo, mes, cliente: c.cliente, importeCent: c.importeCent, motivo })
+  const guardadoDe = (k: string) => misDejados.find((p) => p.clave === k) ?? null
+  const fechaHora = (iso: string) => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
   const vista = (c: (typeof todo.casos)[number]): CasoVista => {
     const acciones = armarAcciones(c.clave)
     const aMano = acciones.some((a) => a.efecto.que === 'facturar_a_mano' && a.efecto.cliente == null) ? 'concepto_cliente' as const
       : acciones.some((a) => a.efecto.que === 'facturar_a_mano' || a.efecto.que === 'concepto_a_mano') ? 'concepto' as const
       : acciones.some((a) => a.efecto.que === 'atar_a_mano') ? 'cliente' as const : null
-    const aqui = misDejados.some((p) => p.clave === c.clave)
-    return { ...c, acciones, resuelto: false, aMano, deshacer: aqui,
-      hecho: c.estado === 'pendiente' ? (aqui ? `Dejado para después (tú, ${c.pendiente?.dejadoAt ? new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' }).format(new Date(c.pendiente.dejadoAt)) : ''}). Queda en «Pendientes», fuera de esta factura. ${NO_SE_GUARDA}`
+    const g = guardadoDe(c.clave)
+    return { ...c, acciones, resuelto: false, aMano, deshacer: !!g,
+      hecho: c.estado === 'pendiente' ? (g ? `Dejado para después (${g.dejadoPor ?? 'sin nombre'}, ${fechaHora(g.dejadoAt)}). Queda en «Pendientes», fuera de esta factura. Cuando se resuelva, se factura en el mes en que se resuelva.`
         : 'Quedó fuera de lo mandado a Cegid: está en «Pendientes». Cuando se resuelva, se factura en el mes en que se resuelva.') : null }
   }
   const armarAcciones = (k: string) => todo.acciones.get(k) ?? []
@@ -174,8 +180,9 @@ export function FacturarMesPage() {
     if (!c) return
     const e = a.efecto
     if (e.que === 'dejar') {
-      dejar(c, e.motivo)
-      frase(k, { estado: 'bien', frase: `Dejado para después: queda en «Pendientes», fuera de esta factura. ${NO_SE_GUARDA}` })
+      setOcupado(k); frase(k, { estado: 'trabajando', frase: 'Guardando…' })
+      try { const r = await dejar(c, e.motivo); frase(k, { estado: 'bien', frase: r.frase }); pd.recargar() }
+      catch (er) { frase(k, { estado: 'mal', frase: msg(er) }) } finally { setOcupado(null) }
       return
     }
     const hacer = async (): Promise<string> => {
@@ -197,16 +204,22 @@ export function FacturarMesPage() {
     setOcupado(k); frase(k, { estado: 'trabajando', frase: 'Apuntando…' })
     try {
       const f = await hacer()
+      // Si estaba en Pendientes, sale de ahí y se factura en este mes (conta_factura_resolver_pendiente).
+      const g = guardadoDe(k)
+      const f2 = g ? `${f} ${await resolverPendiente(g.id, mes)}` : f
       frase(k, null)
-      resolver(c, f)
-      // Quien deja algo para después y luego lo resuelve: ya no está pendiente.
-      setDejados((x) => ({ clave, lista: (x.clave === clave ? x.lista : []).filter((p) => p.clave !== k) }))
+      resolver(c, f2)
       recargar()
     } catch (er) { frase(k, { estado: 'mal', frase: msg(er) }) } finally { setOcupado(null) }
   }
-  const dejarTodos = () => {
-    for (const c of todo.casos) if (c.estado === 'por_resolver') dejar(c, c.frase)
-    frase('casos', { estado: 'bien', frase: `Dejados para después: quedan en «Pendientes», fuera de esta factura. ${NO_SE_GUARDA}` })
+  const dejarTodos = async () => {
+    const quedan = todo.casos.filter((c) => c.estado === 'por_resolver')
+    let hechos = 0
+    setOcupado('casos')
+    try {
+      for (const c of quedan) { await dejar(c, c.frase); hechos += 1 }
+      frase('casos', { estado: 'bien', frase: `Dejados para después ${hechos} ${hechos === 1 ? 'caso' : 'casos'}: quedan en «Pendientes», fuera de esta factura.` })
+    } catch (er) { frase('casos', { estado: 'mal', frase: `Dejados ${hechos} de ${quedan.length}. Se ha parado: ${msg(er)}` }) } finally { setOcupado(null); pd.recargar() }
   }
   const preparar = async () => {
     frase('preparar', { estado: 'trabajando', frase: 'Leyendo GoCardless…' })
@@ -247,8 +260,11 @@ export function FacturarMesPage() {
   const coincide = () => {
     if (!todo.paso4) return
     const s = todo.paso4.serie1
-    setVistoBueno({ clave, vb: { serie: '1', totalCent: s.totalCent, facturas: s.facturas, quien: 'tú', at: new Date().toISOString() } })
-    frase('vb', { estado: 'bien', frase: `Apuntado a las ${hora()}: coincide, ${euros(s.totalCent)} · ${s.facturas} facturas de la serie 1. Manda tú el listado en PDF a QBO: Sumied no manda correos. ${NO_SE_GUARDA}` })
+    frase('vb', { estado: 'trabajando', frase: 'Apuntando el visto bueno…' })
+    // El visto bueno se guarda (conta_factura_visto_bueno_dar): uno vivo por mes y serie; el de antes queda guardado.
+    darVistoBueno(empresa.id, mes, '1', s.totalCent, s.facturas)
+      .then((f) => { frase('vb', { estado: 'bien', frase: `${f} Manda tú el listado en PDF a QBO: Sumied no manda correos.` }); vbL.recargar() })
+      .catch((er: unknown) => frase('vb', { estado: 'mal', frase: msg(er) }))
   }
   const comprobar = async () => {
     frase('comprobar', { estado: 'trabajando', frase: 'Leyendo de Cegid las facturas emitidas…' })
@@ -267,8 +283,14 @@ export function FacturarMesPage() {
       pasos={todo.pasos} preparar={{ frase: fraseDe('preparar'), alPulsar: () => void preparar() }}
       casos={casosVista} ocupado={ocupado} frases={Object.fromEntries(Object.entries(frases).filter(([k]) => k.startsWith(`${clave}|`)).map(([k, v]) => [k.slice(clave.length + 1), v]))}
       conceptos={CONCEPTOS} alAccion={(k, a, x) => void alAccion(k, a, x)}
-      alDeshacer={(k) => { setDejados((x) => ({ clave, lista: (x.clave === clave ? x.lista : []).filter((p) => p.clave !== k) })); frase(k, { estado: 'bien', frase: 'Deshecho: el caso vuelve a estar por resolver.' }) }}
-      alDejarTodos={dejarTodos}
+      alDeshacer={(k) => {
+        const g = guardadoDe(k)
+        if (!g) return
+        setOcupado(k)
+        deshacerPendiente(g.id).then((f) => { frase(k, { estado: 'bien', frase: f }); pd.recargar() })
+          .catch((er: unknown) => frase(k, { estado: 'mal', frase: msg(er) })).finally(() => setOcupado(null))
+      }}
+      alDejarTodos={() => void dejarTodos()}
       cuadre={todo.cuadre} mandar={{ cobros: todo.cobrosPorMandar, frase: fraseDe('mandar'), alPulsar: () => void mandar() }}
       serie1={todo.paso4?.serie1 ?? null} vistoBueno={fraseDe('vb')} alCoincide={coincide}
       serie3={todo.paso4?.serie3 ?? null}
