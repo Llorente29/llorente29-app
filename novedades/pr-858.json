@@ -1,0 +1,29 @@
+[
+ {
+  "id": "858-1",
+  "pr": 858,
+  "fecha": "2026-11-28T00:07:41Z",
+  "producto": "sumied",
+  "apartado": "Facturar el mes, paso 2",
+  "frase": "los casos van por grupos de tipo, con su total, plegados y ordenados por importe.",
+  "ruta": null
+ },
+ {
+  "id": "858-2",
+  "pr": 858,
+  "fecha": "2026-11-28T00:07:41Z",
+  "producto": "sumied",
+  "apartado": "Facturar el mes",
+  "frase": "«Pendientes» con su importe y su Excel para QBO, el botón «Coincide con Cegid» y textos de gestor en los pagos con tarjeta.",
+  "ruta": null
+ },
+ {
+  "id": "858-3",
+  "pr": 858,
+  "fecha": "2026-11-28T00:07:41Z",
+  "producto": "sumied",
+  "apartado": "El mes de un vistazo",
+  "frase": "«Lo que hay que resolver» separa lo del mes de lo de meses anteriores.",
+  "ruta": null
+ }
+]
