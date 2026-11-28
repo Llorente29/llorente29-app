@@ -20,6 +20,7 @@ import { refrescarContextoEsqueleto } from '@/modules/conta/esqueleto/useEsquele
 import { ErrorConReintento, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
 import { CabeceraEntradaMovil, MarcoAjustes } from '@/modules/conta/ajustes/MarcoAjustes'
 import { useAjustes } from '@/modules/conta/ajustes/contextoAjustes'
+import { CodigosCortos } from './CodigosCortos'
 
 const EJES: { eje: IdEje; deSerie: string; plural: string; queGuarda: string; donde: string }[] = [
   { eje: 'local', deSerie: 'Local', plural: 'Locales', queGuarda: 'el local de cada apunte',
@@ -69,6 +70,8 @@ function Analitica() {
         <Eje key={x.eje} def={x} fila={filas.find((f) => f.eje === x.eje) ?? null} accountId={accountId} companyId={activa.id}
           alGuardar={() => { recargar(); refrescarContextoEsqueleto() }} />
       ))}
+      {/* K13 · El código corto de cada local, marca y plataforma (se escribe en la analítica de la recibida). */}
+      {accountId && <CodigosCortos accountId={accountId} />}
     </div>
   )
 }

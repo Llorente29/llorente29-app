@@ -1,0 +1,4 @@
+# K13 · la vuelta atrás, en orden inverso: quita los tramos y después el código corto (sus tablas y funciones nuevas).
+cuenta: scripts/conta/produccion/cuentas/k13-recibida-calcada.sql
+supabase/vuelta-atras/20261124T0001_k13_reparto_en_tramos.down.sql
+supabase/vuelta-atras/20261123T2347_k13_codigo_corto.down.sql

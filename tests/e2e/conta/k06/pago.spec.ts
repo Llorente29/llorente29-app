@@ -212,11 +212,13 @@ for (const [t, ancho, alto] of [[1, 1456, 816], [2, 1366, 768]] as const) {
     await page.mouse.move(r.x + r.width / 2, r.y + 200)
     await page.mouse.down()
     // A la derecha: más sitio para el formulario (a 1366 el formulario ya va casi en su mínimo, y a la izquierda no habría sitio).
-    await page.mouse.move(r.x + r.width / 2 + 60, r.y + 200, { steps: 4 })
-    await page.mouse.move(r.x + r.width / 2 + 120, r.y + 200, { steps: 4 })
+    // K13 (17b): con la ficha de 860 px, a 1366 al panel le quedan unos 116 px hasta su mínimo de 240: se arrastra lo que cabe.
+    const tramo = Math.min(120, Math.floor(antes - 240 - 8))
+    await page.mouse.move(r.x + r.width / 2 + tramo / 2, r.y + 200, { steps: 4 })
+    await page.mouse.move(r.x + r.width / 2 + tramo, r.y + 200, { steps: 4 })
     await page.mouse.up()
     const movida = (await panel.boundingBox())!.width
-    expect(Math.abs(movida - (antes - 120)), `el panel, de ${antes} a ${movida}`).toBeLessThan(4)
+    expect(Math.abs(movida - (antes - tramo)), `el panel, de ${antes} a ${movida} (arrastrado ${tramo})`).toBeLessThan(4)
     await page.reload({ timeout: 30_000 })
     await expect(ficha(page)).toBeVisible({ timeout: 30_000 })
     await expect(ficha(page)).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 })

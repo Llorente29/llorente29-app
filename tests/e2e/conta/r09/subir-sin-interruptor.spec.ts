@@ -6,7 +6,7 @@
 //   1. A 1456 × 816: por el menú (Facturación › Ventas › Ventas del día) se ve «Subir las ventas
 //      del TPV»; se sueltan los cuatro CSV INVENTADOS de tests/e2e/conta/r06/ficheros (T11), se
 //      contabilizan los días que cuadran y, como ninguna forma tiene cuenta, primero se abre «A qué cuenta va cada forma de pago» (R15).
-//   2. A 1366 × 768 (la cinta nace plegada: «Ver los botones»), el mismo camino hasta el botón, y la página no rueda.
+//   2. A 1366 × 768 (desde el K13, con los botones de la cinta a la vista), el mismo camino hasta el botón, y la página no rueda.
 
 import { test, expect, type Page } from '@playwright/test'
 import { readdirSync } from 'node:fs'
@@ -48,15 +48,14 @@ function vigilar(page: Page): string[] {
 }
 
 /**
- * Por el menú, hasta Ventas del día: Facturación › Ventas › Ventas del día. Por debajo de 800 de alto (1366 × 768)
- * la cinta nace plegada, como en la maqueta aprobada del K02: antes, «Ver los botones» (como la K03 y la K05).
+ * Por el menú, hasta Ventas del día: Facturación › Ventas › Ventas del día. Desde el K13 (17b), los botones de la cinta
+ * se ven siempre, también a 1366 × 768.
  */
 async function irAVentasDelDia(page: Page, empresa: string) {
   await page.addInitScript(([clave, valor]) => { window.localStorage.setItem(clave, valor) }, [`folvy.conta.empresa.${NUCLEO.id}`, empresa] as const)
   await page.goto('/conta', { waitUntil: 'load' })
   await page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: 'Facturación' }).click({ timeout: 40_000 })
   await page.getByRole('tablist', { name: 'La cinta' }).getByRole('tab', { name: 'Ventas' }).click()
-  if ((page.viewportSize()?.height ?? 816) < 800) await page.getByRole('button', { name: 'Ver los botones' }).click()
   const boton = page.locator('[data-boton="ventasDia"]')
   await expect(boton).toBeVisible({ timeout: 30_000 })
   await boton.click()

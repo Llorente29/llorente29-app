@@ -82,24 +82,11 @@ import { PestanaViva } from './PestanaViva'
 import { DialogoCerrar } from './DialogoCerrar'
 import './nucleo.css'
 
-/** Por debajo de este alto, los botones de la cinta nacen plegados (decisión 13 de Julio). */
-export const ALTO_CINTA_PLEGADA = 800
-
 /** Donde se guardan las pestañas abiertas para recargar (la sesión de esta pestaña del navegador). */
 export const CLAVE_PESTANAS = 'folvy.conta.nucleo.pestanas'
 
 /** El módulo y la pestaña de la cinta por los que se entra a cada módulo al pulsarlo. */
 const ENTRADA: Partial<Record<IdModulo, string>> = { contabilidad: 'asientos' }
-
-function useAltoVentana(): number {
-  const [alto, setAlto] = useState(() => (typeof window === 'undefined' ? 1000 : window.innerHeight))
-  useEffect(() => {
-    const f = () => setAlto(window.innerHeight)
-    window.addEventListener('resize', f)
-    return () => window.removeEventListener('resize', f)
-  }, [])
-  return alto
-}
 
 function leerGuardadas(): unknown {
   try { const t = window.sessionStorage.getItem(CLAVE_PESTANAS); return t ? JSON.parse(t) : null } catch { return null }
@@ -265,16 +252,6 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
     if (primero) pulsar(primero)
   }
 
-  // ── Plegar los botones (se recuerda: conta_user_pref.cintaOculta). Por debajo de 800 de alto nacen plegados.
-  const alto = useAltoVentana()
-  const bajo = alto < ALTO_CINTA_PLEGADA
-  const [cintaAMano, setCintaAMano] = useState<boolean | null>(null)
-  const plegada = cintaAMano ?? (bajo || prefs.cintaOculta)
-  const alternarCinta = () => {
-    if (bajo) { setCintaAMano(!plegada); return }
-    setCintaAMano(null)
-    cambiar({ cintaOculta: !prefs.cintaOculta })
-  }
   const plegados = !prefs.barraDesplegada
   const alternarModulos = () => cambiar({ barraDesplegada: !prefs.barraDesplegada })
 
@@ -414,7 +391,7 @@ export function MarcoNucleo({ sinPregunta = false }: { children?: ReactNode; sin
     <div ref={raiz} className="cx cxm s-esqueleto s-marco k-nucleo" data-densidad={prefs.densidad} style={{ height: `calc(100dvh - ${encima}px)` }}>
       <Arriba marca={MARCA.nombre} ejercicios={listaEjercicios} ejercicio={ejercicio} elegirEjercicio={elegirEjercicio} abrirBuscador={abrirBuscador}
         nombre={userName ?? 'Tú'} prefs={prefs} cambiar={cambiar} solo={solo} ctx={ctx} />
-      <Cinta pestanas={cinta} elegida={pestanaActual} elegir={setPestanaCinta} plegada={plegada} alternarPlegada={alternarCinta}
+      <Cinta pestanas={cinta} elegida={pestanaActual} elegir={setPestanaCinta}
         actual={actual} contadores={contadores} pulsar={pulsar} />
       <div className="k-cuerpo">
         <Modulos modulos={modulos} elegido={modulo} elegir={elegirModulo} plegados={plegados} alternar={alternarModulos} />

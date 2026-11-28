@@ -1,0 +1,235 @@
+/* src/modules/conta/nucleo/recibida/ficha17b.css
+ *
+ * K13 · La recibida calcada de ERP10: la maqueta 17b (maquetas/17b, que no se tocan) es el contrato. Cada casilla va en
+ * SU sitio (`data-sitio`), con las medidas de la maqueta: la izquierda y el ancho, en % del contenido de la ficha (840 px
+ * a 1366, 868 a 1920: los mismos % a los dos tamaños); el alto de cada fila, en px, el de la maqueta a cada tamaño. Las
+ * de la primera línea llevan además su `data-campo`, el de la maqueta: la e2e k13/calco las compara una a una.
+ *
+ *   1366 (por debajo de 1600 de ancho): ficha de 860, casillas de 20 px, filas cada 34 px.
+ *   1920 (desde 1600): ficha de 888, casillas de 19 px, filas cada 38 px.
+ *
+ * Lo que va debajo del I.V.A. baja una fila de IVA por cada fila de más (--kr-iva-mas, la pone la ficha).
+ */
+
+.kr {
+  --kr-ficha: 860px;
+  --kr-c-alto: 20px;
+  --kr-letra: 11.5px;
+  --kr-f1: 34px; --kr-f2: 68px; --kr-f3: 102px;
+  --kr-hd-iva: 122px; --kr-iva: 156px; --kr-iva-paso: 20px;
+  --kr-hd-contra: 200px; --kr-lineas: 220px; --kr-linea: 68px; --kr-c2: 34px; --kr-tramo: 34px;
+  --kr-hd-pago: 288px; --kr-pago: 322px; --kr-hd-obs: 342px; --kr-obs: 358px;
+  --kr-abajo: 384px; --kr-abajo-pie: 4px; --kr-duda-alto: 22px; --kr-duda-hueco: 3px; --kr-hd-alto: 18px;
+  --kr-iva-mas: 0;
+  --kr-extra: calc(var(--kr-iva-mas) * var(--kr-iva-paso));
+}
+@media (min-width: 1600px) {
+  .kr {
+    --kr-ficha: 888px;
+    --kr-c-alto: 19px;
+    --kr-letra: 12px;
+    --kr-f1: 40px; --kr-f2: 78px; --kr-f3: 116px;
+    --kr-hd-iva: 140px; --kr-iva: 180px; --kr-iva-paso: 24px;
+    --kr-hd-contra: 231px; --kr-lineas: 257px; --kr-linea: 76px; --kr-c2: 38px; --kr-tramo: 38px;
+    --kr-hd-pago: 333px; --kr-pago: 373px; --kr-hd-obs: 397px; --kr-obs: 419px;
+    --kr-abajo: 448px; --kr-abajo-pie: 8px; --kr-duda-alto: 21px; --kr-duda-hueco: 8px; --kr-hd-alto: 24px;
+  }
+}
+
+/* ── La ficha: su ancho, con el documento al lado (la raya, K06, no la deja por debajo de él) ── */
+/* En px, no en calc(): PanelDocumento lo lee con parseFloat para la raya. */
+.kf-ficha.kf-recibida.kr { --kf-min-form: 862px; }
+@media (min-width: 1600px) { .kf-ficha.kf-recibida.kr { --kf-min-form: 890px; } }
+.kf-ficha.kr .kf-cuerpo:not([data-raya='si']) { grid-template-columns: calc(var(--kr-ficha) + 2px) minmax(0, 1fr); }
+.kr .kr-izquierda > .kp-ventana { width: calc(var(--kr-ficha) + 2px); max-width: none; flex: 1; font-size: var(--kr-letra); background: #f5f9fd; }
+.kr .kp-ventana-titulo { height: 22px; background: #dfe8f5; border-bottom-color: #9fb4d6; }
+.kr .kp-ventana-titulo h1 { font-size: 12px; }
+.kr .kp-ventana-pestanas button { height: 21px; }
+
+/* La barra de la ficha: iconos grandes en azul, «Documento», «Ficha proveedor» y, a la derecha, cómo está. */
+.kr .kp-barra { height: 34px; margin: 0; padding: 0 10px; gap: 8px; border-bottom-color: #dbe3ef; }
+.kr .kp-barra-icono { width: 30px; height: 30px; color: #1f5fbf; }
+.kr .kp-barra-icono[data-boton] { color: #1f5fbf; }
+.kr .kp-barra-icono svg { width: 25px; height: 25px; }
+.kr .kp-barra-icono[data-boton='guardar'] svg { width: 25px; height: 25px; }
+.kr .kp-barra-icono[data-boton='anterior'] { margin-left: 14px; }
+.kr .kp-barra-texto { color: #1f5fbf; font-size: 12px; }
+.kr .kp-barra-icono[data-boton='siguiente'] + .kp-barra-texto { margin-left: 40px; }
+.kr .kp-barra-aviso .kf-estado { background: #fdf1d8; border: 1px solid #e9c46a; color: #7a4b00; border-radius: 10px; padding: 1px 9px; font-size: 11.5px; font-weight: 600; }
+.kr .kp-barra-aviso .kf-estado[data-tono='bien'], .kr .kp-barra-aviso .kf-estado[data-tono='ok'] { background: #e7f4ec; border-color: #8fc9a3; color: #137a3a; }
+
+/* ── El lienzo: el contenido de la ficha, a 10 px de cada lado y 6 debajo de la barra ── */
+.kr .kr-pantalla { flex: 1; min-height: 0; position: relative; padding: 0; margin: 6px 10px 0; overflow: visible; }
+.kr .kr-pantalla > * { max-width: none; }
+.kr-lienzo { position: absolute; inset: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: var(--kr-letra); color: #1b2533; }
+.kr-lienzo fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: contents; }
+
+/* Los títulos de los bloques: el nombre en la línea, como ERP10. */
+.kr-hd { position: absolute; left: 0; right: 0; height: 16px; box-sizing: border-box; border-bottom: 1px solid #1b2533; margin: 0; }
+.kr-hd > span { position: absolute; left: 60px; top: 2px; padding: 0 6px; background: #f5f9fd; font-weight: 700; font-size: 12px; line-height: 15px; }
+.kr-hd > .kr-hd-der { position: absolute; left: auto; right: 0; top: 2px; display: flex; align-items: center; gap: 6px; padding: 0 0 0 6px; background: #f5f9fd; color: #1f5fbf; font-size: 11px; line-height: 14px; }
+.kr-hd-der[data-ambar='si'] { color: #7a4b00; background: #fdf1d8; }
+.kr-hd-der .kp-mas { width: auto; height: 16px; padding: 0; display: inline-flex; align-items: center; gap: 3px; border: 0; background: none; color: #1f5fbf; font-size: 11px; cursor: pointer; }
+.kr-hd-der .kp-mas svg { width: 16px; height: 16px; }
+.kr-hd3 { position: absolute; margin: 0; height: 16px; box-sizing: border-box; border-bottom: 1px solid #1b2533; text-align: center; top: var(--kr-hd-iva); }
+.kr-hd3 > span { position: relative; top: 2px; padding: 0 6px; background: #f5f9fd; font-weight: 700; font-size: 12px; line-height: 15px; }
+.kr-hd3[data-subrayado='si'] { border: 0; }
+.kr-hd3[data-subrayado='si'] > span { text-decoration: underline; padding: 0; }
+
+/* ── Una casilla: su caja (blanca), su rótulo encima (azul), su lupa detrás (o delante) y su ⊕ ── */
+.kr-c { position: absolute; height: var(--kr-c-alto); box-sizing: border-box; }
+.kr-c > input, .kr-c > select, .kr-c > textarea, .kr-c > .kp-con-lupa, .kr-c > .kf-con-sugerencias, .kr-c > .kp-con-lupa > input, .kr-c > .kf-con-sugerencias > input {
+  width: 100%; height: 100%; box-sizing: border-box; margin: 0;
+}
+.kr-c > .kp-con-lupa, .kr-c > .kf-con-sugerencias { display: block; position: relative; }
+.kr-c input, .kr-c select, .kr-c textarea {
+  border: 1px solid #9aa6b8; border-radius: 0; background: #fff; padding: 1px 4px; font: inherit; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: var(--kr-letra); color: #1b2533; min-width: 0;
+}
+.kr-c textarea { resize: none; overflow: hidden; line-height: 16px; white-space: nowrap; }
+.kr-c input[readonly], .kr-c textarea[readonly], .kr-c[data-gris='si'] input, .kr-c[data-gris='si'] textarea { background: #fff; color: #7d8794; }
+.kr-c[data-num='si'] input { text-align: right; }
+.kr-c[data-total='si'] input { font-weight: 700; color: #1b2533; }
+.kr-c[data-ambar='si'] input, .kr-c input[data-ambar='si'], .kr-c input[data-duda='si'] { background: #fde7b0; border-color: #d99a00; color: #1b2533; }
+.kr-rot { position: absolute; left: 0; top: -14px; color: #1f5fbf; font-size: 11px; line-height: 13px; white-space: nowrap; pointer-events: none; }
+.kr-rot[data-centro='si'] { width: 100%; text-align: center; }
+.kr-rot[data-gris='si'] { color: #8a93a0; }
+.kr-c .kp-lupa-boton { position: absolute; top: 0; left: calc(100% + 2px); width: 20px; height: var(--kr-c-alto); padding: 0; border: 0; background: none; color: #1f5fbf; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.kr-c .kp-lupa-boton svg { width: 15px; height: 15px; }
+.kr-c[data-lupa='antes'] .kp-lupa-boton { left: -21px; }
+.kr-lupa-sola { position: absolute; top: 0; left: calc(100% + 2px); width: 20px; height: var(--kr-c-alto); padding: 0; border: 0; background: none; color: #1f5fbf; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.kr-lupa-sola:disabled { color: #b7c0ca; cursor: default; }
+.kr-lupa-sola svg { width: 15px; height: 15px; }
+.kr-cal { position: absolute; top: 3px; left: calc(100% + 4px); width: 12px; height: 12px; border: 2px solid #1f5fbf; border-top-width: 4px; box-sizing: border-box; padding: 0; background: none; cursor: pointer; }
+.kr-c > .kr-mas { position: absolute; top: 0; left: calc(100% + 22px); width: 20px; height: 20px; padding: 0; border: 0; background: none; color: #1f5fbf; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.kr-c > .kr-mas:disabled { color: #b7c0ca; cursor: default; }
+.kr-c > .kr-mas svg { width: 20px; height: 20px; }
+.kr-c .kr-quitar { position: absolute; right: -11px; top: 2px; visibility: visible; opacity: 0; }
+.kr-c:hover .kr-quitar, .kr-c .kr-quitar:focus-visible { opacity: 1; }
+.kr-c .kf-sugerencias { z-index: 30; }
+.kr-c .kf-origen.kr-oculto, .kr-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── Datos factura ── */
+.kr-c[data-sitio^='f1-'] { top: var(--kr-f1); }
+.kr-c[data-sitio^='f2-'] { top: var(--kr-f2); }
+.kr-c[data-sitio^='f3-'] { top: var(--kr-f3); }
+.kr-c[data-sitio='f1-1'] { left: 0.23%; width: 30.44%; }
+.kr-c[data-sitio='f1-2'] { left: 30.91%; width: 5.85%; }
+.kr-c[data-sitio='f1-3'] { left: 40.52%; width: 25.76%; }
+.kr-c[data-sitio='f1-4'] { left: 66.51%; width: 6.32%; }
+.kr-c[data-sitio='f1-5'] { left: 76.58%; width: 8.90%; }
+.kr-c[data-sitio='f1-6'] { left: 88.29%; width: 8.90%; }
+.kr-c[data-sitio='f2-1'] { left: 0; width: 10.77%; }
+.kr-c[data-sitio='f2-2'] { left: 13.47%; width: 8.90%; }
+.kr-c[data-sitio='f2-3'] { left: 26.46%; width: 9.72%; }
+.kr-c[data-sitio='f2-4'] { left: 38.99%; width: 61.01%; }
+.kr-c[data-sitio='f3-1'] { left: 0; width: 23.19%; }
+.kr-c[data-sitio='f3-2'] { left: 23.54%; width: 48.01%; }
+.kr-c[data-sitio='f3-3'] { left: 72.48%; width: 20.26%; }
+
+/* ── I.V.A. (dos grupos por fila), Retención y Total factura ── */
+.kr-c[data-sitio^='iva-'] { top: calc(var(--kr-iva) + var(--kr-iva-fila, 0) * var(--kr-iva-paso)); }
+.kr-c[data-sitio='iva-1'] { left: 0.59%; width: 9.37%; }
+.kr-c[data-sitio='iva-2'] { left: 10.19%; width: 4.68%; }
+.kr-c[data-sitio='iva-3'] { left: 15.11%; width: 8.20%; }
+.kr-c[data-sitio='iva-4'] { left: 24.82%; width: 9.37%; }
+.kr-c[data-sitio='iva-5'] { left: 34.43%; width: 4.68%; }
+.kr-c[data-sitio='iva-6'] { left: 39.34%; width: 8.20%; }
+.kr-c[data-sitio='iva-7'] { left: 50.35%; width: 12.76%; }
+.kr-c[data-sitio='iva-8'] { left: 63.47%; width: 9.37%; }
+.kr-c[data-sitio='iva-9'] { left: 73.07%; width: 4.68%; }
+.kr-c[data-sitio='iva-10'] { left: 77.99%; width: 9.37%; }
+.kr-c[data-sitio='iva-11'] { left: 88.06%; width: 9.37%; }
+.kr-c[data-sitio='iva-2'] select, .kr-c[data-sitio='iva-5'] select { padding: 0 2px; appearance: none; }
+
+/* ── Contrapartida/s: la lista se desplaza desde la segunda línea; cada línea, sus dos filas (y una por tramo) ── */
+.kr-lineas { position: absolute; left: 0; right: -10px; top: calc(var(--kr-lineas) + var(--kr-extra)); height: var(--kr-linea); overflow-y: auto; overflow-x: hidden; }
+.kr-linea { position: relative; width: calc(var(--kr-ficha) - 20px); height: calc(var(--kr-linea) + var(--kr-tramos-mas, 0) * var(--kr-tramo)); }
+.kr-linea .kr-c[data-sitio^='c1-'] { top: 14px; }
+.kr-linea .kr-c[data-sitio^='c2-'] { top: calc(14px + var(--kr-c2) + var(--kr-tramo-n, 0) * var(--kr-tramo)); }
+.kr-c[data-sitio='c1-1'] { left: 0.59%; width: 10.77%; }
+.kr-c[data-sitio='c1-2'] { left: 15.11%; width: 37.47%; }
+.kr-c[data-sitio='c1-3'] { left: 52.81%; width: 34.89%; }
+.kr-c[data-sitio='c1-4'] { left: 88.06%; width: 9.37%; }
+.kr-c[data-sitio='c2-1'] { left: 1.76%; width: 4.68%; }
+.kr-c[data-sitio='c2-2'] { left: 10.19%; width: 19.91%; }
+.kr-c[data-sitio='c2-3'] { left: 30.33%; width: 4.68%; }
+.kr-c[data-sitio='c2-4'] { left: 38.76%; width: 19.91%; }
+.kr-c[data-sitio='c2-5'] { left: 58.90%; width: 4.68%; }
+.kr-c[data-sitio='c2-6'] { left: 67.33%; width: 18.15%; }
+.kr-c[data-sitio='c2-7'] { left: 85.71%; width: 9.37%; }
+.kr-c[data-sitio='c2-1'] input, .kr-c[data-sitio='c2-3'] input, .kr-c[data-sitio='c2-5'] input { padding: 1px 2px; }
+
+/* ── Pago factura: una fila por pago; desde el segundo, se desplaza ── */
+.kr-pagos { position: absolute; left: 0; right: -10px; top: calc(var(--kr-pago) + var(--kr-extra) - 14px); height: calc(var(--kr-hd-obs) - var(--kr-pago) + 14px); overflow-y: auto; overflow-x: hidden; }
+.kr-pago-fila { position: relative; width: calc(var(--kr-ficha) - 20px); height: calc(var(--kr-hd-obs) - var(--kr-pago) + 14px); }
+.kr-pago-fila .kr-c { top: 14px; }
+.kr-pago-fila + .kr-pago-fila .kr-rot { display: none; }
+.kr-pago-fila + .kr-pago-fila { height: calc(var(--kr-c-alto) + 4px); }
+.kr-pago-fila + .kr-pago-fila .kr-c { top: 0; }
+.kr-c[data-sitio='p1-1'] { left: 0.59%; width: 5.85%; }
+.kr-c[data-sitio='p1-2'] { left: 10.30%; width: 20.49%; }
+.kr-c[data-sitio='p1-3'] { left: 31.03%; width: 5.85%; }
+.kr-c[data-sitio='p1-4'] { left: 37.24%; width: 10.77%; }
+.kr-c[data-sitio='p1-5'] { left: 51.87%; width: 8.78%; }
+.kr-c[data-sitio='p1-6'] { left: 60.89%; width: 22.83%; }
+.kr-c[data-sitio='p1-7'] { left: 84.07%; width: 9.37%; }
+.kr-pago-botones { position: absolute; left: calc(100% + 4px); top: 0; display: flex; gap: 2px; }
+.kr-pago-botones .kr-boton { width: 20px; height: var(--kr-c-alto); }
+
+/* ── Observaciones, de todo el ancho ── */
+.kr-c[data-sitio='obs-1'] { top: calc(var(--kr-obs) + var(--kr-extra)); left: 0.59%; width: 96.84%; }
+
+/* ── Abajo: la duda (solo si la hay, en una línea, con sus botones) y la visualización del asiento hasta abajo ── */
+.kr-abajo { position: absolute; left: 0; right: 0; top: calc(var(--kr-abajo) + var(--kr-extra)); bottom: var(--kr-abajo-pie); display: flex; flex-direction: column; }
+.kr-dudas { display: flex; flex-direction: column; gap: 2px; margin: 0 0 var(--kr-duda-hueco); }
+.kr-dudas:empty { display: none; }
+.kr .kr-dudas .kf-duda { display: flex; align-items: center; gap: 8px; height: var(--kr-duda-alto); box-sizing: border-box; margin: 0; padding: 0 3px 0 8px; background: #fdf1d8; border: 1px solid #e9c46a; border-radius: 4px; color: #7a4b00; white-space: nowrap; overflow: hidden; }
+.kr .kr-dudas .kf-duda p { flex: 1; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; }
+.kr .kr-dudas .kf-duda button { height: 16px; padding: 0 8px; font-size: 11px; font-weight: 600; border-radius: 3px; border: 1px solid #b8860b; background: #fff; color: #7a4b00; line-height: 1; }
+.kr .kr-dudas .kf-duda .kf-boton-ambar { background: #8a5a00; color: #fff; }
+.kr .kr-dudas .kf-duda > div { display: flex; flex-direction: row-reverse; gap: 6px; flex-shrink: 0; }
+.kr .kr-dudas .kf-aviso { margin: 0; padding: 2px 8px; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kr-abajo > .kr-hd { position: relative; flex-shrink: 0; height: 16px; margin-bottom: calc(var(--kr-hd-alto) - 16px); }
+.kr .kr-visual-marco { flex: 1; min-height: 0; display: flex; flex-direction: column; border: 1px solid #d33; background: #fff; }
+.kr-visual-cabeza { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 1px 6px; background: #cfe0f7; white-space: nowrap; }
+.kr-visual-cabeza > .kf-etiqueta { margin-left: auto; background: none; border: 0; padding: 0; color: #137a3a; font-weight: 600; font-size: inherit; }
+.kr-visual-cabeza > .kf-etiqueta[data-tono='mal'], .kr-visual-cabeza > .kf-etiqueta[data-tono='falta'], .kr-visual-cabeza > .kf-etiqueta[data-tono='ambar'] { color: #7a4b00; }
+.kr-visual-cabeza > .kf-etiqueta[data-tono='vacio'] { color: #7d8794; font-weight: 400; }
+.kr-visual-ed { color: #1f5fbf; font-weight: 700; cursor: default; }
+.kr-visual-cuerpo { flex: 1; min-height: 0; overflow-y: auto; }
+.kr-visual-nota { padding: 1px 8px; color: #6b4300; }
+.kr-visual-asiento + .kr-visual-asiento { border-top: 1px solid #f0c0c0; }
+.kr-visual-asiento > .kr-visual-cabeza { background: #e7eef8; }
+.kr-visual-cols { display: flex; }
+.kr-visual-cols > div { flex: 1; min-width: 0; }
+.kr-visual-cols > div:first-child { border-right: 1px solid #d33; }
+.kr-al { padding: 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kr-al > b { font-weight: 400; display: inline-block; width: 62px; text-align: right; }
+.kr-al > span { margin-left: 12px; }
+.kr-ar { padding: 1px 8px; display: flex; gap: 8px; white-space: nowrap; }
+.kr-ar > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.kr-ar > span:last-child { margin-left: auto; flex-shrink: 0; }
+.kr-ar i { color: #6b7587; font-style: normal; }
+@media (min-width: 1600px) { .kr-al > b { width: 70px; } }
+
+/* Por encima de lo de la K11b (fichaErp10.css): en la 17b, todas las casillas blancas, con la letra de la maqueta; las que
+   no se escriben, con el texto en gris. */
+.kf-ficha.kr .kp-ventana .kr-c input:not([type='checkbox']):not([type='file']), .kf-ficha.kr .kp-ventana .kr-c select, .kf-ficha.kr .kp-ventana .kr-c textarea {
+  height: 100%; box-sizing: border-box; border: 1px solid #9aa6b8; border-radius: 0; background: #fff; padding: 1px 4px; margin: 0;
+  font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: var(--kr-letra); line-height: 16px; color: #1b2533; box-shadow: none;
+}
+.kf-ficha.kr .kp-ventana .kr-c input[readonly]:not([type='checkbox']):not([type='file']), .kf-ficha.kr .kp-ventana .kr-c textarea[readonly],
+.kf-ficha.kr .kp-ventana .kr-c[data-gris='si'] input:not([type='checkbox']):not([type='file']), .kf-ficha.kr .kp-ventana .kr-c select:disabled { background: #fff; color: #7d8794; }
+.kf-ficha.kr .kp-ventana .kr-c[data-num='si'] input { text-align: right; }
+.kf-ficha.kr .kp-ventana .kr-c[data-total='si'] input { font-weight: 700; color: #1b2533; }
+.kf-ficha.kr .kp-ventana .kr-c[data-ambar='si'] input:not([type='checkbox']), .kf-ficha.kr .kp-ventana .kr-c input[data-ambar='si'], .kf-ficha.kr .kp-ventana .kr-c input[data-duda='si'],
+.kf-ficha.kr .kp-ventana .kr-c[data-ambar='si'] textarea, .kf-ficha.kr .kp-ventana .kr-c textarea[data-duda='si'] { background: #fde7b0; border-color: #d99a00; color: #1b2533; }
+.kf-ficha.kr .kp-ventana .kr-c[data-sitio^='c2-'] input:not([type='checkbox']) { padding: 1px 3px; }
+.kf-ficha.kr .kr-pantalla .kr-dudas { max-width: none; }
+.kf-ficha.kr .kr-visual-marco .kp-visual-cuenta { font-style: normal; color: inherit; }
+.kf-ficha.kr .kr-ar .kp-visual-cuenta { color: #6b7587; }
+.kr-nuevo-proveedor { position: absolute; top: calc(var(--kr-f2) - 15px); left: 6.5%; height: 14px; padding: 0 4px; border: 0; background: none; color: #1f5fbf; font-size: 11px; cursor: pointer; }
+.kr-alta { flex-shrink: 1; min-height: 0; overflow: auto; margin-bottom: 4px; }
+
+/* K13 · La cuenta que falta en el asiento: «(falta)», en ámbar. */
+.kf-ficha.kr .kr-visual-marco .kp-visual-cuenta.kr-falta { background: #fde7b0; color: #7a4b00; font-weight: 600; padding: 0 3px; border-radius: 2px; }

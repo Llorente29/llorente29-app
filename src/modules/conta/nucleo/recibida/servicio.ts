@@ -362,3 +362,57 @@ export async function guardarOtrosDatos(invoiceId: string, cambios: {
   const r = await rpc<Fila>('conta_recibida_otros_datos', { p_invoice: invoiceId, p_cambios: cambios, p_quien_nombre: quien })
   return { texto: String(r.texto ?? 'Guardado.'), asientoQuitado: r.asiento_quitado === true }
 }
+
+// ── K13 · El código corto de los locales, marcas y plataformas (20261123T2347) ──
+
+export type TablaCodigo = 'locations' | 'brand' | 'sales_channel'
+export interface CodigoCorto { tabla: TablaCodigo; id: string; codigo: string; origen: 'propuesto' | 'a_mano' | 'erp10' }
+
+/**
+ * Los códigos cortos de la cuenta (conta_codigos_cortos: antes pone el propuesto a lo que aún no tiene). Si la base aún no
+ * tiene la 2347, ninguno: la analítica se sigue eligiendo por la lupa, por el nombre.
+ */
+export async function leerCodigosCortos(accountId: string): Promise<CodigoCorto[]> {
+  try {
+    const filas = await rpc<Fila[]>('conta_codigos_cortos', { p_cuenta: accountId })
+    return (filas ?? []).map((f) => ({ tabla: String(f.tabla) as TablaCodigo, id: String(f.id), codigo: String(f.codigo), origen: String(f.origen) as CodigoCorto['origen'] }))
+  } catch (e) {
+    if (/conta_codigos_cortos|PGRST202|42883/.test(String((e as Error)?.message ?? e))) return []
+    throw e
+  }
+}
+
+/** Cambia a mano el código corto (vacío: vuelve al propuesto). Devuelve el texto para la pantalla. */
+export async function ponerCodigoCorto(tabla: TablaCodigo, id: string, codigo: string): Promise<{ codigo: string | null; texto: string }> {
+  const r = await rpc<Fila>('conta_codigo_corto_poner', { p_tabla: tabla, p_id: id, p_codigo: codigo })
+  return { codigo: s(r.codigo), texto: String(r.texto ?? 'Guardado.') }
+}
+
+// ── K13 · El reparto analítico de cada línea en tramos (20261124T0001) ──
+
+export interface TramoFicha { localId: string | null; marcaId: string | null; canalId: string | null; importe: number }
+
+/** Los tramos de cada línea de una recibida, por posición. Vacío si la base aún no tiene la 0001. */
+export async function leerTramos(accountId: string, invoiceId: string): Promise<Map<number, TramoFicha[]>> {
+  const m = new Map<number, TramoFicha[]>()
+  const { data, error } = await tabla('supplier_invoice_expense_tramo').select('position, tramo, location_id, brand_id, channel_id, amount')
+    .eq('account_id', accountId).eq('supplier_invoice_id', invoiceId).order('position').order('tramo')
+  if (error) {
+    if (/supplier_invoice_expense_tramo|PGRST205|42P01/.test(error.message)) return m
+    throw new Error(`No se ha podido leer el reparto de las líneas: ${error.message}`)
+  }
+  for (const t of (data ?? []) as Fila[]) {
+    const p = Number(t.position)
+    m.set(p, [...(m.get(p) ?? []), { localId: s(t.location_id), marcaId: s(t.brand_id), canalId: s(t.channel_id), importe: Number(t.amount) }])
+  }
+  return m
+}
+
+/** Pone el reparto de UNA línea (con menos de dos tramos, la línea queda sin reparto). */
+export async function guardarTramos(invoiceId: string, posicion: number, tramos: readonly TramoFicha[], quien: string | null): Promise<{ texto: string; asientoQuitado: boolean }> {
+  const r = await rpc<Fila>('conta_recibida_reparto_linea', {
+    p_invoice: invoiceId, p_posicion: posicion, p_quien_nombre: quien,
+    p_tramos: tramos.map((t) => ({ local: t.localId, marca: t.marcaId, plataforma: t.canalId, importe: t.importe })),
+  })
+  return { texto: String(r.texto ?? 'Guardado.'), asientoQuitado: r.asiento_quitado === true }
+}

@@ -13,7 +13,7 @@
 import { hojaDelProveedor, siguienteLibre } from '@/modules/conta/lib/planEmpresa'
 import { leerNoDeducibles, type IvaNoDeducible } from '@/modules/conta/services/ivaNoDeducibleService'
 import { porQueNoDeducible } from '@/modules/conta/lib/ivaNoDeducible'
-import { aplicarAsientoAMano, aplicarDatosDeLineas, aplicarReparto, conSuplidos, cuentaDelReparto, lineasYCuotas, type LineaConCanal } from '@/modules/conta/lib/recibidaGuardada'
+import { aplicarAsientoAMano, aplicarDatosDeLineas, aplicarReparto, aplicarTramos, conSuplidos, cuentaDelReparto, lineasYCuotas, type LineaConCanal } from '@/modules/conta/lib/recibidaGuardada'
 import { supabase } from '@/lib/supabase'
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
@@ -336,6 +336,9 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     // K10b · 2150: el tipo de operación, el trimestre y el concepto de la factura. Sin ellos (antes de aplicarla), lo de antes.
     // K11a · 0839: el % de IVA deducible y los datos de cada línea (concepto, marca y plataforma).
     // K11f1 · 0921: la fecha contable (la del asiento).
+    // K13 · 2349: el reparto analítico de cada línea, en tramos.
+    const k13 = await consulta(`${ficha}, vat_operation, deduct_from, accounting_date, entry_concept, vat_deductible_pct, supplier_invoice_expense_dato(position, concept, brand_id, channel_id), supplier_invoice_expense_tramo(position, tramo, location_id, brand_id, channel_id, amount)`)
+    if (!falta(k13.error)) return leer(Promise.resolve(k13), 'las facturas')
     const k11f = await consulta(`${ficha}, vat_operation, deduct_from, accounting_date, entry_concept, vat_deductible_pct, supplier_invoice_expense_dato(position, concept, brand_id, channel_id)`)
     if (!falta(k11f.error)) return leer(Promise.resolve(k11f), 'las facturas')
     const k11a = await consulta(`${ficha}, vat_operation, deduct_from, entry_concept, vat_deductible_pct, supplier_invoice_expense_dato(position, concept, brand_id, channel_id)`)
@@ -571,7 +574,10 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     // K11a · El concepto, la marca y la plataforma de cada línea de gasto.
     const datosLineas = ((f.supplier_invoice_expense_dato ?? []) as Fila[])
       .map((d) => ({ posicion: n(d.position), concepto: s(d.concept), marcaId: s(d.brand_id), canalId: s(d.channel_id) }))
-    const conDatos = aplicarDatosDeLineas(conAMano, datosLineas)
+    // K13 · El reparto analítico: una línea con dos o más tramos, una línea del asiento por tramo.
+    const tramos = ((f.supplier_invoice_expense_tramo ?? []) as Fila[])
+      .map((t) => ({ posicion: n(t.position), tramo: n(t.tramo), localId: s(t.location_id), marcaId: s(t.brand_id), canalId: s(t.channel_id), importe: n(t.amount) }))
+    const conDatos = aplicarTramos(aplicarDatosDeLineas(conAMano, datosLineas), tramos)
     const final = s(f.entry_concept) ? { ...conDatos, concepto: String(f.entry_concept).trim() } : conDatos
     // N23 «Cómo se apunta»: la misma propuesta, sin escribirla.
     if (ver) ver(final)
