@@ -152,6 +152,9 @@ export function FacturarMes(p: PropsFacturarMes) {
     .map((g) => ({ ...g, casos: [...g.casos].sort((a, b) => b.importeCent - a.importeCent) }))
     .sort((a, b) => (b.porResolver > 0 ? 1 : 0) - (a.porResolver > 0 ? 1 : 0) || b.totalCent - a.totalCent)
   const totalPendientes = p.pendientes.reduce((t, x) => t + x.importeCent, 0)
+  // R21h · Lo de «Pendientes» de este mes que aún no está en lo cobrado (pagos con tarjeta sin abono del banco): se dice
+  // en la fila del cuadre, para que «Pendientes: N · X €» y la fila no parezcan dos cifras que no cuadran.
+  const sinAbonoCent = Math.max(0, p.pendientes.filter((x) => x.mes.slice(0, 7) === p.mes).reduce((t, x) => t + x.importeCent, 0) - p.cuadre.pendientesCent)
   const bajarPendientes = () => exportarTabla('xlsx', {
     nombre: `Pendientes ${p.empresa} ${p.mes}`, titulo: `Pendientes de facturar · ${p.empresa}`,
     subtitulo: `${n(p.pendientes.length, 'caso', 'casos')} · ${euros(totalPendientes)} · fuera de la factura hasta resolverlos`,
@@ -198,7 +201,7 @@ export function FacturarMes(p: PropsFacturarMes) {
           <div><span>{p.mandar.cobros > 0 ? '− Se manda a Cegid' : '− Mandado a Cegid'}</span><span>{euros(p.cuadre.mandadoCent)}</span></div>
           <div><span>− Paga facturas que ya existían</span><span>{euros(p.cuadre.pagaFacturasCent)}</span></div>
           {p.cuadre.despuesCent !== 0 && <div data-prueba="despues"><span>− Contasimple (serie 3): se manda después de generar la serie 1</span><span>{euros(p.cuadre.despuesCent)}</span></div>}
-          <div><span>− Pendientes: fuera de esta factura hasta resolverlos</span><span>{euros(p.cuadre.pendientesCent)}</span></div>
+          <div><span>− Pendientes: fuera de esta factura hasta resolverlos{sinAbonoCent > 0 ? ` (los otros ${euros(sinAbonoCent)} de «Pendientes» son pagos con tarjeta que el banco aún no ha abonado: todavía no son cobrado)` : ''}</span><span>{euros(p.cuadre.pendientesCent)}</span></div>
           <div className="r21-diferencia" data-cuadra={p.cuadre.cuadra ? 'si' : 'no'} data-prueba="diferencia"><span>Diferencia</span><span>{euros(p.cuadre.diferenciaCent)}</span></div>
           {p.cuadre.sinExplicar.map((x) => <div key={x.clave} data-prueba="sin-explicar"><span>{x.texto}</span><span>{euros(x.cent)}</span></div>)}
         </div>

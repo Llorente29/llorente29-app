@@ -341,7 +341,10 @@ export function FacturarMesPage() {
       serie3={todo.paso4?.serie3 ?? null}
       contasimple={{ cuotas: plan.vueltas['3'].lineas, cent: plan.vueltas['3'].cent, frase: fraseDe('contasimple'), alPulsar: () => void contasimple() }}
       comprobar={{ frase: paso5Frase, faltan: todo.paso5?.faltan ?? null, alPulsar: () => void comprobar() }}
-      pendientes={todo.pendientes.map((p) => ({ clave: p.clave, mes: p.mes, cliente: p.cliente, importeCent: p.importeCent, motivo: p.motivo }))}
+      pendientes={todo.pendientes.map((p) => ({ clave: p.clave, mes: p.mes, cliente: p.cliente, importeCent: p.importeCent,
+        // R21h · El motivo, con las palabras de hoy de su tarjeta (sin el texto técnico que se guardó) y sin repetir «Quedó fuera…».
+        motivo: [todo.casos.find((c) => c.clave === p.clave)?.frase ?? p.motivo, todo.casos.find((c) => c.clave === p.clave)?.falta ?? '']
+          .join(' ').replace(/\s*Quedó fuera de lo mandado a Cegid\.?/g, '').trim() }))}
       alResolverPendiente={(k) => setTimeout(() => document.getElementById(`r21-caso-${k}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)} />
   )
 }
