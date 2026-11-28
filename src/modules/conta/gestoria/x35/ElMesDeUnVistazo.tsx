@@ -125,8 +125,13 @@ export function ElMesDeUnVistazo() {
           <section aria-labelledby="x35-resolver" style={{ flex: '1 1 440px', minWidth: 0, background: '#fff', border: `1px solid ${C.borde}`, borderRadius: 16, padding: '20px 22px' }}>
             <h2 id="x35-resolver" style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 700 }}>Lo que hay que resolver</h2>
             <p style={{ margin: '0 0 8px', fontSize: 13, color: C.suave }}>{m.asuntos.length ? 'Primero lo que más dinero mueve' : 'Nada que resolver en este mes.'}</p>
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-              {m.asuntos.map((i) => (
+            {/* X35e · Lo del mes, arriba; lo que viene de meses anteriores, aparte y con su título. */}
+            {([['mes', m.asuntos.filter((a) => a.alcance !== 'antes')], ['antes', m.asuntos.filter((a) => a.alcance === 'antes')]] as const).map(([cual, lista]) => lista.length > 0 && (
+              <div key={cual} data-testid={`x35-asuntos-${cual}`}>
+                <h3 style={{ margin: cual === 'antes' ? '16px 0 0' : '4px 0 0', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', color: C.suave }}>
+                  {cual === 'mes' ? `De ${m.titulo.toLowerCase().replace(/ de \d+$/, '')}` : 'De meses anteriores'}</h3>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {lista.map((i) => (
                 <li key={i.id}>
                   <button type="button" data-testid={`x35-asunto-${i.id}`} onClick={() => setAbierta({ titulo: i.titulo, fuente: i.texto, cifra: i.importe, lista: i.lista, ir: rutaDe(i.ir) })}
                     style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', width: '100%', border: 0, borderTop: `1px solid ${C.linea}`, background: 'none', textAlign: 'left', cursor: 'pointer', color: C.tinta, fontFamily: 'inherit' }}>
@@ -141,6 +146,8 @@ export function ElMesDeUnVistazo() {
                 </li>
               ))}
             </ul>
+              </div>
+            ))}
           </section>
           {nc && cobros6.datos && (() => {
             const g = grafica(hoy, cobros6.datos, nc)

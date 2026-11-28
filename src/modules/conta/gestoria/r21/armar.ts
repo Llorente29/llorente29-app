@@ -70,10 +70,10 @@ export function arreglarTildes(t: string): string {
 }
 
 const BIC = /\b[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/
-/** Del texto del banco, solo lo que escribió el que paga («baja autónomo»). Si no escribió nada, null. Con tarjeta, el texto es de Sumied y se deja. */
+/** Del texto del banco, solo lo que escribió el que paga («baja autónomo»). Si no escribió nada, null. Con tarjeta, el texto es de Sumied (técnico): null. */
 export function conceptoDelBanco(texto: string | null, via: string): string | null {
   if (!texto) return null
-  if (via === 'tarjeta') return texto
+  if (via === 'tarjeta') return null
   const partes = texto.split(', ').map((x) => x.trim())
   if (partes.length < 2) return arreglarTildes(texto).trim() || null
   const nombre = partes.slice(1, -1).find((x) => /[a-zA-Z]/.test(x) && !/^\d/.test(x)) ?? ''
@@ -223,9 +223,13 @@ export function armarCasos(e: EntradaArmar): CasoConBotones[] {
     const quien = quienEs(c.codigo, nombresCegid)
     const texto = conceptoDelBanco(c.texto, c.via)
     if (p.estado !== 'para_julio') {
+      // R21g · Con tarjeta, el porqué técnico (cómo se intentó casar con la negociación) no se enseña: se dice en palabras.
+      const tarjeta = c.via === 'tarjeta'
+      const porque = tarjeta ? (c.codigo == null ? 'El TPV no dice de qué cliente es este pago. Si lo sabes, dilo; si no, se pregunta a QBO.' : 'Falta saber qué servicio paga.')
+        : (p.porque || c.falta || 'Falta algo para facturarlo.')
       casos.push({ clave: c.clave, tipo: c.codigo == null ? 'no_se_sabe_quien' : 'paga_sin_recibo', cliente: quien, importeCent: t, fecha: c.fecha,
-        frase: `Entró un cobro de ${euros(t)} ${como} el ${dia(c.fecha)}${texto ? ` («${texto}»)` : ''}.`.replace('  ', ' '), propuesta: null,
-        falta: p.porque || c.falta || 'Falta algo para facturarlo.', decidido: false, acciones: [DEJAR(`Cobro de ${euros(t)} del ${dia(c.fecha)}: ${p.porque || 'falta algo para facturarlo'}.`)] })
+        frase: tarjeta ? `${quien ?? 'Alguien'} pagó ${euros(t)} con tarjeta el ${dia(c.fecha)}.` : `Entró un cobro de ${euros(t)} ${como} el ${dia(c.fecha)}${texto ? ` («${texto}»)` : ''}.`.replace('  ', ' '), propuesta: null,
+        falta: porque, decidido: false, acciones: [DEJAR(`Cobro de ${euros(t)} del ${dia(c.fecha)}: ${porque}`)] })
       continue
     }
     const f = proponerFactura(c, e.facturasCegid)

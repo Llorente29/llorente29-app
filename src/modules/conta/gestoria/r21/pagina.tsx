@@ -207,8 +207,8 @@ export function FacturarMesPage() {
     // R21f · Lo que quedó fuera de lo mandado lo guarda Sumied, no una persona: no se dice «dejado por» ni se deshace.
     const fueraDeLoMandado = !!g && g.motivo.includes('Quedó fuera de lo mandado a Cegid')
     return { ...c, acciones, resuelto: false, aMano, deshacer: !!g && !fueraDeLoMandado,
-      hecho: c.estado === 'pendiente' ? (g && !fueraDeLoMandado ? `Dejado para después (${g.dejadoPor ?? 'sin nombre'}, ${fechaHora(g.dejadoAt)}). Queda en «Pendientes», fuera de esta factura. Cuando se resuelva, se factura en el mes en que se resuelva.`
-        : 'Quedó fuera de lo mandado a Cegid: está en «Pendientes» hasta que se resuelva.') : null }
+      hecho: c.estado === 'pendiente' ? (g && !fueraDeLoMandado ? `En Pendientes: lo dejó ${g.dejadoPor ?? 'alguien'} el ${fechaHora(g.dejadoAt)}.`
+        : 'En Pendientes: quedó fuera de lo mandado a Cegid.') : null }
   }
   const armarAcciones = (k: string) => todo.acciones.get(k) ?? []
 

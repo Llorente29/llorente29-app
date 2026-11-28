@@ -39,6 +39,8 @@ export interface Asunto {
   lista: Lista
   /** Adónde lleva: la pantalla donde se resuelve. */
   ir: 'facturar' | 'facturasDelMes' | 'clientes'
+  /** X35e · Del mes elegido o de meses anteriores (se pintan en dos bloques). */
+  alcance?: 'mes' | 'antes'
 }
 export interface MesDeUnVistazo {
   mes: string
@@ -193,7 +195,7 @@ export function mesDeUnVistazo(e: EntradaMes): MesDeUnVistazo {
     if (teDeben.filas.length) asuntos.push(asunto('reclamar', 'Cobrar', `Reclamar a quien no ha pagado ${mesTexto}`, `${plural(clientesMes, 'cliente', 'clientes')} · ${plural(teDeben.filas.length, 'recibo', 'recibos')}`, teDeben, 'clientes'))
     if (cual === 'actual') {
       const viejos = e.noCobrado.tramos.find((t) => t.texto === 'Más de 90 días')?.lista
-      if (viejos?.filas.length) asuntos.push({ ...asunto('viejos', 'Urgente', 'Recibos sin cobrar desde hace más de 90 días', `${plural(new Set(viejos.filas.map((f) => f.fichaId ?? f.id)).size, 'cliente', 'clientes')} · de todos los meses`, viejos, 'clientes') })
+      if (viejos?.filas.length) asuntos.push({ ...asunto('viejos', 'Urgente', 'Recibos sin cobrar desde hace más de 90 días', `${plural(new Set(viejos.filas.map((f) => f.fichaId ?? f.id)).size, 'cliente', 'clientes')} · de todos los meses`, viejos, 'clientes'), alcance: 'antes' as const })
     }
     // X35c · Los abonos del TPV sin detalle son de desde mayo, no de este mes: van en «Dónde se te escapa el dinero», no aquí.
   }

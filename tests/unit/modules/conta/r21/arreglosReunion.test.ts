@@ -19,8 +19,8 @@ describe('R21c · el texto del banco', () => {
     expect(conceptoDelBanco('TRANSFER INMEDIATA, PERSONA INVENTADA, PERSONA INVENTADA, 000001, PERSONA INVENTADA BSCHESMMXXX', 'transferencia')).toBeNull()
     expect(conceptoDelBanco('TRANSFER INMEDIATA, PERSONA INVENTADA, 000001, PERSONA INVENTADA', 'transferencia')).toBeNull()
   })
-  it('con tarjeta, el texto es de Sumied y se deja', () => {
-    expect(conceptoDelBanco('hay tres pagos de 96,80 €', 'tarjeta')).toBe('hay tres pagos de 96,80 €')
+  it('con tarjeta, el texto es de Sumied (técnico) y no se enseña', () => {
+    expect(conceptoDelBanco('hay tres pagos de 96,80 €', 'tarjeta')).toBeNull()
   })
   it('las tildes que no conoce se quedan sin los asteriscos', () => {
     expect(arreglarTildes('regularizaci**n y cami**n')).toBe('regularización y camin')
