@@ -1,0 +1,3 @@
+# X14 · 2 · Tramos de IVA por casilla de ERP10: la 2205 y su prueba en ROLLBACK.
+supabase/migrations/20261127T2205_x14l_tramos_por_casilla.sql
+supabase/staging/sql/20261127_x14l_tramos_por_casilla_prueba.sql

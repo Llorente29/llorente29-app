@@ -1,0 +1,4 @@
+# X14 · 2 · la vuelta atrás: devuelve la regla de un tramo por factura y tipo, y quita la casilla, su disparador y el índice
+# (para si ya hay recibidas con dos tramos al mismo tipo: con ellas no cabe la regla de antes).
+cuenta: scripts/conta/produccion/cuentas/x14l-tramos.sql
+supabase/vuelta-atras/20261127T2205_x14l_tramos_por_casilla.down.sql
