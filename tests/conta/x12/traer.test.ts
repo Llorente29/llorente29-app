@@ -109,15 +109,18 @@ describe('de lo leído a la carga de «Traer»', () => {
     const bien = contraElResumen(apuntes, resumen(3, 2, 4), ['2025-01', '2025-02'])
     expect(bien).toMatchObject({ cuadra: true, frases: [], nota: 'Igual que ERP10, mes a mes', lineasErp10: 9, lineasTraidas: 9 })
     const mal = contraElResumen(apuntes, resumen(2, 3, 5), ['2025-01', '2025-02'])
+    // X14l · Enero: 5 líneas en los dos, repartidas de otra forma por tipo: cuadra (los tipos de ERP10 no son los mismos códigos).
+    // Febrero: el total no da lo mismo: sale, con el reparto por tipo solo de detalle.
     expect(mal.frases).toEqual([
-      'En enero de 2025 lo traído no da lo mismo que el resumen de ERP10 (en total, 5 líneas en los dos). Por tipo, «Pantalla única»: ERP10 cuenta 3 líneas y se han traído 2; «Por factura»: ERP10 cuenta 2 líneas y se han traído 3.',
-      'En febrero de 2025 lo traído no da lo mismo que el resumen de ERP10 (en total, ERP10 cuenta 5 líneas y se han traído 4). Por tipo, «Por factura»: ERP10 cuenta 5 líneas y se han traído 4.',
+      'En febrero de 2025 lo traído no da lo mismo que el resumen de ERP10: ERP10 cuenta 5 líneas y se han traído 4. Por tipo (solo de detalle: los tipos de ERP10 no son los mismos códigos), «Por factura»: ERP10 cuenta 5 líneas y se han traído 4.',
     ])
-    expect(mal.nota).toBe('2 meses no dan lo mismo que ERP10')
+    const soloReparto = contraElResumen(apuntes, resumen(2, 3, 4), ['2025-01', '2025-02'])
+    expect(soloReparto).toMatchObject({ cuadra: true, frases: [], nota: 'Igual que ERP10, mes a mes', lineasErp10: 9, lineasTraidas: 9 })
+    expect(mal.nota).toBe('1 mes no da lo mismo que ERP10')
     // Y la fila del diario lo dice.
     const c = leerCarga([], leidoDeLaConexion({ ejercicio: '2025', subcuentas: [], apuntes, facturas: [], resumen: resumen(2, 3, 5), mesesLeidos: ['2025-01', '2025-02'] }))
     expect(c.ficheros.find((f) => f.tipo === 'diario')).toMatchObject({ estado: 'mira', avisos: expect.arrayContaining(mal.frases) })
-    expect(filasPaso1(c, 'nueva').find((f) => f.tipo === 'diario')?.nota).toBe('2 meses no dan lo mismo que ERP10')
+    expect(filasPaso1(c, 'nueva').find((f) => f.tipo === 'diario')?.nota).toBe('1 mes no da lo mismo que ERP10')
   })
 })
 

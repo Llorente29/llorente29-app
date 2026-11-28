@@ -49,7 +49,7 @@ describe('antes de empezar', () => {
     expect(filasUnBoton(e).map((f) => [f.que, f.icono, f.linea])).toEqual([
       ['Plan de cuentas', 'vacio', 'las subcuentas'], ['Proveedores y acreedores', 'vacio', 'con NIF y dirección'], ['Clientes', 'vacio', 'con NIF y dirección'],
       ['Diario', 'vacio', 'todos los asientos del ejercicio'], ['Facturas emitidas', 'vacio', 'con su IVA'], ['Facturas recibidas', 'vacio', 'con su IVA y su retención'],
-      ['Sumas y saldos', 'vacio', 'se calcula y se compara con ERP10'],
+      ['Sumas y saldos', 'vacio', 'se compara con el de ERP10, de su fichero'],
     ])
     expect(pastillaUnBoton(e)).toBeNull()
     expect(FRASES_UN_BOTON.unBoton).toContain('Entra en prueba: hasta que lo des por bueno, se deshace entero.')
@@ -76,7 +76,7 @@ describe('mientras trae', () => {
       ['Diario', 'leyendo', '8 asientos', 'Leyendo marzo · 3 de 11 meses', 2 / 11],
       ['Facturas emitidas', 'vacio', null, 'Después del diario', null],
       ['Facturas recibidas', 'vacio', null, 'Después del diario', null],
-      ['Sumas y saldos', 'vacio', null, 'Se calcula al final', null],
+      ['Sumas y saldos', 'vacio', null, 'Se compara al final, con el fichero de ERP10', null],
     ])
     expect(pastillaUnBoton(e)?.texto).toMatch(/^Trayendo( · (quedan unos \d+ minutos|queda un minuto|queda menos de un minuto))?$/)
     expect(pastillaUnBoton(e)?.tono).toBe('azul')
@@ -134,7 +134,7 @@ describe('al acabar', () => {
     expect(pastillaUnBoton(e)).toEqual({ texto: 'No cuadra con ERP10', tono: 'ambar' })
     const diario = filasUnBoton(e).find((f) => f.tipo === 'diario')!
     expect(diario).toMatchObject({ icono: 'mira', linea: '1 mes no da lo mismo que ERP10' })
-    expect(diario.verlos?.lista[0]).toMatch(/^En (enero|febrero|marzo) de 2026 lo traído no da lo mismo que el resumen de ERP10 \(en total, ERP10 cuenta \d+ líneas y se han traído \d+\)\./)
+    expect(diario.verlos?.lista[0]).toMatch(/^En (enero|febrero|marzo) de 2026 lo traído no da lo mismo que el resumen de ERP10: ERP10 cuenta \d+ líneas y se han traído \d+\./)
     const d = confirmarDarlo(e)
     expect(d).toMatchObject({ boton: 'Darlo por bueno igual', puede: true })
     expect(d.texto).toContain('Lo leído no da lo mismo que el resumen de ERP10: En ')

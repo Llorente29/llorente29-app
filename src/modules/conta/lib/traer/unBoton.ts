@@ -97,7 +97,7 @@ export const FILAS_UN_BOTON: readonly { tipo: TipoUnBoton; que: string; antes: s
   { tipo: 'diario', que: 'Diario', antes: 'todos los asientos del ejercicio' },
   { tipo: 'expedidas', que: 'Facturas emitidas', antes: 'con su IVA' },
   { tipo: 'recibidas', que: 'Facturas recibidas', antes: 'con su IVA y su retención' },
-  { tipo: 'sumas_saldos', que: 'Sumas y saldos', antes: 'se calcula y se compara con ERP10' },
+  { tipo: 'sumas_saldos', que: 'Sumas y saldos', antes: 'se compara con el de ERP10, de su fichero' },
 ]
 
 const n = (x: number) => String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
@@ -159,7 +159,7 @@ function mientras(e: EntradaUnBoton, tipo: TipoUnBoton, base: FilaUnBoton): Fila
   const c = l.cuantos
   const cifra = tipo === 'plan_cuentas' ? cuantos(c.subcuentas, 'cuenta', 'cuentas') : tipo === 'proveedores' ? cuantos(c.proveedores, 'ficha', 'fichas')
     : tipo === 'clientes' ? cuantos(c.clientes, 'ficha', 'fichas') : tipo === 'diario' ? cuantos(c.asientos, 'asiento', 'asientos') : null
-  if (tipo === 'sumas_saldos') return { ...base, linea: 'Se calcula al final' }
+  if (tipo === 'sumas_saldos') return { ...base, linea: 'Se compara al final, con el fichero de ERP10' }
   if (todas) {
     // Las facturas: emitidas o recibidas se sabe al acabar todas (la serie cuenta entera).
     return { ...base, icono: 'hecho', cifra: cifra ?? cuantos(c.facturas, 'factura leída', 'facturas leídas'), linea: tipo === 'proveedores' || tipo === 'clientes' ? 'con NIF y dirección' : '' }
