@@ -26,6 +26,7 @@ import { facturasDelMes } from '../q10/facturasDelMes'
 import { leerFacturasDelMes } from '../q10/datos'
 import { codigosCegid } from '../q10/equivalencias'
 import { armarCasos, CONCEPTOS, explicarDiferencia, mesesDelSelector, type Accion } from './armar'
+import { retieneQ10 } from '../q10/serie'
 import { darVistoBueno, dejarParaDespues, deshacerPendiente, leerPendientes, leerPrevistoGc, leerResueltosEnElMes, leerVistoBueno, resolverPendiente } from './datos'
 import { FacturarMes, type CasoVista, type Frase } from './FacturarMes'
 
@@ -187,6 +188,17 @@ export function FacturarMesPage() {
 
   const error = d.error ?? cg.error ?? bk.error ?? pd.error ?? rs.error ?? vbL.error
   if (error) return <ErrorConReintento mensaje={`No se ha podido leer lo del mes: ${error}`} reintentar={() => { d.recargar(); cg.recargar(); md.recargar(); bk.recargar(); pd.recargar(); rs.recargar(); vbL.recargar() }} />
+  // R21i · Una persona física (factura con retención, como Anny Zerpa) aún no se factura desde aquí: sus conceptos de Cegid
+  // y la base con retención no están configurados (encargo Q11). Se dice, en vez de enseñar propuestas que no le valen.
+  if (empresa && d.datos && retieneQ10(d.datos.empresa.tax_id)) return (
+    <section className="r21" data-prueba="en-preparacion" style={{ maxWidth: 760, margin: '32px auto', padding: '0 20px' }}>
+      <div style={{ fontSize: 14, color: '#5b6475' }}>Clientes › Facturar el mes · {empresa.nombre}</div>
+      <h1 style={{ margin: '6px 0 0', fontSize: 30 }}>Facturar el mes: en preparación</h1>
+      <p style={{ fontSize: 16, lineHeight: 1.55, color: '#334155' }}>
+        Sumied ya lee el GoCardless, el banco y el Cegid de {empresa.nombre}. Falta configurar dos cosas antes de facturar desde aquí:
+        sus propios conceptos de Cegid y la retención del 15 % de sus facturas. Mientras tanto, este mes se factura como hasta ahora.</p>
+    </section>
+  )
   // R21e · Una empresa sin nada leído de Cegid (por ejemplo, la que aún no está conectada) no se queda cargando: lo dice.
   if (empresa && cg.datos && !cg.datos.clientes.length) return <ErrorConReintento mensaje={`${empresa.nombre} aún no tiene nada leído de Cegid. Léelo en «Facturas del mes» (Volver a leer de Cegid) y vuelve aquí; si no está conectada a Cegid, hay que conectarla primero.`} reintentar={() => cg.recargar()} />
   if (!empresa || !todo || !plan || !pd.datos || !rs.datos) return <TarjetaCargando />
