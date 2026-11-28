@@ -1,0 +1,25 @@
+# K14b · QBO Integrity: un solo banco, «CaixaBank», con la subcuenta 57200000 y sus 847 movimientos (Julio, 26/11).
+# Rama conta/k14b-qbo-un-banco. Va DESPUÉS de la tanda de conta/k14b-un-solo-banco (la 1240: _bank_juntar y
+# _bank_antes_del_inicio_recalcular), ya aplicada. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1241  Regla de Julio (26/11): hasta el 31/10 manda ERP10 y lo que entró por error se borra, sin contraasientos.
+#         Borra los 37 asientos de banco que creó el agente (a conta_asiento_borrado; ninguno ha salido a ERP10) y deshace
+#         sus casados; junta los dos bancos en el de los movimientos, lo llama «CaixaBank» con la 57200000; deja los 708 de
+#         antes del 01/11 «de antes del inicio»; vuelve a casar los 4 ingresos de noviembre con su pago de GoCardless, ya
+#         en la 57200000; y rehace la cadena de huellas del diario desde 1, sin hueco. Destruye y mueve: AUTORIZO. Sin
+#         vuelta atrás (lo esperado, abajo).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/k14b-qbo-un-banco.sql
+supabase/migrations/20261126T1241_k14b_qbo_un_banco.sql
+sin-vuelta-atras: supabase/migrations/20261126T1241_k14b_qbo_un_banco.sql · motivo: borra 37 asientos validados (con su copia en conta_asiento_borrado), rehace la cadena de huellas y borra el banco repetido (no tenía nada).
+esperado: k14b-qbo-un-banco · QBO · bancos activos con el IBAN ···7181 que no son «CaixaBank» con la 57200000 = 0
+esperado: k14b-qbo-un-banco · QBO · movimientos: filas · huella = como antes
+esperado: k14b-qbo-un-banco · QBO · movimientos con «antes del inicio» mal puesto = 0
+esperado: k14b-qbo-un-banco · QBO · casados vivos de antes del 01/11 = 0
+esperado: k14b-qbo-un-banco · QBO · ingresos de GoCardless de noviembre sin casar en la 57200000 = 0
+esperado: k14b-qbo-un-banco · QBO · asientos de banco validados de antes del 01/11 = 0
+esperado: k14b-qbo-un-banco · QBO · eslabones rotos de la cadena del diario = 0
+esperado: k14b-qbo-un-banco · QBO · asientos de banco de antes del 01/11 (de cualquier estado) = 0
+esperado: k14b-qbo-un-banco · QBO · cobros casados del K14: filas · huella = como antes
+esperado: k14b-qbo-un-banco · las demás cuentas · movimientos del banco: filas · huella = como antes
