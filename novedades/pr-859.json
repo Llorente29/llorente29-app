@@ -1,0 +1,20 @@
+[
+ {
+  "id": "859-1",
+  "pr": 859,
+  "fecha": "2026-11-28T07:23:41Z",
+  "producto": "sumied",
+  "apartado": "Facturar el mes",
+  "frase": "la fila «Pendientes» del cuadre dice por qué es menos que el «Pendientes» de arriba: pagos con tarjeta aún sin abono.",
+  "ruta": null
+ },
+ {
+  "id": "859-2",
+  "pr": 859,
+  "fecha": "2026-11-28T07:23:41Z",
+  "producto": "sumied",
+  "apartado": "Facturar el mes",
+  "frase": "la lista de Pendientes y su Excel usan las palabras de hoy de cada tarjeta, sin el texto técnico guardado.",
+  "ruta": null
+ }
+]
